@@ -9,3 +9,4 @@ python_version = "3.13"
 [packages]
 
 [dev-packages]
+pre-commit = "*"
