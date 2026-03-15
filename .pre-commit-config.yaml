@@ -34,3 +34,9 @@ repos:
         entry: pipenv run ruff format .
         language: system
         types: [python]
+      - id: terraform-format
+        name: Terraform formatter
+        description: Uses Terraform's built-in format command to format .tf files using standard conventions.
+        entry: bash -c "cd infrastructure/module && terraform fmt"
+        language: system
+        types: [terraform]
