@@ -33,8 +33,7 @@ Check all layers touched by this PR:
 <!-- e.g. "Added S3 bucket for user-uploaded assets; updated IAM role to allow EC2 read access" -->
 
 **Environment impact:**
-- [ ] Dev only
-- [ ] Staging
+- [ ] Dev
 - [ ] Production
 
 **Deployment steps / manual actions required:**
