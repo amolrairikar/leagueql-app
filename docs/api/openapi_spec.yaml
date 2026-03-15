@@ -1,0 +1,302 @@
+openapi: 3.1.0
+
+info:
+  title: Fantasy Football API
+  version: v1
+  description: >
+    API for onboarding and querying fantasy football league data.
+    Supports ESPN and Sleeper as data sources. League data is fetched
+    from external APIs, transformed, and stored in DynamoDB for fast retrieval.
+  license:
+    name: MIT
+
+paths:
+
+  /leagues/{leagueId}:
+    get:
+      summary: Get league metadata
+      description: >
+        Checks whether a league has been onboarded. If the league exists,
+        returns metadata for the league. Returns 404 if the league
+        has not been onboarded yet.
+      operationId: getLeague
+      parameters:
+        - name: leagueId
+          in: path
+          required: true
+          description: The ESPN or Sleeper league ID
+          schema:
+            type: string
+            example: "12345678"
+        - name: platform
+          in: query
+          required: true
+          description: The name of the platform the fantasy football league is on
+          schema:
+            type: string
+            example: "ESPN"
+      responses:
+        "200":
+          $ref: "#/components/responses/LeagueMetadataResponse"
+        "404":
+          $ref: "#/components/responses/LeagueNotFoundError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /leagues:
+    post:
+      summary: Onboard a new league
+      description: >
+        Triggers the onboarding Lambda which fetches all historical season data
+        from the specified source (ESPN or Sleeper), transforms it via DuckDB,
+        and writes precomputed views to DynamoDB. This endpoint is idempotent —
+        if the league is already onboarded, the request is redirected to
+        GET /leagues/{leagueId} and no duplicate processing occurs.
+      operationId: onboardLeague
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OnboardRequest"
+      responses:
+        "201":
+          $ref: "#/components/responses/OnboardSuccessResponse"
+        "409":
+          $ref: "#/components/responses/AlreadyOnboardedError"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "502":
+          $ref: "#/components/responses/UpstreamError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /leagues/{leagueId}/query:
+    get:
+      summary: Query a precomputed league view
+      description: >
+        Returns a precomputed data view for the specified league. The queryType
+        parameter maps directly to the DynamoDB sort key (e.g. WEEKLY_SCORES#2024).
+      operationId: queryLeague
+      parameters:
+        - name: leagueId
+          in: path
+          required: true
+          description: The ESPN or Sleeper league ID
+          schema:
+            type: string
+            example: "12345678"
+        - name: platform
+          in: query
+          required: true
+          description: The name of the platform the fantasy football league is on
+          schema:
+            type: string
+            example: "ESPN"
+        - name: queryType
+          in: query
+          required: true
+          description: >
+            The precomputed view to retrieve. Season-scoped views require
+            a season suffix (e.g. WEEKLY_SCORES#2024). Cross-season views
+            such as ALL_TIME_STANDINGS do not require a suffix.
+          schema:
+            type: string
+            # TODO: Fill this out as the list of views evolves
+            enum:
+              - ALL_TIME_STANDINGS
+              - WEEKLY_SCORES
+              - DRAFT_RESULTS
+              - PLAYER_POINTS
+            example: "WEEKLY_SCORES"
+        - name: season
+          in: query
+          required: false
+          description: >
+            The season year to scope the query. Not applicable for cross-season
+            views (e.g., ALL_TIME_STANDINGS).
+          schema:
+            type: integer
+            example: 2024
+      responses:
+        "200":
+          $ref: "#/components/responses/QuerySuccessResponse"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "404":
+          $ref: "#/components/responses/LeagueNotFoundError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+components:
+
+  schemas:
+
+    LeagueMetadata:
+      type: object
+      required: [leagueId, source, status, onboardedAt]
+      properties:
+        leagueId:
+          type: string
+          example: "12345678"
+        source:
+          type: string
+          enum: [ESPN, SLEEPER]
+          example: "ESPN"
+        onboardedAt:
+          type: string
+          format: date-time
+          example: "2024-09-01T00:00:00Z"
+
+    OnboardRequest:
+      type: object
+      required: [leagueId, source]
+      properties:
+        leagueId:
+          type: string
+          description: The ESPN or Sleeper league ID
+          example: "12345678"
+        source:
+          type: string
+          enum: [ESPN, SLEEPER]
+          description: The fantasy platform this league belongs to
+          example: "ESPN"
+        season:
+          type: string
+          description: >
+            The most recent season the league was active for. Required for
+            ESPN leagues only.
+          example: "2025"
+        s2:
+          type: string
+          description: >
+            ESPN espn_s2 cookie value. Required for private ESPN leagues only.
+            This value is only passed to the application for onboarding and is
+            never logged or stored in our database.
+          example: "AEBxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        swid:
+          type: string
+          description: >
+            ESPN SWID cookie value. Required for private ESPN leagues only.
+            This value is only passed to the application for onboarding and is
+            never logged or stored in our database.
+          example: "{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}"
+
+    OnboardResponse:
+      type: object
+      required: [status, leagueId]
+      properties:
+        status:
+          type: string
+          example: "onboarded"
+        leagueId:
+          type: string
+          example: "12345678"
+
+    QueryResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          description: Array of precomputed result objects. Shape varies by queryType.
+          items:
+            type: object
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          example: "Not found"
+        message:
+          type: string
+          example: "A human-readable description of the error"
+
+  responses:
+
+    # ── Success responses ──────────────────────────────────
+
+    LeagueMetadataResponse:
+      description: League found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/LeagueMetadata"
+
+    OnboardSuccessResponse:
+      description: League successfully onboarded
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/OnboardResponse"
+
+    QuerySuccessResponse:
+      description: Precomputed view returned successfully
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/QueryResponse"
+
+    # ── Error responses ────────────────────────────────────
+
+    BadRequestError:
+      description: Missing or invalid query parameters
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error: "Bad request"
+            message: "season is required for queryType WEEKLY_SCORES"
+
+    LeagueNotFoundError:
+      description: League not found — onboarding required
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error: "League not found"
+            message: "No ESPN league with ID 12345678 has been onboarded. Use POST /leagues to onboard."
+
+    AlreadyOnboardedError:
+      description: League already onboarded
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error: "Already onboarded"
+            message: "League 12345678 has already been onboarded. Use GET /leagues/12345678 to retrieve your key."
+
+    ValidationError:
+      description: Invalid request body
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error: "Unprocessable entity"
+            message: "source must be one of: ESPN, SLEEPER"
+
+    UpstreamError:
+      description: Upstream data source error — ESPN or Sleeper API unavailable
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error: "Upstream error"
+            message: "Failed to fetch data from ESPN API. Please try again later."
+
+    InternalError:
+      description: Unexpected server error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error: "Internal server error"
+            message: "An unexpected error occurred. Please try again later."
