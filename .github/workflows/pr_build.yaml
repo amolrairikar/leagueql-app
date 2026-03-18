@@ -14,23 +14,24 @@ permissions:
 
 jobs:
   setup:
-    name: Resolve Config
+    name: Set GitHub Actions Role
     runs-on: ubuntu-latest
     outputs:
       role-arn: ${{ steps.set-role.outputs.role-arn }}
 
     steps:
-      - name: Set IAM role based on event
+      - name: Set Role Based on Event Type
         id: set-role
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "role-arn=arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-pr-role" >> $GITHUB_OUTPUT
+            echo "role-arn=arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-dev-role" >> $GITHUB_OUTPUT
           else
-            echo "role-arn=arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-main-role" >> $GITHUB_OUTPUT
+            echo "role-arn=arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-prod-role" >> $GITHUB_OUTPUT
           fi
 
   deploy:
-    name: AWS Job
+    # TODO: change this step name to dynamically append env
+    name: Deploy Infrastructure
     runs-on: ubuntu-latest
     needs: setup
 
