@@ -61,11 +61,13 @@ class Transformer:
         for item in raw_data:
             if item["data_type"] == "league_information":
                 for record in item["data"].get("members", []):
-                    record["season"] = item["season"]
-                    all_members.append(record)
+                    record_copy = record.copy()
+                    record_copy["season"] = item["season"]
+                    all_members.append(record_copy)
                 for record in item["data"].get("teams", []):
-                    record["season"] = item["season"]
-                    all_teams.append(record)
+                    record_copy = record.copy()
+                    record_copy["season"] = item["season"]
+                    all_teams.append(record_copy)
 
         return {
             "members": all_members,
@@ -89,8 +91,9 @@ class Transformer:
         for item in raw_data:
             if item["data_type"] == "users":
                 for record in item["data"]:
-                    record["season"] = item["season"]
-                    all_teams.append(record)
+                    record_copy = record.copy()
+                    record_copy["season"] = item["season"]
+                    all_teams.append(record_copy)
 
         return {
             "teams": all_teams,
@@ -133,7 +136,7 @@ class Transformer:
         for query in sql_query_config:
             # Results that are partitioned by season and/or week
             if sql_query_config[query]["database_key"] in (
-                "MATCHUPS"
+                "MATCHUPS",
             ):  # TODO: Fill out later
                 pass
             # Results that are not partitioned by season and/or week

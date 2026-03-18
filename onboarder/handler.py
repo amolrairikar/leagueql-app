@@ -26,12 +26,12 @@ def lambda_handler(event, context) -> dict[str, str | int]:
         service = OnboardingService(
             league_id=str(body["leagueId"]),
             platform=body["platform"],
-            latest_season=str(body.get("season")),
+            latest_season=body.get("season"),
             espn_s2_cookie=body.get("s2"),
             swid_cookie=body.get("swid"),
         )
     except KeyError as e:
-        logger.error(e)
+        logger.error("Missing required field in request body: %s", e)
         return {
             "statusCode": 400,
             "body": json.dumps({"status": "failed", "error_msg": str(e)}),
@@ -42,6 +42,11 @@ def lambda_handler(event, context) -> dict[str, str | int]:
             "body": json.dumps({"status": "failed", "error_msg": str(e)}),
         }
     except requests.exceptions.HTTPError as e:
+        return {
+            "statusCode": 502,
+            "body": json.dumps({"status": "failed", "error_msg": str(e)}),
+        }
+    except RuntimeError as e:
         return {
             "statusCode": 502,
             "body": json.dumps({"status": "failed", "error_msg": str(e)}),

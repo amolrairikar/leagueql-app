@@ -35,6 +35,7 @@ class ESPNClient:
         _get_league_seasons(latest_season): Gets list of all the seasons league has been active.
         _construct_request_url(base_url, data_type, week): Creates full ESPN Fantasy Football API request URL based on the type of data to fetch.
         _build_all_request_urls(): Constructs all ESPN Fantasy Football API request URLs needed to fetch data for app.
+        _make_cookies_dict(): Builds the raw cookies dict from s2 and SWID values.
         _build_cookies(): Creates cookies object for espn_s2 and SWID cookies if needed.
         fetch_all(): Fetch all URLs at once asynchronously with a limit of 10 active calls.
         _fetch(session, semaphore, url_data): Fetch a single URL asynchronously.
@@ -73,12 +74,7 @@ class ESPNClient:
             f"https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl"
             f"/seasons/{latest_season}/segments/0/leagues/{self.league_id}?view=mTeam"
         )
-        cookies = {}
-        if self.s2:
-            cookies["espn_s2"] = self.s2
-        if self.swid:
-            cookies["SWID"] = self.swid
-
+        cookies = self._make_cookies_dict()
         response = requests.get(url=url, cookies=cookies or None)
         try:
             response.raise_for_status()
@@ -147,6 +143,15 @@ class ESPNClient:
                     urls.append((season, data_type, full_url))
         return urls
 
+    def _make_cookies_dict(self) -> dict[str, str]:
+        """Builds the raw cookies dict from s2 and SWID values."""
+        cookies = {}
+        if self.s2:
+            cookies["espn_s2"] = self.s2
+        if self.swid:
+            cookies["SWID"] = self.swid
+        return cookies
+
     def _build_cookies(self) -> dict[str, str] | None:
         """
         Creates cookies object for espn_s2 and SWID cookies if needed.
@@ -155,11 +160,7 @@ class ESPNClient:
             The cookies object for private leagues, else None.
         """
         # Cookies are only required to fetch private ESPN league data
-        cookies = {}
-        if self.s2:
-            cookies["espn_s2"] = self.s2
-        if self.swid:
-            cookies["SWID"] = self.swid
+        cookies = self._make_cookies_dict()
         return cookies if cookies else None
 
     async def fetch_all(self) -> list[dict[str, Any]]:
@@ -207,7 +208,7 @@ class ESPNClient:
                     "sortAppliedStatTotal": {
                         "sortAsc": False,
                         "sortPriority": 2,
-                        "value": "002024",
+                        "value": f"00{season}",
                     },
                 }
             }

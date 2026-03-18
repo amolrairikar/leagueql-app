@@ -64,7 +64,13 @@ class SleeperClient:
                 raise e
 
             data = response.json()
-            result[data["season"]] = data["league_id"]
+            try:
+                result[data["season"]] = data["league_id"]
+            except KeyError as e:
+                logger.error("Could not find league_id field in Sleeper API response")
+                raise RuntimeError(
+                    f"Unexpected response from Sleeper API: missing field {e}"
+                ) from e
             previous_league_id = data.get("previous_league_id", "0")
             if previous_league_id == "0":
                 break

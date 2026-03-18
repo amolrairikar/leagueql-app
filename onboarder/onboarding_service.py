@@ -38,7 +38,7 @@ class OnboardingService:
         """Constructor."""
         self.league_id = league_id
         self.platform = platform
-        self.latest_season = latest_season
+        self.latest_season = str(latest_season) if latest_season else None
         self.client = self._build_client(
             league_id=league_id,
             platform=platform,

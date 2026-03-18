@@ -10,6 +10,3 @@ terraform.tfplan
 
 # Python files
 __pycache__
-
-# MD files
-CODE_REVIEW.md

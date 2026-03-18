@@ -44,15 +44,15 @@ class DynamoWriter:
                     }
                 )
 
-            # Written last for a league — signals onboarding completed successfully
-            batch.put_item(
-                Item={
-                    "PK": f"LEAGUE#{self.league_id}",
-                    "SK": "METADATA",
-                    "status": "active",
-                    "onboardedAt": datetime.now(timezone.utc).isoformat(),
-                }
-            )
+        # Written after batch flushes — guarantees all data records are committed first
+        self.table.put_item(
+            Item={
+                "PK": f"LEAGUE#{self.league_id}",
+                "SK": "METADATA",
+                "status": "active",
+                "onboardedAt": datetime.now(timezone.utc).isoformat(),
+            }
+        )
 
         self.table.update_item(
             Key={"PK": "APP#STATS", "SK": "LEAGUE_COUNT"},
