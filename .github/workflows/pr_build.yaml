@@ -1,4 +1,4 @@
-name: CI/CD
+name: fantasy-football-recap-build-pipeline
 
 on:
   pull_request:
@@ -13,30 +13,11 @@ permissions:
   contents: read
 
 jobs:
-  setup:
-    name: Set GitHub Actions Role
-    runs-on: ubuntu-latest
-    outputs:
-      role-arn: ${{ steps.set-role.outputs.role-arn }}
-
-    steps:
-      - name: Set Role Based on Event Type
-        id: set-role
-        env:
-          AWS_ID: ${{ secrets.AWS_ACCOUNT_ID }}
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "role-arn=arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-dev-role" >> $GITHUB_OUTPUT
-          else
-            echo "role-arn=arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-prod-role" >> $GITHUB_OUTPUT
-          fi
-          echo "Length of account ID is: ${#AWS_ID}"
 
   deploy:
     # TODO: change this step name to dynamically append env
     name: Deploy Infrastructure
     runs-on: ubuntu-latest
-    needs: setup
 
     steps:
       - name: Checkout code
@@ -45,7 +26,10 @@ jobs:
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v6
         with:
-          role-to-assume: ${{ needs.setup.outputs.role-arn }}
+          role-to-assume: >-
+            ${{ github.event_name == 'pull_request' 
+              && format('arn:aws:iam::{0}:role/github-actions-dev-role', secrets.AWS_ACCOUNT_ID) 
+              || format('arn:aws:iam::{0}:role/github-actions-prod-role', secrets.AWS_ACCOUNT_ID) }}
           aws-region: us-east-1
           role-session-name: GitHubActions-${{ github.run_id }}
 
