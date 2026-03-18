@@ -21,7 +21,7 @@ Check all layers touched by this PR:
 
 - [ ] **Infrastructure** — Terraform, Kubernetes, CI/CD, cloud resources, networking
 - [ ] **Backend** — API endpoints, services, database migrations, authentication
-- [ ] **Business Logic** — Domain models, rules engine, data processing, integrations
+- [ ] **Onboarding Logic** — Domain models, rules engine, data processing, integrations
 - [ ] **Frontend** — UI components, routing, state management, styling
 
 ---
