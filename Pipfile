@@ -7,6 +7,15 @@ name = "pypi"
 python_version = "3.13"
 
 [packages]
+aiohttp = "*"
+asyncio = "*"
+duckdb = "*"
+pandas = "*"
+pyyaml = "*"
+requests = "*"
 
 [dev-packages]
+boto3 = "*"
+boto3-stubs = "*"
 pre-commit = "*"
+ruff = "*"

@@ -1,0 +1,31 @@
+espn:
+    join_member_and_team_info:
+        database_key: TEAMS
+        description: Joins teams to members to associate each team with its respective owner's name.
+        query: |
+            SELECT
+                m.displayName AS display_name,
+                CAST(t.id AS STRING) AS team_id,
+                t.name AS team_name,
+                t.logo AS team_logo,
+                t.season,
+                t.owners[1] AS primary_owner_id,
+                t.owners[2] AS secondary_owner_id
+            FROM teams t
+            INNER JOIN members m
+            ON t.primaryOwner = m.id
+
+sleeper:
+    filter_team_info:
+        database_key: TEAMS
+        description: Filters raw Sleeper users API response to pull relevant fields.
+        query: |
+            SELECT
+                display_name,
+                NULL AS team_id,
+                "metadata.team_name" AS team_name,
+                avatar AS team_logo,
+                season,
+                user_id AS primary_owner_id,
+                NULL AS secondary_owner_id
+            FROM teams
