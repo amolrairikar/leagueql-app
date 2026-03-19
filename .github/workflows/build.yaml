@@ -64,4 +64,9 @@ jobs:
             -backend-config="bucket=$TF_STATE_BUCKET" \
             -backend-config="key=fantasy-football-recap/${{ env.ENVIRONMENT }}/global-terraform.tfstate" \
             -backend-config="region=us-east-1"
-          terraform apply -auto-approve -var="environment=${{ env.ENVIRONMENT }}"
+          terraform apply \
+            -auto-approve \
+            -var="environment=${{ env.ENVIRONMENT }}" \
+            -var="account_id=${{ secrets.AWS_ACCOUNT_ID }}" \
+            -var="primary_aws_region=us-east-1" \
+            -var="secondary_aws_region=us-west-2"
