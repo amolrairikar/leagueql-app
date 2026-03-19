@@ -63,5 +63,5 @@ jobs:
           terraform init \
             -backend-config="bucket=$TF_STATE_BUCKET" \
             -backend-config="key=fantasy-football-recap/${{ env.ENVIRONMENT }}/global-terraform.tfstate" \
-            -backend-config="region=us-east-1" \
+            -backend-config="region=us-east-1"
           terraform apply -auto-approve
