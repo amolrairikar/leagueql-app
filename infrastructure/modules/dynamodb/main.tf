@@ -1,4 +1,15 @@
+terraform {
+  required_providers {
+    aws = {
+      source                = "hashicorp/aws"
+      version               = "~> 6.0"
+      configuration_aliases = [aws.primary, aws.replica]
+    }
+  }
+}
+
 resource "aws_dynamodb_table" "global_table" {
+  provider         = aws.primary
   name             = var.table_name
   billing_mode     = "PAY_PER_REQUEST"
   hash_key         = var.hash_key
