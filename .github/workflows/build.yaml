@@ -55,7 +55,7 @@ jobs:
         with:
           terraform_version: "1.14.7"
 
-      - name: Initialize Terraform
+      - name: Initialize & Apply Terraform
         working-directory: infrastructure/global/${{ env.ENVIRONMENT }}
         env:
           TF_STATE_BUCKET: terraform-state-bucket-east-${{ secrets.AWS_ACCOUNT_ID }}
@@ -63,4 +63,5 @@ jobs:
           terraform init \
             -backend-config="bucket=$TF_STATE_BUCKET" \
             -backend-config="key=fantasy-football-recap/${{ env.ENVIRONMENT }}/global-terraform.tfstate" \
-            -backend-config="region=us-east-1"
+            -backend-config="region=us-east-1" \
+          terraform apply -auto-approve
