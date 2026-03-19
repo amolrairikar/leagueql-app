@@ -129,6 +129,7 @@ resource "aws_s3_bucket_replication_configuration" "secondary_to_primary" {
 }
 
 resource "aws_iam_role" "this" {
+  provider           = aws.primary
   name               = var.replication_role_name
   description        = var.replication_role_description
   assume_role_policy = file(var.replication_role_trust_policy_file)

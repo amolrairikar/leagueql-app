@@ -23,8 +23,8 @@
       ],
       "Effect": "Allow",
       "Resource": [
-        "arn:aws:s3:::fantasy-football-recap-dev-bucket-${region1}-${account_id}",
-        "arn:aws:s3:::fantasy-football-recap-dev-bucket-${region2}-${account_id}"
+        "arn:aws:s3:::fantasy-football-recap-dev-bucket-${region1}-${account_id}/*",
+        "arn:aws:s3:::fantasy-football-recap-dev-bucket-${region2}-${account_id}/*"
       ]
     }
   ]
