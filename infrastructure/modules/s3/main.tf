@@ -140,7 +140,7 @@ resource "aws_iam_role_policy" "this" {
   role   = aws_iam_role.this.id
   policy = templatefile(var.replication_role_policy_file, {
     account_id = var.account_id
-    region1    = var.primary_aws_region
-    region2    = var.secondary_aws_region
+    region1    = local.primary_region
+    region2    = local.secondary_region
   })
 }
