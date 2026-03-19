@@ -40,12 +40,7 @@ variable "secondary_aws_region" {
   type        = string
 }
 
-variable "replication_role_name" {
-  description = "The name of the IAM role to use for S3 replication"
-  type        = string
-}
-
-variable "replication_role_description" {
-  description = "The description for the IAM role to use for S3 replication"
+variable "replication_role_arn" {
+  description = "The ARN of the IAM role to use for S3 replication"
   type        = string
 }
