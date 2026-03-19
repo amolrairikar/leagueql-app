@@ -101,31 +101,31 @@ module "s3-replication-role" {
   }
 }
 
-module "s3-bidirectional-replication" {
-  source = "../../modules/s3"
+# module "s3-bidirectional-replication" {
+#   source = "../../modules/s3"
 
-  providers = {
-    aws.primary = aws.primary
-    aws.replica = aws.replica
-  }
+#   providers = {
+#     aws.primary = aws.primary
+#     aws.replica = aws.replica
+#   }
 
-  bucket_prefix        = "fantasy-football-recap-${var.environment}-bucket"
-  account_id           = var.account_id
-  primary_aws_region   = "us-east-1"
-  secondary_aws_region = "us-west-2"
-  versioning_enabled   = true  
-  replication_role_arn = module.s3-replication-role.role_arn
+#   bucket_prefix        = "fantasy-football-recap-${var.environment}-bucket"
+#   account_id           = var.account_id
+#   primary_aws_region   = "us-east-1"
+#   secondary_aws_region = "us-west-2"
+#   versioning_enabled   = true  
+#   replication_role_arn = module.s3-replication-role.role_arn
 
-  lifecycle_rules = [{
-    rule_name       = "expire-noncurrent-objects"
-    prefix          = "lambda-code-artifacts/"
-    noncurrent_days = 7
-  }]
+#   lifecycle_rules = [{
+#     rule_name       = "expire-noncurrent-objects"
+#     prefix          = "lambda-code-artifacts/"
+#     noncurrent_days = 7
+#   }]
 
-  tags = {
-    environment = var.environment
-    project     = "fantasy-football-recap"
-    component   = "s3"
-    managed-by  = "terraform"
-  }
-}
+#   tags = {
+#     environment = var.environment
+#     project     = "fantasy-football-recap"
+#     component   = "s3"
+#     managed-by  = "terraform"
+#   }
+# }
