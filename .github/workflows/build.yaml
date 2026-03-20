@@ -116,5 +116,5 @@ jobs:
       - name: Package and upload Lambda functions
         env:
           S3_BUCKET: fantasy-football-recap-${{ env.ENVIRONMENT }}-bucket
-          ACCOUNT_NUMBER: ${{ secrets.AWS_ACCOUNT_ID }}
+          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
         run: bash deployment_scripts/build_lambda_zip.sh ${{ steps.discover-lambda-dirs.outputs.dirs }}
