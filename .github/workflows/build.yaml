@@ -33,6 +33,7 @@ jobs:
     name: Deploy Global Infrastructure - ${{ needs.set-env.outputs.environment }}
     runs-on: ubuntu-latest
     needs: set-env
+    timeout-minutes: 6
     env:
       ENVIRONMENT: ${{ needs.set-env.outputs.environment }}
 
