@@ -97,6 +97,9 @@ jobs:
         with:
           python-version: "3.13"
 
+      - name: Install pipenv
+        run: pip install pipenv
+
       - name: Make packaging script executable
         run: chmod +x deployment_scripts/build_lambda_zip.sh
 
