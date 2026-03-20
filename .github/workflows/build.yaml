@@ -156,18 +156,18 @@ jobs:
         with:
           terraform_version: "1.14.7"
 
-      # - name: Initialize & Apply Terraform
-      #   working-directory: infrastructure/regional
-      #   env:
-      #     TF_STATE_BUCKET: terraform-state-bucket-${{ matrix.region == 'us-east-1' && 'east' || 'west' }}-${{ secrets.AWS_ACCOUNT_ID }}
-      #     TF_VAR_FILE: ../../environments/${{ env.ENVIRONMENT }}/regional.tfvars
-      #   run: |
-      #     terraform init \
-      #       -backend-config="bucket=$TF_STATE_BUCKET" \
-      #       -backend-config="key=fantasy-football-recap/${{ env.ENVIRONMENT }}/regional-${{ matrix.region }}-terraform.tfstate" \
-      #       -backend-config="region=${{ matrix.region }}"
-      #     terraform apply \
-      #       -auto-approve \
-      #       -var="environment=${{ env.ENVIRONMENT }}" \
-      #       -var="account_id=${{ secrets.AWS_ACCOUNT_ID }}"
-      #       -var="lambda_role_arn=arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/onboarding-lambda-${{ env.ENVIRONMENT }}-role"
+      - name: Initialize & Apply Terraform
+        working-directory: infrastructure/regional
+        env:
+          TF_STATE_BUCKET: terraform-state-bucket-${{ matrix.region == 'us-east-1' && 'east' || 'west' }}-${{ secrets.AWS_ACCOUNT_ID }}
+          TF_VAR_FILE: ../../environments/${{ env.ENVIRONMENT }}/regional.tfvars
+        run: |
+          terraform init \
+            -backend-config="bucket=$TF_STATE_BUCKET" \
+            -backend-config="key=fantasy-football-recap/${{ env.ENVIRONMENT }}/regional-${{ matrix.region }}-terraform.tfstate" \
+            -backend-config="region=${{ matrix.region }}"
+          terraform apply \
+            -auto-approve \
+            -var="environment=${{ env.ENVIRONMENT }}" \
+            -var="account_id=${{ secrets.AWS_ACCOUNT_ID }}"
+            -var="lambda_role_arn=arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/onboarding-lambda-${{ env.ENVIRONMENT }}-role"
