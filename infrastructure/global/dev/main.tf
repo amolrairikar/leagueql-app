@@ -129,3 +129,59 @@ module "s3-bidirectional-replication" {
     managed-by  = "terraform"
   }
 }
+
+module "onboarding-lambda-role" {
+  source = "../../modules/iam-role"
+  role_name = "fantasy-football-recap-onboarding-lambda-${var.environment}-role"
+  role_description = "Execution role for onboarding lambda."
+  trust_policy_json = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+      }
+    ]
+  })
+  role_policy_json = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "CreateLogGroups"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup"
+        ]
+        Resource = ["arn:aws:logs:region:${var.account_id}:*"]
+      },
+      {
+        Sid    = "CreateLogEvents"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ],
+        Resource = [
+          "arn:aws:logs:region:${var.account_id}:log-group:/aws/lambda/fantasy-football-recap-onboarder-${var.environment}-east:*",
+          "arn:aws:logs:region:${var.account_id}:log-group:/aws/lambda/fantasy-football-recap-onboarder-${var.environment}-west:*"
+        ]
+      },
+      {
+        Sid    = "WriteToDynamoDB"
+        Effect = "Allow"
+        Action = ["dynamodb:PutItem"]
+        Resource = [module.dynamodb.primary_table_arn]
+      }
+    ]
+  })
+
+  tags = {
+    environment = var.environment
+    project     = "fantasy-football-recap"
+    component   = "api"
+    managed-by  = "terraform"
+  }
+}
