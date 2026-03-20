@@ -27,7 +27,7 @@ module "lambda" {
   handler              = "handler.lambda_handler"
   memory_size          = 2048
   timeout              = 30
-  s3_bucket            = "fantasy-football-recap-${var.environment}-${local.region}-${local.account_id}"
+  s3_bucket            = "fantasy-football-recap-${var.environment}-${local.region}-bucket-${local.account_id}"
   s3_key               = "lambda-code-artifacts/onboarder-lambda.zip"
 
   tags = {
