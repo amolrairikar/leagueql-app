@@ -19,6 +19,11 @@ variable "lambda_function_name" {
   type        = string
 }
 
+variable "log_retention_days" {
+  description = "Number of days to retain API Gateway logs."
+  type        = number
+}
+
 variable "openapi_spec_path" {
   description = "The path to the OpenAPI YAML/JSON file"
   type        = string

@@ -260,3 +260,60 @@ module "api-lambda-role" {
     managed-by  = "terraform"
   }
 }
+
+module "api-gateway-role" {
+  source = "../../modules/iam-role"
+  role_name = "fantasy-football-recap-api-gateway-${var.environment}-role"
+  role_description = "Role for API Gateway to write logs to Cloudwatch."
+  trust_policy_json = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "apigateway.amazonaws.com"
+        }
+      }
+    ]
+  })
+  role_policy_json = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "CreateLogGroups"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:DescribeLogGroups",
+        ]
+        Resource = [
+          "arn:aws:logs:us-east-1:${var.account_id}:*",
+          "arn:aws:logs:us-west-2:${var.account_id}:*"
+        ]
+      },
+      {
+        Sid    = "CreateLogEvents"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogStream",
+          "logs:GetLogEvents",
+          "logs:PutLogEvents",
+          "logs:FilterLogEvents",
+          "logs:DescribeLogStreams"
+        ],
+        Resource = [
+          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/apigateway/fantasy-football-recap-api-${var.environment}-east:*",
+          "arn:aws:logs:us-west-2:${var.account_id}:log-group:/aws/apigateway/fantasy-football-recap-api-${var.environment}-west:*"
+        ]
+      }
+    ]
+  })
+
+  tags = {
+    environment = var.environment
+    project     = "fantasy-football-recap"
+    component   = "api"
+    managed-by  = "terraform"
+  }
+}
