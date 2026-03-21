@@ -68,17 +68,17 @@ module "api_lambda" {
   }
 }
 
-# module "backend_api" {
-#   source = "../modules/api-gw"
+module "backend_api" {
+  source = "../modules/api-gw"
 
-#   api_name           = "fantasy-football-recap-api-${var.environment}-${local.region}"
-#   api_description    = "API for fantasy football recap app"
-#   cors_allow_origins = ["http://localhost:5173"]
-#   openapi_spec_path  = "${path.module}/../../docs/api/openapi_spec.yaml"
-#   stage_name         = "${var.environment}-${local.region}"
+  api_name           = "fantasy-football-recap-api-${var.environment}-${local.region}"
+  api_description    = "API for fantasy football recap app"
+  cors_allow_origins = ["http://localhost:5173"]
+  openapi_spec_path  = "${path.module}/../../docs/api/openapi_spec.yaml"
+  stage_name         = "${var.environment}-${local.region}"
   
-#   openapi_vars = {
-#     aws_region = var.aws_region
-#     lambda_arn = module.api_lambda.lambda_arn
-#   }
-# }
+  openapi_vars = {
+    aws_region = var.aws_region
+    lambda_arn = module.api_lambda.lambda_arn
+  }
+}
