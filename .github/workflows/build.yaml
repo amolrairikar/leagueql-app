@@ -125,6 +125,7 @@ jobs:
     needs:
       - set-env
       - deploy-global
+      - deploy-lambda-layers
     env:
       ENVIRONMENT: ${{ needs.set-env.outputs.environment }}
 
