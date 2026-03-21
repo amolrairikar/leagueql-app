@@ -70,13 +70,18 @@ jobs:
             -var="account_id=${{ secrets.AWS_ACCOUNT_ID }}"
 
   deploy-lambda-layers:
-    name: Deploy Lambda Layers - ${{ needs.set-env.outputs.environment }}
+    name: Deploy Lambda Layers - ${{ needs.set-env.outputs.environment }} - ${{ matrix.region }}
     runs-on: ubuntu-latest
     needs:
       - set-env
       - deploy-global
     env:
       ENVIRONMENT: ${{ needs.set-env.outputs.environment }}
+
+    strategy:
+      matrix:
+        region: [us-east-1, us-west-2]
+      fail-fast: false
  
     steps:
       - name: Checkout code
@@ -97,7 +102,7 @@ jobs:
 
       - name: Build, upload, and publish Lambda layers
         env:
-          S3_BUCKET: fantasy-football-recap-${{ env.ENVIRONMENT }}-bucket
+          S3_BUCKET: fantasy-football-recap-${{ env.ENVIRONMENT }}-bucket-${{ matrix.region == 'us-east-1' && 'east' || 'west' }}-${{ secrets.AWS_ACCOUNT_ID }}
           AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
         run: |
           for package in pandas duckdb; do
@@ -116,7 +121,8 @@ jobs:
               --layer-name "${safe_name}-layer-${{ env.ENVIRONMENT }}" \
               --content "S3Bucket=${S3_BUCKET},S3Key=${s3_key}" \
               --compatible-runtimes python3.13 \
-              --compatible-architectures x86_64
+              --compatible-architectures x86_64 \
+              --region ${{ matrix.region }}
           done
 
   deploy-lambda-artifacts:
