@@ -177,7 +177,8 @@ module "onboarding-lambda-role" {
         Effect = "Allow"
         Action = [
           "dynamodb:PutItem",
-          "dynamodb:BatchWriteItem"
+          "dynamodb:BatchWriteItem",
+          "dynamodb:UpdateItem"
         ]
         Resource = [module.dynamodb.primary_table_arn]
       }
