@@ -38,7 +38,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v6
@@ -64,4 +64,151 @@ jobs:
             -backend-config="bucket=$TF_STATE_BUCKET" \
             -backend-config="key=fantasy-football-recap/${{ env.ENVIRONMENT }}/global-terraform.tfstate" \
             -backend-config="region=us-east-1"
-          terraform apply -auto-approve -var="environment=${{ env.ENVIRONMENT }}"
+          terraform apply \
+            -auto-approve \
+            -var="environment=${{ env.ENVIRONMENT }}" \
+            -var="account_id=${{ secrets.AWS_ACCOUNT_ID }}"
+
+  deploy-lambda-artifacts:
+    name: Deploy Lambda Artifacts - ${{ needs.set-env.outputs.environment }}
+    runs-on: ubuntu-latest
+    needs:
+      - set-env
+      - deploy-global
+    env:
+      ENVIRONMENT: ${{ needs.set-env.outputs.environment }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-${{ env.ENVIRONMENT }}-role 
+          aws-region: us-east-1
+          role-session-name: GitHubActions-${{ github.run_id }}
+
+      - name: Verify AWS identity
+        run: aws sts get-caller-identity
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install pipenv
+        run: pip install pipenv
+
+      - name: Make packaging script executable
+        run: chmod +x deployment_scripts/build_lambda_zip.sh
+
+      - name: Discover Lambda directories
+        id: discover-lambda-dirs
+        run: |
+          dirs=$(find . \
+            -name "requirements.txt" \
+            -not -path "*/.git/*" \
+            -not -path "*/node_modules/*" \
+            -not -path "./requirements.txt" \
+            | xargs -I{} dirname {} \
+            | tr '\n' ' ' \
+            | xargs)
+          echo "dirs=$dirs" >> $GITHUB_OUTPUT
+ 
+      - name: Package and upload Lambda functions
+        env:
+          S3_BUCKET: fantasy-football-recap-${{ env.ENVIRONMENT }}-bucket
+          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+        # NOTE: The script here handles us-east-1 and us-west-2
+        run: bash deployment_scripts/build_lambda_zip.sh ${{ steps.discover-lambda-dirs.outputs.dirs }}
+
+  deploy-regional:
+    name: Deploy Regional Infrastructure - ${{ needs.set-env.outputs.environment }} - ${{ matrix.region }}
+    runs-on: ubuntu-latest
+    needs:
+      - set-env
+      - deploy-global
+      - deploy-lambda-artifacts
+    env:
+      ENVIRONMENT: ${{ needs.set-env.outputs.environment }}
+
+    strategy:
+      matrix:
+        region: [us-east-1, us-west-2]
+      fail-fast: false  # let both regions attempt; don't cancel one if the other fails
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-${{ env.ENVIRONMENT }}-role
+          aws-region: ${{ matrix.region }}
+          role-session-name: GitHubActions-${{ github.run_id }}-${{ matrix.region }}
+
+      - name: Verify AWS identity
+        run: aws sts get-caller-identity
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "1.14.7"
+
+      - name: Initialize & Apply Terraform
+        working-directory: infrastructure/regional
+        env:
+          TF_STATE_BUCKET: terraform-state-bucket-${{ matrix.region == 'us-east-1' && 'east' || 'west' }}-${{ secrets.AWS_ACCOUNT_ID }}
+        run: |
+          terraform init \
+            -backend-config="bucket=$TF_STATE_BUCKET" \
+            -backend-config="key=fantasy-football-recap/${{ env.ENVIRONMENT }}/regional-${{ matrix.region }}-terraform.tfstate" \
+            -backend-config="region=${{ matrix.region }}"
+          terraform apply \
+            -auto-approve \
+            -var="environment=${{ env.ENVIRONMENT }}" \
+            -var="aws_region=${{ matrix.region }}" \
+            -var="lambda_role_arn=arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/fantasy-football-recap-onboarding-lambda-${{ env.ENVIRONMENT }}-role"
+
+  live-dependency-tests:
+    name: Live Dependency Tests
+    runs-on: ubuntu-latest
+    # These tests should never run in prod, only dev
+    if: github.event_name == 'pull_request'
+    needs:
+      - set-env
+      - deploy-regional
+    env:
+      ENVIRONMENT: ${{ needs.set-env.outputs.environment }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-${{ env.ENVIRONMENT }}-testing-role
+          aws-region: us-east-1
+          role-session-name: GitHubActions-${{ github.run_id }}-live-dependency-testing
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install pipenv
+        run: pip install pipenv
+
+      - name: Install dependencies
+        run: pipenv install --dev
+
+      - name: Run live dependency tests
+        env:
+          AWS_REGION: us-east-1
+          SEASON: ${{ vars.SEASON }}
+          S2: ${{ secrets.S2 }}
+          SWID: ${{ secrets.SWID }}
+        run: pipenv run behave tests/live_dependency --no-capture

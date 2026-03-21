@@ -3,6 +3,7 @@ import asyncio
 from espn_client import ESPNClient
 from sleeper_client import SleeperClient
 from transformer import Transformer
+from utils import logger
 from writer import DynamoWriter
 
 
@@ -51,9 +52,15 @@ class OnboardingService:
 
     def run(self) -> None:
         """Runs the onboarding logic."""
+        logger.info("Beginning raw data fetch")
         raw_data = asyncio.run(self.client.fetch_all())
+        logger.info("Completed data fetch")
+        logger.info("Beginning data transformation")
         views = self.transformer.transform(raw_data=raw_data)
+        logger.info("Completed data transformation")
+        logger.info("Beginning data write")
         self.writer.write_all(views=views)
+        logger.info("Completed data write")
 
     def _build_client(
         self,

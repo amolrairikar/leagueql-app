@@ -15,6 +15,7 @@ pyyaml = "*"
 requests = "*"
 
 [dev-packages]
+behave = "*"
 boto3 = "*"
 boto3-stubs = "*"
 coverage = "*"
@@ -22,4 +23,5 @@ pre-commit = "*"
 pytest = "*"
 pytest-asyncio = "*"
 pytest-cov = "*"
+python-dotenv = "*"
 ruff = "*"

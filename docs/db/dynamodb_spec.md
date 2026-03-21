@@ -9,8 +9,7 @@
 | Primary key | `PK` (String) + `SK` (String) |
 | GSIs | None |
 
-All reads are single `GetItem` calls — no scans, no queries, no GSIs. The table holds `0n + 3` items per league onboarded,
-where `n` is the number of seasons onboarded for that league.
+All reads are single `GetItem` calls — no scans, no queries, no GSIs. The table holds `1 + l(0 * n + 2)` items per league onboarded, where `n` is the number of seasons onboarded for that league and `l` is the number of leagues onboarded.
 
 ---
 

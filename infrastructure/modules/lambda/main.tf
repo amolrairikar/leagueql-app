@@ -11,30 +11,32 @@ data "aws_s3_object" "lambda_package" {
   key    = var.s3_key
 }
 
+locals {
+  # Prefer version_id (stable, requires bucket versioning) and fall back to etag.
+  # Either changes whenever a new artifact is uploaded, triggering redeployment.
+  source_code_hash = coalesce(
+    data.aws_s3_object.lambda_package.version_id,
+    data.aws_s3_object.lambda_package.etag
+  )
+}
+
 resource "aws_lambda_function" "this" {
-  function_name = var.function_name
-  description   = var.function_description
-  role          = var.role_arn
-  handler       = var.handler
-  layers        = var.layers
-  memory_size   = var.memory_size
-  timeout       = var.timeout
-  
-  s3_bucket = var.s3_bucket
-  s3_key    = var.s3_key
-
-  # This is the key to automatic redeployment.
-  # When the file in S3 changes, its checksum_sha256 changes,
-  # forcing Terraform to update the Lambda function.
-  source_code_hash = data.aws_s3_object.lambda_package.checksum_sha256
-
-  runtime = "python3.12"
+  function_name     = var.function_name
+  description       = var.function_description
+  role              = var.role_arn
+  handler           = var.handler
+  layers            = var.layers
+  memory_size       = var.memory_size
+  timeout           = var.timeout
+  s3_bucket         = var.s3_bucket
+  s3_key            = var.s3_key
+  s3_object_version = data.aws_s3_object.lambda_package.version_id
+  runtime           = "python3.13"
 
   environment {
     variables = var.environment_variables
   }
 
-  tags = var.tags
-
+  tags       = var.tags
   depends_on = [aws_cloudwatch_log_group.lambda_log_group]
 }

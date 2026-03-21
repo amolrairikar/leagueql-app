@@ -9,13 +9,13 @@ variable "role_description" {
   default     = "Managed by Terraform"
 }
 
-variable "trust_policy_file" {
-  description = "The relative path to the JSON file containing the trust (assume role) policy"
+variable "trust_policy_json" {
+  description = "The Terraform JSON definition containing the trust (assume role) policy"
   type        = string
 }
 
-variable "role_policy_file" {
-  description = "The relative path to the JSON file containing the permissions policy"
+variable "role_policy_json" {
+  description = "The Terraform JSON definition containing the permissions policy"
   type        = string
 }
 

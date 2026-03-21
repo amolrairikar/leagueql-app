@@ -1,9 +1,9 @@
-import os
-import yaml
 from typing import Any
 
 import duckdb
 import pandas as pd
+
+from queries import ESPN_QUERIES, SLEEPER_QUERIES
 
 
 class Transformer:
@@ -128,22 +128,19 @@ class Transformer:
         Returns:
             Mapping of DynamoDB sort key to processed data.
         """
-        base_path = os.path.dirname(__file__)
-        yaml_path = os.path.join(base_path, "transformation_queries.yaml")
-        with open(yaml_path) as stream:
-            sql_query_config = yaml.safe_load(stream=stream)[self.platform.lower()]
+        sql_query_config = (
+            ESPN_QUERIES if self.platform.lower() == "espn" else SLEEPER_QUERIES
+        )
         results = {}
-        for query in sql_query_config:
+        for key, query in sql_query_config.items():
             # Results that are partitioned by season and/or week
-            if sql_query_config[query]["database_key"] in (
-                "MATCHUPS",
-            ):  # TODO: Fill out later
+            if key in ("MATCHUPS",):  # TODO: Fill out later
                 pass
             # Results that are not partitioned by season and/or week
             else:
-                res = con.execute(sql_query_config[query]["query"])
+                res = con.execute(query)
                 columns = [desc[0] for desc in res.description]
                 rows = res.fetchall()
                 data = [dict(zip(columns, row)) for row in rows]
-                results[sql_query_config[query]["database_key"]] = data
+                results[key] = data
         return results

@@ -10,6 +10,7 @@ terraform.tfplan
 
 # Python files
 __pycache__
+.env
 
 # Coverage files
 .coverage

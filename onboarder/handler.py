@@ -37,16 +37,26 @@ def lambda_handler(event, context) -> dict[str, str | int]:
             "body": json.dumps({"status": "failed", "error_msg": str(e)}),
         }
     except ValueError as e:
+        logger.error(
+            "Incorrect value error while initializing onboarding service: %s", e
+        )
         return {
             "statusCode": 400,
             "body": json.dumps({"status": "failed", "error_msg": str(e)}),
         }
     except requests.exceptions.HTTPError as e:
+        logger.error(
+            "Request error occurred fetching data while initializing onboarding service: %s",
+            e,
+        )
         return {
             "statusCode": 502,
             "body": json.dumps({"status": "failed", "error_msg": str(e)}),
         }
     except RuntimeError as e:
+        logger.error(
+            "Runtime error occurred while initializing onboarding service: %s", e
+        )
         return {
             "statusCode": 502,
             "body": json.dumps({"status": "failed", "error_msg": str(e)}),
@@ -55,11 +65,15 @@ def lambda_handler(event, context) -> dict[str, str | int]:
     try:
         service.run()
     except RuntimeError as e:
+        logger.error("Runtime error occurred while running onboarding service: %s", e)
         return {
             "statusCode": 502,
             "body": json.dumps({"status": "failed", "error_msg": str(e)}),
         }
     except Exception as e:
+        logger.error(
+            "Unexpected error occurred while running onboarding service: %s", e
+        )
         return {
             "statusCode": 500,
             "body": json.dumps(

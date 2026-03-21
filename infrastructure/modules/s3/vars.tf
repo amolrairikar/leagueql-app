@@ -1,10 +1,10 @@
-variable "bucket_name" {
-  description = "The name of the S3 bucket"
+variable "bucket_prefix" {
+  description = "The prefix for the two S3 buckets"
   type        = string
 }
 
 variable "tags" {
-  description = "Additional tags for the S3 bucket"
+  description = "Additional tags for the S3 buckets"
   type        = map(string)
   default     = {}
 }
@@ -16,7 +16,7 @@ variable "versioning_enabled" {
 }
 
 variable "lifecycle_rules" {
-  description = "List of lifecycle rules to apply to the bucket"
+  description = "List of lifecycle rules to apply to the buckets"
   type = list(object({
     rule_name       = string
     prefix          = string
@@ -25,14 +25,22 @@ variable "lifecycle_rules" {
   default = []
 }
 
-variable "replication_role_arn" {
-  description = "The ARN of the IAM role to use for S3 replication. If null, replication will not be configured."
+variable "account_id" {
+  description = "The 12 digit ID for the AWS account to deploy to"
   type        = string
-  default     = null
 }
 
-variable "destination_bucket_arn" {
-  description = "The ARN of the destination bucket for replication"
+variable "primary_aws_region" {
+  description = "The name of the primary AWS region"
   type        = string
-  default     = null
+}
+
+variable "secondary_aws_region" {
+  description = "The name of the secondary AWS region"
+  type        = string
+}
+
+variable "replication_role_arn" {
+  description = "The ARN of the IAM role to use for S3 replication"
+  type        = string
 }
