@@ -109,8 +109,8 @@ resource "aws_cloudwatch_log_resource_policy" "apigateway_log_delivery" {
           "logs:PutLogEvents"
         ]
         Resource = [
-          "arn:aws:logs:us-east-1:${locals.account_id}:log-group:/aws/apigateway/*",
-          "arn:aws:logs:us-west-2:${locals.account_id}:log-group:/aws/apigateway/*"
+          "arn:aws:logs:us-east-1:${local.account_id}:log-group:/aws/apigateway/*",
+          "arn:aws:logs:us-west-2:${local.account_id}:log-group:/aws/apigateway/*"
         ]
       }
     ]
