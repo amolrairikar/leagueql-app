@@ -69,6 +69,56 @@ jobs:
             -var="environment=${{ env.ENVIRONMENT }}" \
             -var="account_id=${{ secrets.AWS_ACCOUNT_ID }}"
 
+  deploy-lambda-layers:
+    name: Deploy Lambda Layers - ${{ needs.set-env.outputs.environment }}
+    runs-on: ubuntu-latest
+    needs:
+      - set-env
+      - deploy-global
+    env:
+      ENVIRONMENT: ${{ needs.set-env.outputs.environment }}
+ 
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+ 
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-${{ env.ENVIRONMENT }}-role
+          aws-region: us-east-1
+          role-session-name: GitHubActions-${{ github.run_id }}
+ 
+      - name: Verify AWS identity
+        run: aws sts get-caller-identity
+ 
+      - name: Make layer script executable
+        run: chmod +x deployment_scripts/build_lambda_layer_zip.sh
+
+      - name: Build, upload, and publish Lambda layers
+        env:
+          S3_BUCKET: fantasy-football-recap-${{ env.ENVIRONMENT }}-bucket
+          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+        run: |
+          for package in pandas duckdb; do
+            echo "── Building layer for: $package ──"
+            bash deployment_scripts/build_lambda_layer_zip.sh "$package" "3.13"
+ 
+            safe_name="${package//-/_}"
+            zip_file="${safe_name}_lambda_layer.zip"
+            s3_key="lambda-code-artifacts/${zip_file}"
+ 
+            echo "Uploading ${zip_file} to s3://${S3_BUCKET}/${s3_key}"
+            aws s3 cp "$zip_file" "s3://${S3_BUCKET}/${s3_key}"
+ 
+            echo "Publishing layer version for ${package}"
+            aws lambda publish-layer-version \
+              --layer-name "${safe_name}-layer-${{ env.ENVIRONMENT }}" \
+              --content "S3Bucket=${S3_BUCKET},S3Key=${s3_key}" \
+              --compatible-runtimes python3.13 \
+              --compatible-architectures x86_64
+          done
+
   deploy-lambda-artifacts:
     name: Deploy Lambda Artifacts - ${{ needs.set-env.outputs.environment }}
     runs-on: ubuntu-latest
