@@ -2,7 +2,11 @@
 <!-- What does this PR do and why? -->
 
 **Type:**
-- [ ] 🐛 Bug fix  &nbsp;  - [ ] ✨ Feature  &nbsp;  - [ ] ♻️ Refactor  &nbsp;  - [ ] 🏗️ Infra  &nbsp;  - [ ] 📝 Docs
+- [ ] 🐛 Bug fix
+- [ ] ✨ Feature 
+- [ ] ♻️ Refactor
+- [ ] 🏗️ Infra
+- [ ] 📝 Docs
 
 **Ticket:** <!-- #123 -->
 

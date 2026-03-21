@@ -28,5 +28,4 @@ variable "openapi_vars" {
 variable "stage_name" {
   description = "The name of the deployment stage"
   type        = string
-  default     = "prod"
 }
