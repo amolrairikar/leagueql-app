@@ -43,30 +43,30 @@ module "onboarder_lambda" {
   }
 }
 
-# module "api_lambda" {
-#   source = "../modules/lambda"
+module "api_lambda" {
+  source = "../modules/lambda"
 
-#   function_name        = "fantasy-football-recap-api-${var.environment}-${local.region}"
-#   function_description = "Lambda function containing API handler for fantasy football recap app"
-#   role_arn             =  var.api_lambda_role_arn
-#   handler              = "handler.lambda_handler"
-#   memory_size          = 1024
-#   timeout              = 15
-#   log_retention        = 7
-#   s3_bucket            = "fantasy-football-recap-${var.environment}-bucket-${local.region}-${local.account_id}"
-#   s3_key               = "lambda-code-artifacts/api-lambda.zip"
+  function_name        = "fantasy-football-recap-api-${var.environment}-${local.region}"
+  function_description = "Lambda function containing API handler for fantasy football recap app"
+  role_arn             =  var.api_lambda_role_arn
+  handler              = "main.handler"
+  memory_size          = 1024
+  timeout              = 15
+  log_retention        = 7
+  s3_bucket            = "fantasy-football-recap-${var.environment}-bucket-${local.region}-${local.account_id}"
+  s3_key               = "lambda-code-artifacts/api-lambda.zip"
 
-#   environment_variables = {
-#     DYNAMODB_TABLE_NAME = "fantasy-football-recap-table-${var.environment}"
-#   }
+  environment_variables = {
+    DYNAMODB_TABLE_NAME = "fantasy-football-recap-table-${var.environment}"
+  }
 
-#   tags = {
-#     environment = var.environment
-#     project     = "fantasy-football-recap"
-#     component   = "api"
-#     managed-by  = "terraform"
-#   }
-# }
+  tags = {
+    environment = var.environment
+    project     = "fantasy-football-recap"
+    component   = "api"
+    managed-by  = "terraform"
+  }
+}
 
 # module "backend_api" {
 #   source = "../modules/api-gw"
