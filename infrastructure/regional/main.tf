@@ -91,3 +91,28 @@ module "backend_api" {
     managed-by  = "terraform"
   }
 }
+
+resource "aws_cloudwatch_log_resource_policy" "apigateway_log_delivery" {
+  policy_name = "api-gateway-log-delivery-${var.environment}"
+
+  policy_document = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AllowLogDeliveryService"
+        Effect = "Allow"
+        Principal = {
+          Service = "delivery.logs.amazonaws.com"
+        }
+        Action = [
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = [
+          "arn:aws:logs:us-east-1:${locals.account_id}:log-group:/aws/apigateway/*",
+          "arn:aws:logs:us-west-2:${locals.account_id}:log-group:/aws/apigateway/*"
+        ]
+      }
+    ]
+  })
+}
