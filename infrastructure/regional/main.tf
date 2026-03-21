@@ -40,8 +40,8 @@ module "lambda" {
   s3_key               = "lambda-code-artifacts/onboarder-lambda.zip"
 
   layers = [
-    data.aws_lambda_layer_version.duckdb_layer.version,
-    data.aws_lambda_layer_version.pandas_layer.version
+    data.aws_lambda_layer_version.duckdb_layer.arn,
+    data.aws_lambda_layer_version.pandas_layer.arn
   ]
 
   environment_variables = {
