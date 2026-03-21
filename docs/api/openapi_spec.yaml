@@ -1,4 +1,4 @@
-openapi: 3.1.0
+openapi: 3.0.1
 
 info:
   title: Fantasy Football API
@@ -11,6 +11,21 @@ info:
     name: MIT
 
 paths:
+
+  /:
+    get:
+      summary: Health check
+      description: >
+        Health check to validate the API is running and responding to requests.
+      operationId: healthCheck
+      responses:
+        "200":
+          description: Healthy!
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        httpMethod: POST
+        uri: "arn:aws:apigateway:${aws_region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations"
+        payloadFormatVersion: "2.0"
 
   /leagues/{leagueId}:
     get:

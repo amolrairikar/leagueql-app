@@ -14,6 +14,16 @@ variable "cors_allow_origins" {
   type        = list(string)
 }
 
+variable "lambda_function_name" {
+  description = "Name of the Lambda function handling API requests."
+  type        = string
+}
+
+variable "log_retention_days" {
+  description = "Number of days to retain API Gateway logs."
+  type        = number
+}
+
 variable "openapi_spec_path" {
   description = "The path to the OpenAPI YAML/JSON file"
   type        = string
@@ -28,5 +38,10 @@ variable "openapi_vars" {
 variable "stage_name" {
   description = "The name of the deployment stage"
   type        = string
-  default     = "prod"
+}
+
+variable "tags" {
+  description = "A map of tags to assign to the resource"
+  type        = map(string)
+  default     = {}
 }

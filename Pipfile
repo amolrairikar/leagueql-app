@@ -10,9 +10,12 @@ python_version = "3.13"
 aiohttp = "*"
 asyncio = "*"
 duckdb = "*"
+fastapi = "*"
+mangum = "*"
 pandas = "*"
 pyyaml = "*"
 requests = "*"
+uvicorn = "*"
 
 [dev-packages]
 behave = "*"
