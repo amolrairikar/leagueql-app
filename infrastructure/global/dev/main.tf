@@ -30,7 +30,7 @@ module "dynamodb" {
     aws.replica = aws.replica
   }
 
-  table_name      = "fantasy-football-recap-table-dev"
+  table_name      = "fantasy-football-recap-table-${var.environment}"
   hash_key        = "PK"
   range_key       = "SK"
   replica_regions = ["us-west-2"]
