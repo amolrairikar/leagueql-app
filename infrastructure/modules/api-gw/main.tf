@@ -9,6 +9,8 @@ resource "aws_apigatewayv2_api" "this" {
     allow_headers = ["Content-Type", "Authorization"]
     max_age       = 3600
   }
+
+  tags = var.tags
 }
 
 resource "aws_apigatewayv2_stage" "default" {
@@ -19,4 +21,6 @@ resource "aws_apigatewayv2_stage" "default" {
   lifecycle {
     create_before_destroy = true
   }
+
+  tags = var.tags
 }

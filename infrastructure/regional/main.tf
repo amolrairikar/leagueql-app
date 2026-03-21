@@ -81,4 +81,11 @@ module "backend_api" {
     aws_region = var.aws_region
     lambda_arn = module.api_lambda.lambda_arn
   }
+
+  tags = {
+    environment = var.environment
+    project     = "fantasy-football-recap"
+    component   = "api"
+    managed-by  = "terraform"
+  }
 }
