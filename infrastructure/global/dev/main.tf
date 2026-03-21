@@ -175,7 +175,10 @@ module "onboarding-lambda-role" {
       {
         Sid    = "WriteToDynamoDB"
         Effect = "Allow"
-        Action = ["dynamodb:PutItem"]
+        Action = [
+          "dynamodb:PutItem",
+          "dynamodb:BatchWriteItem"
+        ]
         Resource = [module.dynamodb.primary_table_arn]
       }
     ]
