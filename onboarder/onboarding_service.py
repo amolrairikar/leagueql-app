@@ -54,16 +54,16 @@ class OnboardingService:
         logger.info("Beginning raw data fetch")
         raw_data = asyncio.run(self.client.fetch_all())
         logger.info("Completed data fetch")
+        logger.info("Updating job onboarding status in DynamoDB")
+        job_id = write_onboarding_job_id_to_dynamodb()
+        logger.info("Wrote job onboarding status to DynamoDB")
         logger.info("Writing raw data to S3")
         upload_results_to_s3(
             results=raw_data,
             bucket_name=os.environ["S3_BUCKET_NAME"],
-            key_name=f"raw-api-data/{self.platform}/{self.league_id}/onboard.json",
+            key_name=f"raw-api-data/{self.platform}/{self.league_id}/onboard_{job_id}.json",
         )
         logger.info("Wrote raw data to S3")
-        logger.info("Updating job onboarding status in DynamoDB")
-        job_id = write_onboarding_job_id_to_dynamodb()
-        logger.info("Wrote job onboarding status to DynamoDB")
         return job_id
 
     def _build_client(

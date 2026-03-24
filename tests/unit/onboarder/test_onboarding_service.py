@@ -100,7 +100,7 @@ class TestRun:
         mock_upload.assert_called_once_with(
             results=raw_data,
             bucket_name="test-bucket",
-            key_name="raw-api-data/ESPN/123/onboard.json",
+            key_name="raw-api-data/ESPN/123/onboard_job-123.json",
         )
         mock_write_job.assert_called_once()
         assert result == "job-123"
