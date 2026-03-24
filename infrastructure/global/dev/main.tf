@@ -233,8 +233,8 @@ module "processing-lambda-role" {
           "logs:PutLogEvents"
         ],
         Resource = [
-          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/lambda/fantasy-football-recap-processing-${var.environment}-east:*",
-          "arn:aws:logs:us-west-2:${var.account_id}:log-group:/aws/lambda/fantasy-football-recap-processing-${var.environment}-west:*"
+          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/lambda/fantasy-football-recap-processor-${var.environment}-east:*",
+          "arn:aws:logs:us-west-2:${var.account_id}:log-group:/aws/lambda/fantasy-football-recap-processor-${var.environment}-west:*"
         ]
       },
       {

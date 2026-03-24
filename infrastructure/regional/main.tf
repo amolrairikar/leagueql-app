@@ -46,7 +46,7 @@ module "onboarder_lambda" {
 module "processor_lambda" {
   source = "../modules/lambda"
 
-  function_name        = "fantasy-football-recap-processing-${var.environment}-${local.region}"
+  function_name        = "fantasy-football-recap-processor-${var.environment}-${local.region}"
   function_description = "Lambda function for processing raw fantasy football league data"
   role_arn             =  var.processor_lambda_role_arn
   handler              = "handler.lambda_handler"
