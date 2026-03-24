@@ -168,6 +168,7 @@ jobs:
             -var="environment=${{ env.ENVIRONMENT }}" \
             -var="aws_region=${{ matrix.region }}" \
             -var="onboarder_lambda_role_arn=arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/fantasy-football-recap-onboarding-lambda-${{ env.ENVIRONMENT }}-role" \
+            -var="processor_lambda_role_arn=arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/fantasy-football-recap-processing-lambda-${{ env.ENVIRONMENT }}-role" \
             -var="api_lambda_role_arn=arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/fantasy-football-recap-api-lambda-${{ env.ENVIRONMENT }}-role"
 
   # live-dependency-tests:
