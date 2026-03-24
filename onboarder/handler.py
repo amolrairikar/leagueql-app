@@ -89,15 +89,3 @@ def lambda_handler(event, context) -> dict[str, str | int]:
         "statusCode": 200,
         "body": json.dumps({"status": "succeeded", "leagueId": body["leagueId"]}),
     }
-
-
-lambda_handler(
-    event={
-        "name": "test-event",
-        "body": {
-            "leagueId": "1251587932842627072",
-            "platform": "SLEEPER",
-        },
-    },
-    context={},
-)

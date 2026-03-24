@@ -192,6 +192,17 @@ module "onboarding-lambda-role" {
           "${local.primary_bucket_arn}/raw-api-data/*",
           "${local.secondary_bucket_arn}/raw-api-data/*"
         ]
+      },
+      {
+        Sid    = "WriteJobStatusDynamoDB"
+        Effect = "Allow"
+        Action = [
+          "dynamodb:PutItem",
+        ]
+        Resource = [
+          module.dynamodb.primary_table_arn,
+          module.dynamodb.replica_table_arn
+        ]
       }
     ]
   })
