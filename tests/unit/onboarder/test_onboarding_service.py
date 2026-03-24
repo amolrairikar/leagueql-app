@@ -85,12 +85,16 @@ class TestRun:
                 "onboarder.onboarding_service.asyncio.run", return_value=raw_data
             ) as mock_run,
             patch("onboarder.onboarding_service.upload_results_to_s3") as mock_upload,
+            patch(
+                "onboarder.onboarding_service.write_onboarding_job_id_to_dynamodb",
+                return_value="job-123",
+            ) as mock_write_job,
             patch.dict(os.environ, {"S3_BUCKET_NAME": "test-bucket"}),
         ):
             service = OnboardingService(
                 league_id="123", platform="ESPN", latest_season="2023"
             )
-            service.run()
+            result = service.run()
 
         mock_run.assert_called_once()
         mock_upload.assert_called_once_with(
@@ -98,3 +102,5 @@ class TestRun:
             bucket_name="test-bucket",
             key_name="raw-api-data/ESPN/123/onboard.json",
         )
+        mock_write_job.assert_called_once()
+        assert result == "job-123"

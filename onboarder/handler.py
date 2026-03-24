@@ -63,7 +63,13 @@ def lambda_handler(event, context) -> dict[str, str | int]:
         }
 
     try:
-        service.run()
+        job_id = service.run()
+    except KeyError as e:
+        logger.error("Missing required environment variable: %s", e)
+        return {
+            "statusCode": 400,
+            "body": json.dumps({"status": "failed", "error_msg": str(e)}),
+        }
     except RuntimeError as e:
         logger.error("Runtime error occurred while running onboarding service: %s", e)
         return {
@@ -87,5 +93,5 @@ def lambda_handler(event, context) -> dict[str, str | int]:
     logger.info("Ending league onboarding process execution.")
     return {
         "statusCode": 200,
-        "body": json.dumps({"status": "succeeded", "leagueId": body["leagueId"]}),
+        "body": json.dumps({"status": "succeeded", "onboarding_job_id": job_id}),
     }

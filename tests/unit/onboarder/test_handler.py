@@ -22,6 +22,7 @@ class TestLambdaHandlerSuccess:
     def test_returns_200_on_success(self):
         context = MagicMock()
         mock_service = MagicMock()
+        mock_service.run.return_value = "job-123"
 
         with patch("onboarder.handler.OnboardingService", return_value=mock_service):
             result = lambda_handler(make_event(), context)
@@ -29,13 +30,14 @@ class TestLambdaHandlerSuccess:
         assert result["statusCode"] == 200
         body = json.loads(result["body"])
         assert body["status"] == "succeeded"
-        assert body["leagueId"] == 123
+        assert body["onboarding_job_id"] == "job-123"
         mock_service.run.assert_called_once()
 
     def test_optional_fields_passed_as_none(self):
         context = MagicMock()
         event = make_event({"leagueId": 456, "platform": "espn"})
         mock_service = MagicMock()
+        mock_service.run.return_value = "job-456"
 
         with patch(
             "onboarder.handler.OnboardingService", return_value=mock_service
@@ -107,6 +109,19 @@ class TestLambdaHandlerOnboardingServiceErrors:
 
 
 class TestLambdaHandlerRunErrors:
+    def test_key_error_in_run_returns_400(self):
+        context = MagicMock()
+        mock_service = MagicMock()
+        mock_service.run.side_effect = KeyError("DYNAMODB_TABLE_NAME")
+
+        with patch("onboarder.handler.OnboardingService", return_value=mock_service):
+            result = lambda_handler(make_event(), context)
+
+        assert result["statusCode"] == 400
+        body = json.loads(result["body"])
+        assert body["status"] == "failed"
+        assert "DYNAMODB_TABLE_NAME" in body["error_msg"]
+
     def test_runtime_error_in_run_returns_502(self):
         context = MagicMock()
         mock_service = MagicMock()

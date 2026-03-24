@@ -5,7 +5,7 @@ import asyncio
 from espn_client import ESPNClient
 from sleeper_client import SleeperClient
 from utils import logger
-from writer import upload_results_to_s3
+from writer import upload_results_to_s3, write_onboarding_job_id_to_dynamodb
 
 
 class OnboardingService:
@@ -49,7 +49,7 @@ class OnboardingService:
             swid_cookie=swid_cookie,
         )
 
-    def run(self) -> None:
+    def run(self) -> str:
         """Runs the onboarding logic."""
         logger.info("Beginning raw data fetch")
         raw_data = asyncio.run(self.client.fetch_all())
@@ -61,6 +61,10 @@ class OnboardingService:
             key_name=f"raw-api-data/{self.platform}/{self.league_id}/onboard.json",
         )
         logger.info("Wrote raw data to S3")
+        logger.info("Updating job onboarding status in DynamoDB")
+        job_id = write_onboarding_job_id_to_dynamodb()
+        logger.info("Wrote job onboarding status to DynamoDB")
+        return job_id
 
     def _build_client(
         self,
