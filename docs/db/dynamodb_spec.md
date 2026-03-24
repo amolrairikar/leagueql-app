@@ -57,6 +57,7 @@ Entry representing the status of a given onboarding job. Has TTL setup to expire
 | `PK` | String | Yes | `JOB#<job_id>` |
 | `SK` | String | Yes | `ONBOARDING_JOB_STATUS` |
 | `status` | String | Yes | The current onboarding status |
+| `expiration_time` | Number | Yes | Epoch timestamp representing expiration time of record 
 
 **Example:**
 ```json

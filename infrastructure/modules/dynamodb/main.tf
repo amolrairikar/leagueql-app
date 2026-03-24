@@ -32,6 +32,11 @@ resource "aws_dynamodb_table" "global_table" {
     enabled = true
   }
 
+  ttl {
+    attribute_name = "expiration_time"
+    enabled        = true
+  }
+
   dynamic "replica" {
     for_each = var.replica_regions
     content {
