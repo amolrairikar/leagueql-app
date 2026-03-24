@@ -3,36 +3,36 @@ from unittest.mock import patch
 
 import pytest
 
-from onboarding_service import OnboardingService
+from onboarder.onboarding_service import OnboardingService
 
 
 def make_espn_service(**kwargs):
     defaults = {"league_id": "123", "platform": "ESPN", "latest_season": "2023"}
     defaults.update(kwargs)
     with (
-        patch("onboarding_service.ESPNClient"),
-        patch("onboarding_service.SleeperClient"),
+        patch("onboarder.onboarding_service.ESPNClient"),
+        patch("onboarder.onboarding_service.SleeperClient"),
     ):
         return OnboardingService(**defaults)
 
 
 class TestOnboardingServiceInit:
     def test_latest_season_converted_to_string_when_truthy(self):
-        with patch("onboarding_service.ESPNClient"):
+        with patch("onboarder.onboarding_service.ESPNClient"):
             service = OnboardingService(
                 league_id="123", platform="ESPN", latest_season=2023
             )
         assert service.latest_season == "2023"
 
     def test_latest_season_none_when_falsy(self):
-        with patch("onboarding_service.SleeperClient"):
+        with patch("onboarder.onboarding_service.SleeperClient"):
             service = OnboardingService(
                 league_id="123", platform="SLEEPER", latest_season=None
             )
         assert service.latest_season is None
 
     def test_stores_league_id_and_platform(self):
-        with patch("onboarding_service.ESPNClient"):
+        with patch("onboarder.onboarding_service.ESPNClient"):
             service = OnboardingService(
                 league_id="456", platform="ESPN", latest_season="2023"
             )
@@ -42,7 +42,7 @@ class TestOnboardingServiceInit:
 
 class TestBuildClient:
     def test_espn_platform_creates_espn_client(self):
-        with patch("onboarding_service.ESPNClient") as mock_espn_cls:
+        with patch("onboarder.onboarding_service.ESPNClient") as mock_espn_cls:
             service = OnboardingService(
                 league_id="123",
                 platform="ESPN",
@@ -64,7 +64,7 @@ class TestBuildClient:
             OnboardingService(league_id="123", platform="ESPN", latest_season=None)
 
     def test_sleeper_platform_creates_sleeper_client(self):
-        with patch("onboarding_service.SleeperClient") as mock_sleeper_cls:
+        with patch("onboarder.onboarding_service.SleeperClient") as mock_sleeper_cls:
             service = OnboardingService(league_id="456", platform="SLEEPER")
 
         mock_sleeper_cls.assert_called_once_with("456")
@@ -80,9 +80,11 @@ class TestRun:
         raw_data = [{"season": "2023", "data_type": "league_information", "data": {}}]
 
         with (
-            patch("onboarding_service.ESPNClient"),
-            patch("onboarding_service.asyncio.run", return_value=raw_data) as mock_run,
-            patch("onboarding_service.upload_results_to_s3") as mock_upload,
+            patch("onboarder.onboarding_service.ESPNClient"),
+            patch(
+                "onboarder.onboarding_service.asyncio.run", return_value=raw_data
+            ) as mock_run,
+            patch("onboarder.onboarding_service.upload_results_to_s3") as mock_upload,
             patch.dict(os.environ, {"S3_BUCKET_NAME": "test-bucket"}),
         ):
             service = OnboardingService(

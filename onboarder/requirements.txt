@@ -1,5 +1,3 @@
 aiohttp
 asyncio
-duckdb
-pandas
 requests

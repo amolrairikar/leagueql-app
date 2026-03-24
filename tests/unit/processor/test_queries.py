@@ -1,4 +1,4 @@
-from queries import ESPN_QUERIES, SLEEPER_QUERIES
+from processor.queries import ESPN_QUERIES, SLEEPER_QUERIES
 
 
 class TestESPNQueries:

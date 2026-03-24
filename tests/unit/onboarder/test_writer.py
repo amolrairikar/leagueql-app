@@ -1,7 +1,7 @@
 import json
 from unittest.mock import MagicMock, patch
 
-from writer import upload_results_to_s3
+from onboarder.writer import upload_results_to_s3
 
 
 class TestUploadResultsToS3:
@@ -9,7 +9,7 @@ class TestUploadResultsToS3:
         mock_s3 = MagicMock()
         results = [{"season": "2023", "data_type": "league_information", "data": {}}]
 
-        with patch("writer.boto3.client", return_value=mock_s3):
+        with patch("onboarder.writer.boto3.client", return_value=mock_s3):
             upload_results_to_s3(
                 results=results,
                 bucket_name="my-bucket",
@@ -27,7 +27,7 @@ class TestUploadResultsToS3:
         mock_s3 = MagicMock()
         results = [{"key": "value"}]
 
-        with patch("writer.boto3.client", return_value=mock_s3):
+        with patch("onboarder.writer.boto3.client", return_value=mock_s3):
             upload_results_to_s3(
                 results=results,
                 bucket_name="bucket",

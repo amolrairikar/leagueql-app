@@ -2,8 +2,8 @@ import json
 
 import requests
 
-from onboarding_service import OnboardingService
-from utils import logger
+from .onboarding_service import OnboardingService
+from .utils import logger
 
 
 def lambda_handler(event, context) -> dict[str, str | int]:

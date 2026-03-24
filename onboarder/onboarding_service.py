@@ -2,10 +2,10 @@ import os
 
 import asyncio
 
-from espn_client import ESPNClient
-from sleeper_client import SleeperClient
-from utils import logger
-from writer import upload_results_to_s3
+from .espn_client import ESPNClient
+from .sleeper_client import SleeperClient
+from .utils import logger
+from .writer import upload_results_to_s3
 
 
 class OnboardingService:

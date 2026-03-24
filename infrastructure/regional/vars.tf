@@ -13,6 +13,11 @@ variable "onboarder_lambda_role_arn" {
   type        = string
 }
 
+variable "processor_lambda_role_arn" {
+  description = "IAM role ARN for the processor Lambda function execution role"
+  type        = string
+}
+
 variable "api_lambda_role_arn" {
   description = "IAM role ARN for the API Lambda function execution role"
   type        = string

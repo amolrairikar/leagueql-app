@@ -6,7 +6,7 @@ import asyncio
 import requests
 from yarl import URL
 
-from utils import logger, process_api_results
+from .utils import logger, process_api_results
 
 DATA_FETCH_TYPES = [
     "league_information",

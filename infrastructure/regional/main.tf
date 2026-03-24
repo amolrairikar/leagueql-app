@@ -43,6 +43,31 @@ module "onboarder_lambda" {
   }
 }
 
+module "processor_lambda" {
+  source = "../modules/lambda"
+
+  function_name        = "fantasy-football-recap-processing-${var.environment}-${local.region}"
+  function_description = "Lambda function for processing raw fantasy football league data"
+  role_arn             =  var.processor_lambda_role_arn
+  handler              = "handler.lambda_handler"
+  memory_size          = 2048
+  timeout              = 30
+  log_retention        = 7
+  s3_bucket            = "fantasy-football-recap-${var.environment}-bucket-${local.region}-${local.account_id}"
+  s3_key               = "lambda-code-artifacts/processor-lambda.zip"
+
+  environment_variables = {
+    S3_BUCKET_NAME = "fantasy-football-recap-${var.environment}-bucket-${local.region}-${local.account_id}"
+  }
+
+  tags = {
+    environment = var.environment
+    project     = "fantasy-football-recap"
+    component   = "api"
+    managed-by  = "terraform"
+  }
+}
+
 module "api_lambda" {
   source = "../modules/lambda"
 

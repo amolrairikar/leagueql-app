@@ -238,7 +238,7 @@ module "processing-lambda-role" {
         ]
       },
       {
-        Sid    = "CRUDDynamoDB"
+        Sid    = "WriteDynamoDB"
         Effect = "Allow"
         Action = [
           "dynamodb:PutItem",

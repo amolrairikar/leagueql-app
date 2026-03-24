@@ -109,6 +109,7 @@ jobs:
         with:
           files: |
             onboarder/**
+            processor/**
             api/**
  
       - name: Package and upload Lambda functions
@@ -117,7 +118,7 @@ jobs:
           S3_BUCKET: fantasy-football-recap-${{ env.ENVIRONMENT }}-bucket
           AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
         # NOTE: The script here handles us-east-1 and us-west-2
-        run: bash deployment_scripts/build_lambda_zip.sh ./onboarder ./api
+        run: bash deployment_scripts/build_lambda_zip.sh ./onboarder ./processor ./api
 
   deploy-regional:
     name: Deploy Regional Infrastructure - ${{ needs.set-env.outputs.environment }} - ${{ matrix.region }}
