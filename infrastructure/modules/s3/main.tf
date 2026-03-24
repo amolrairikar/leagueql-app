@@ -54,7 +54,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "primary" {
 
 resource "aws_lambda_permission" "allow_primary_s3" {
   provider      = aws.primary
-  statement_id  = "AllowS3Invoke"
+  statement_id  = "AllowS3InvokePrimary"
   action        = "lambda:InvokeFunction"
   function_name = var.primary_lambda
   principal     = "s3.amazonaws.com"
@@ -175,7 +175,7 @@ resource "aws_s3_bucket_replication_configuration" "secondary_to_primary" {
 
 resource "aws_lambda_permission" "allow_secondary_s3" {
   provider      = aws.replica
-  statement_id  = "AllowS3Invoke"
+  statement_id  = "AllowS3InvokeSecondary"
   action        = "lambda:InvokeFunction"
   function_name = var.secondary_lambda
   principal     = "s3.amazonaws.com"
