@@ -9,8 +9,6 @@
 | Primary key | `PK` (String) + `SK` (String) |
 | GSIs | None |
 
-All reads are single `GetItem` calls — no scans, no queries, no GSIs. The table holds `1 + l(0 * n + 2)` items per league onboarded, where `n` is the number of seasons onboarded for that league and `l` is the number of leagues onboarded.
-
 ---
 
 ## Key Schema
@@ -24,7 +22,7 @@ All reads are single `GetItem` calls — no scans, no queries, no GSIs. The tabl
 
 ## Items
 
-All items (with the exception of LEAGUE_COUNT) share the same partition key format
+All items (with the exception of LEAGUE_COUNT and ONBOARDING_JOB_STATUS) share the same partition key format
 `LEAGUE#{leagueId}#PLATFORM#{platform}`. The sort key determines the item type.
 
 <details>
@@ -42,9 +40,31 @@ metadata record is updated.
 **Example:**
 ```json
 {
-  "PK": "LEAGUE#12345678#PLATFORM#ESPN",
-  "SK": "METADATA",
-  "leagueId": "12345678",
+  "PK": "APP#STATS",
+  "SK": "LEAGUE_COUNT",
+  "count": 10
+}
+```
+</details>
+
+<details>
+<summary><b>ONBOARDING_JOB_STATUS</b></summary>
+
+Entry representing the status of a given onboarding job. Has TTL setup to expire after 24 hours.
+
+| Attribute | Type | Required | Description |
+|---|---|---|---|
+| `PK` | String | Yes | `JOB#<job_id>` |
+| `SK` | String | Yes | `ONBOARDING_JOB_STATUS` |
+| `status` | String | Yes | The current onboarding status |
+| `expiration_time` | Number | Yes | Epoch timestamp representing expiration time of record 
+
+**Example:**
+```json
+{
+  "PK": "JOB#12345",
+  "SK": "ONBOARDING_JOB_STATUS",
+  "status": "12345678",
   "platform": "ESPN",
   "onboardedAt": "2024-09-01T00:00:00Z",
   "seasons": ["2022", "2023", "2024"]
@@ -55,16 +75,15 @@ metadata record is updated.
 <details>
 <summary><b>METADATA</b></summary>
 
-Represents a successfully onboarded league. Written **last** during onboarding —
-its presence signals that onboarding completed successfully. If onboarding fails
-before this item is written, the league will not appear as onboarded and a retry
-will re-run the full onboarding flow.
+Represents a successfully onboarded league. If onboarding fails before this item is written,
+the league will not appear as onboarded and a retry will re-run the full onboarding flow.
 
 | Attribute | Type | Required | Description |
 |---|---|---|---|
 | `PK` | String | Yes | `LEAGUE#{league_id}#PLATFORM#{platform}` |
 | `SK` | String | Yes | `METADATA` |
 | `league_id` | String | Yes | The ESPN or Sleeper league ID |
+| `canonical_league_id` | String | Yes | The UUID associated with this league to associate multiple league IDs for the same league together |
 | `platform` | String | Yes | Platform the league belongs to. Enum: `ESPN`, `SLEEPER` |
 | `onboarded_at` | String | Yes | ISO 8601 timestamp of when onboarding completed |
 | `seasons` | List\<String\> | Yes | List of seasons onboarded (e.g. `["2016", "2017", "2018"]`) |
@@ -74,9 +93,10 @@ will re-run the full onboarding flow.
 {
   "PK": "LEAGUE#12345678#PLATFORM#ESPN",
   "SK": "METADATA",
-  "leagueId": "12345678",
+  "league_id": "12345678",
+  "canonical_league_id": "uuid-string",
   "platform": "ESPN",
-  "onboardedAt": "2024-09-01T00:00:00Z",
+  "onboarded_at": "2024-09-01T00:00:00Z",
   "seasons": ["2022", "2023", "2024"]
 }
 ```
@@ -106,7 +126,7 @@ Represents all teams across all seasons in the fantasy league.
 ```json
 {
   "PK": "LEAGUE#12345678#PLATFORM#ESPN",
-  "SK": "METADATA",
+  "SK": "TEAMS",
   "display_name": "myusername123",
   "owner_first_name": "Player",
   "owner_last_name": "One",

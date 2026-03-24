@@ -52,6 +52,28 @@ resource "aws_s3_bucket_lifecycle_configuration" "primary" {
   }
 }
 
+resource "aws_lambda_permission" "allow_primary_s3" {
+  provider      = aws.primary
+  statement_id  = "AllowS3InvokePrimary"
+  action        = "lambda:InvokeFunction"
+  function_name = var.primary_lambda
+  principal     = "s3.amazonaws.com"
+  source_arn    = aws_s3_bucket.primary.arn
+}
+
+resource "aws_s3_bucket_notification" "primary_notification" {
+  provider = aws.primary
+  bucket   = aws_s3_bucket.primary.id
+
+  lambda_function {
+    lambda_function_arn = "arn:aws:lambda:us-east-1:${var.account_id}:function:${var.primary_lambda}"
+    events              = ["s3:ObjectCreated:*"]
+    filter_prefix       = "raw-api-data/"
+  }
+
+  depends_on = [aws_lambda_permission.allow_primary_s3]
+}
+
 resource "aws_s3_bucket" "secondary" {
   provider = aws.replica
   bucket   = "${var.bucket_prefix}-${local.secondary_region}-${var.account_id}"
@@ -149,4 +171,26 @@ resource "aws_s3_bucket_replication_configuration" "secondary_to_primary" {
 
     filter {}
   }
+}
+
+resource "aws_lambda_permission" "allow_secondary_s3" {
+  provider      = aws.replica
+  statement_id  = "AllowS3InvokeSecondary"
+  action        = "lambda:InvokeFunction"
+  function_name = var.secondary_lambda
+  principal     = "s3.amazonaws.com"
+  source_arn    = aws_s3_bucket.secondary.arn
+}
+
+resource "aws_s3_bucket_notification" "secondary_notification" {
+  provider = aws.replica
+  bucket   = aws_s3_bucket.secondary.id
+
+  lambda_function {
+    lambda_function_arn = "arn:aws:lambda:us-west-2:${var.account_id}:function:${var.secondary_lambda}"
+    events              = ["s3:ObjectCreated:*"]
+    filter_prefix       = "raw-api-data/"
+  }
+
+  depends_on = [aws_lambda_permission.allow_secondary_s3]
 }

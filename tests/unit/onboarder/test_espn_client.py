@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 import requests
 
-from espn_client import V2_CUTOFF, ESPNClient
+from onboarder.espn_client import V2_CUTOFF, ESPNClient
 
 
 def _mock_seasons_response(previous_seasons=None):
@@ -24,7 +24,7 @@ def make_client(
     previous_seasons=None,
 ):
     with patch(
-        "espn_client.requests.get",
+        "onboarder.espn_client.requests.get",
         return_value=_mock_seasons_response(previous_seasons),
     ):
         return ESPNClient(
@@ -61,7 +61,7 @@ class TestGetLeagueSeasons:
     def test_returns_previous_and_latest_seasons(self):
         client = make_client()
         mock_resp = _mock_seasons_response(previous_seasons=[2020, 2021, 2022])
-        with patch("espn_client.requests.get", return_value=mock_resp):
+        with patch("onboarder.espn_client.requests.get", return_value=mock_resp):
             seasons = client._get_league_seasons("2023")
         assert seasons == ["2020", "2021", "2022", "2023"]
 
@@ -69,14 +69,14 @@ class TestGetLeagueSeasons:
         client = make_client()
         mock_resp = MagicMock()
         mock_resp.json.return_value = {"status": {}}
-        with patch("espn_client.requests.get", return_value=mock_resp):
+        with patch("onboarder.espn_client.requests.get", return_value=mock_resp):
             seasons = client._get_league_seasons("2023")
         assert seasons == ["2023"]
 
     def test_http_error_raises(self):
         mock_resp = MagicMock()
         mock_resp.raise_for_status.side_effect = requests.exceptions.HTTPError("404")
-        with patch("espn_client.requests.get", return_value=mock_resp):
+        with patch("onboarder.espn_client.requests.get", return_value=mock_resp):
             with pytest.raises(requests.exceptions.HTTPError):
                 ESPNClient(league_id="123", latest_season="2023")
 
@@ -218,12 +218,15 @@ class TestFetchAll:
         mock_session_cm.__aenter__.return_value = mock_session
 
         with (
-            patch("espn_client.aiohttp.ClientSession", return_value=mock_session_cm),
+            patch(
+                "onboarder.espn_client.aiohttp.ClientSession",
+                return_value=mock_session_cm,
+            ),
             patch.object(
                 client, "_fetch", new_callable=AsyncMock, return_value=mock_fetch_result
             ),
             patch(
-                "espn_client.process_api_results", return_value=expected
+                "onboarder.espn_client.process_api_results", return_value=expected
             ) as mock_process,
         ):
             results = await client.fetch_all()

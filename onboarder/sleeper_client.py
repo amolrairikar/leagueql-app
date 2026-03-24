@@ -4,7 +4,7 @@ import aiohttp
 import asyncio
 import requests
 
-from utils import logger, process_api_results
+from .utils import logger, process_api_results
 
 SLEEPER_BASE_URL = "https://api.sleeper.app/v1"
 DATA_FETCH_TYPES = [

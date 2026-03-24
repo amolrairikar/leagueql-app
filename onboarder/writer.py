@@ -1,74 +1,22 @@
 import json
-import os
-from decimal import Decimal
-from datetime import datetime, timezone
 from typing import Any
 
 import boto3
 
 
-class DynamoWriter:
+def upload_results_to_s3(
+    results: list[dict[str, Any]], bucket_name: str, key_name: str
+) -> None:
     """
-    Class for writing transformed league data to DynamoDB.
+    Uploads raw API data to S3.
 
-    Attributes:
-        league_id: The ID of the league being onboarded.
-        platform: The platform the league is on (e.g., ESPN, SLEEPER)
-
-    Methods:
-        __init__(league_id, platform): Constructor.
-        write_all(views): Writes each view to DynamoDB using the sort key and corresponding data from the view mapping.
-        _serialize(data): Serializes DynamoDB records to convert floats to Decimal.
+    Args:
+        results: List containing raw API results.
+        bucket_name: Name of the S3 bucket to upload data to.
+        key_name: Full key path within the S3 bucket to upload data to.
     """
-
-    def __init__(self, league_id: str, platform: str):
-        """Constructor."""
-        self.league_id = league_id
-        self.platform = platform
-        self.table = boto3.resource("dynamodb").Table(os.environ["DYNAMODB_TABLE_NAME"])
-
-    def write_all(self, views: dict[str, Any]) -> None:
-        """
-        Writes each view to DynamoDB using the sort key and corresponding data from the view mapping.
-
-        Args:
-            views: Mapping containing DynamoDB sort key and the corresponding data.
-        """
-        with self.table.batch_writer() as batch:
-            for sort_key, data in views.items():
-                batch.put_item(
-                    Item={
-                        "PK": f"LEAGUE#{self.league_id}#PLATFORM#{self.platform}",
-                        "SK": sort_key,
-                        "data": self._serialize(data),
-                    }
-                )
-
-        # Written after batch flushes — guarantees all data records are committed first
-        self.table.put_item(
-            Item={
-                "PK": f"LEAGUE#{self.league_id}",
-                "SK": "METADATA",
-                "status": "active",
-                "onboardedAt": datetime.now(timezone.utc).isoformat(),
-            }
-        )
-
-        self.table.update_item(
-            Key={"PK": "APP#STATS", "SK": "LEAGUE_COUNT"},
-            UpdateExpression="ADD #count :inc",
-            ExpressionAttributeNames={"#count": "count"},
-            ExpressionAttributeValues={":inc": 1},
-        )
-
-    def _serialize(self, data: dict[str, Any]) -> dict[str, Any]:
-        """
-        Serializes DynamoDB records to convert floats to Decimal.
-
-        Args:
-            data: The data to serialize.
-
-        Returns:
-            The updated data with floats converted to Decimal.
-        """
-        return json.loads(json.dumps(data), parse_float=Decimal)
+    s3 = boto3.client("s3")
+    json_data = json.dumps(results)
+    s3.put_object(
+        Bucket=bucket_name, Key=key_name, Body=json_data, ContentType="application/json"
+    )

@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import requests
 
-from handler import lambda_handler
+from onboarder.handler import lambda_handler
 
 
 def make_event(body=None):
@@ -23,7 +23,7 @@ class TestLambdaHandlerSuccess:
         context = MagicMock()
         mock_service = MagicMock()
 
-        with patch("handler.OnboardingService", return_value=mock_service):
+        with patch("onboarder.handler.OnboardingService", return_value=mock_service):
             result = lambda_handler(make_event(), context)
 
         assert result["statusCode"] == 200
@@ -37,7 +37,9 @@ class TestLambdaHandlerSuccess:
         event = make_event({"leagueId": 456, "platform": "espn"})
         mock_service = MagicMock()
 
-        with patch("handler.OnboardingService", return_value=mock_service) as mock_cls:
+        with patch(
+            "onboarder.handler.OnboardingService", return_value=mock_service
+        ) as mock_cls:
             result = lambda_handler(event, context)
 
         assert result["statusCode"] == 200
@@ -52,7 +54,9 @@ class TestLambdaHandlerOnboardingServiceErrors:
         context = MagicMock()
         event = make_event({"platform": "espn"})  # missing leagueId
 
-        with patch("handler.OnboardingService", side_effect=KeyError("leagueId")):
+        with patch(
+            "onboarder.handler.OnboardingService", side_effect=KeyError("leagueId")
+        ):
             result = lambda_handler(event, context)
 
         assert result["statusCode"] == 400
@@ -64,7 +68,8 @@ class TestLambdaHandlerOnboardingServiceErrors:
         context = MagicMock()
 
         with patch(
-            "handler.OnboardingService", side_effect=ValueError("invalid platform")
+            "onboarder.handler.OnboardingService",
+            side_effect=ValueError("invalid platform"),
         ):
             result = lambda_handler(make_event(), context)
 
@@ -77,7 +82,7 @@ class TestLambdaHandlerOnboardingServiceErrors:
         context = MagicMock()
 
         with patch(
-            "handler.OnboardingService",
+            "onboarder.handler.OnboardingService",
             side_effect=requests.exceptions.HTTPError("503 Service Unavailable"),
         ):
             result = lambda_handler(make_event(), context)
@@ -90,7 +95,8 @@ class TestLambdaHandlerOnboardingServiceErrors:
         context = MagicMock()
 
         with patch(
-            "handler.OnboardingService", side_effect=RuntimeError("fetch failed")
+            "onboarder.handler.OnboardingService",
+            side_effect=RuntimeError("fetch failed"),
         ):
             result = lambda_handler(make_event(), context)
 
@@ -106,7 +112,7 @@ class TestLambdaHandlerRunErrors:
         mock_service = MagicMock()
         mock_service.run.side_effect = RuntimeError("processing failed")
 
-        with patch("handler.OnboardingService", return_value=mock_service):
+        with patch("onboarder.handler.OnboardingService", return_value=mock_service):
             result = lambda_handler(make_event(), context)
 
         assert result["statusCode"] == 502
@@ -119,7 +125,7 @@ class TestLambdaHandlerRunErrors:
         mock_service = MagicMock()
         mock_service.run.side_effect = Exception("unexpected error")
 
-        with patch("handler.OnboardingService", return_value=mock_service):
+        with patch("onboarder.handler.OnboardingService", return_value=mock_service):
             result = lambda_handler(make_event(), context)
 
         assert result["statusCode"] == 500

@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 import requests
 
-from sleeper_client import SLEEPER_BASE_URL, SleeperClient
+from onboarder.sleeper_client import SLEEPER_BASE_URL, SleeperClient
 
 
 def _make_get_response(season, league_id, previous_league_id="0"):
@@ -19,7 +19,7 @@ def _make_get_response(season, league_id, previous_league_id="0"):
 
 def make_client(season="2023", league_id="abc", previous_league_id="0"):
     with patch(
-        "sleeper_client.requests.get",
+        "onboarder.sleeper_client.requests.get",
         return_value=_make_get_response(season, league_id, previous_league_id),
     ):
         return SleeperClient(league_id=league_id)
@@ -28,7 +28,7 @@ def make_client(season="2023", league_id="abc", previous_league_id="0"):
 class TestGetLeagueSeasons:
     def test_single_season_returns_mapping(self):
         with patch(
-            "sleeper_client.requests.get",
+            "onboarder.sleeper_client.requests.get",
             return_value=_make_get_response("2023", "abc"),
         ):
             client = SleeperClient("abc")
@@ -40,7 +40,7 @@ class TestGetLeagueSeasons:
             _make_get_response("2023", "abc", previous_league_id="xyz"),
             _make_get_response("2022", "xyz", previous_league_id="0"),
         ]
-        with patch("sleeper_client.requests.get", side_effect=responses):
+        with patch("onboarder.sleeper_client.requests.get", side_effect=responses):
             client = SleeperClient("abc")
 
         assert client.season_mapping == {"2023": "abc", "2022": "xyz"}
@@ -48,7 +48,7 @@ class TestGetLeagueSeasons:
     def test_missing_previous_league_id_field_stops_loop(self):
         mock_resp = MagicMock()
         mock_resp.json.return_value = {"season": "2023", "league_id": "abc"}
-        with patch("sleeper_client.requests.get", return_value=mock_resp):
+        with patch("onboarder.sleeper_client.requests.get", return_value=mock_resp):
             client = SleeperClient("abc")
 
         assert client.season_mapping == {"2023": "abc"}
@@ -56,14 +56,14 @@ class TestGetLeagueSeasons:
     def test_http_error_raises(self):
         mock_resp = MagicMock()
         mock_resp.raise_for_status.side_effect = requests.exceptions.HTTPError("404")
-        with patch("sleeper_client.requests.get", return_value=mock_resp):
+        with patch("onboarder.sleeper_client.requests.get", return_value=mock_resp):
             with pytest.raises(requests.exceptions.HTTPError):
                 SleeperClient("abc")
 
     def test_missing_season_key_raises_runtime_error(self):
         mock_resp = MagicMock()
         mock_resp.json.return_value = {"league_id": "abc"}
-        with patch("sleeper_client.requests.get", return_value=mock_resp):
+        with patch("onboarder.sleeper_client.requests.get", return_value=mock_resp):
             with pytest.raises(
                 RuntimeError, match="Unexpected response from Sleeper API"
             ):
@@ -72,7 +72,7 @@ class TestGetLeagueSeasons:
     def test_missing_league_id_key_raises_runtime_error(self):
         mock_resp = MagicMock()
         mock_resp.json.return_value = {"season": "2023"}
-        with patch("sleeper_client.requests.get", return_value=mock_resp):
+        with patch("onboarder.sleeper_client.requests.get", return_value=mock_resp):
             with pytest.raises(
                 RuntimeError, match="Unexpected response from Sleeper API"
             ):
@@ -170,7 +170,10 @@ class TestFetchAll:
         mock_session_cm.__aenter__.return_value = mock_session
 
         with (
-            patch("sleeper_client.aiohttp.ClientSession", return_value=mock_session_cm),
+            patch(
+                "onboarder.sleeper_client.aiohttp.ClientSession",
+                return_value=mock_session_cm,
+            ),
             patch.object(
                 client,
                 "_fetch",
@@ -178,7 +181,7 @@ class TestFetchAll:
                 return_value={"season": "2023", "data_type": "users", "data": []},
             ),
             patch(
-                "sleeper_client.process_api_results", return_value=expected
+                "onboarder.sleeper_client.process_api_results", return_value=expected
             ) as mock_process,
         ):
             results = await client.fetch_all()

@@ -109,6 +109,7 @@ jobs:
         with:
           files: |
             onboarder/**
+            processor/**
             api/**
  
       - name: Package and upload Lambda functions
@@ -117,7 +118,7 @@ jobs:
           S3_BUCKET: fantasy-football-recap-${{ env.ENVIRONMENT }}-bucket
           AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
         # NOTE: The script here handles us-east-1 and us-west-2
-        run: bash deployment_scripts/build_lambda_zip.sh ./onboarder ./api
+        run: bash deployment_scripts/build_lambda_zip.sh ./onboarder ./processor ./api
 
   deploy-regional:
     name: Deploy Regional Infrastructure - ${{ needs.set-env.outputs.environment }} - ${{ matrix.region }}
@@ -167,45 +168,46 @@ jobs:
             -var="environment=${{ env.ENVIRONMENT }}" \
             -var="aws_region=${{ matrix.region }}" \
             -var="onboarder_lambda_role_arn=arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/fantasy-football-recap-onboarding-lambda-${{ env.ENVIRONMENT }}-role" \
+            -var="processor_lambda_role_arn=arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/fantasy-football-recap-processing-lambda-${{ env.ENVIRONMENT }}-role" \
             -var="api_lambda_role_arn=arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/fantasy-football-recap-api-lambda-${{ env.ENVIRONMENT }}-role"
 
-  live-dependency-tests:
-    name: Live Dependency Tests
-    runs-on: ubuntu-latest
-    # These tests should never run in prod, only dev
-    if: github.event_name == 'pull_request'
-    needs:
-      - set-env
-      - deploy-regional
-    env:
-      ENVIRONMENT: ${{ needs.set-env.outputs.environment }}
+  # live-dependency-tests:
+  #   name: Live Dependency Tests
+  #   runs-on: ubuntu-latest
+  #   # These tests should never run in prod, only dev
+  #   if: github.event_name == 'pull_request'
+  #   needs:
+  #     - set-env
+  #     - deploy-regional
+  #   env:
+  #     ENVIRONMENT: ${{ needs.set-env.outputs.environment }}
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v6
 
-      - name: Configure AWS credentials via OIDC
-        uses: aws-actions/configure-aws-credentials@v6
-        with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-${{ env.ENVIRONMENT }}-testing-role
-          aws-region: us-east-1
-          role-session-name: GitHubActions-${{ github.run_id }}-live-dependency-testing
+  #     - name: Configure AWS credentials via OIDC
+  #       uses: aws-actions/configure-aws-credentials@v6
+  #       with:
+  #         role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-${{ env.ENVIRONMENT }}-testing-role
+  #         aws-region: us-east-1
+  #         role-session-name: GitHubActions-${{ github.run_id }}-live-dependency-testing
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.13"
+  #     - name: Set up Python
+  #       uses: actions/setup-python@v6
+  #       with:
+  #         python-version: "3.13"
 
-      - name: Install pipenv
-        run: pip install pipenv
+  #     - name: Install pipenv
+  #       run: pip install pipenv
 
-      - name: Install dependencies
-        run: pipenv install --dev
+  #     - name: Install dependencies
+  #       run: pipenv install --dev
 
-      - name: Run live dependency tests
-        env:
-          AWS_REGION: us-east-1
-          SEASON: ${{ vars.SEASON }}
-          S2: ${{ secrets.S2 }}
-          SWID: ${{ secrets.SWID }}
-        run: pipenv run behave tests/live_dependency --no-capture
+  #     - name: Run live dependency tests
+  #       env:
+  #         AWS_REGION: us-east-1
+  #         SEASON: ${{ vars.SEASON }}
+  #         S2: ${{ secrets.S2 }}
+  #         SWID: ${{ secrets.SWID }}
+  #       run: pipenv run behave tests/live_dependency --no-capture

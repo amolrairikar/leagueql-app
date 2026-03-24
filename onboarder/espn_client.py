@@ -6,7 +6,7 @@ import asyncio
 import requests
 from yarl import URL
 
-from utils import logger, process_api_results
+from .utils import logger, process_api_results
 
 DATA_FETCH_TYPES = [
     "league_information",
@@ -75,7 +75,7 @@ class ESPNClient:
             f"/seasons/{latest_season}/segments/0/leagues/{self.league_id}?view=mTeam"
         )
         cookies = self._make_cookies_dict()
-        response = requests.get(url=url, cookies=cookies or None)
+        response = requests.get(url=url, cookies=cookies)
         try:
             response.raise_for_status()
         except requests.exceptions.HTTPError as e:

@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 import pytest
 
-from utils import JsonFormatter, process_api_results, setup_logger
+from onboarder.utils import JsonFormatter, process_api_results, setup_logger
 
 
 class TestJsonFormatter:
@@ -21,7 +21,7 @@ class TestJsonFormatter:
         )
         record.funcName = "my_function"
 
-        with patch("utils.time.time", return_value=1000.0):
+        with patch("onboarder.utils.time.time", return_value=1000.0):
             result = formatter.format(record)
 
         parsed = json.loads(result)

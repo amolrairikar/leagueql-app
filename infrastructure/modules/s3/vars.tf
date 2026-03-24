@@ -44,3 +44,13 @@ variable "replication_role_arn" {
   description = "The ARN of the IAM role to use for S3 replication"
   type        = string
 }
+
+variable "primary_lambda" {
+  description = "The name of the lambda function in the primary region (us-east-1)"
+  type        = string
+}
+
+variable "secondary_lambda" {
+  description = "The name of the lambda function in the secondary region (us-west-2)"
+  type        = string
+}
