@@ -1,10 +1,11 @@
+import os
+
 import asyncio
 
 from espn_client import ESPNClient
 from sleeper_client import SleeperClient
-from transformer import Transformer
 from utils import logger
-from writer import DynamoWriter
+from writer import upload_results_to_s3
 
 
 class OnboardingService:
@@ -47,20 +48,19 @@ class OnboardingService:
             espn_s2_cookie=espn_s2_cookie,
             swid_cookie=swid_cookie,
         )
-        self.transformer = Transformer(platform=self.platform)
-        self.writer = DynamoWriter(league_id=self.league_id, platform=self.platform)
 
     def run(self) -> None:
         """Runs the onboarding logic."""
         logger.info("Beginning raw data fetch")
         raw_data = asyncio.run(self.client.fetch_all())
         logger.info("Completed data fetch")
-        logger.info("Beginning data transformation")
-        views = self.transformer.transform(raw_data=raw_data)
-        logger.info("Completed data transformation")
-        logger.info("Beginning data write")
-        self.writer.write_all(views=views)
-        logger.info("Completed data write")
+        logger.info("Writing raw data to S3")
+        upload_results_to_s3(
+            results=raw_data,
+            bucket_name=os.environ["S3_BUCKET_NAME"],
+            key_name=f"raw-api-data/{self.platform}/{self.league_id}/onboard.json",
+        )
+        logger.info("Wrote raw data to S3")
 
     def _build_client(
         self,

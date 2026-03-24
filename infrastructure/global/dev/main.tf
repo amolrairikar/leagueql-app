@@ -173,14 +173,16 @@ module "onboarding-lambda-role" {
         ]
       },
       {
-        Sid    = "WriteToDynamoDB"
+        Sid    = "WriteToS3RawPrefix"
         Effect = "Allow"
         Action = [
-          "dynamodb:PutItem",
-          "dynamodb:BatchWriteItem",
-          "dynamodb:UpdateItem"
+          "s3:PutObject",
+          "s3:PutObjectAcl"
         ]
-        Resource = [module.dynamodb.primary_table_arn]
+        Resource = [
+          "${local.primary_bucket_arn}/raw-api-data/*",
+          "${local.secondary_bucket_arn}/raw-api-data/*"
+        ]
       }
     ]
   })
