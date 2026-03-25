@@ -32,7 +32,12 @@ resource "aws_dynamodb_table" "global_table" {
     enabled = true
   }
 
-  # TODO: Figure out how to make this dynamic
+  # TODO: Figure out how to make this part dynamic
+  attribute {
+    name = "canonical_league_id"
+    type = "S"
+  }
+
   global_secondary_index {
     name               = "GSI1"
     projection_type    = "INCLUDE"
