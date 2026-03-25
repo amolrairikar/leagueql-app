@@ -72,7 +72,7 @@ class OnboardingService:
         upload_results_to_s3(
             results=raw_data,
             bucket_name=os.environ["S3_BUCKET_NAME"],
-            key_name=f"raw-api-data/{self.platform}/{self.league_id}/onboard_{job_id}.json",
+            key_name=f"raw-api-data/{self.platform}/{self.canonical_league_id}/onboard_{job_id}.json",
         )
         logger.info("Wrote raw data to S3")
         return job_id

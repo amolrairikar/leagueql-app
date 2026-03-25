@@ -7,16 +7,23 @@
 | Table name | `fantasy-football-recap-db` |
 | Billing mode | On-demand (pay-per-request) |
 | Primary key | `PK` (String) + `SK` (String) |
-| GSIs | None |
+| GSIs | `GSI1` - Get all league IDs for a canonical league ID |
 
 ---
 
 ## Key Schema
 
+### Base Table
+
 | Attribute | Type | Role | Description |
 |---|---|---|---|
 | `PK` | String | Partition key | Always in the format `LEAGUE#{leagueId}` |
 | `SK` | String | Sort key | Identifies the item type |
+
+### GSI1: Canonical League index
+| Attribute | Type | Role | Description |
+|---|---|---|---|
+| `canonical_league_id` | String | Partition key | The unified UUID for the league |
 
 ---
 
