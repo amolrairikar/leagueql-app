@@ -1,3 +1,4 @@
+import datetime
 import json
 import os
 import uuid
@@ -61,11 +62,11 @@ def write_onboarding_job_id_to_dynamodb(
                     "Put": {
                         "TableName": os.environ["DYNAMODB_TABLE_NAME"],
                         "Item": {
-                            "PK": {"S": canonical_league_id},
+                            "PK": {"S": f"LEAGUE#{canonical_league_id}"},
                             "SK": {"S": "METADATA"},
                             "platform": {"S": platform},
                             "onboarding_id": {"S": job_id},
-                            "onboarded_at": {"S": ""},
+                            "onboarded_at": {"S": datetime.datetime.now().isoformat()},
                             "onboarding_status": {"S": "onboarding"},
                         },
                     }
