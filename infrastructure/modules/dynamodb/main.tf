@@ -32,6 +32,17 @@ resource "aws_dynamodb_table" "global_table" {
     enabled = true
   }
 
+  # TODO: Figure out how to make this dynamic
+  global_secondary_index {
+    name               = "GSI1"
+    projection_type    = "INCLUDE"
+    non_key_attributes = ["seasons", "PK"]
+    key_schema {
+      attribute_name = "canonical_league_id"
+      key_type       = "HASH"
+    }
+  }
+
   dynamic "replica" {
     for_each = var.replica_regions
     content {
