@@ -1,6 +1,5 @@
 import json
 import os
-import time
 import uuid
 from typing import Any
 
@@ -35,9 +34,20 @@ def upload_results_to_s3(
         raise e
 
 
-def write_onboarding_job_id_to_dynamodb() -> str:
+def write_onboarding_job_id_to_dynamodb(
+    league_id: str,
+    platform: str,
+    canonical_league_id: str,
+    seasons: list[str],
+) -> str:
     """
     Writes the onboarding job ID and status to DynamoDB for client to poll to determine onboarding status.
+
+    Args:
+        league_id: The ID for the league on its platform.
+        platform: The platform (e.g., ESPN, SLEEPER) that the league is on.
+        canonical_league_id: The unique ID for the league.
+        seasons: List of strings representing number of seasons league was active for prior to onboarding.
 
     Returns:
         The UUID corresponding to the current onboarding job run
@@ -45,14 +55,33 @@ def write_onboarding_job_id_to_dynamodb() -> str:
     try:
         dynamodb = boto3.client("dynamodb")
         job_id = str(uuid.uuid4())
-        dynamodb.put_item(
-            TableName=os.environ["DYNAMODB_TABLE_NAME"],
-            Item={
-                "PK": {"S": f"JOB#{job_id}"},
-                "SK": {"S": "ONBOARDING_STATUS"},
-                "status": {"S": "onboarding"},
-                "expiration_time": {"N": str(int(time.time() + 86400))},
-            },
+        dynamodb.transact_write_items(
+            TransactItems=[
+                {
+                    "Put": {
+                        "TableName": os.environ["DYNAMODB_TABLE_NAME"],
+                        "Item": {
+                            "PK": {"S": canonical_league_id},
+                            "SK": {"S": "METADATA"},
+                            "platform": {"S": platform},
+                            "onboarding_id": {"S": job_id},
+                            "onboarded_at": {"S": ""},
+                            "onboarding_status": {"S": "onboarding"},
+                        },
+                    }
+                },
+                {
+                    "Put": {
+                        "TableName": os.environ["DYNAMODB_TABLE_NAME"],
+                        "Item": {
+                            "PK": {"S": f"LEAGUE#{league_id}#PLATFORM#{platform}"},
+                            "SK": {"S": "LEAGUE_LOOKUP"},
+                            "canonical_league_id": {"S": canonical_league_id},
+                            "seasons": {"SS": seasons},
+                        },
+                    }
+                },
+            ]
         )
         return job_id
     except KeyError as e:

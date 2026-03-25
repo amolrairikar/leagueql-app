@@ -40,8 +40,8 @@ class SleeperClient:
 
     def _get_league_seasons(self) -> dict[str, str]:
         """
-        Gets mapping of all seasons the league has been active and the corresponding
-        league_ids.
+        Gets mapping of all seasons the league has been active for prior to onboarding
+        and the corresponding league_ids.
 
         Iteratively walks backwards through the league's history one season
         at a time via the previous_league_id field until it reaches the

@@ -1,4 +1,5 @@
 import os
+import uuid
 
 import asyncio
 
@@ -48,6 +49,7 @@ class OnboardingService:
             espn_s2_cookie=espn_s2_cookie,
             swid_cookie=swid_cookie,
         )
+        self.canonical_league_id = str(uuid.uuid4())
 
     def run(self) -> str:
         """Runs the onboarding logic."""
@@ -55,7 +57,16 @@ class OnboardingService:
         raw_data = asyncio.run(self.client.fetch_all())
         logger.info("Completed data fetch")
         logger.info("Updating job onboarding status in DynamoDB")
-        job_id = write_onboarding_job_id_to_dynamodb()
+        if isinstance(self.client, ESPNClient):
+            seasons = self.client.seasons
+        else:
+            seasons = list(self.client.season_mapping.keys())
+        job_id = write_onboarding_job_id_to_dynamodb(
+            league_id=self.league_id,
+            platform=self.platform,
+            canonical_league_id=self.canonical_league_id,
+            seasons=seasons,
+        )
         logger.info("Wrote job onboarding status to DynamoDB")
         logger.info("Writing raw data to S3")
         upload_results_to_s3(

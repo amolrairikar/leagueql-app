@@ -62,7 +62,7 @@ class ESPNClient:
 
     def _get_league_seasons(self, latest_season: str) -> list[str]:
         """
-        Gets list of all the seasons league has been active.
+        Gets list of all the seasons league has been active for prior to onboarding.
 
         Args:
             latest_season: Most recent season the league was active.
