@@ -7,7 +7,7 @@ from typing import Annotated, Any, Optional
 
 import boto3
 import botocore.exceptions
-from fastapi import FastAPI, HTTPException, Path, status, Query
+from fastapi import FastAPI, HTTPException, Path, Response, status, Query
 from fastapi.middleware.cors import CORSMiddleware
 from mangum import Mangum
 from pydantic import BaseModel
@@ -177,8 +177,29 @@ def get_league(
 
 
 @app.post("/leagues", status_code=status.HTTP_201_CREATED)
-def onboard_league(payload: OnboardingPayload) -> APIResponse:
+def onboard_league(payload: OnboardingPayload, response: Response) -> APIResponse:
     """Onboard a league to the application."""
+    platform = Platform(payload.platform)
+
+    # Check if league is already onboarded — redirect to GET if so
+    try:
+        canonical_league_id = lookup_league(
+            league_id=payload.leagueId, platform=platform
+        )
+        logger.info(
+            "League %s already onboarded, returning existing data", payload.leagueId
+        )
+        response.status_code = status.HTTP_200_OK
+        return APIResponse(
+            detail="League already onboarded",
+            data={"canonical_league_id": canonical_league_id},
+        )
+    except HTTPException as e:
+        if e.status_code != status.HTTP_404_NOT_FOUND:
+            raise
+
+    # If new league, proceed with onboarding
+    logger.info("New league detected, proceeding with onboarding...")
     try:
         lambda_client.invoke(
             FunctionName=os.environ["ONBOARDER_LAMBDA_NAME"],

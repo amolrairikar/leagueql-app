@@ -120,12 +120,8 @@ paths:
       responses:
         "201":
           $ref: "#/components/responses/OnboardSuccessResponse"
-        "409":
-          $ref: "#/components/responses/AlreadyOnboardedError"
         "422":
           $ref: "#/components/responses/ValidationError"
-        "502":
-          $ref: "#/components/responses/UpstreamError"
         "500":
           $ref: "#/components/responses/InternalError"
       x-amazon-apigateway-integration:
@@ -343,16 +339,6 @@ components:
             error: "League not found"
             message: "No ESPN league with ID 12345678 has been onboarded. Use POST /leagues to onboard."
 
-    AlreadyOnboardedError:
-      description: League already onboarded
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/ErrorResponse"
-          example:
-            error: "Already onboarded"
-            message: "League 12345678 has already been onboarded. Use GET /leagues/12345678 to retrieve your key."
-
     ValidationError:
       description: Invalid request body
       content:
@@ -362,16 +348,6 @@ components:
           example:
             error: "Unprocessable entity"
             message: "platform must be one of: ESPN, SLEEPER"
-
-    UpstreamError:
-      description: Upstream data source error — ESPN or Sleeper API unavailable
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/ErrorResponse"
-          example:
-            error: "Upstream error"
-            message: "Failed to fetch data from ESPN API. Please try again later."
 
     InternalError:
       description: Unexpected server error
