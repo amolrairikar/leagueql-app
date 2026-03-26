@@ -38,7 +38,7 @@ class DynamoWriter:
             for sort_key, data in views.items():
                 batch.put_item(
                     Item={
-                        "PK": f"LEAGUE#{self.league_id}#PLATFORM#{self.platform}",
+                        "PK": f"LEAGUE#{self.league_id}",
                         "SK": sort_key,
                         "data": self._serialize(data),
                     }

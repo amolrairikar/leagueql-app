@@ -32,7 +32,7 @@ paths:
       summary: Get league metadata
       description: >
         Checks whether a league has been onboarded. If the league exists,
-        returns metadata for the league. Returns 404 if the league
+        returns the canonical league ID. Returns 404 if the league
         has not been onboarded yet.
       operationId: getLeague
       parameters:
@@ -42,6 +42,7 @@ paths:
           description: The ESPN or Sleeper league ID
           schema:
             type: string
+            pattern: '^\d+$'
             example: "12345678"
         - name: platform
           in: query
@@ -49,10 +50,47 @@ paths:
           description: The name of the platform the fantasy football league is on
           schema:
             type: string
+            enum: [ESPN, SLEEPER]
             example: "ESPN"
       responses:
         "200":
-          $ref: "#/components/responses/LeagueMetadataResponse"
+          $ref: "#/components/responses/LeagueFoundResponse"
+        "404":
+          $ref: "#/components/responses/LeagueNotFoundError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        httpMethod: POST        # always POST for Lambda proxy, regardless of your route method
+        uri: "arn:aws:apigateway:${aws_region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations"
+        payloadFormatVersion: "2.0"   # use 2.0 for HTTP API (v2)
+
+    delete:
+      summary: Delete league
+      description: >
+        Deletes an onboarded league and its associated data from DynamoDB and S3.
+        Also decrements the total onboarded league count.
+      operationId: deleteLeague
+      parameters:
+        - name: leagueId
+          in: path
+          required: true
+          description: The ESPN or Sleeper league ID
+          schema:
+            type: string
+            pattern: '^\d+$'
+            example: "12345678"
+        - name: platform
+          in: query
+          required: true
+          description: The name of the platform the fantasy football league is on
+          schema:
+            type: string
+            enum: [ESPN, SLEEPER]
+            example: "ESPN"
+      responses:
+        "200":
+          $ref: "#/components/responses/DeleteLeagueResponse"
         "404":
           $ref: "#/components/responses/LeagueNotFoundError"
         "500":
@@ -82,12 +120,8 @@ paths:
       responses:
         "201":
           $ref: "#/components/responses/OnboardSuccessResponse"
-        "409":
-          $ref: "#/components/responses/AlreadyOnboardedError"
         "422":
           $ref: "#/components/responses/ValidationError"
-        "502":
-          $ref: "#/components/responses/UpstreamError"
         "500":
           $ref: "#/components/responses/InternalError"
       x-amazon-apigateway-integration:
@@ -110,6 +144,7 @@ paths:
           description: The ESPN or Sleeper league ID
           schema:
             type: string
+            pattern: '^\d+$'
             example: "12345678"
         - name: platform
           in: query
@@ -117,6 +152,7 @@ paths:
           description: The name of the platform the fantasy football league is on
           schema:
             type: string
+            enum: [ESPN, SLEEPER]
             example: "ESPN"
         - name: queryType
           in: query
@@ -162,27 +198,24 @@ components:
 
   schemas:
 
-    LeagueMetadata:
+    LeagueFoundData:
       type: object
-      required: [leagueId, platform, onboardedAt, seasons]
+      required: [canonical_league_id]
       properties:
-        leagueId:
+        canonical_league_id:
           type: string
           example: "12345678"
-        platform:
+
+    APIResponse:
+      type: object
+      required: [detail]
+      properties:
+        detail:
           type: string
-          enum: [ESPN, SLEEPER]
-          example: "ESPN"
-        onboardedAt:
-          type: string
-          format: date-time
-          example: "2024-09-01T00:00:00Z"
-        seasons:
-          type: array
-          description: List of seasons the league has data for
-          items:
-            type: string
-          example: ["2022", "2023", "2024"]
+          example: "Found league"
+        data:
+          description: Present on success responses that return data; absent otherwise.
+          nullable: true
 
     OnboardRequest:
       type: object
@@ -243,19 +276,39 @@ components:
 
     # ── Success responses ──────────────────────────────────
 
-    LeagueMetadataResponse:
+    LeagueFoundResponse:
       description: League found
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/LeagueMetadata"
+            allOf:
+              - $ref: "#/components/schemas/APIResponse"
+              - type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/LeagueFoundData"
+          example:
+            detail: "Found league"
+            data:
+              canonical_league_id: "12345678"
 
-    OnboardSuccessResponse:
-      description: League successfully onboarded
+    DeleteLeagueResponse:
+      description: League successfully deleted
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/LeagueMetadata"
+            $ref: "#/components/schemas/APIResponse"
+          example:
+            detail: "Successfully deleted league"
+
+    OnboardSuccessResponse:
+      description: Onboarding successfully triggered
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/APIResponse"
+          example:
+            detail: "Successfully triggered onboarding"
 
     QuerySuccessResponse:
       description: Precomputed view returned successfully
@@ -286,16 +339,6 @@ components:
             error: "League not found"
             message: "No ESPN league with ID 12345678 has been onboarded. Use POST /leagues to onboard."
 
-    AlreadyOnboardedError:
-      description: League already onboarded
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/ErrorResponse"
-          example:
-            error: "Already onboarded"
-            message: "League 12345678 has already been onboarded. Use GET /leagues/12345678 to retrieve your key."
-
     ValidationError:
       description: Invalid request body
       content:
@@ -305,16 +348,6 @@ components:
           example:
             error: "Unprocessable entity"
             message: "platform must be one of: ESPN, SLEEPER"
-
-    UpstreamError:
-      description: Upstream data source error — ESPN or Sleeper API unavailable
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/ErrorResponse"
-          example:
-            error: "Upstream error"
-            message: "Failed to fetch data from ESPN API. Please try again later."
 
     InternalError:
       description: Unexpected server error

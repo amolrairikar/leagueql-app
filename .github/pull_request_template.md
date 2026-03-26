@@ -12,29 +12,6 @@
 
 ---
 
-## Changes
-<!-- Key changes made. Delete sections that don't apply. -->
-
-**Infrastructure/DevOps**
-- 
-
----
-
-**Frontend**
-- 
-
----
-
-**Backend**
-- 
-
----
-
-**Onboarding Logic**
-- 
-
----
-
 ## Testing
 - [ ] Tests added/updated
 - [ ] Manually verified
