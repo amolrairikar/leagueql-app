@@ -269,6 +269,17 @@ module "processing-lambda-role" {
           module.dynamodb.primary_table_arn,
           module.dynamodb.replica_table_arn
         ]
+      },
+      {
+        Sid    = "ReadFromS3RawPrefix"
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+        ]
+        Resource = [
+          "${local.primary_bucket_arn}/raw-api-data/*",
+          "${local.secondary_bucket_arn}/raw-api-data/*"
+        ]
       }
     ]
   })

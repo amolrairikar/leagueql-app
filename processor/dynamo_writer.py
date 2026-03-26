@@ -1,7 +1,6 @@
 import json
 import os
 from decimal import Decimal
-from datetime import datetime, timezone
 from typing import Any
 
 import boto3
@@ -26,6 +25,7 @@ class DynamoWriter:
         self.league_id = league_id
         self.platform = platform
         self.table = boto3.resource("dynamodb").Table(os.environ["DYNAMODB_TABLE_NAME"])
+        self.client = boto3.client("dynamodb")
 
     def write_all(self, views: dict[str, Any]) -> None:
         """
@@ -44,21 +44,29 @@ class DynamoWriter:
                     }
                 )
 
-        # Written after batch flushes — guarantees all data records are committed first
-        self.table.put_item(
-            Item={
-                "PK": f"LEAGUE#{self.league_id}",
-                "SK": "METADATA",
-                "status": "active",
-                "onboardedAt": datetime.now(timezone.utc).isoformat(),
-            }
-        )
-
-        self.table.update_item(
-            Key={"PK": "APP#STATS", "SK": "LEAGUE_COUNT"},
-            UpdateExpression="ADD #count :inc",
-            ExpressionAttributeNames={"#count": "count"},
-            ExpressionAttributeValues={":inc": 1},
+        self.client.transact_write_items(
+            TransactItems=[
+                {
+                    "Update": {
+                        "TableName": self.table.name,
+                        "Key": {
+                            "PK": {"S": f"LEAGUE#{self.league_id}"},
+                            "SK": {"S": "METADATA"},
+                        },
+                        "UpdateExpression": "SET onboarding_status = :val",
+                        "ExpressionAttributeValues": {":val": {"S": "completed"}},
+                    }
+                },
+                {
+                    "Update": {
+                        "TableName": self.table.name,
+                        "Key": {"PK": {"S": "APP#STATS"}, "SK": {"S": "LEAGUE_COUNT"}},
+                        "UpdateExpression": "ADD #count :inc",
+                        "ExpressionAttributeNames": {"#count": "count"},
+                        "ExpressionAttributeValues": {":inc": {"N": "1"}},
+                    }
+                },
+            ]
         )
 
     def _serialize(self, data: dict[str, Any]) -> dict[str, Any]:

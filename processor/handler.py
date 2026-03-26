@@ -67,13 +67,6 @@ def lambda_handler(event, context) -> dict[str, str | int]:
     transformer = Transformer(platform=platform)
     transformed_data = transformer.transform(raw_data=raw_data)
     dynamo_writer = DynamoWriter(league_id=league_id, platform=platform)
-    for data in transformed_data.values():
-        dynamo_writer.write_all(views=data)
+    dynamo_writer.write_all(views=transformed_data)
 
     return {}
-
-
-# lambda_handler(
-#     event="",
-#     context="",
-# )
