@@ -1,6 +1,22 @@
 # fantasy-football-recap
 App to show league history and insights for ESPN and Sleeper leagues
 
+## Local Development
+
+### Loading Environment Variables
+Before running the API locally, you need to load the environment variables from the `src/api/.env` file into your shell session. Run the following command from the project root:
+
+```bash
+export $(grep -v '^#' src/api/.env | xargs)
+```
+
+### Running the API
+After loading environment variables, start up the uvicorn server:
+
+```bash
+pipenv run uvicorn src.api.main:app --reload
+```
+
 ## Unit Tests
 
 ### Writing Tests with Claude

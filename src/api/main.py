@@ -22,6 +22,14 @@ class APIResponse(BaseModel):
     data: Optional[Any] = None
 
 
+class OnboardingPayload(BaseModel):
+    leagueId: str
+    platform: str
+    season: Optional[str] = None
+    s2: Optional[str] = None
+    swid: Optional[str] = None
+
+
 class Platform(str, Enum):
     SLEEPER = "SLEEPER"
     ESPN = "ESPN"
@@ -86,9 +94,59 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# TODO: look into adding a custom config for retries
-dynamodb = boto3.resource("dynamodb")
-table = dynamodb.Table(os.environ["DYNAMODB_TABLE_NAME"])
+# TODO: look into adding a custom config for retries for resource
+dynamodb_resource = boto3.resource("dynamodb")
+table = dynamodb_resource.Table(os.environ["DYNAMODB_TABLE_NAME"])
+dynamodb_client = boto3.client("dynamodb")
+
+lambda_client = boto3.client("lambda")
+
+s3_client = boto3.client("s3")
+S3_BUCKET = os.environ["S3_BUCKET_NAME"]
+
+
+def lookup_league(league_id: str, platform: Platform) -> str:
+    """
+    Utility function to lookup a given league.
+
+    Args:
+        league_id: The ID for the league.
+        platform: The platform the league is on (e.g., ESPN, SLEEPER).
+
+    Returns:
+        The canonical league ID associated with that league.
+    """
+    pk = f"LEAGUE#{league_id}#PLATFORM#{platform.value}"
+    sk = "LEAGUE_LOOKUP"
+    try:
+        response = table.get_item(Key={"PK": pk, "SK": sk})
+    except botocore.exceptions.ClientError as e:
+        logger.error("Boto error occurred: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error",
+        )
+
+    item = response.get("Item")
+    if not item:
+        logger.warning("League %s not found for %s platform")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"League {league_id} not found for {platform.value} platform",
+        )
+
+    if not item.get("canonical_league_id"):
+        logger.error(
+            "canonical_league_id not found in item for league %s on platform %s",
+            league_id,
+            platform.value,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"canonical_league_id not created for league {league_id} on {platform.value} platform",
+        )
+
+    return item["canonical_league_id"]
 
 
 @app.get("/", status_code=status.HTTP_200_OK)
@@ -105,34 +163,124 @@ def get_league(
     platform: Annotated[Platform, Query(description="The platform the league is on")],
 ) -> APIResponse:
     """Gets league by league ID and platform."""
-    pk = f"LEAGUE#{leagueId}#PLATFORM#{platform.value}"
-    sk = "LEAGUE_LOOKUP"
+    canonical_league_id = lookup_league(league_id=leagueId, platform=platform)
+    logger.info(
+        "Canonical league for league ID %s and platform %s: %s",
+        leagueId,
+        platform,
+        canonical_league_id,
+    )
+    return APIResponse(
+        detail="Found league",
+        data={"canonical_league_id": canonical_league_id},
+    )
+
+
+@app.post("/leagues", status_code=status.HTTP_201_CREATED)
+def onboard_league(payload: OnboardingPayload) -> APIResponse:
+    """Onboard a league to the application."""
     try:
-        response = table.get_item(Key={"PK": pk, "SK": sk})
+        lambda_client.invoke(
+            FunctionName=os.environ["ONBOARDER_LAMBDA_NAME"],
+            InvocationType="Event",
+            Payload=json.dumps({"body": payload.model_dump()}),
+        )
+        logger.info("Triggered onboarding lambda")
+        return APIResponse(detail="Successfully triggered onboarding")
+
     except botocore.exceptions.ClientError as e:
-        logger.error("Boto error occurred: %s", e)
+        logger.error("Failed to trigger onboarding: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to trigger onboarding",
+        )
+
+
+@app.delete("/leagues/{leagueId}", status_code=status.HTTP_200_OK)
+def delete_league(
+    leagueId: Annotated[
+        str, Path(description="The ID of the fantasy league", pattern=r"^\d+$")
+    ],
+    platform: Annotated[Platform, Query(description="The platform the league is on")],
+) -> APIResponse:
+    """Deletes an onboarded league."""
+    canonical_league_id = lookup_league(league_id=leagueId, platform=platform)
+    logger.info(
+        "Proceeding with delete for canonical_league_id: %s", canonical_league_id
+    )
+    try:
+        dynamodb_client.transact_write_items(
+            TransactItems=[
+                {
+                    "Delete": {
+                        "TableName": os.environ["DYNAMODB_TABLE_NAME"],
+                        "Key": {
+                            "PK": {"S": f"LEAGUE#{canonical_league_id}"},
+                            "SK": {"S": "METADATA"},
+                        },
+                    }
+                },
+                {
+                    "Delete": {
+                        "TableName": os.environ["DYNAMODB_TABLE_NAME"],
+                        "Key": {
+                            "PK": {"S": f"LEAGUE#{canonical_league_id}"},
+                            "SK": {"S": "TEAMS"},
+                        },
+                    }
+                },
+                {
+                    "Delete": {
+                        "TableName": os.environ["DYNAMODB_TABLE_NAME"],
+                        "Key": {
+                            "PK": {"S": f"LEAGUE#{leagueId}#PLATFORM#{platform.value}"},
+                            "SK": {"S": "LEAGUE_LOOKUP"},
+                        },
+                    }
+                },
+                {
+                    "Update": {
+                        "TableName": os.environ["DYNAMODB_TABLE_NAME"],
+                        "Key": {"PK": {"S": "APP#STATS"}, "SK": {"S": "LEAGUE_COUNT"}},
+                        "UpdateExpression": "SET #c = #c - :val",
+                        "ConditionExpression": "attribute_exists(PK) AND #c > :zero",
+                        "ExpressionAttributeNames": {"#c": "count"},
+                        "ExpressionAttributeValues": {
+                            ":val": {"N": "1"},
+                            ":zero": {"N": "0"},
+                        },
+                    }
+                },
+            ]
+        )
+        logger.info("Deleted league items from DynamoDB")
+
+        # After DB delete, delete raw API data files from S3
+        s3_prefix = f"raw-api-data/{platform.value}/{canonical_league_id}/"
+        response = s3_client.list_objects_v2(Bucket=S3_BUCKET, Prefix=s3_prefix)
+        if "Contents" in response:
+            delete_keys = [{"Key": obj["Key"]} for obj in response["Contents"]]
+
+            # S3 delete_objects can handle up to 1,000 keys per request
+            s3_client.delete_objects(
+                Bucket=S3_BUCKET,
+                Delete={
+                    "Objects": delete_keys,
+                    "Quiet": True,  # Returns only errors in the response
+                },
+            )
+
+        logger.info("Deleted raw API data for league from S3")
+
+        return APIResponse(
+            detail="Successfully deleted league",
+        )
+    except botocore.exceptions.ClientError as e:
+        logger.error("Error occurred while deleting league: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error",
         )
-
-    item = response.get("Item")
-    if not item:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"League {leagueId} not found for {platform.value} platform",
-        )
-
-    if not item.get("canonical_league_id"):
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"canonical_league_id not created for league {leagueId} on {platform.value} platform",
-        )
-
-    return APIResponse(
-        detail="Found league",
-        data={"canonical_league_id": item.get("canonical_league_id")},
-    )
 
 
 handler = Mangum(app)
