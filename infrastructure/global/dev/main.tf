@@ -345,11 +345,41 @@ module "api-lambda-role" {
           "dynamodb:BatchGetItem",
           "dynamodb:Query",
           "dynamodb:Scan",
-          "dynamodb:DeleteItem"
+          "dynamodb:DeleteItem",
+          "dynamodb:ConditionCheckItem"
         ]
         Resource = [
           module.dynamodb.primary_table_arn,
           module.dynamodb.replica_table_arn
+        ]
+      },
+      {
+        Sid    = "InvokeOnboarderLambda"
+        Effect = "Allow"
+        Action = [
+          "lambda:InvokeFunction"
+        ]
+        Resource = [
+          "arn:aws:lambda:us-east-1:${var.account_id}:function:fantasy-football-recap-onboarder-${var.environment}-east",
+          "arn:aws:lambda:us-west-2:${var.account_id}:function:fantasy-football-recap-onboarder-${var.environment}-west"
+        ]
+      },
+      {
+        Sid    = "S3ListBucket"
+        Effect = "Allow"
+        Action = ["s3:ListBucket"]
+        Resource = [
+          local.primary_bucket_arn,
+          local.secondary_bucket_arn
+        ]
+      },
+      {
+        Sid    = "S3DeleteRawDataOnly"
+        Effect = "Allow"
+        Action = ["s3:DeleteObject"]
+        Resource = [
+          "${local.primary_bucket_arn}/raw-api-data/*",
+          "${local.secondary_bucket_arn}/raw-api-data/*"
         ]
       }
     ]
