@@ -129,7 +129,7 @@ def lookup_league(league_id: str, platform: Platform) -> str:
 
     item = response.get("Item")
     if not item:
-        logger.warning("League %s not found for %s platform")
+        logger.warning("League %s not found for %s platform", league_id, platform.value)
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"League {league_id} not found for {platform.value} platform",
