@@ -230,7 +230,9 @@ def onboard_league(
         lambda_client.invoke(
             FunctionName=os.environ["ONBOARDER_LAMBDA_NAME"],
             InvocationType="Event",
-            Payload=json.dumps({"body": payload.model_dump()}),
+            Payload=json.dumps(
+                {"body": payload.model_dump(), "requestType": requestType.value}
+            ),
         )
 
         detail_msg = (

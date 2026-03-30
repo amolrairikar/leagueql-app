@@ -18,6 +18,7 @@ def lambda_handler(event, context) -> dict[str, str | int]:
         dict: A response indicating the success of the operation.
     """
     body = event["body"]
+    request_type = event["requestType"]
     # NOTE: We cannot log the event due to the potential for sensitive ESPN cookies
     logger.info("Starting league onboarding process execution.")
     logger.info("Context data: %s", context)
@@ -29,6 +30,7 @@ def lambda_handler(event, context) -> dict[str, str | int]:
             latest_season=body.get("season"),
             espn_s2_cookie=body.get("s2"),
             swid_cookie=body.get("swid"),
+            request_type=request_type,
         )
     except KeyError as e:
         logger.error("Missing required field in request body: %s", e)

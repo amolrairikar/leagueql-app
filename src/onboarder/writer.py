@@ -40,6 +40,7 @@ def write_onboarding_job_id_to_dynamodb(
     platform: str,
     canonical_league_id: str,
     seasons: list[str],
+    request_type: str,
 ) -> str:
     """
     Writes the onboarding job ID and status to DynamoDB for client to poll to determine onboarding status.
@@ -49,6 +50,7 @@ def write_onboarding_job_id_to_dynamodb(
         platform: The platform (e.g., ESPN, SLEEPER) that the league is on.
         canonical_league_id: The unique ID for the league.
         seasons: List of strings representing number of seasons league was active for prior to onboarding.
+        request_type: The type of onboarding request (e.g., "ONBOARD" or "REFRESH")
 
     Returns:
         The UUID corresponding to the current onboarding job run
@@ -56,24 +58,57 @@ def write_onboarding_job_id_to_dynamodb(
     try:
         dynamodb = boto3.client("dynamodb")
         job_id = str(uuid.uuid4())
-        dynamodb.transact_write_items(
-            TransactItems=[
+        table_name = os.environ["DYNAMODB_TABLE_NAME"]
+        now_iso = datetime.datetime.now().isoformat()
+
+        if request_type == "REFRESH":
+            transact_items = [
+                {
+                    "Update": {
+                        "TableName": table_name,
+                        "Key": {
+                            "PK": {"S": f"LEAGUE#{canonical_league_id}"},
+                            "SK": {"S": "METADATA"},
+                        },
+                        "UpdateExpression": "SET refresh_status = :rs, last_refreshed_date = :rd",
+                        "ExpressionAttributeValues": {
+                            ":rs": {"S": "refreshing"},
+                            ":rd": {"S": now_iso},
+                        },
+                    }
+                },
+                {
+                    "Update": {
+                        "TableName": table_name,
+                        "Key": {
+                            "PK": {"S": f"LEAGUE#{league_id}#PLATFORM#{platform}"},
+                            "SK": {"S": "LEAGUE_LOOKUP"},
+                        },
+                        "UpdateExpression": "SET seasons = :s",
+                        "ExpressionAttributeValues": {
+                            ":s": {"SS": seasons},
+                        },
+                    }
+                },
+            ]
+        else:
+            transact_items = [
                 {
                     "Put": {
-                        "TableName": os.environ["DYNAMODB_TABLE_NAME"],
+                        "TableName": table_name,
                         "Item": {
                             "PK": {"S": f"LEAGUE#{canonical_league_id}"},
                             "SK": {"S": "METADATA"},
                             "platform": {"S": platform},
                             "onboarding_id": {"S": job_id},
-                            "onboarded_at": {"S": datetime.datetime.now().isoformat()},
+                            "onboarded_at": {"S": now_iso},
                             "onboarding_status": {"S": "onboarding"},
                         },
                     }
                 },
                 {
                     "Put": {
-                        "TableName": os.environ["DYNAMODB_TABLE_NAME"],
+                        "TableName": table_name,
                         "Item": {
                             "PK": {"S": f"LEAGUE#{league_id}#PLATFORM#{platform}"},
                             "SK": {"S": "LEAGUE_LOOKUP"},
@@ -83,7 +118,8 @@ def write_onboarding_job_id_to_dynamodb(
                     }
                 },
             ]
-        )
+
+        dynamodb.transact_write_items(TransactItems=transact_items)
         return job_id
     except KeyError as e:
         logger.error("Environment variable 'DYNAMODB_TABLE_NAME' not set!")

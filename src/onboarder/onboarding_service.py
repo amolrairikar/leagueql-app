@@ -16,6 +16,7 @@ class OnboardingService:
     Attributes:
         league_id: The ID of the league being onboarded.
         platform: The platform the league is on (e.g., ESPN, SLEEPER)
+        request_type: The type of onboarding request (e.g., "ONBOARD" or "REFRESH")
         latest_season: Optional value for the most recent season a league was active,
             only required for ESPN leagues.
         espn_s2_cookie: Optional cookie value for espn_s2 cookie, required to fetch
@@ -24,7 +25,7 @@ class OnboardingService:
             private ESPN league data.
 
     Methods:
-        __init__(league_id, platform, latest_season, espn_s2_cookie, swid_cookie): Constructor.
+        __init__(league_id, platform, request_type, latest_season, espn_s2_cookie, swid_cookie): Constructor.
         run(): Runs the onboarding logic.
         _build_client(league_id, platform, latest_season, espn_s2_cookie, swid_cookie):
             Builds API request client for the provided platform (e.g., URL/cookie setup).
@@ -34,6 +35,7 @@ class OnboardingService:
         self,
         league_id: str,
         platform: str,
+        request_type: str,
         latest_season: str | None = None,
         espn_s2_cookie: str | None = None,
         swid_cookie: str | None = None,
@@ -41,6 +43,7 @@ class OnboardingService:
         """Constructor."""
         self.league_id = league_id
         self.platform = platform
+        self.request_type = request_type
         self.latest_season = str(latest_season) if latest_season else None
         self.client = self._build_client(
             league_id=league_id,
@@ -66,6 +69,7 @@ class OnboardingService:
             platform=self.platform,
             canonical_league_id=self.canonical_league_id,
             seasons=seasons,
+            request_type=self.request_type,
         )
         logger.info("Wrote job onboarding status to DynamoDB")
         logger.info("Writing raw data to S3")
