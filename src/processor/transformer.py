@@ -59,7 +59,7 @@ class Transformer:
         all_members, all_teams = [], []
 
         for item in raw_data:
-            if item["data_type"] == "league_information":
+            if item["data_type"] == "users":
                 for record in item["data"].get("members", []):
                     record_copy = record.copy()
                     record_copy["season"] = item["season"]

@@ -271,6 +271,15 @@ module "processing-lambda-role" {
         ]
       },
       {
+        Sid    = "S3ListBucket"
+        Effect = "Allow"
+        Action = ["s3:ListBucket"]
+        Resource = [
+          local.primary_bucket_arn,
+          local.secondary_bucket_arn
+        ]
+      },
+      {
         Sid    = "ReadFromS3RawPrefix"
         Effect = "Allow"
         Action = [
