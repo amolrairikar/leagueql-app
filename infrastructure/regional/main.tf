@@ -84,8 +84,9 @@ module "api_lambda" {
   s3_key               = "lambda-code-artifacts/api-lambda.zip"
 
   environment_variables = {
-    DYNAMODB_TABLE_NAME = "fantasy-football-recap-table-${var.environment}"
-    S3_BUCKET_NAME      = "fantasy-football-recap-${var.environment}-bucket-${local.region}-${local.account_id}"
+    DYNAMODB_TABLE_NAME   = "fantasy-football-recap-table-${var.environment}"
+    ONBOARDER_LAMBDA_NAME = "fantasy-football-recap-onboarder-${var.environment}-${local.region}"
+    S3_BUCKET_NAME        = "fantasy-football-recap-${var.environment}-bucket-${local.region}-${local.account_id}"
   }
 
   tags = {

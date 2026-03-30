@@ -13,17 +13,21 @@ class DynamoWriter:
     Attributes:
         league_id: The ID of the league being onboarded.
         platform: The platform the league is on (e.g., ESPN, SLEEPER)
+        refresh: Boolean indicating if this write is part of a refresh operation (True) or an initial onboarding (False).
+        table: The DynamoDB table resource.
+        client: The DynamoDB client for making API calls.
 
     Methods:
-        __init__(league_id, platform): Constructor.
+        __init__(league_id, platform, refresh): Constructor.
         write_all(views): Writes each view to DynamoDB using the sort key and corresponding data from the view mapping.
         _serialize(data): Serializes DynamoDB records to convert floats to Decimal.
     """
 
-    def __init__(self, league_id: str, platform: str):
+    def __init__(self, league_id: str, platform: str, refresh: bool = False):
         """Constructor."""
         self.league_id = league_id
         self.platform = platform
+        self.refresh = refresh
         self.table = boto3.resource("dynamodb").Table(os.environ["DYNAMODB_TABLE_NAME"])
         self.client = boto3.client("dynamodb")
 
@@ -44,8 +48,10 @@ class DynamoWriter:
                     }
                 )
 
-        self.client.transact_write_items(
-            TransactItems=[
+        transact_items = []
+
+        if self.refresh:
+            transact_items.append(
                 {
                     "Update": {
                         "TableName": self.table.name,
@@ -53,21 +59,42 @@ class DynamoWriter:
                             "PK": {"S": f"LEAGUE#{self.league_id}"},
                             "SK": {"S": "METADATA"},
                         },
-                        "UpdateExpression": "SET onboarding_status = :val",
+                        "UpdateExpression": "SET refresh_status = :val",
                         "ExpressionAttributeValues": {":val": {"S": "completed"}},
                     }
-                },
-                {
-                    "Update": {
-                        "TableName": self.table.name,
-                        "Key": {"PK": {"S": "APP#STATS"}, "SK": {"S": "LEAGUE_COUNT"}},
-                        "UpdateExpression": "ADD #count :inc",
-                        "ExpressionAttributeNames": {"#count": "count"},
-                        "ExpressionAttributeValues": {":inc": {"N": "1"}},
-                    }
-                },
-            ]
-        )
+                }
+            )
+        else:
+            transact_items.extend(
+                [
+                    {
+                        "Update": {
+                            "TableName": self.table.name,
+                            "Key": {
+                                "PK": {"S": f"LEAGUE#{self.league_id}"},
+                                "SK": {"S": "METADATA"},
+                            },
+                            "UpdateExpression": "SET onboarding_status = :val",
+                            "ExpressionAttributeValues": {":val": {"S": "completed"}},
+                        }
+                    },
+                    {
+                        "Update": {
+                            "TableName": self.table.name,
+                            "Key": {
+                                "PK": {"S": "APP#STATS"},
+                                "SK": {"S": "LEAGUE_COUNT"},
+                            },
+                            "UpdateExpression": "ADD #count :inc",
+                            "ExpressionAttributeNames": {"#count": "count"},
+                            "ExpressionAttributeValues": {":inc": {"N": "1"}},
+                        }
+                    },
+                ]
+            )
+
+        if transact_items:
+            self.client.transact_write_items(TransactItems=transact_items)
 
     def _serialize(self, data: dict[str, Any]) -> dict[str, Any]:
         """

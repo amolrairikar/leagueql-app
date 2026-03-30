@@ -18,17 +18,20 @@ def lambda_handler(event, context) -> dict[str, str | int]:
         dict: A response indicating the success of the operation.
     """
     body = event["body"]
+    request_type = event["requestType"]
     # NOTE: We cannot log the event due to the potential for sensitive ESPN cookies
     logger.info("Starting league onboarding process execution.")
     logger.info("Context data: %s", context)
 
     try:
-        service = OnboardingService(
+        onboarding_service = OnboardingService(
             league_id=str(body["leagueId"]),
             platform=body["platform"],
             latest_season=body.get("season"),
             espn_s2_cookie=body.get("s2"),
             swid_cookie=body.get("swid"),
+            request_type=request_type,
+            canonical_league_id=event.get("canonicalLeagueId", None),
         )
     except KeyError as e:
         logger.error("Missing required field in request body: %s", e)
@@ -63,7 +66,7 @@ def lambda_handler(event, context) -> dict[str, str | int]:
         }
 
     try:
-        job_id = service.run()
+        onboarding_service.run()
     except KeyError as e:
         logger.error("Missing required environment variable: %s", e)
         return {
@@ -93,5 +96,10 @@ def lambda_handler(event, context) -> dict[str, str | int]:
     logger.info("Ending league onboarding process execution.")
     return {
         "statusCode": 200,
-        "body": json.dumps({"status": "succeeded", "onboarding_job_id": job_id}),
+        "body": json.dumps(
+            {
+                "status": "succeeded",
+                "canonical_league_id": onboarding_service.canonical_league_id,
+            }
+        ),
     }
