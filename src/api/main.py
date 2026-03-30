@@ -45,6 +45,21 @@ class Platform(str, Enum):
         return None
 
 
+class RequestType(str, Enum):
+    ONBOARD = "ONBOARD"
+    REFRESH = "REFRESH"
+
+    @classmethod
+    def _missing_(cls, value: object):
+        """Standard-compliant override for case-insensitive lookup."""
+        if isinstance(value, str):
+            normalized_value = value.upper()
+            for member in cls:
+                if member.value == normalized_value:
+                    return member
+        return None
+
+
 class JsonFormatter(logging.Formatter):
     """Class to format logs in JSON format."""
 
@@ -177,15 +192,26 @@ def get_league(
 
 
 @app.post("/leagues", status_code=status.HTTP_201_CREATED)
-def onboard_league(payload: OnboardingPayload, response: Response) -> APIResponse:
+def onboard_league(
+    payload: OnboardingPayload,
+    response: Response,
+    requestType: Annotated[
+        RequestType, Query(description="The type of request: ONBOARD or REFRESH")
+    ] = RequestType.ONBOARD,
+) -> APIResponse:
     """Onboard a league to the application."""
     platform = Platform(payload.platform)
+    canonical_league_id = None
 
-    # Check if league is already onboarded — redirect to GET if so
     try:
         canonical_league_id = lookup_league(
             league_id=payload.leagueId, platform=platform
         )
+    except HTTPException as e:
+        if e.status_code != status.HTTP_404_NOT_FOUND:
+            raise
+
+    if requestType == RequestType.ONBOARD and canonical_league_id:
         logger.info(
             "League %s already onboarded, returning existing data", payload.leagueId
         )
@@ -194,26 +220,31 @@ def onboard_league(payload: OnboardingPayload, response: Response) -> APIRespons
             detail="League already onboarded",
             data={"canonical_league_id": canonical_league_id},
         )
-    except HTTPException as e:
-        if e.status_code != status.HTTP_404_NOT_FOUND:
-            raise
 
-    # If new league, proceed with onboarding
-    logger.info("New league detected, proceeding with onboarding...")
+    log_msg = (
+        "Refreshing existing league" if canonical_league_id else "New league detected"
+    )
+    logger.info(f"{log_msg}, proceeding with Lambda trigger...")
+
     try:
         lambda_client.invoke(
             FunctionName=os.environ["ONBOARDER_LAMBDA_NAME"],
             InvocationType="Event",
             Payload=json.dumps({"body": payload.model_dump()}),
         )
-        logger.info("Triggered onboarding lambda")
-        return APIResponse(detail="Successfully triggered onboarding")
+
+        detail_msg = (
+            "Successfully triggered refresh"
+            if canonical_league_id
+            else "Successfully triggered onboarding"
+        )
+        return APIResponse(detail=detail_msg)
 
     except botocore.exceptions.ClientError as e:
-        logger.error("Failed to trigger onboarding: %s", e)
+        logger.error("Failed to trigger onboarding/refresh: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to trigger onboarding",
+            detail="Failed to trigger processing",
         )
 
 

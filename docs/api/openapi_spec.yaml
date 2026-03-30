@@ -111,6 +111,17 @@ paths:
         if the league is already onboarded, the request is redirected to
         GET /leagues/{leagueId} and no duplicate processing occurs.
       operationId: onboardLeague
+      parameters:
+        - name: requestType
+          in: query
+          required: true
+          description: > 
+            The type of onboarding request being made. Can be "ONBOARD" for new leagues
+            or "REFRESH" to refresh data for an existing league.
+          schema:
+            type: string
+            enum: [ONBOARD, REFRESH]
+            example: "ONBOARD"
       requestBody:
         required: true
         content:
