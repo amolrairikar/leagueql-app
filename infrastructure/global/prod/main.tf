@@ -274,7 +274,10 @@ module "processing-lambda-role" {
       {
         Sid    = "S3ListBucket"
         Effect = "Allow"
-        Action = ["s3:ListBucket"]
+        Action = [
+          "s3:ListBucket",
+          "s3:ListBucketVersions"
+        ],
         Resource = [
           local.primary_bucket_arn,
           local.secondary_bucket_arn
