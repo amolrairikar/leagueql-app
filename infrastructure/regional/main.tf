@@ -145,3 +145,14 @@ resource "aws_cloudwatch_log_resource_policy" "apigateway_log_delivery" {
     ]
   })
 }
+
+resource "aws_acm_certificate" "api_subdomain_cert" {
+  domain_name       = "api.leagueql.com"
+  validation_method = "DNS"
+  tags = {
+    environment = var.environment
+    project     = "fantasy-football-recap"
+    component   = "api"
+    managed-by  = "terraform"
+  }
+}
