@@ -1,4 +1,4 @@
-name: fantasy-football-recap-build-pipeline
+name: leagueql-app-build-pipeline
 
 on:
   pull_request:
