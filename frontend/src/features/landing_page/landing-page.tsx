@@ -1,43 +1,14 @@
-import { ChevronLeft, ChevronRight, type LucideProps } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 
-import { ModeToggle } from '@/components/mode-toggle';
 import { Button } from '@/components/ui/button';
 import {
-  NAV_LINKS,
   SLIDES,
   FEATURES,
   FOOTER_LINKS,
 } from '@/features/landing_page/constants';
-import type {
-  NavLinkItem,
-  Slide,
-  Feature,
-} from '@/features/landing_page/types';
-
-interface NavLinkProps {
-  href: string;
-  icon: React.FC<LucideProps>;
-  label: string;
-}
-
-function NavLink({ href, icon: Icon, label }: NavLinkProps) {
-  return (
-    <a
-      href={href}
-      className="
-        flex items-center gap-1.5 px-3 py-1.5 rounded-md
-        text-muted-foreground hover:text-foreground hover:bg-accent
-        font-mono text-xs tracking-wide
-        transition-colors duration-200
-      "
-    >
-      <Icon size={13} className="opacity-70" />
-      <span className="hidden sm:inline">{label}</span>
-    </a>
-  );
-}
+import type { Slide, Feature } from '@/features/landing_page/types';
 
 interface ScreenshotPlaceholderProps {
   title: string;
@@ -264,35 +235,6 @@ export default function LeagueQLLanding() {
         }}
       />
 
-      <nav
-        className="
-        fixed top-0 left-0 right-0 z-50
-        flex items-center justify-between
-        px-8 h-15
-        bg-background/80 backdrop-blur-md
-        border-b border-border
-        "
-      >
-        <a
-          href="#"
-          className="flex items-center gap-2 no-underline font-heading"
-        >
-          <span className="w-1.75 h-1.75 rounded-full bg-primary inline-block" />
-          <span className="text-foreground text-xl tracking-tight">
-            LeagueQL
-          </span>
-        </a>
-
-        <div className="flex items-center gap-1">
-          {NAV_LINKS.map((link: NavLinkItem) => (
-            <NavLink key={link.label} {...link} />
-          ))}
-
-          <div className="ml-2">
-            <ModeToggle />
-          </div>
-        </div>
-      </nav>
 
       <section className="relative z-10 flex flex-col items-center text-center px-6 pt-36 pb-20">
         <h1
