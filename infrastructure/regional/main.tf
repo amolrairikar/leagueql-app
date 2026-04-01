@@ -146,13 +146,30 @@ resource "aws_cloudwatch_log_resource_policy" "apigateway_log_delivery" {
   })
 }
 
-# resource "aws_acm_certificate" "api_subdomain_cert" {
-#   domain_name       = "api.leagueql.com"
-#   validation_method = "DNS"
-#   tags = {
-#     environment = var.environment
-#     project     = "fantasy-football-recap"
-#     component   = "api"
-#     managed-by  = "terraform"
-#   }
-# }
+resource "aws_acm_certificate" "api_subdomain_cert" {
+  domain_name       = "api.leagueql.com"
+  validation_method = "DNS"
+
+  tags = {
+    environment = var.environment
+    project     = "fantasy-football-recap"
+    component   = "api"
+    managed-by  = "terraform"
+  }
+}
+
+resource "aws_apigatewayv2_domain_name" "api_subdomain" {
+  domain_name = "api.leagueql.com"
+
+  domain_name_configuration {
+    certificate_arn = aws_acm_certificate.api_subdomain_cert.arn
+    endpoint_type   = "REGIONAL"
+    security_policy = "TLS_1_2"
+  }
+}
+
+resource "aws_apigatewayv2_api_mapping" "api_subdomain_mapping" {
+  api_id      = module.backend_api.api_id
+  domain_name = aws_apigatewayv2_domain_name.api_subdomain.id
+  stage       = "$default"
+}
