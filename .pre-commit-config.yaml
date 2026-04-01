@@ -46,6 +46,13 @@ repos:
         entry: bash -c "cd infrastructure/modules && terraform validate"
         language: system
         types: [terraform]
+      - id: npm-build
+        name: Run npm build
+        description: Runs npm run build to ensure the project compiles before committing.
+        entry: cd frontend && npm run build
+        language: system
+        files: \.(js|jsx|ts|tsx)$ 
+        pass_filenames: false
       # - id: run-unit-tests
       #   name: Run unit tests
       #   description: Runs unit tests using pipenv and pytest to validate unit tests pass prior to committing code.
