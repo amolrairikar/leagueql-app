@@ -43,9 +43,13 @@ def upload_results_to_s3(
         manifest_key = f"{prefix}/manifest.json"
         try:
             existing_manifest_obj = s3.get_object(Bucket=bucket_name, Key=manifest_key)
+            logger.info(
+                "Existing manifest found in S3, merging new seasons with existing manifest"
+            )
             full_manifest = json.loads(existing_manifest_obj["Body"].read())
         except botocore.exceptions.ClientError as e:
             if e.response.get("Error", {}).get("Code") == "NoSuchKey":
+                logger.info("No existing manifest found in S3, creating new manifest")
                 full_manifest = {}
             else:
                 logger.error(
@@ -63,6 +67,7 @@ def upload_results_to_s3(
             Body=json.dumps(full_manifest),
             ContentType="application/json",
         )
+        logger.info("Wrote manifest to S3")
     except botocore.exceptions.ClientError as e:
         logger.error("Error occurred while writing raw API JSON to S3: %s", e)
         raise e
