@@ -182,6 +182,29 @@ module "onboarding-lambda-role" {
         ]
       },
       {
+        Sid    = "S3ListBucket"
+        Effect = "Allow"
+        Action = [
+          "s3:ListBucket",
+          "s3:ListBucketVersions"
+        ],
+        Resource = [
+          local.primary_bucket_arn,
+          local.secondary_bucket_arn
+        ]
+      },
+      {
+        Sid    = "ReadFromS3RawPrefix"
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+        ]
+        Resource = [
+          "${local.primary_bucket_arn}/raw-api-data/*",
+          "${local.secondary_bucket_arn}/raw-api-data/*"
+        ]
+      },
+      {
         Sid    = "WriteToS3RawPrefix"
         Effect = "Allow"
         Action = [
