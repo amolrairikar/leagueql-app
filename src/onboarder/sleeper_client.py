@@ -1,7 +1,10 @@
-from typing import Any, Sequence, Union
+import os
+from typing import Any, Optional, Sequence, Union
 
 import aiohttp
 import asyncio
+import boto3
+import botocore.exceptions
 import requests
 
 from utils import logger
@@ -14,6 +17,70 @@ DATA_FETCH_TYPES = [
     "transactions",
     "drafts",
 ]
+
+
+def resolve_sleeper_canonical_league_id(new_league_id: str) -> Optional[str]:
+    """
+    Resolves the canonical_league_id for a new Sleeper season by walking the
+    previous_league_id chain until a known league ID is found in DynamoDB.
+
+    Args:
+        new_league_id: The new season's Sleeper league ID that is not yet in LEAGUE_LOOKUP.
+
+    Returns:
+        The canonical_league_id if a prior season is found in LEAGUE_LOOKUP, or None if
+        the chain is exhausted without finding a match (truly unknown league).
+    """
+    dynamodb = boto3.client("dynamodb")
+    table_name = os.environ["DYNAMODB_TABLE_NAME"]
+    current_id = new_league_id
+
+    while True:
+        url = f"{SLEEPER_BASE_URL}/league/{current_id}"
+        response = requests.get(url)
+        try:
+            response.raise_for_status()
+        except requests.exceptions.HTTPError as e:
+            logger.error(
+                "Error fetching Sleeper league %s during chain walk: %s", current_id, e
+            )
+            raise e
+
+        data = response.json()
+        previous_league_id = data.get("previous_league_id", "0")
+        if previous_league_id == "0":
+            logger.warning(
+                "Exhausted previous_league_id chain from %s without finding a known league",
+                new_league_id,
+            )
+            return None
+
+        try:
+            result = dynamodb.get_item(
+                TableName=table_name,
+                Key={
+                    "PK": {"S": f"LEAGUE#{previous_league_id}#PLATFORM#SLEEPER"},
+                    "SK": {"S": "LEAGUE_LOOKUP"},
+                },
+            )
+        except botocore.exceptions.ClientError as e:
+            logger.error(
+                "DynamoDB error while resolving Sleeper canonical league ID: %s", e
+            )
+            raise e
+
+        item = result.get("Item")
+        if item and item.get("canonical_league_id"):
+            canonical_league_id = item["canonical_league_id"]["S"]
+            logger.info(
+                "Resolved canonical_league_id %s for new season league ID %s via previous_league_id %s",
+                canonical_league_id,
+                new_league_id,
+                previous_league_id,
+            )
+            return canonical_league_id
+
+        current_id = previous_league_id
 
 
 class SleeperClient:

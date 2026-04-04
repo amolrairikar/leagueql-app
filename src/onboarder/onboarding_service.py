@@ -43,11 +43,13 @@ class OnboardingService:
         espn_s2_cookie: str | None = None,
         swid_cookie: str | None = None,
         canonical_league_id: str | None = None,
+        is_new_season_refresh: bool = False,
     ):
         """Constructor."""
         self.league_id = league_id
         self.platform = platform
         self.request_type = request_type
+        self.is_new_season_refresh = is_new_season_refresh
         self.latest_season = str(latest_season) if latest_season else None
         self.client = self._build_client(
             league_id=league_id,
@@ -75,6 +77,7 @@ class OnboardingService:
             canonical_league_id=self.canonical_league_id,
             seasons=seasons,
             request_type=self.request_type,
+            is_new_season_refresh=self.is_new_season_refresh,
         )
         logger.info("Wrote job onboarding status to DynamoDB")
         logger.info("Writing raw data to S3")

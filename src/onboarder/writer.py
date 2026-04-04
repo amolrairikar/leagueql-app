@@ -79,6 +79,7 @@ def write_onboarding_status_to_dynamodb(
     canonical_league_id: str,
     seasons: list[str],
     request_type: str,
+    is_new_season_refresh: bool = False,
 ):
     """
     Writes the onboarding status to DynamoDB for client to poll to determine onboarding status.
@@ -89,6 +90,8 @@ def write_onboarding_status_to_dynamodb(
         canonical_league_id: The unique ID for the league.
         seasons: List of strings representing number of seasons league was active for prior to onboarding.
         request_type: The type of onboarding request (e.g., "ONBOARD" or "REFRESH")
+        is_new_season_refresh: If True, league_id is a new season's ID not yet in LEAGUE_LOOKUP;
+            a new LEAGUE_LOOKUP item is created via Put instead of updating an existing one.
     """
     try:
         dynamodb = boto3.client("dynamodb")
@@ -96,6 +99,33 @@ def write_onboarding_status_to_dynamodb(
         now_iso = datetime.datetime.now().isoformat()
 
         if request_type == "REFRESH":
+            if is_new_season_refresh:
+                league_lookup_operation = {
+                    "Put": {
+                        "TableName": table_name,
+                        "Item": {
+                            "PK": {"S": f"LEAGUE#{league_id}#PLATFORM#{platform}"},
+                            "SK": {"S": "LEAGUE_LOOKUP"},
+                            "canonical_league_id": {"S": canonical_league_id},
+                            "seasons": {"SS": seasons},
+                        },
+                    }
+                }
+            else:
+                league_lookup_operation = {
+                    "Update": {
+                        "TableName": table_name,
+                        "Key": {
+                            "PK": {"S": f"LEAGUE#{league_id}#PLATFORM#{platform}"},
+                            "SK": {"S": "LEAGUE_LOOKUP"},
+                        },
+                        "UpdateExpression": "ADD seasons :s",
+                        "ExpressionAttributeValues": {
+                            ":s": {"SS": seasons},
+                        },
+                    }
+                }
+
             transact_items = [
                 {
                     "Update": {
@@ -111,19 +141,7 @@ def write_onboarding_status_to_dynamodb(
                         },
                     }
                 },
-                {
-                    "Update": {
-                        "TableName": table_name,
-                        "Key": {
-                            "PK": {"S": f"LEAGUE#{league_id}#PLATFORM#{platform}"},
-                            "SK": {"S": "LEAGUE_LOOKUP"},
-                        },
-                        "UpdateExpression": "ADD seasons :s",
-                        "ExpressionAttributeValues": {
-                            ":s": {"SS": seasons},
-                        },
-                    }
-                },
+                league_lookup_operation,
             ]
         else:
             transact_items = [

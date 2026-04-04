@@ -222,14 +222,19 @@ def onboard_league(
         )
 
     if requestType == RequestType.REFRESH and not canonical_league_id:
-        logger.warning(
-            "League %s not found for %s platform, cannot refresh non-existent league",
+        if platform != Platform.SLEEPER:
+            logger.warning(
+                "League %s not found for %s platform, cannot refresh non-existent league",
+                payload.leagueId,
+                platform.value,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"League {payload.leagueId} not found for {platform.value} platform, unable to refresh league",
+            )
+        logger.info(
+            "Sleeper league %s not found in LEAGUE_LOOKUP; onboarder will resolve via previous_league_id chain",
             payload.leagueId,
-            platform.value,
-        )
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"League {payload.leagueId} not found for {platform.value} platform, unable to refresh league",
         )
 
     log_msg = (
