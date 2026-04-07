@@ -274,7 +274,7 @@ class ESPNClient:
             elif data_type == "draft_picks":
                 processed_data = {"draft_picks": data["draftDetail"]["picks"]}
             elif data_type.startswith("matchups"):
-                matchup_week = data_type[-1]
+                matchup_week = data_type.removeprefix("matchups_week")
                 matchups = data["schedule"]
                 processed_matchups = [
                     matchup
