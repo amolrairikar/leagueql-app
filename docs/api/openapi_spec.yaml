@@ -103,13 +103,13 @@ paths:
 
   /leagues:
     post:
-      summary: Onboard a new league
+      summary: Onboard a new league or refresh an existing league's data
       description: >
         Triggers the onboarding Lambda which fetches all historical season data
         from the specified platform (ESPN or Sleeper), transforms it via DuckDB,
-        and writes precomputed views to DynamoDB. This endpoint is idempotent —
-        if the league is already onboarded, the request is redirected to
-        GET /leagues/{leagueId} and no duplicate processing occurs.
+        and writes precomputed views to DynamoDB. The requestType query parameter
+        determines whether this is a new onboarding ("ONBOARD") or a refresh of an
+        existing league's data ("REFRESH").
       operationId: onboardLeague
       parameters:
         - name: requestType

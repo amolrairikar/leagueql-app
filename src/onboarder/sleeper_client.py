@@ -12,6 +12,7 @@ from utils import logger
 SLEEPER_BASE_URL = "https://api.sleeper.app/v1"
 DATA_FETCH_TYPES = [
     "users",
+    "rosters",
     "matchups",
     "playoff_bracket",
     "transactions",
@@ -169,6 +170,8 @@ class SleeperClient:
         """
         if data_type == "users":
             return f"{SLEEPER_BASE_URL}/league/{league_id}/users"
+        elif data_type == "rosters":
+            return f"{SLEEPER_BASE_URL}/league/{league_id}/rosters"
         elif data_type == "matchups":
             return f"{SLEEPER_BASE_URL}/league/{league_id}/matchups/{week}"
         elif data_type == "playoff_bracket":

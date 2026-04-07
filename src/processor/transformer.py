@@ -48,7 +48,8 @@ class Transformer:
         self, raw_data: list[dict[str, Any]]
     ) -> dict[str, Any]:
         """
-        Loads raw ESPN data into entity-data mapping with season added to data.
+        Loads raw ESPN data into entity-data mapping with season added to data
+        and any initial data processing performed.
 
         Args:
             raw_data: List of dictionaries containing raw API response data.
@@ -56,7 +57,7 @@ class Transformer:
         Returns:
             Mapping of entity (DuckDB table name) to raw data.
         """
-        all_members, all_teams = [], []
+        all_members, all_teams, all_matchups = [], [], []
 
         for item in raw_data:
             if item["data_type"] == "users":
@@ -68,10 +69,38 @@ class Transformer:
                     record_copy = record.copy()
                     record_copy["season"] = item["season"]
                     all_teams.append(record_copy)
+            if item["data_type"].startswith("matchups"):
+                for record in item["data"].get("matchups", []):
+                    team_a_id = record.get("home", {}).get("teamId", "")
+                    team_a_score = record.get("home", {}).get("totalPoints", "0.00")
+                    team_b_id = record.get("away", {}).get("teamId", "")
+                    team_b_score = record.get("away", {}).get("totalPoints", "0.00")
+                    week = record.get("matchupPeriodId", "")
+                    if float(team_a_score) > float(team_b_score):
+                        winner = team_a_id
+                        loser = team_b_id
+                    elif float(team_b_score) > float(team_a_score):
+                        winner = team_b_id
+                        loser = team_a_id
+                    else:
+                        winner = "TIE"
+                        loser = "TIE"
+                    cleaned_matchup = {
+                        "team_a_id": team_a_id,
+                        "team_a_score": team_a_score,
+                        "team_b_id": team_b_id,
+                        "team_b_score": team_b_score,
+                        "winner": winner,
+                        "loser": loser,
+                        "week": week,
+                        "season": item["season"],
+                    }
+                    all_matchups.append(cleaned_matchup)
 
         return {
             "members": all_members,
             "teams": all_teams,
+            "matchups": all_matchups,
         }
 
     def _prepare_table_data_sleeper(
@@ -134,8 +163,19 @@ class Transformer:
         results = {}
         for key, query in sql_query_config.items():
             # Results that are partitioned by season and/or week
-            if key in ("MATCHUPS",):  # TODO: Fill out later
-                pass
+            if key in ("MATCHUPS",):
+                # Partition results by season and week, returning a mapping of sort key to data for each season-week combination
+                res = con.execute(query)
+                columns = [desc[0] for desc in res.description]
+                rows = res.fetchall()
+                data = [dict(zip(columns, row)) for row in rows]
+                for record in data:
+                    season = record["season"]
+                    week = record["week"]
+                    sort_key = f"{key}#{season}#{week}"
+                    if sort_key not in results:
+                        results[sort_key] = []
+                    results[sort_key].append(record)
             # Results that are not partitioned by season and/or week
             else:
                 res = con.execute(query)
