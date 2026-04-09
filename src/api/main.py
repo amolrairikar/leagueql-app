@@ -330,7 +330,7 @@ def delete_league(
         logger.info("Deleted league items from DynamoDB")
 
         # After DB delete, delete raw API data files from S3
-        s3_prefix = f"raw-api-data/{platform.value}/{canonical_league_id}/"
+        s3_prefix = f"raw-api-data/{canonical_league_id}/"
         response = s3_client.list_objects_v2(Bucket=S3_BUCKET, Prefix=s3_prefix)
         if "Contents" in response:
             delete_keys = [{"Key": obj["Key"]} for obj in response["Contents"]]
