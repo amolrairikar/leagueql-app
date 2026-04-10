@@ -10,7 +10,14 @@ function App() {
       <Header />
       <Routes>
         <Route path="/" element={<LeagueQLLanding />} />
-        <Route path="/connect_league" element={<LeagueConnect />} />
+        <Route
+          path="/connect_league"
+          element={
+            <div className="pt-1">
+              <LeagueConnect />
+            </div>
+          }
+        />
       </Routes>
     </BrowserRouter>
   );
