@@ -239,7 +239,7 @@ def write_metadata_items(league_id: str, refresh: bool) -> None:
             }
         )
     else:
-        transact_items.extend(
+        transact_items.append(
             [
                 {
                     "Update": {
@@ -251,18 +251,7 @@ def write_metadata_items(league_id: str, refresh: bool) -> None:
                         "UpdateExpression": "SET onboarding_status = :val",
                         "ExpressionAttributeValues": {":val": {"S": "COMPLETED"}},
                     }
-                },
-                {
-                    "Update": {
-                        "TableName": table.name,
-                        "Key": {
-                            "PK": {"S": "APP#STATS"},
-                            "SK": {"S": "LEAGUE_COUNT"},
-                        },
-                        "UpdateExpression": "ADD league_count :inc",
-                        "ExpressionAttributeValues": {":inc": {"N": "1"}},
-                    }
-                },
+                }
             ]
         )
 
