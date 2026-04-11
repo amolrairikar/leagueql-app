@@ -35,21 +35,21 @@ All items (with the exception of LEAGUE_COUNT) share the same partition key form
 <details>
 <summary><b>LEAGUE_COUNT</b></summary>
 
-Counter representing the total number of leagues onboarded to the app. Written after the
+Counter representing the total number of leagues onboarded to the app. Incremented after the
 metadata record is updated.
 
 | Attribute | Type | Required | Description |
 |---|---|---|---|
 | `PK` | String | Yes | `APP#STATS` |
 | `SK` | String | Yes | `LEAGUE_COUNT` |
-| `count` | Integer | Yes | The number of leagues onboarded |
+| `league_count` | Integer | Yes | The number of leagues onboarded |
 
 **Example:**
 ```json
 {
   "PK": "APP#STATS",
   "SK": "LEAGUE_COUNT",
-  "count": 10
+  "league_count": 10
 }
 ```
 </details>

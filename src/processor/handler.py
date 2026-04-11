@@ -1,14 +1,54 @@
 import json
-from typing import Any
+import os
+from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
+from decimal import Decimal
+from enum import Enum
+from itertools import islice
+from typing import Any, Callable, Iterator
 
 import boto3
 import botocore.exceptions
+import duckdb
+import pandas as pd
 
-from dynamo_writer import DynamoWriter
 from logging_utils import logger
-from transformer import Transformer
+from queries import QUERIES
 
 s3_client = boto3.client("s3")
+table_name = os.environ["DYNAMODB_TABLE_NAME"]
+table = boto3.resource("dynamodb").Table(table_name)
+ddb_client = boto3.client("dynamodb")
+DYNAMO_BATCH_LIMIT = 25
+
+
+class EntityType(str, Enum):
+    TEAMS = "TEAMS"
+    MATCHUPS = "MATCHUPS"
+    STANDINGS = "STANDINGS"
+
+
+@dataclass(frozen=True)
+class KeySchema:
+    pk: str
+    sk: Callable  # function that builds the sort key from a row
+    entity_type: EntityType
+
+
+def sanitize_value(val: Any) -> Any:
+    """
+    Convert Python floats to Decimal for DynamoDB.
+
+    Args:
+        val: The value to sanitize.
+
+    Returns:
+        The sanitized value.
+    """
+    if isinstance(val, float):
+        return Decimal(str(val))
+    return val
 
 
 def read_s3_object(bucket: str, key: str) -> Any:
@@ -52,16 +92,190 @@ def has_prior_versions(bucket: str, key: str) -> bool:
         return False
 
 
-def lambda_handler(event, context) -> dict[str, str | int]:
+def register_raw_data(raw_data: list[dict], con: duckdb.DuckDBPyConnection) -> None:
+    """
+    Register raw API response data as DuckDB views, grouped by data_type.
+
+    Each view is named after its data_type (e.g. 'members', 'teams')
+    and contains all seasons for that type.
+
+    Args:
+        raw_data: List of dicts with keys: season, data_type, data.
+        con: A DuckDB connection object.
+    """
+    grouped: dict[str, list[dict]] = defaultdict(list)
+    all_members, all_teams, all_matchups = [], [], []
+    for item in raw_data:
+        if item["data_type"] == "users":
+            for record in item["data"].get("members", []):
+                record_copy = record.copy()
+                record_copy["season"] = item["season"]
+                all_members.append(record_copy)
+            for record in item["data"].get("teams", []):
+                record_copy = record.copy()
+                record_copy["season"] = item["season"]
+                all_teams.append(record_copy)
+        elif item["data_type"].startswith("matchups"):
+            for record in item["data"].get("matchups", []):
+                team_a_id = record.get("home", {}).get("teamId", "")
+                team_a_score = record.get("home", {}).get("totalPoints", "0.00")
+                team_b_id = record.get("away", {}).get("teamId", "")
+                team_b_score = record.get("away", {}).get("totalPoints", "0.00")
+                playoff_tier_type = record.get("playoffTierType", "")
+                week = record.get("matchupPeriodId", "")
+                if float(team_a_score) > float(team_b_score):
+                    winner = team_a_id
+                    loser = team_b_id
+                elif float(team_b_score) > float(team_a_score):
+                    winner = team_b_id
+                    loser = team_a_id
+                else:
+                    winner = "TIE"
+                    loser = "TIE"
+                cleaned_matchup = {
+                    "team_a_id": team_a_id,
+                    "team_a_score": team_a_score,
+                    "team_b_id": team_b_id,
+                    "team_b_score": team_b_score,
+                    "playoff_tier_type": playoff_tier_type,
+                    "winner": winner,
+                    "loser": loser,
+                    "week": week,
+                    "season": item["season"],
+                }
+                all_matchups.append(cleaned_matchup)
+
+    grouped["members"] = all_members
+    grouped["teams"] = all_teams
+    grouped["matchups"] = all_matchups
+
+    for data_type, rows in grouped.items():
+        df = pd.DataFrame(rows)
+        con.register(data_type, df)
+
+
+def dataframe_to_dynamo_items(
+    rel: duckdb.DuckDBPyRelation,
+    schema: KeySchema,
+) -> list[dict]:
+    """
+    Convert a DuckDB relation to a list of DynamoDB-ready items.
+
+    Args:
+        rel: A DuckDB relation (query result).
+        schema: The KeySchema defining how PK/SK are constructed.
+
+    Returns:
+        List of dicts ready for boto3 put_item / batch_writer.
+    """
+    rows = rel.fetchall()
+    columns = [desc[0] for desc in rel.description]
+    row_dicts = [dict(zip(columns, row)) for row in rows]
+    grouped: dict[str, list[dict]] = defaultdict(list)
+    for row_dict in row_dicts:
+        sk = schema.sk(row_dict)
+        grouped[sk].append({k: sanitize_value(v) for k, v in row_dict.items()})
+
+    items = []
+    for sk, group_rows in grouped.items():
+        items.append(
+            {
+                "PK": schema.pk,
+                "SK": sk,
+                "data": group_rows,
+            }
+        )
+
+    return items
+
+
+def _chunked(iterable, size: int) -> Iterator[list]:
+    it = iter(iterable)
+    while chunk := list(islice(it, size)):
+        yield chunk
+
+
+def write_items(
+    table_name: str,
+    items: list[dict],
+) -> None:
+    """
+    Batch-write items to DynamoDB, handling the 25-item limit automatically.
+
+    Args:
+        table_name: Target DynamoDB table name.
+        items: List of dicts from dataframe_to_dynamo_items().
+        dynamodb_resource: Optional injected boto3 resource (for testing).
+    """
+    for batch in _chunked(items, DYNAMO_BATCH_LIMIT):
+        with table.batch_writer() as writer:
+            for item in batch:
+                writer.put_item(Item=item)
+
+    logger.info("Wrote %d items to %s", len(items), table_name)
+
+
+def write_metadata_items(league_id: str, refresh: bool) -> None:
+    """
+    Writes metadata items to DynamoDB to track onboarding/refresh status.
+
+    Args:
+        league_id: The league ID for which the metadata is being written.
+        refresh: Whether this is a refresh operation (vs initial onboarding).
+    """
+    transact_items = []
+    if refresh:
+        transact_items.append(
+            {
+                "Update": {
+                    "TableName": table.name,
+                    "Key": {
+                        "PK": {"S": f"LEAGUE#{league_id}"},
+                        "SK": {"S": "METADATA"},
+                    },
+                    "UpdateExpression": "SET refresh_status = :val",
+                    "ExpressionAttributeValues": {":val": {"S": "COMPLETED"}},
+                }
+            }
+        )
+    else:
+        transact_items.extend(
+            [
+                {
+                    "Update": {
+                        "TableName": table.name,
+                        "Key": {
+                            "PK": {"S": f"LEAGUE#{league_id}"},
+                            "SK": {"S": "METADATA"},
+                        },
+                        "UpdateExpression": "SET onboarding_status = :val",
+                        "ExpressionAttributeValues": {":val": {"S": "COMPLETED"}},
+                    }
+                },
+                {
+                    "Update": {
+                        "TableName": table.name,
+                        "Key": {
+                            "PK": {"S": "APP#STATS"},
+                            "SK": {"S": "LEAGUE_COUNT"},
+                        },
+                        "UpdateExpression": "ADD league_count :inc",
+                        "ExpressionAttributeValues": {":inc": {"N": "1"}},
+                    }
+                },
+            ]
+        )
+
+    ddb_client.transact_write_items(TransactItems=transact_items)
+
+
+def lambda_handler(event, context) -> None:
     """
     Main handler function for processing raw API data fetched by onboarder.
 
     Args:
         event: The event data that triggered the Lambda function.
         context: The context in which the Lambda function is running.
-
-    Returns:
-        dict: A response indicating the success of the operation.
     """
     logger.info("Starting league onboarding process execution.")
     logger.info("Event data: %s", event)
@@ -75,10 +289,6 @@ def lambda_handler(event, context) -> dict[str, str | int]:
         logger.info(
             "Lambda triggered by replication event, no further processing needed."
         )
-        return {
-            "statusCode": 200,
-            "body": json.dumps({"status": "succeeded", "message": "no-op"}),
-        }
 
     bucket = event["Records"][0]["s3"]["bucket"]["name"]
     key = event["Records"][0]["s3"]["object"]["key"]
@@ -92,16 +302,53 @@ def lambda_handler(event, context) -> dict[str, str | int]:
     seasons = manifest[platform]
     prefix = "/".join(key.split("/")[:2])
     raw_data: list[dict[str, Any]] = []
-    for season in seasons:
-        logger.info("Processing season %s", season)
-        season_data = read_s3_object(bucket=bucket, key=f"{prefix}/{season}.json")
-        raw_data.extend(season_data)
 
-    transformer = Transformer(platform=platform)
-    transformed_data = transformer.transform(raw_data=raw_data)
-    dynamo_writer = DynamoWriter(
-        league_id=canonical_league_id, platform=platform, refresh=prior_versions_exist
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        future_to_season = {
+            executor.submit(read_s3_object, bucket, f"{prefix}/{s}.json"): s
+            for s in seasons
+        }
+        for future in as_completed(future_to_season):
+            season = future_to_season[future]
+            try:
+                season_data = future.result()
+                raw_data.extend(season_data)
+                logger.info("Successfully processed season %s", season)
+            except Exception as exc:
+                logger.error("Season %s generated an exception: %s", season, exc)
+
+    con = duckdb.connect()
+    register_raw_data(raw_data=raw_data, con=con)
+
+    TEAMS_SCHEMA = KeySchema(
+        pk=f"LEAGUE#{canonical_league_id}",
+        sk=lambda row: f"TEAMS#{row['season']}",
+        entity_type=EntityType.TEAMS,
     )
-    dynamo_writer.write_all(views=transformed_data)
 
-    return {}
+    MATCHUPS_SCHEMA = KeySchema(
+        pk=f"LEAGUE#{canonical_league_id}",
+        sk=lambda row: f"MATCHUPS#{row['season']}#WEEK#{int(row['week']):02d}",
+        entity_type=EntityType.MATCHUPS,
+    )
+
+    STANDINGS_SCHEMA = KeySchema(
+        pk=f"LEAGUE#{canonical_league_id}",
+        sk=lambda row: f"STANDINGS#{row['season']}",
+        entity_type=EntityType.STANDINGS,
+    )
+
+    schemas = [TEAMS_SCHEMA, MATCHUPS_SCHEMA, STANDINGS_SCHEMA]
+    for schema in schemas:
+        logger.info(f"Converting {schema.entity_type} data to DynamoDB items.")
+        if schema in [TEAMS_SCHEMA, MATCHUPS_SCHEMA]:
+            rel = con.sql(QUERIES[schema.entity_type.value][platform])
+        else:
+            rel = con.sql(QUERIES[schema.entity_type.value])
+        con.register(f"{schema.entity_type.value}_output", rel)
+        write_items(
+            table_name=table_name,
+            items=dataframe_to_dynamo_items(rel=rel, schema=schema),
+        )
+
+    write_metadata_items(league_id=canonical_league_id, refresh=prior_versions_exist)
