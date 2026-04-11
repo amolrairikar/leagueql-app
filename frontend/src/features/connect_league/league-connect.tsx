@@ -6,6 +6,7 @@ import {
   useForm,
   useWatch,
 } from 'react-hook-form';
+import { useNavigate } from 'react-router-dom';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -41,6 +42,7 @@ function getCookieValue(name: string): string {
 }
 
 export default function LeagueConnect() {
+  const navigate = useNavigate();
   const [pollStatus, setPollStatus] = useState<'idle' | 'success' | 'failed'>(
     'idle',
   );
@@ -114,7 +116,11 @@ export default function LeagueConnect() {
         clearInterval(intervalId);
         clearTimeout(timeoutId);
         setPollStatus(status);
-        setTimeout(() => setPollStatus('idle'), 10000);
+        if (status === 'success') {
+          void navigate('/home');
+        } else {
+          setTimeout(() => setPollStatus('idle'), 10000);
+        }
         resolve();
       };
 

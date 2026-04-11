@@ -240,19 +240,17 @@ def write_metadata_items(league_id: str, refresh: bool) -> None:
         )
     else:
         transact_items.append(
-            [
-                {
-                    "Update": {
-                        "TableName": table.name,
-                        "Key": {
-                            "PK": {"S": f"LEAGUE#{league_id}"},
-                            "SK": {"S": "METADATA"},
-                        },
-                        "UpdateExpression": "SET onboarding_status = :val",
-                        "ExpressionAttributeValues": {":val": {"S": "COMPLETED"}},
-                    }
+            {
+                "Update": {
+                    "TableName": table.name,
+                    "Key": {
+                        "PK": {"S": f"LEAGUE#{league_id}"},
+                        "SK": {"S": "METADATA"},
+                    },
+                    "UpdateExpression": "SET onboarding_status = :val",
+                    "ExpressionAttributeValues": {":val": {"S": "COMPLETED"}},
                 }
-            ]
+            }
         )
 
     ddb_client.transact_write_items(TransactItems=transact_items)
