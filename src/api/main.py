@@ -393,7 +393,7 @@ def delete_league(
                         "Key": {"PK": {"S": "APP#STATS"}, "SK": {"S": "LEAGUE_COUNT"}},
                         "UpdateExpression": "SET #c = #c - :val",
                         "ConditionExpression": "attribute_exists(PK) AND #c > :zero",
-                        "ExpressionAttributeNames": {"#c": "count"},
+                        "ExpressionAttributeNames": {"#c": "league_count"},
                         "ExpressionAttributeValues": {
                             ":val": {"N": "1"},
                             ":zero": {"N": "0"},
