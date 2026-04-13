@@ -132,10 +132,11 @@ QUERIES = {
         ROUND(SUM(win) / COUNT(*)::DOUBLE, 3) AS win_pct,
         SUM(vs_league_wins) AS total_vs_league_wins,
         SUM(vs_league_losses) AS total_vs_league_losses,
-        ROUND(SUM(vs_league_wins) / (SUM(vs_league_wins) + SUM(vs_league_losses))::DOUBLE, 3) AS all_play_win_pct,
+        ROUND(SUM(vs_league_wins) / (SUM(vs_league_wins) + SUM(vs_league_losses))::DOUBLE, 3) AS win_pct_vs_league,
         SUM(points_for) AS total_pf,
         SUM(points_against) AS total_pa,
-        ROUND(AVG(points_for), 2) AS avg_pf
+        ROUND(AVG(points_for), 2) AS avg_pf,
+        ROUND(AVG(points_against), 2) AS avg_pa
     FROM processed_performance
     GROUP BY season, team_id, owner_id
     ORDER BY season DESC, wins DESC, total_pf DESC;
