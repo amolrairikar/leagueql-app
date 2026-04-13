@@ -107,10 +107,14 @@ module "backend_api" {
   stage_name           = "${var.environment}-${local.region}"
   lambda_function_name = split(":", module.api_lambda.lambda_arn)[6]
   log_retention_days   = 7
+  clerk_issuer_url     = var.clerk_issuer_url
+  clerk_jwt_audience   = var.clerk_jwt_audience 
   
   openapi_vars = {
-    aws_region = var.aws_region
-    lambda_arn = module.api_lambda.lambda_arn
+    aws_region         = var.aws_region
+    lambda_arn         = module.api_lambda.lambda_arn
+    clerk_issuer_url   = var.clerk_issuer_url
+    clerk_jwt_audience = var.clerk_jwt_audience
   }
 
   tags = {

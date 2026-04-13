@@ -22,3 +22,13 @@ variable "api_lambda_role_arn" {
   description = "IAM role ARN for the API Lambda function execution role"
   type        = string
 }
+
+variable "clerk_issuer_url" {
+  description = "Clerk Frontend API URL, used as JWT issuer (e.g. https://xxx.clerk.accounts.dev)"
+  type        = string
+}
+
+variable "clerk_jwt_audience" {
+  description = "Audience value that must match the `aud` claim in Clerk session tokens"
+  type        = string
+}

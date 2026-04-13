@@ -1,8 +1,10 @@
+import { SignIn, useUser } from '@clerk/react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import {
   SLIDES,
   FEATURES,
@@ -221,6 +223,18 @@ function FeatureCard({ icon, title, desc }: FeatureCardProps) {
 }
 
 export default function LeagueQLLanding() {
+  const { isSignedIn } = useUser();
+  const navigate = useNavigate();
+  const [authOpen, setAuthOpen] = useState(false);
+
+  function handleConnectLeague() {
+    if (isSignedIn) {
+      void navigate('/connect_league');
+    } else {
+      setAuthOpen(true);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-background text-foreground font-sans overflow-x-hidden">
       <div
@@ -234,7 +248,6 @@ export default function LeagueQLLanding() {
           opacity: 0.2,
         }}
       />
-
 
       <section className="relative z-10 flex flex-col items-center text-center px-6 pt-36 pb-20">
         <h1
@@ -259,8 +272,12 @@ export default function LeagueQLLanding() {
         </p>
 
         <div className="flex gap-3 mt-9 animate-[fadeUp_0.6s_0.55s_both]">
-          <Button size="lg" className="font-mono text-[0.82rem] px-6" asChild>
-            <Link to="/connect_league">Connect Your League</Link>
+          <Button
+            size="lg"
+            className="font-mono text-[0.82rem] px-6"
+            onClick={handleConnectLeague}
+          >
+            Connect Your League
           </Button>
 
           <Button
@@ -273,6 +290,20 @@ export default function LeagueQLLanding() {
           </Button>
         </div>
       </section>
+
+      <Dialog open={authOpen} onOpenChange={setAuthOpen}>
+        <DialogContent
+          className="p-0 overflow-hidden w-auto max-w-none bg-transparent border-none shadow-none ring-0"
+          showCloseButton={false}
+        >
+          <DialogTitle className="sr-only">Sign in to LeagueQL</DialogTitle>
+          <SignIn
+            routing="virtual"
+            forceRedirectUrl="/connect_league"
+            signUpForceRedirectUrl="/connect_league"
+          />
+        </DialogContent>
+      </Dialog>
 
       <Slideshow />
 
