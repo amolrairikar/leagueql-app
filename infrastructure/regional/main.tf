@@ -102,7 +102,7 @@ module "backend_api" {
 
   api_name             = "fantasy-football-recap-api-${var.environment}-${local.region}"
   api_description      = "API for fantasy football recap app"
-  cors_allow_origins   = ["http://localhost:5173"]
+  cors_allow_origins   = ["http://localhost:5173", "https://leagueql.com"]
   openapi_spec_path    = "${path.module}/../../docs/api/openapi_spec.yaml"
   stage_name           = "${var.environment}-${local.region}"
   lambda_function_name = split(":", module.api_lambda.lambda_arn)[6]
