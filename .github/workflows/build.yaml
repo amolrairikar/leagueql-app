@@ -154,6 +154,14 @@ jobs:
         with:
           terraform_version: "1.14.7"
 
+      - name: Set Clerk issuer URL
+        run: |
+          if [ "${{ env.ENVIRONMENT }}" == "prod" ]; then
+            echo "CLERK_ISSUER_URL=${{ secrets.CLERK_ISSUER_URL_PROD }}" >> $GITHUB_ENV
+          else
+            echo "CLERK_ISSUER_URL=${{ secrets.CLERK_ISSUER_URL_DEV }}" >> $GITHUB_ENV
+          fi
+
       - name: Initialize & Apply Terraform
         working-directory: infrastructure/regional
         env:
@@ -170,7 +178,7 @@ jobs:
             -var="onboarder_lambda_role_arn=arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/fantasy-football-recap-onboarding-lambda-${{ env.ENVIRONMENT }}-role" \
             -var="processor_lambda_role_arn=arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/fantasy-football-recap-processing-lambda-${{ env.ENVIRONMENT }}-role" \
             -var="api_lambda_role_arn=arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/fantasy-football-recap-api-lambda-${{ env.ENVIRONMENT }}-role" \
-            -var="clerk_issuer_url=${{ secrets.CLERK_ISSUER_URL }}" \
+            -var="clerk_issuer_url=${{ env.CLERK_ISSUER_URL }}" \
             -var="clerk_jwt_audience=${{ secrets.CLERK_JWT_AUDIENCE }}"
 
   # live-dependency-tests:

@@ -5,6 +5,11 @@ import App from './app.tsx';
 
 import { useTheme } from '@/hooks/use-theme';
 
+const CLERK_PUBLISHABLE_KEY =
+  window.location.hostname === 'leagueql.com'
+    ? 'pk_live_Y2xlcmsubGVhZ3VlcWwuY29tJA' // eslint-disable-line no-secrets/no-secrets -- Clerk publishable keys are intentionally public
+    : 'pk_test_c2VsZWN0ZWQtZGluZ28tNTkuY2xlcmsuYWNjb3VudHMuZGV2JA'; // eslint-disable-line no-secrets/no-secrets -- Clerk publishable keys are intentionally public
+
 export default function ClerkWithTheme() {
   const { theme } = useTheme();
   const isDark =
@@ -14,7 +19,7 @@ export default function ClerkWithTheme() {
 
   return (
     <ClerkProvider
-      publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string}
+      publishableKey={CLERK_PUBLISHABLE_KEY}
       appearance={{ theme: isDark ? dark : undefined }}
     >
       <App />
