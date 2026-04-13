@@ -11,6 +11,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import LeagueConnect from '@/features/connect_league/league-connect';
 import Home from '@/features/home/home';
 import LeagueQLLanding from '@/features/landing_page/landing-page';
+import LeagueSelection from '@/features/league_selection/league-selection';
 import { AppSidebar } from '@/features/sidebar/app-sidebar';
 import Test from '@/features/test/test';
 
@@ -48,6 +49,17 @@ function App() {
               <Header />
               <LeagueQLLanding />
             </>
+          }
+        />
+        <Route
+          path="/league"
+          element={
+            <ProtectedRoute>
+              <Header />
+              <div className="pt-1">
+                <LeagueSelection />
+              </div>
+            </ProtectedRoute>
           }
         />
         <Route

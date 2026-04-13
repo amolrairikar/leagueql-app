@@ -229,7 +229,7 @@ export default function LeagueQLLanding() {
 
   function handleConnectLeague() {
     if (isSignedIn) {
-      void navigate('/connect_league');
+      void navigate('/league');
     } else {
       setAuthOpen(true);
     }
@@ -274,7 +274,7 @@ export default function LeagueQLLanding() {
         <div className="flex gap-3 mt-9 animate-[fadeUp_0.6s_0.55s_both]">
           <Button
             size="lg"
-            className="font-mono text-[0.82rem] px-6"
+            className="font-mono text-[0.82rem] px-6 cursor-pointer"
             onClick={handleConnectLeague}
           >
             Connect Your League
@@ -299,8 +299,8 @@ export default function LeagueQLLanding() {
           <DialogTitle className="sr-only">Sign in to LeagueQL</DialogTitle>
           <SignIn
             routing="virtual"
-            forceRedirectUrl="/connect_league"
-            signUpForceRedirectUrl="/connect_league"
+            forceRedirectUrl="/league"
+            signUpForceRedirectUrl="/league"
           />
         </DialogContent>
       </Dialog>

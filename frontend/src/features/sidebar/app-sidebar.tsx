@@ -1,9 +1,11 @@
+import { UserButton } from '@clerk/react';
 import { FlaskConical, Home } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarMenu,
@@ -43,6 +45,9 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+      <SidebarFooter className="p-3">
+        <UserButton showName />
+      </SidebarFooter>
     </Sidebar>
   );
 }

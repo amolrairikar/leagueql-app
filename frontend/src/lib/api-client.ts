@@ -61,10 +61,17 @@ export function useApiError(): ApiError | null {
 
 // ── Fetch core ────────────────────────────────────────────────────────────────
 
+function getSessionToken(): string | null {
+  const match = /(?:^|;\s*)__session=([^;]*)/.exec(document.cookie);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = getSessionToken();
   const response = await fetch(`${API_BASE_URL}${path}`, {
     headers: {
       'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...init?.headers,
     },
     ...init,
