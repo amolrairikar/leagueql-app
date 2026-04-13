@@ -16,6 +16,7 @@ from pydantic import BaseModel
 
 ORIGINS = [
     "http://localhost:5173",  # LOCAL/DEV
+    "https://leagueql.com",  # PROD
 ]
 
 
