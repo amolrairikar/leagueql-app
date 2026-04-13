@@ -21,6 +21,8 @@ paths:
       responses:
         "200":
           description: Healthy!
+      security:
+        - ClerkJWT: []
       x-amazon-apigateway-integration:
         type: aws_proxy
         httpMethod: POST
@@ -60,6 +62,8 @@ paths:
           $ref: "#/components/responses/LeagueNotFoundError"
         "500":
           $ref: "#/components/responses/InternalError"
+      security:
+        - ClerkJWT: []
       x-amazon-apigateway-integration:
         type: aws_proxy
         httpMethod: POST        # always POST for Lambda proxy, regardless of your route method
@@ -96,6 +100,8 @@ paths:
           $ref: "#/components/responses/LeagueNotFoundError"
         "500":
           $ref: "#/components/responses/InternalError"
+      security:
+        - ClerkJWT: []
       x-amazon-apigateway-integration:
         type: aws_proxy
         httpMethod: POST        # always POST for Lambda proxy, regardless of your route method
@@ -136,6 +142,8 @@ paths:
           $ref: "#/components/responses/ValidationError"
         "500":
           $ref: "#/components/responses/InternalError"
+      security:
+        - ClerkJWT: []
       x-amazon-apigateway-integration:
         type: aws_proxy
         httpMethod: POST        # always POST for Lambda proxy, regardless of your route method
@@ -190,6 +198,8 @@ paths:
           $ref: "#/components/responses/LeagueNotFoundError"
         "500":
           $ref: "#/components/responses/InternalError"
+      security:
+        - ClerkJWT: []
       x-amazon-apigateway-integration:
         type: aws_proxy
         httpMethod: POST        # always POST for Lambda proxy, regardless of your route method
@@ -235,6 +245,8 @@ paths:
           $ref: "#/components/responses/LeagueNotFoundError"
         "500":
           $ref: "#/components/responses/InternalError"
+      security:
+        - ClerkJWT: []
       x-amazon-apigateway-integration:
         type: aws_proxy
         httpMethod: POST        # always POST for Lambda proxy, regardless of your route method
@@ -243,8 +255,22 @@ paths:
 
 components:
 
-  schemas:
+  securitySchemes:
+    ClerkJWT:
+      type: apiKey
+      name: Authorization
+      in: header
+      x-amazon-apigateway-authtype: jwt
+      x-amazon-apigateway-authorizer:
+        identitySource: $request.header.Authorization
+        jwtConfiguration:
+          issuer: "${clerk_issuer_url}"
+          audience:
+            - "${clerk_jwt_audience}"
+        type: jwt
 
+
+  schemas:
     LeagueFoundData:
       type: object
       required: [canonical_league_id, seasons]

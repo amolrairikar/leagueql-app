@@ -56,6 +56,18 @@ resource "aws_apigatewayv2_stage" "default" {
   tags = var.tags
 }
 
+resource "aws_apigatewayv2_authorizer" "clerk" {
+  api_id           = aws_apigatewayv2_api.this.id
+  authorizer_type  = "JWT"
+  identity_sources = ["$request.header.Authorization"]
+  name             = "clerk-jwt-authorizer"
+
+  jwt_configuration {
+    issuer   = var.clerk_issuer_url
+    audience = [var.clerk_jwt_audience]
+  }
+}
+
 resource "aws_lambda_permission" "api_gateway" {
   statement_id  = "AllowAPIGatewayInvoke"
   action        = "lambda:InvokeFunction"

@@ -169,7 +169,9 @@ jobs:
             -var="aws_region=${{ matrix.region }}" \
             -var="onboarder_lambda_role_arn=arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/fantasy-football-recap-onboarding-lambda-${{ env.ENVIRONMENT }}-role" \
             -var="processor_lambda_role_arn=arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/fantasy-football-recap-processing-lambda-${{ env.ENVIRONMENT }}-role" \
-            -var="api_lambda_role_arn=arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/fantasy-football-recap-api-lambda-${{ env.ENVIRONMENT }}-role"
+            -var="api_lambda_role_arn=arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/fantasy-football-recap-api-lambda-${{ env.ENVIRONMENT }}-role" \
+            -var="clerk_issuer_url=${{ secrets.CLERK_ISSUER_URL }}" \
+            -var="clerk_jwt_audience=${{ secrets.CLERK_JWT_AUDIENCE }}"
 
   # live-dependency-tests:
   #   name: Live Dependency Tests

@@ -39,7 +39,10 @@ export default function Header() {
       border-b border-border
       "
     >
-      <Link to="/" className="flex items-center gap-2 no-underline font-heading">
+      <Link
+        to="/"
+        className="flex items-center gap-2 no-underline font-heading"
+      >
         <span className="w-1.75 h-1.75 rounded-full bg-primary inline-block" />
         <span className="text-foreground text-xl tracking-tight">LeagueQL</span>
       </Link>
