@@ -2,11 +2,13 @@ import json
 import logging
 import os
 import time
+from decimal import Decimal
 from enum import Enum
 from typing import Annotated, Any, Optional
 
 import boto3
 import botocore.exceptions
+from boto3.dynamodb.conditions import Key
 from fastapi import FastAPI, HTTPException, Path, Response, status, Query
 from fastapi.middleware.cors import CORSMiddleware
 from mangum import Mangum
@@ -20,6 +22,21 @@ ORIGINS = [
 class APIResponse(BaseModel):
     detail: str
     data: Optional[Any] = None
+
+
+class QueryResponse(BaseModel):
+    data: list[Any]
+
+
+def convert_decimals(obj: Any) -> Any:
+    """Recursively convert Decimal values to float for JSON serialization."""
+    if isinstance(obj, list):
+        return [convert_decimals(i) for i in obj]
+    if isinstance(obj, dict):
+        return {k: convert_decimals(v) for k, v in obj.items()}
+    if isinstance(obj, Decimal):
+        return float(obj)
+    return obj
 
 
 class OnboardingPayload(BaseModel):
@@ -58,6 +75,19 @@ class RequestType(str, Enum):
                 if member.value == normalized_value:
                     return member
         return None
+
+
+class QueryType(str, Enum):
+    TEAMS = "TEAMS"
+    MATCHUPS = "MATCHUPS"
+    SEASON_STANDINGS = "SEASON_STANDINGS"
+
+
+QUERY_TYPE_TO_SK_BASE = {
+    QueryType.TEAMS: "TEAMS",
+    QueryType.MATCHUPS: "MATCHUPS",
+    QueryType.SEASON_STANDINGS: "STANDINGS",
+}
 
 
 class JsonFormatter(logging.Formatter):
@@ -432,6 +462,67 @@ def delete_league(
         )
     except botocore.exceptions.ClientError as e:
         logger.error("Error occurred while deleting league: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error",
+        )
+
+
+@app.get("/leagues/{leagueId}/query", status_code=status.HTTP_200_OK)
+def query_league(
+    leagueId: Annotated[
+        str, Path(description="The ID of the fantasy league", pattern=r"^\d+$")
+    ],
+    platform: Annotated[Platform, Query(description="The platform the league is on")],
+    queryType: Annotated[str, Query(description="The precomputed view to retrieve")],
+) -> QueryResponse:
+    """Returns a precomputed data view for the specified league."""
+    parts = queryType.split("#", 1)
+    base_type_str = parts[0].upper()
+    suffix = parts[1] if len(parts) > 1 else None
+
+    try:
+        base_type = QueryType(base_type_str)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid queryType '{base_type_str}'. Must be one of: {', '.join(qt.value for qt in QueryType)}",
+        )
+
+    sk_base = QUERY_TYPE_TO_SK_BASE[base_type]
+    sk = f"{sk_base}#{suffix}" if suffix is not None else f"{sk_base}#"
+
+    canonical_league_id = lookup_league(league_id=leagueId, platform=platform)
+    pk = f"LEAGUE#{canonical_league_id}"
+
+    try:
+        if sk.endswith("#"):
+            response = table.query(
+                KeyConditionExpression=Key("PK").eq(pk) & Key("SK").begins_with(sk),
+            )
+            items = response.get("Items", [])
+            if not items:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"No data found for queryType '{queryType}'",
+                )
+            all_data: list[Any] = []
+            for item in items:
+                all_data.extend(item.get("data", []))
+            return QueryResponse(data=convert_decimals(all_data))
+        else:
+            response = table.get_item(Key={"PK": pk, "SK": sk})
+            item = response.get("Item")
+            if not item:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"No data found for queryType '{queryType}'",
+                )
+            return QueryResponse(data=convert_decimals(item.get("data", [])))
+    except HTTPException:
+        raise
+    except botocore.exceptions.ClientError as e:
+        logger.error("Boto error occurred: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error",

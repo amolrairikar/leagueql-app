@@ -171,26 +171,16 @@ paths:
           required: true
           description: >
             The precomputed view to retrieve. Season-scoped views require
-            a season suffix (e.g. WEEKLY_SCORES#2024). Cross-season views
+            a season suffix (e.g. SEASON_STANDINGS#2024). Cross-season views
             such as ALL_TIME_STANDINGS do not require a suffix.
           schema:
             type: string
             # TODO: Fill this out as the list of views evolves
             enum:
-              - ALL_TIME_STANDINGS
-              - WEEKLY_SCORES
-              - DRAFT_RESULTS
-              - PLAYER_POINTS
-            example: "WEEKLY_SCORES"
-        - name: season
-          in: query
-          required: false
-          description: >
-            The season year to scope the query. Not applicable for cross-season
-            views (e.g., ALL_TIME_STANDINGS).
-          schema:
-            type: string
-            example: "2024"
+              - TEAMS
+              - MATCHUPS
+              - SEASON_STANDINGS
+            example: "SEASON_STANDINGS"
       responses:
         "200":
           $ref: "#/components/responses/QuerySuccessResponse"

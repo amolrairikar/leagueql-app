@@ -116,14 +116,14 @@ Represents all teams across all seasons in the fantasy league.
 |---|---|---|---|
 | `PK` | String | Yes | `LEAGUE#{league_id}` |
 | `SK` | String | Yes | `METADATA` |
-| `teams` | List\<Array\> | Yes | A list of objects containing team details |
+| `data` | List\<Array\> | Yes | A list of objects containing team details |
 
 **Example:**
 ```json
 {
   "PK": "LEAGUE#123456789",
   "SK": "TEAMS",
-  "teams": [
+  "data": [
     {
       "display_name": "myusername123",
       "owner_first_name": "Player",
@@ -150,16 +150,68 @@ Represents matchups for a given week in the fantasy league.
 |---|---|---|---|
 | `PK` | String | Yes | `LEAGUE#{league_id}` |
 | `SK` | String | Yes | `MATCHUPS#{season}#{week}` |
-| `matchups` | List\<Array\> | Yes | A list of objects containing weekly matchups details |
+| `data` | List\<Array\> | Yes | A list of objects containing weekly matchups details |
 
 **Example:**
 ```json
 {
   "PK": "LEAGUE#123456789",
   "SK": "MATCHUPS#2025#01",
-  "teams": [
+  "data": [
     {
-      "TBD": "tbd",
+      "team_a_id": "1",
+      "team_a_score": 95.46,
+      "team_b_id": "2",
+      "team_b_score": 90.12,
+      "playoff_tier_type": "NONE",
+      "winner": "1",
+      "loser": "2",
+      "week": "1",
+      "season": "2025",
+      "team_a_primary_owner_id": "pid1",
+      "team_a_secondary_owner_id": "sid1",
+      "team_b_primary_owner_id": "pid2",
+      "team_b_secondary_owner_id": "sid2"
+    }
+  ]
+}
+```
+</details>
+
+<details>
+<summary><b>STANDINGS</b></summary>
+
+Represents standings for a given season in the fantasy league.
+
+| Attribute | Type | Required | Description |
+|---|---|---|---|
+| `PK` | String | Yes | `LEAGUE#{league_id}` |
+| `SK` | String | Yes | `STANDINGS#{season}` |
+| `data` | List\<Array\> | Yes | A list of objects containing season standings details |
+
+**Example:**
+```json
+{
+  "PK": "LEAGUE#123456789",
+  "SK": "STANDINGS#2025",
+  "data": [
+    {
+      "season": "2025",
+      "team_id": "1",
+      "owner_id": "pid1",
+      "games_played": 14,
+      "wins": 11,
+      "losses": 3,
+      "ties": 0,
+      "record": "11-3-0",
+      "win_pct": 0.786,
+      "total_vs_league_wins": 50,
+      "total_vs_league_losses": 15,
+      "win_pct_vs_league": 0.769,
+      "total_pf": 1000.67,
+      "total_pa": 900.67,
+      "avg_pf": 95.46,
+      "avg_pa": 90.12
     }
   ]
 }
