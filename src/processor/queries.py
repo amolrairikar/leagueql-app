@@ -145,6 +145,6 @@ QUERIES = {
     INNER JOIN teams_output t
         ON (p.team_id = t.team_id AND p.season = t.season)
     GROUP BY p.season, p.team_id, p.owner_id
-    ORDER BY p.season DESC, p.wins DESC, p.total_pf DESC;
+    ORDER BY season DESC, wins DESC, total_pf DESC;
     """,
 }
