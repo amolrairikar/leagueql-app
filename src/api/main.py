@@ -227,6 +227,49 @@ def get_league_metadata(canonical_league_id: str) -> dict:
     return item
 
 
+def get_league_seasons(canonical_league_id: str) -> list[str]:
+    """
+    Uses GSI1 to find all seasons a league has been onboarded for.
+
+    Queries all LEAGUE_LOOKUP items that share the given canonical_league_id
+    (there may be multiple for Sleeper leagues) and merges their season sets.
+
+    Args:
+        canonical_league_id: The canonical league ID to look up.
+
+    Returns:
+        A sorted list of unique season strings (e.g. ["2022", "2023", "2025"]).
+    """
+    try:
+        response = table.query(
+            IndexName="GSI1",
+            KeyConditionExpression=Key("canonical_league_id").eq(canonical_league_id),
+        )
+    except botocore.exceptions.ClientError as e:
+        logger.error("Boto error occurred: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error",
+        )
+
+    items = response.get("Items", [])
+    if not items:
+        logger.warning(
+            "No LEAGUE_LOOKUP items found for canonical_league_id %s",
+            canonical_league_id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No seasons found for canonical league ID {canonical_league_id}",
+        )
+
+    seasons: set[str] = set()
+    for item in items:
+        seasons.update(item.get("seasons", set()))
+
+    return sorted(seasons)
+
+
 def delete_prefixed_items(table_name: str, pk_value: str, sk_prefix: str) -> None:
     """
     Queries and deletes all items sharing a PK and a specific SK prefix.
@@ -281,9 +324,10 @@ def get_league(
         platform,
         canonical_league_id,
     )
+    seasons = get_league_seasons(canonical_league_id=canonical_league_id)
     return APIResponse(
         detail="Found league",
-        data={"canonical_league_id": canonical_league_id},
+        data={"canonical_league_id": canonical_league_id, "seasons": seasons},
     )
 
 

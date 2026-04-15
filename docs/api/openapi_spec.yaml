@@ -277,13 +277,15 @@ components:
       properties:
         canonical_league_id:
           type: string
-          example: "12345678"
+          format: uuid
+          description: Internal UUID assigned to the league at onboarding time. Stable across platforms and seasons.
+          example: "1d97a0ac-1a3c-4dd7-a4a0-a6f74035d076"
         seasons:
           type: array
           items:
             type: string
-          description: List of seasons the league has been active for.
-          example: ["2023", "2024"]
+          description: Sorted list of seasons the league has been onboarded for.
+          example: ["2023", "2024", "2025"]
 
     APIResponse:
       type: object
@@ -369,8 +371,8 @@ components:
           example:
             detail: "Found league"
             data:
-              canonical_league_id: "12345678"
-              seasons: ["2023", "2024"]
+              canonical_league_id: "1d97a0ac-1a3c-4dd7-a4a0-a6f74035d076"
+              seasons: ["2023", "2024", "2025"]
 
     DeleteLeagueResponse:
       description: League successfully deleted
