@@ -107,7 +107,7 @@ function StandingsBody({ promise }: { promise: Promise<StandingsResult> }) {
             key={row.team_id}
             className="border-b border-border/50 last:border-0 bg-card"
           >
-            <td className="px-3.5 py-2.5">
+            <td className="px-3.5 py-2.5 sticky left-0 z-10 bg-card">
               <div className="flex items-center gap-2">
                 <span className="text-[12px] text-muted-foreground w-4 text-right shrink-0">
                   {i + 1}
@@ -164,7 +164,7 @@ function AwardsGrid({ promise }: { promise: Promise<StandingsResult> }) {
   const luckDiff = luckiest.win_pct - luckiest.win_pct_vs_league;
 
   return (
-    <div className="grid grid-cols-3 gap-3 mb-6">
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
       {/* Season Champion */}
       <div className="bg-card border border-border/50 rounded-lg p-4 flex flex-col gap-2.5">
         <div className="flex items-center gap-2.5">
@@ -299,7 +299,7 @@ function AwardsGrid({ promise }: { promise: Promise<StandingsResult> }) {
 
 function SkeletonAwards() {
   return (
-    <div className="grid grid-cols-3 gap-3 mb-6">
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
       {Array.from({ length: 3 }).map((_, i) => (
         <div
           key={i}
@@ -325,7 +325,7 @@ function SkeletonBody() {
     <tbody>
       {Array.from({ length: 8 }).map((_, i) => (
         <tr key={i} className="border-b border-border/50">
-          <td className="px-3.5 py-2.5">
+          <td className="px-3.5 py-2.5 sticky left-0 z-10 bg-card">
             <div className="flex items-center gap-2">
               <Skeleton className="w-4 h-3 shrink-0" />
               <Skeleton className="w-7 h-7 rounded-full shrink-0" />
@@ -411,73 +411,75 @@ export default function SeasonStandings() {
         </div>
 
         <div className="bg-card border border-border/50 rounded-lg overflow-hidden mb-6">
-          <table
-            className="w-full border-collapse text-[13px]"
-            style={{ tableLayout: 'fixed' }}
-          >
-            <thead>
-              <tr>
-                <th
-                  className="text-left text-[10px] font-medium uppercase tracking-[0.07em] text-muted-foreground px-3.5 py-2.5 border-b border-border/50 bg-muted"
-                  style={{ width: '36%' }}
-                >
-                  Owner
-                </th>
-                <th
-                  className="text-right text-[10px] font-medium uppercase tracking-[0.07em] text-muted-foreground px-3.5 py-2.5 border-b border-border/50 bg-muted"
-                  style={{ width: '12%' }}
-                >
-                  Record
-                </th>
-                <th
-                  className="text-right text-[10px] font-medium uppercase tracking-[0.07em] text-muted-foreground px-3.5 py-2.5 border-b border-border/50 bg-muted"
-                  style={{ width: '12%' }}
-                >
-                  PF/Game
-                </th>
-                <th
-                  className="text-right text-[10px] font-medium uppercase tracking-[0.07em] text-muted-foreground px-3.5 py-2.5 border-b border-border/50 bg-muted"
-                  style={{ width: '12%' }}
-                >
-                  PA/Game
-                </th>
-                <th
-                  className="text-right text-[10px] font-medium uppercase tracking-[0.07em] text-muted-foreground px-3.5 py-2.5 border-b border-border/50 bg-muted"
-                  style={{ width: '14%' }}
-                >
-                  Win %
-                </th>
-                <th
-                  className="text-right text-[10px] font-medium uppercase tracking-[0.07em] text-muted-foreground px-3.5 py-2.5 border-b border-border/50 bg-muted"
-                  style={{ width: '14%' }}
-                >
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span className="inline-flex items-center justify-end gap-1 cursor-default">
-                          Win % vs. League
-                          <Info className="w-3 h-3 shrink-0" />
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent
-                        side="top"
-                        className="max-w-64 text-center leading-relaxed bg-popover text-popover-foreground border border-border shadow-md [&>svg]:fill-popover [&>svg]:bg-popover"
-                      >
-                        This percentage measures a team&apos;s win percentage if
-                        they played every team in the league each week
-                        aggregated over the season (i.e., if a team was the 2nd
-                        highest scoring team in a 10 team league, their win %
-                        vs. league for that week would be .900)
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </th>
-              </tr>
-            </thead>
-            <Suspense fallback={<SkeletonBody />}>
-              <StandingsBody promise={standingsPromise} />
-            </Suspense>
-          </table>
+          <div className="overflow-x-auto">
+            <table
+              className="w-full border-collapse text-[13px]"
+              style={{ tableLayout: 'fixed', minWidth: '540px' }}
+            >
+              <thead>
+                <tr>
+                  <th
+                    className="text-left text-[10px] font-medium uppercase tracking-[0.07em] text-muted-foreground px-3.5 py-2.5 border-b border-border/50 bg-muted sticky left-0 z-10"
+                    style={{ width: '48%' }}
+                  >
+                    Owner
+                  </th>
+                  <th
+                    className="text-right text-[10px] font-medium uppercase tracking-[0.07em] text-muted-foreground px-3.5 py-2.5 border-b border-border/50 bg-muted"
+                    style={{ width: '15%' }}
+                  >
+                    Record
+                  </th>
+                  <th
+                    className="text-right text-[10px] font-medium uppercase tracking-[0.07em] text-muted-foreground px-3.5 py-2.5 border-b border-border/50 bg-muted"
+                    style={{ width: '12%' }}
+                  >
+                    PF/Game
+                  </th>
+                  <th
+                    className="text-right text-[10px] font-medium uppercase tracking-[0.07em] text-muted-foreground px-3.5 py-2.5 border-b border-border/50 bg-muted"
+                    style={{ width: '12%' }}
+                  >
+                    PA/Game
+                  </th>
+                  <th
+                    className="text-right text-[10px] font-medium uppercase tracking-[0.07em] text-muted-foreground px-3.5 py-2.5 border-b border-border/50 bg-muted"
+                    style={{ width: '14%' }}
+                  >
+                    Win %
+                  </th>
+                  <th
+                    className="text-right text-[10px] font-medium uppercase tracking-[0.07em] text-muted-foreground px-3.5 py-2.5 border-b border-border/50 bg-muted"
+                    style={{ width: '14%' }}
+                  >
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="inline-flex items-center justify-end gap-1 cursor-default">
+                            Win % vs. League
+                            <Info className="w-3 h-3 shrink-0" />
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent
+                          side="top"
+                          className="max-w-64 text-center leading-relaxed bg-popover text-popover-foreground border border-border shadow-md [&>svg]:fill-popover [&>svg]:bg-popover"
+                        >
+                          This percentage measures a team&apos;s win percentage
+                          if they played every team in the league each week
+                          aggregated over the season (i.e., if a team was the
+                          2nd highest scoring team in a 10 team league, their
+                          win % vs. league for that week would be .900)
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </th>
+                </tr>
+              </thead>
+              <Suspense fallback={<SkeletonBody />}>
+                <StandingsBody promise={standingsPromise} />
+              </Suspense>
+            </table>
+          </div>
         </div>
 
         <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-2.5">

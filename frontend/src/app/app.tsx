@@ -78,7 +78,7 @@ function App() {
           }
         />
         <Route
-          path="/home"
+          path="/standings"
           element={
             <ProtectedRoute>
               <AppLayout>

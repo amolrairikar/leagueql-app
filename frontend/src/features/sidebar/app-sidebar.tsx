@@ -1,5 +1,5 @@
 import { UserButton } from '@clerk/react';
-import { FlaskConical, Home, Trash2 } from 'lucide-react';
+import { FlaskConical, TableProperties, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
@@ -29,7 +29,7 @@ import {
 import { deleteLeague } from '@/features/sidebar/api-calls';
 
 const navItems = [
-  { title: 'Home', url: '/home', icon: Home },
+  { title: 'Standings', url: '/standings', icon: TableProperties },
   { title: 'Test', url: '/test', icon: FlaskConical },
 ];
 
