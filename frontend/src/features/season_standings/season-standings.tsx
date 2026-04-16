@@ -1,7 +1,8 @@
 import { Clover, Info } from 'lucide-react';
-import { Suspense, use, useMemo, useState, useCallback } from 'react';
+import { Suspense, use, useMemo, useState } from 'react';
 
 import { Skeleton } from '@/components/ui/skeleton';
+import { avatarColor, TeamAvatar } from '@/components/team-avatar';
 import {
   Tooltip,
   TooltipContent,
@@ -15,67 +16,6 @@ import {
   getSeasonRecap,
   getSeasonStandings,
 } from '@/features/season_standings/api-calls';
-
-const AVATAR_COLORS = [
-  '#4338ca',
-  '#0f6e56',
-  '#993c1d',
-  '#993556',
-  '#185FA5',
-  '#854F0B',
-  '#5F5E5A',
-  '#A32D2D',
-  '#7c3aed',
-  '#b45309',
-  '#0891b2',
-  '#be185d',
-];
-
-function avatarColor(index: number): string {
-  return AVATAR_COLORS[index % AVATAR_COLORS.length];
-}
-
-function TeamAvatar({
-  teamLogo,
-  teamName,
-  ownerUsername,
-  index,
-}: {
-  teamLogo: string | null | undefined;
-  teamName: string;
-  ownerUsername: string;
-  index: number;
-}) {
-  const [imgError, setImgError] = useState(false);
-  const handleError = useCallback(() => setImgError(true), []);
-
-  return (
-    <div
-      className="w-7 h-7 rounded-full overflow-hidden shrink-0 flex items-center justify-center text-[11px] font-medium text-white"
-      style={{ background: avatarColor(index) }}
-    >
-      {teamLogo && !imgError ? (
-        <img
-          src={teamLogo}
-          alt={teamName}
-          className="w-full h-full object-cover"
-          onError={handleError}
-        />
-      ) : (
-        initials(ownerUsername)
-      )}
-    </div>
-  );
-}
-
-function initials(username: string): string {
-  const parts = username
-    .replace(/[^a-zA-Z0-9]/g, ' ')
-    .trim()
-    .split(/\s+/);
-  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-  return username.slice(0, 2).toUpperCase();
-}
 
 type StandingsResult =
   | { ok: true; data: SeasonStandingsItem[] }
@@ -137,7 +77,7 @@ function StandingsBody({ promise }: { promise: Promise<StandingsResult> }) {
                   teamLogo={row.team_logo}
                   teamName={row.team_name}
                   ownerUsername={row.owner_username}
-                  index={i}
+                  color={avatarColor(i)}
                 />
                 <div className="flex flex-col">
                   <span className="text-[13px] font-medium text-foreground font-mono">

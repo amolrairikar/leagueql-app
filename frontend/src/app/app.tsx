@@ -12,9 +12,9 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import LeagueConnect from '@/features/connect_league/league-connect';
 import LeagueQLLanding from '@/features/landing_page/landing-page';
 import LeagueSelection from '@/features/league_selection/league-selection';
+import Matchups from '@/features/matchups/matchups';
 import SeasonStandings from '@/features/season_standings/season-standings';
 import { AppSidebar } from '@/features/sidebar/app-sidebar';
-import Test from '@/features/test/test';
 
 function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -88,11 +88,11 @@ function App() {
           }
         />
         <Route
-          path="/test"
+          path="/matchups"
           element={
             <ProtectedRoute>
               <AppLayout>
-                <Test />
+                <Matchups />
               </AppLayout>
             </ProtectedRoute>
           }

@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Spinner } from '@/components/ui/spinner';
+import { Spinner } from '@/components/spinner';
 import { getLeague } from '@/features/connect_league/api-calls';
 import { ApiError } from '@/lib/api-client';
 

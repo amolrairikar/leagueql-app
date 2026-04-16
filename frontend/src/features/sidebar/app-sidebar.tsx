@@ -1,5 +1,5 @@
 import { UserButton } from '@clerk/react';
-import { FlaskConical, RefreshCw, TableProperties, Trash2 } from 'lucide-react';
+import { RefreshCw, Swords, TableProperties, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
@@ -30,7 +30,7 @@ import { deleteLeague } from '@/features/sidebar/api-calls';
 
 const navItems = [
   { title: 'Standings', url: '/standings', icon: TableProperties },
-  { title: 'Test', url: '/test', icon: FlaskConical },
+  { title: 'Matchups', url: '/matchups', icon: Swords },
 ];
 
 function getCookie(name: string): string {

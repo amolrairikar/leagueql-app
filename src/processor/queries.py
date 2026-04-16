@@ -36,6 +36,27 @@ QUERIES = {
             CAST(m.team_b_id AS STRING) AS team_b_id,
             m.team_b_score AS team_b_score,
             m.playoff_tier_type AS playoff_tier_type,
+            CASE
+                WHEN m.playoff_tier_type = 'WINNERS_BRACKET' THEN
+                    CASE
+                        WHEN CAST(m.season AS INTEGER) < 2021 THEN
+                            CASE
+                                WHEN CAST(m.week AS INTEGER) = 14 THEN 'Quarterfinals'
+                                WHEN CAST(m.week AS INTEGER) = 15 THEN 'Semifinals'
+                                WHEN CAST(m.week AS INTEGER) = 16 THEN 'Finals'
+                                ELSE NULL
+                            END
+                        ELSE
+                            CASE
+                                WHEN CAST(m.week AS INTEGER) = 15 THEN 'Quarterfinals'
+                                WHEN CAST(m.week AS INTEGER) = 16 THEN 'Semifinals'
+                                WHEN CAST(m.week AS INTEGER) = 17 THEN 'Finals'
+                                ELSE NULL
+                            END
+                    END
+                WHEN m.playoff_tier_type = 'NONE' THEN NULL
+                ELSE 'Losers Bracket'
+            END AS playoff_round,
             CAST(m.winner AS STRING) AS winner,
             CAST(m.loser AS STRING) AS loser,
             CAST(m.week AS STRING) AS week,
@@ -57,6 +78,7 @@ QUERIES = {
             CAST(m.team_b_roster_id AS STRING) AS team_b_id,
             m.team_b_points AS team_b_score,
             NULL AS playoff_tier_type,
+            NULL AS playoff_round,
             CAST(m.winner AS STRING) AS winner,
             CAST(m.loser AS STRING) AS loser,
             CAST(m.team_a_week AS STRING) AS week,
