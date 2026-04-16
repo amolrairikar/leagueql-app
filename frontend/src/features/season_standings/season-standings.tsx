@@ -83,10 +83,20 @@ type StandingsResult =
 
 function RecapBody({ promise }: { promise: Promise<SeasonRecapItem | null> }) {
   const result = use(promise);
+  if (!result) {
+    return (
+      <p className="text-[13px] leading-[1.75] text-muted-foreground border-t border-border/50 pt-3">
+        Recap not yet available for this season.
+      </p>
+    );
+  }
+  const paragraphs = result.recap_text.split(/\n\n+/).filter(Boolean);
   return (
-    <p className="text-[13px] leading-[1.75] text-muted-foreground border-t border-border/50 pt-3">
-      {result ? result.recap_text : 'Recap not yet available for this season.'}
-    </p>
+    <div className="text-[13px] leading-[1.75] text-muted-foreground border-t border-border/50 pt-3 space-y-3">
+      {paragraphs.map((p, i) => (
+        <p key={i}>{p}</p>
+      ))}
+    </div>
   );
 }
 
