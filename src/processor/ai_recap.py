@@ -68,9 +68,12 @@ def build_season_recap_prompt(
                 f"  {a_label} ({a_score:.2f}) vs {b_label} ({b_score:.2f}) — {result_text}"
             )
 
+    playoff_start_week = 15 if int(season) >= 2021 else 14
     prompt = (
         f"You are a fantasy football analyst. Write a 2-3 paragraph season recap for "
         f"the {season} fantasy football season.\n\n"
+        f"Note: in fantasy football, the playoffs began in week {playoff_start_week} "
+        f"of the {season} season. Weeks before that are the regular season.\n\n"
         "Cover: the champion and their performance, notable scoring leaders, interesting "
         "matchup moments, and the overall character of the season. Keep the tone engaging "
         "and conversational, as if writing for a league newsletter. Do not use headers or "

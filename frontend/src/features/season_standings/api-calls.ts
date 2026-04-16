@@ -20,6 +20,7 @@ export interface SeasonStandingsItem {
   total_pa: number;
   avg_pf: number;
   avg_pa: number;
+  champion: string;
 }
 
 export interface GetSeasonStandingsResponse {

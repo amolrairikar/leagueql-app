@@ -104,7 +104,7 @@ QUERIES = {
         FROM weekly_stats
     ),
     processed_performance AS (
-        SELECT 
+        SELECT
             season,
             team_id,
             owner_id,
@@ -116,8 +116,19 @@ QUERIES = {
             (total_teams_that_week - weekly_rank) AS vs_league_wins,
             (weekly_rank - 1) AS vs_league_losses
         FROM league_rankings
+    ),
+    champion AS (
+        SELECT
+            season,
+            winner AS champion_team_id
+        FROM matchups_output
+        WHERE playoff_tier_type = 'WINNERS_BRACKET'
+            AND (
+                (CAST(season AS INTEGER) < 2021 AND CAST(week AS INTEGER) = 16)
+                OR (CAST(season AS INTEGER) >= 2021 AND CAST(week AS INTEGER) = 17)
+            )
     )
-    SELECT 
+    SELECT
         p.season,
         p.team_id,
         p.owner_id,
@@ -129,8 +140,8 @@ QUERIES = {
         SUM(p.loss) AS losses,
         SUM(p.tie) AS ties,
         CONCAT(
-            CAST(SUM(p.win) AS STRING), '-', 
-            CAST(SUM(p.loss) AS STRING), '-', 
+            CAST(SUM(p.win) AS STRING), '-',
+            CAST(SUM(p.loss) AS STRING), '-',
             CAST(SUM(p.tie) AS STRING)
         ) AS record,
         ROUND(SUM(p.win) / COUNT(*)::DOUBLE, 3) AS win_pct,
@@ -140,11 +151,14 @@ QUERIES = {
         SUM(p.points_for) AS total_pf,
         SUM(p.points_against) AS total_pa,
         ROUND(AVG(p.points_for), 2) AS avg_pf,
-        ROUND(AVG(p.points_against), 2) AS avg_pa
+        ROUND(AVG(p.points_against), 2) AS avg_pa,
+        CASE WHEN c.champion_team_id IS NOT NULL THEN 'Yes' ELSE 'No' END AS champion
     FROM processed_performance p
     INNER JOIN teams_output t
         ON (p.team_id = t.team_id AND p.season = t.season)
-    GROUP BY p.season, p.team_id, p.owner_id, t.team_name, t.team_logo, t.display_name
+    LEFT JOIN champion c
+        ON (p.team_id = c.champion_team_id AND p.season = c.season)
+    GROUP BY p.season, p.team_id, p.owner_id, t.team_name, t.team_logo, t.display_name, c.champion_team_id
     ORDER BY season DESC, wins DESC, total_pf DESC;
     """,
 }

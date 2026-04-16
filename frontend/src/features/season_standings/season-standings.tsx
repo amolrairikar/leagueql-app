@@ -167,7 +167,7 @@ function AwardsGrid({ promise }: { promise: Promise<StandingsResult> }) {
 
   const standings = result.data;
 
-  const champion = standings[0];
+  const champion = standings.find((s) => s.champion === 'Yes') ?? null;
   const highScorer = standings.reduce((a, b) => (a.avg_pf > b.avg_pf ? a : b));
   const luckiest = standings.reduce((a, b) =>
     a.win_pct - a.win_pct_vs_league > b.win_pct - b.win_pct_vs_league ? a : b,
@@ -212,18 +212,31 @@ function AwardsGrid({ promise }: { promise: Promise<StandingsResult> }) {
           </span>
         </div>
         <div>
-          <div className="text-[15px] font-medium text-foreground font-mono">
-            {champion.owner_username}
-          </div>
-          <div className="text-[12px] text-muted-foreground">
-            {champion.team_name}
-          </div>
-          <div
-            className="text-[11px] font-medium mt-0.5"
-            style={{ color: '#534AB7' }}
-          >
-            {champion.record} · {champion.win_pct.toFixed(3)} Win%
-          </div>
+          {champion ? (
+            <>
+              <div className="text-[15px] font-medium text-foreground font-mono">
+                {champion.owner_username}
+              </div>
+              <div className="text-[12px] text-muted-foreground">
+                {champion.team_name}
+              </div>
+              <div
+                className="text-[11px] font-medium mt-0.5"
+                style={{ color: '#534AB7' }}
+              >
+                {champion.record} · {champion.win_pct.toFixed(3)} Win%
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="text-[15px] font-medium text-foreground font-mono">
+                TBD
+              </div>
+              <div className="text-[12px] text-muted-foreground">
+                Season in progress
+              </div>
+            </>
+          )}
         </div>
       </div>
 
