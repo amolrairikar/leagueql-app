@@ -179,7 +179,8 @@ jobs:
             -var="processor_lambda_role_arn=arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/fantasy-football-recap-processing-lambda-${{ env.ENVIRONMENT }}-role" \
             -var="api_lambda_role_arn=arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/fantasy-football-recap-api-lambda-${{ env.ENVIRONMENT }}-role" \
             -var="clerk_issuer_url=${{ env.CLERK_ISSUER_URL }}" \
-            -var="clerk_jwt_audience=${{ secrets.CLERK_JWT_AUDIENCE }}"
+            -var="clerk_jwt_audience=${{ secrets.CLERK_JWT_AUDIENCE }}" \
+            -var="anthropic_api_key=${{ secrets.ANTHROPIC_API_KEY }}"
 
   # live-dependency-tests:
   #   name: Live Dependency Tests

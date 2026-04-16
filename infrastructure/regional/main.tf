@@ -52,7 +52,7 @@ module "processor_lambda" {
   role_arn             =  var.processor_lambda_role_arn
   handler              = "handler.lambda_handler"
   memory_size          = 2048
-  timeout              = 30
+  timeout              = 60
   log_retention        = 7
   s3_bucket            = "fantasy-football-recap-${var.environment}-bucket-${local.region}-${local.account_id}"
   s3_key               = "lambda-code-artifacts/processor-lambda.zip"
@@ -60,6 +60,7 @@ module "processor_lambda" {
   environment_variables = {
     DYNAMODB_TABLE_NAME = "fantasy-football-recap-table-${var.environment}"
     S3_BUCKET_NAME      = "fantasy-football-recap-${var.environment}-bucket-${local.region}-${local.account_id}"
+    ANTHROPIC_API_KEY   = var.anthropic_api_key
   }
 
   tags = {

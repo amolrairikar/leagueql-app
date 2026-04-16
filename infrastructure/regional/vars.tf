@@ -32,3 +32,9 @@ variable "clerk_jwt_audience" {
   description = "Audience value that must match the `aud` claim in Clerk session tokens"
   type        = string
 }
+
+variable "anthropic_api_key" {
+  description = "Anthropic API key for AI recap generation in the processor Lambda"
+  type        = string
+  sensitive   = true
+}

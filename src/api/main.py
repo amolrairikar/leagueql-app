@@ -82,12 +82,14 @@ class QueryType(str, Enum):
     TEAMS = "TEAMS"
     MATCHUPS = "MATCHUPS"
     SEASON_STANDINGS = "SEASON_STANDINGS"
+    AI_RECAP = "AI_RECAP"
 
 
 QUERY_TYPE_TO_SK_BASE = {
     QueryType.TEAMS: "TEAMS",
     QueryType.MATCHUPS: "MATCHUPS",
     QueryType.SEASON_STANDINGS: "STANDINGS",
+    QueryType.AI_RECAP: "AI_RECAP",
 }
 
 
@@ -479,7 +481,7 @@ def delete_league(
             ]
         )
 
-        prefixes_to_clear = ["MATCHUPS#", "TEAMS#", "STANDINGS#"]
+        prefixes_to_clear = ["MATCHUPS#", "TEAMS#", "STANDINGS#", "AI_RECAP#"]
         for prefix in prefixes_to_clear:
             delete_prefixed_items(
                 table_name=table_name, pk_value=league_pk, sk_prefix=prefix
