@@ -136,20 +136,8 @@ async def generate_recaps_for_all_seasons(
     """
     client = AsyncAnthropic(api_key=api_key)
 
-    seasons_needing_recap: list[str] = []
-    for season in seasons:
-        response = table.get_item(Key={"PK": pk, "SK": f"AI_RECAP#{season}"})
-        if response.get("Item"):
-            logger.info("AI recap already exists for season %s, skipping", season)
-        else:
-            seasons_needing_recap.append(season)
-
-    if not seasons_needing_recap:
-        logger.info("All seasons already have AI recaps, nothing to generate")
-        return
-
     prompts: dict[str, str] = {}
-    for season in seasons_needing_recap:
+    for season in seasons:
         s_rows = standings_by_season.get(season, [])
         m_rows = matchups_by_season.get(season, [])
         if not s_rows:

@@ -288,7 +288,8 @@ module "processing-lambda-role" {
         Action = [
           "dynamodb:PutItem",
           "dynamodb:BatchWriteItem",
-          "dynamodb:UpdateItem"
+          "dynamodb:UpdateItem",
+          "dynamodb:GetItem"
         ]
         Resource = [
           module.dynamodb.primary_table_arn,

@@ -397,11 +397,11 @@ def lambda_handler(event, context) -> None:
     matchups_df = con.sql("SELECT * FROM MATCHUPS_output").df()
 
     standings_by_season: dict[str, list[dict]] = {
-        season: group.to_dict("records")
+        str(season): group.to_dict("records")
         for season, group in standings_df.groupby("season")
     }
     matchups_by_season: dict[str, list[dict]] = {
-        season: group.to_dict("records")
+        str(season): group.to_dict("records")
         for season, group in matchups_df.groupby("season")
     }
 
