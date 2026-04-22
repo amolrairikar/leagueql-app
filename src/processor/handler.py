@@ -387,11 +387,15 @@ def _register_sleeper_raw_data(
     Parse raw Sleeper API data into grouped lists ready for DuckDB registration.
 
     Extracts users and rosters from their respective records. Processes the
-    winners bracket to build a per-season lookup that maps each bracket matchup
-    ID to its tier type and round label (r=1 Quarterfinals, r=2 Semifinals,
-    r=3 Finals). For weekly matchup records, pairs teams that share a matchup_id;
-    playoff tier and round are resolved via the bracket lookup and entries without
-    a partner (e.g. bye weeks) are skipped.
+    winners bracket to build a per-season lookup keyed by bracket matchup ID (m),
+    storing each game's tier, round label (r=1 Quarterfinals, r=2 Semifinals,
+    r=3 Finals), and team pair. For weekly matchup records, pairs teams that share
+    a matchup_id; playoff tier and round are resolved by requiring both the
+    matchup_id to match a bracket m value AND the two roster IDs to match that
+    bracket entry's team pair, preventing false positives from non-playoff teams
+    whose matchup_ids happen to collide with bracket m values and from regular
+    season games between teams who also meet in the playoffs. Entries without a
+    partner (e.g. bye weeks) are skipped.
 
     Args:
         raw_data: List of dicts with keys: season, data_type, data.
@@ -400,17 +404,29 @@ def _register_sleeper_raw_data(
         Dict with keys 'users', 'rosters', and 'matchups', each mapping to a list of row dicts.
     """
     # First pass: build per-season bracket lookups from playoff_bracket data.
-    # p=1 is the championship game; absent p means an intermediate winners-path game;
-    # any other p value is a consolation/losers-bracket game.
+    # Keyed by bracket matchup ID (m), which corresponds to the weekly matchup_id
+    # during playoff weeks. The team pair is stored alongside so we can verify
+    # both the matchup_id and the actual teams match before tagging a game as
+    # a playoff game. p=1 is the championship; absent p means an intermediate
+    # winners-path game; any other p value is a consolation game.
     bracket_by_season: dict[str, dict[int, dict]] = defaultdict(dict)
     for item in raw_data:
         if item["data_type"] == "playoff_bracket":
             for entry in item["data"]:
+                t1, t2 = entry.get("t1"), entry.get("t2")
+                if t1 is None or t2 is None:
+                    continue
                 p = entry.get("p")
                 tier = "WINNERS_BRACKET" if (p is None or p == 1) else "LOSERS_BRACKET"
+                round_label = (
+                    _ROUND_LABELS.get(entry["r"])
+                    if tier == "WINNERS_BRACKET"
+                    else "Losers Bracket"
+                )
                 bracket_by_season[item["season"]][entry["m"]] = {
-                    "r": entry["r"],
                     "tier": tier,
+                    "round": round_label,
+                    "teams": frozenset([t1, t2]),
                 }
 
     all_users, all_rosters, all_matchups = [], [], []
@@ -446,16 +462,14 @@ def _register_sleeper_raw_data(
                 else:
                     winner = "TIE"
                     loser = "TIE"
+                pair = frozenset([team_a["roster_id"], team_b["roster_id"]])
                 bracket_entry = bracket.get(matchup_id)
-                if bracket_entry is None:
+                if bracket_entry is None or bracket_entry["teams"] != pair:
                     playoff_tier_type = "NONE"
                     playoff_round = None
                 else:
                     playoff_tier_type = bracket_entry["tier"]
-                    if playoff_tier_type == "WINNERS_BRACKET":
-                        playoff_round = _ROUND_LABELS.get(bracket_entry["r"])
-                    else:
-                        playoff_round = "Losers Bracket"
+                    playoff_round = bracket_entry["round"]
                 team_a_starters_stats, team_a_starter_ids = (
                     compile_sleeper_starter_stats(
                         starters=team_a.get("starters", []),
