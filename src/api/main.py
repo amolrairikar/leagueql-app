@@ -462,28 +462,23 @@ def delete_league(
     try:
         table_name = os.environ["DYNAMODB_TABLE_NAME"]
         league_pk = f"LEAGUE#{canonical_league_id}"
-        dynamodb_client.transact_write_items(
-            TransactItems=[
-                {
-                    "Delete": {
-                        "TableName": table_name,
-                        "Key": {
-                            "PK": {"S": f"LEAGUE#{canonical_league_id}"},
-                            "SK": {"S": "METADATA"},
-                        },
-                    }
-                },
-                {
-                    "Delete": {
-                        "TableName": table_name,
-                        "Key": {
-                            "PK": {"S": f"LEAGUE#{leagueId}#PLATFORM#{platform.value}"},
-                            "SK": {"S": "LEAGUE_LOOKUP"},
-                        },
-                    }
-                },
-            ]
+        dynamodb_client.delete_item(
+            TableName=table_name,
+            Key={
+                "PK": {"S": f"LEAGUE#{canonical_league_id}"},
+                "SK": {"S": "METADATA"},
+            },
         )
+
+        lookup_response = table.query(
+            IndexName="GSI1",
+            KeyConditionExpression=Key("canonical_league_id").eq(canonical_league_id),
+        )
+        lookup_items = lookup_response.get("Items", [])
+        if lookup_items:
+            with table.batch_writer() as writer:
+                for item in lookup_items:
+                    writer.delete_item(Key={"PK": item["PK"], "SK": item["SK"]})
 
         prefixes_to_clear = ["MATCHUPS#", "TEAMS#", "STANDINGS#", "AI_RECAP#"]
         for prefix in prefixes_to_clear:
