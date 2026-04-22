@@ -18,7 +18,7 @@ QUERIES = {
         SELECT
             u.display_name,
             CAST(r.roster_id AS STRING) AS team_id,
-            "metadata.team_name" AS team_name,
+            u.metadata.team_name AS team_name,
             u.avatar AS team_logo,
             u.season,
             u.user_id AS primary_owner_id,
