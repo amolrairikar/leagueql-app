@@ -84,6 +84,14 @@ function processData(teams: TeamItem[], matchups: MatchupItem[]): MatchupsData {
     (byWeek[week] ??= []).push(pm);
   }
 
+  for (const week of Object.keys(byWeek)) {
+    byWeek[Number(week)].sort((a, b) => {
+      const rank = (r: string | null) =>
+        r === null || r === 'Losers Bracket' ? 1 : 0;
+      return rank(a.playoffRound) - rank(b.playoffRound);
+    });
+  }
+
   const weeks = Object.keys(byWeek)
     .map(Number)
     .sort((a, b) => a - b);

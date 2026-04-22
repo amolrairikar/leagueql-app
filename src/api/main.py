@@ -281,28 +281,32 @@ def delete_prefixed_items(table_name: str, pk_value: str, sk_prefix: str) -> Non
         pk_value: The value of the PK to match.
         sk_prefix: The prefix of the SK to match for deletion.
     """
-    response = dynamodb_client.query(
-        TableName=table_name,
-        KeyConditionExpression="PK = :pk AND begins_with(SK, :prefix)",
-        ExpressionAttributeValues={
+    query_kwargs: dict = {
+        "TableName": table_name,
+        "KeyConditionExpression": "PK = :pk AND begins_with(SK, :prefix)",
+        "ExpressionAttributeValues": {
             ":pk": {"S": pk_value},
             ":prefix": {"S": sk_prefix},
         },
-        ProjectionExpression="PK, SK",
-    )
-    items = response.get("Items", [])
-
-    if not items:
-        return
-
-    for i in range(0, len(items), 25):
-        batch = items[i : i + 25]
-        dynamodb_client.batch_write_item(
-            RequestItems={
-                table_name: [{"DeleteRequest": {"Key": item}} for item in batch]
-            }
-        )
-    logger.info(f"Deleted {len(items)} items with prefix {sk_prefix}")
+        "ProjectionExpression": "PK, SK",
+    }
+    total_deleted = 0
+    while True:
+        response = dynamodb_client.query(**query_kwargs)
+        items = response.get("Items", [])
+        for i in range(0, len(items), 25):
+            batch = items[i : i + 25]
+            dynamodb_client.batch_write_item(
+                RequestItems={
+                    table_name: [{"DeleteRequest": {"Key": item}} for item in batch]
+                }
+            )
+        total_deleted += len(items)
+        last_key = response.get("LastEvaluatedKey")
+        if not last_key:
+            break
+        query_kwargs["ExclusiveStartKey"] = last_key
+    logger.info(f"Deleted {total_deleted} items with prefix {sk_prefix}")
 
 
 @app.get("/", status_code=status.HTTP_200_OK)

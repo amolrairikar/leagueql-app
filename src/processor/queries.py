@@ -19,7 +19,7 @@ QUERIES = {
             u.display_name,
             CAST(r.roster_id AS STRING) AS team_id,
             u.metadata.team_name AS team_name,
-            u.avatar AS team_logo,
+            'https://sleepercdn.com/avatars/thumbs/' || u.avatar AS team_logo,
             u.season,
             u.user_id AS primary_owner_id,
             NULL AS secondary_owner_id
@@ -86,7 +86,27 @@ QUERIES = {
             m.team_b_starters AS team_b_starters,
             m.team_b_bench AS team_b_bench,
             m.playoff_tier_type AS playoff_tier_type,
-            m.playoff_round AS playoff_round,
+            CASE
+                WHEN m.playoff_tier_type = 'WINNERS_BRACKET' THEN
+                    CASE
+                        WHEN CAST(m.team_a_season AS INTEGER) < 2021 THEN
+                            CASE
+                                WHEN CAST(m.team_a_week AS INTEGER) = 14 THEN 'Quarterfinals'
+                                WHEN CAST(m.team_a_week AS INTEGER) = 15 THEN 'Semifinals'
+                                WHEN CAST(m.team_a_week AS INTEGER) = 16 THEN 'Finals'
+                                ELSE NULL
+                            END
+                        ELSE
+                            CASE
+                                WHEN CAST(m.team_a_week AS INTEGER) = 15 THEN 'Quarterfinals'
+                                WHEN CAST(m.team_a_week AS INTEGER) = 16 THEN 'Semifinals'
+                                WHEN CAST(m.team_a_week AS INTEGER) = 17 THEN 'Finals'
+                                ELSE NULL
+                            END
+                    END
+                WHEN m.playoff_tier_type = 'NONE' THEN NULL
+                ELSE 'Losers Bracket'
+            END AS playoff_round,
             CAST(m.winner AS STRING) AS winner,
             CAST(m.loser AS STRING) AS loser,
             CAST(m.team_a_week AS STRING) AS week,
