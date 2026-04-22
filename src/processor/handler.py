@@ -55,7 +55,17 @@ class KeySchema:
     entity_type: EntityType
 
 
-def compile_bench_stats(roster: dict, starter_ids: list[int]) -> list[dict]:
+def compile_espn_bench_stats(roster: dict, starter_ids: list[int]) -> list[dict]:
+    """
+    Build a list of stat dicts for every bench player in an ESPN roster.
+
+    Args:
+        roster: The ESPN roster object containing an 'entries' list of player dicts.
+        starter_ids: Player IDs already counted as starters, excluded from bench output.
+
+    Returns:
+        List of dicts with player_id, full_name, points_scored, and position.
+    """
     stats = []
     for player in roster.get("entries", []):
         player_id = player["playerId"]
@@ -74,9 +84,21 @@ def compile_bench_stats(roster: dict, starter_ids: list[int]) -> list[dict]:
     return stats
 
 
-def compile_starter_stats(
+def compile_espn_starter_stats(
     roster: dict, slot_map: dict[int, int]
 ) -> tuple[list[dict], list[int]]:
+    """
+    Build a list of stat dicts for every starter in an ESPN roster.
+
+    Args:
+        roster: The ESPN roster object containing an 'entries' list of player dicts.
+        slot_map: Mapping of player ID to lineup slot ID derived from the scoring-period roster,
+            used to resolve each player's actual fantasy position.
+
+    Returns:
+        Tuple of (stats, ids) where stats is a list of dicts with player_id, full_name,
+        points_scored, position, and fantasy_position, and ids is the list of starter player IDs.
+    """
     stats = []
     ids = []
     for player in roster.get("entries", []):
@@ -108,7 +130,71 @@ def compile_starter_stats(
     return stats, ids
 
 
+def compile_sleeper_starter_stats(
+    starters: list[str], starters_points: list[float]
+) -> tuple[list[dict], list[str]]:
+    """
+    Build a list of stat dicts for every starter in a Sleeper roster.
+
+    Args:
+        starters: Ordered list of starter player IDs.
+        starters_points: Points scored by each starter, in the same order as starters.
+
+    Returns:
+        Tuple of (stats, ids) where stats is a list of dicts with player_id and
+        points_scored, and ids is the list of starter player IDs.
+    """
+    stats = [
+        {
+            "player_id": player_id,
+            "full_name": None,
+            "points_scored": points,
+            "position": None,
+            "fantasy_position": None,
+        }
+        for player_id, points in zip(starters, starters_points)
+    ]
+    return stats, starters
+
+
+def compile_sleeper_bench_stats(
+    players: list[str],
+    players_points: dict[str, float],
+    starter_ids: list[str],
+) -> list[dict]:
+    """
+    Build a list of stat dicts for every bench player in a Sleeper roster.
+
+    Args:
+        players: Full list of player IDs on the roster (starters + bench).
+        players_points: Mapping of player ID to points scored.
+        starter_ids: Player IDs already counted as starters, excluded from bench output.
+
+    Returns:
+        List of dicts with player_id and points_scored.
+    """
+    return [
+        {
+            "player_id": player_id,
+            "full_name": None,
+            "points_scored": players_points.get(player_id, 0.0),
+            "position": None,
+        }
+        for player_id in players
+        if player_id not in starter_ids
+    ]
+
+
 def sanitize_value(val: Any) -> Any:
+    """
+    Recursively convert floats to Decimal so values are safe for DynamoDB.
+
+    Args:
+        val: Any value — scalar, list, or dict.
+
+    Returns:
+        The value with all floats replaced by their Decimal equivalents.
+    """
     if isinstance(val, float):
         return Decimal(str(val))
     if isinstance(val, list):
@@ -193,18 +279,21 @@ def resolve_seasons_to_process(
     return [current_seasons[-1]]
 
 
-def register_raw_data(raw_data: list[dict], con: duckdb.DuckDBPyConnection) -> None:
+def _register_espn_raw_data(
+    raw_data: list[dict],
+) -> dict[str, list[dict]]:
     """
-    Register raw API response data as DuckDB views, grouped by data_type.
+    Parse raw ESPN API data into grouped lists ready for DuckDB registration.
 
-    Each view is named after its data_type (e.g. 'members', 'teams')
-    and contains all seasons for that type.
+    Extracts members and teams from 'users' records and builds cleaned matchup
+    dicts (including starter/bench player stats) from 'matchups*' records.
 
     Args:
         raw_data: List of dicts with keys: season, data_type, data.
-        con: A DuckDB connection object.
+
+    Returns:
+        Dict with keys 'members', 'teams', and 'matchups', each mapping to a list of row dicts.
     """
-    grouped: dict[str, list[dict]] = defaultdict(list)
     all_members, all_teams, all_matchups = [], [], []
     for item in raw_data:
         if item["data_type"] == "users":
@@ -234,7 +323,6 @@ def register_raw_data(raw_data: list[dict], con: duckdb.DuckDBPyConnection) -> N
                     winner = "TIE"
                     loser = "TIE"
 
-                # Get players for each matchups
                 team_a_starters = record.get("home", {}).get(
                     "rosterForMatchupPeriod", {}
                 )
@@ -255,39 +343,181 @@ def register_raw_data(raw_data: list[dict], con: duckdb.DuckDBPyConnection) -> N
                     p["playerId"]: p["lineupSlotId"]
                     for p in team_b_bench.get("entries", [])
                 }
-                team_a_starters_stats, team_a_starters_ids = compile_starter_stats(
+                team_a_starters_stats, team_a_starters_ids = compile_espn_starter_stats(
                     roster=team_a_starters, slot_map=team_a_slot_map
                 )
-                team_b_starters_stats, team_b_starters_ids = compile_starter_stats(
+                team_b_starters_stats, team_b_starters_ids = compile_espn_starter_stats(
                     roster=team_b_starters, slot_map=team_b_slot_map
                 )
-                team_a_bench_stats = compile_bench_stats(
+                team_a_bench_stats = compile_espn_bench_stats(
                     roster=team_a_bench, starter_ids=team_a_starters_ids
                 )
-                team_b_bench_stats = compile_bench_stats(
+                team_b_bench_stats = compile_espn_bench_stats(
                     roster=team_b_bench, starter_ids=team_b_starters_ids
                 )
 
-                cleaned_matchup = {
-                    "team_a_id": team_a_id,
-                    "team_a_score": team_a_score,
-                    "team_a_starters": team_a_starters_stats,
-                    "team_a_bench": team_a_bench_stats,
-                    "team_b_id": team_b_id,
-                    "team_b_score": team_b_score,
-                    "team_b_starters": team_b_starters_stats,
-                    "team_b_bench": team_b_bench_stats,
-                    "playoff_tier_type": playoff_tier_type,
-                    "winner": winner,
-                    "loser": loser,
-                    "week": week,
-                    "season": item["season"],
-                }
-                all_matchups.append(cleaned_matchup)
+                all_matchups.append(
+                    {
+                        "team_a_id": team_a_id,
+                        "team_a_score": team_a_score,
+                        "team_a_starters": team_a_starters_stats,
+                        "team_a_bench": team_a_bench_stats,
+                        "team_b_id": team_b_id,
+                        "team_b_score": team_b_score,
+                        "team_b_starters": team_b_starters_stats,
+                        "team_b_bench": team_b_bench_stats,
+                        "playoff_tier_type": playoff_tier_type,
+                        "winner": winner,
+                        "loser": loser,
+                        "week": week,
+                        "season": item["season"],
+                    }
+                )
 
-    grouped["members"] = all_members
-    grouped["teams"] = all_teams
-    grouped["matchups"] = all_matchups
+    return {"members": all_members, "teams": all_teams, "matchups": all_matchups}
+
+
+_ROUND_LABELS = {1: "Quarterfinals", 2: "Semifinals", 3: "Finals"}
+
+
+def _register_sleeper_raw_data(
+    raw_data: list[dict],
+) -> dict[str, list[dict]]:
+    """
+    Parse raw Sleeper API data into grouped lists ready for DuckDB registration.
+
+    Extracts users and rosters from their respective records. Processes the
+    winners bracket to build a per-season lookup that maps each bracket matchup
+    ID to its tier type and round label (r=1 Quarterfinals, r=2 Semifinals,
+    r=3 Finals). For weekly matchup records, pairs teams that share a matchup_id;
+    playoff tier and round are resolved via the bracket lookup and entries without
+    a partner (e.g. bye weeks) are skipped.
+
+    Args:
+        raw_data: List of dicts with keys: season, data_type, data.
+
+    Returns:
+        Dict with keys 'users', 'rosters', and 'matchups', each mapping to a list of row dicts.
+    """
+    # First pass: build per-season bracket lookups from playoff_bracket data.
+    # p=1 is the championship game; absent p means an intermediate winners-path game;
+    # any other p value is a consolation/losers-bracket game.
+    bracket_by_season: dict[str, dict[int, dict]] = defaultdict(dict)
+    for item in raw_data:
+        if item["data_type"] == "playoff_bracket":
+            for entry in item["data"]:
+                p = entry.get("p")
+                tier = "WINNERS_BRACKET" if (p is None or p == 1) else "LOSERS_BRACKET"
+                bracket_by_season[item["season"]][entry["m"]] = {
+                    "r": entry["r"],
+                    "tier": tier,
+                }
+
+    all_users, all_rosters, all_matchups = [], [], []
+    for item in raw_data:
+        if item["data_type"] == "users":
+            for record in item["data"]:
+                record_copy = record.copy()
+                record_copy["season"] = item["season"]
+                all_users.append(record_copy)
+        elif item["data_type"] == "rosters":
+            for record in item["data"]:
+                record_copy = record.copy()
+                record_copy["season"] = item["season"]
+                all_rosters.append(record_copy)
+        elif item["data_type"].startswith("matchups"):
+            bracket = bracket_by_season.get(item["season"], {})
+            week = int(item["data_type"].split("week")[1])
+            paired: dict[int, list[dict]] = defaultdict(list)
+            for entry in item["data"]:
+                paired[entry["matchup_id"]].append(entry)
+            for matchup_id, teams in paired.items():
+                if len(teams) != 2:
+                    continue
+                team_a, team_b = teams[0], teams[1]
+                team_a_score = team_a.get("points", 0.0)
+                team_b_score = team_b.get("points", 0.0)
+                if float(team_a_score) > float(team_b_score):
+                    winner = team_a["roster_id"]
+                    loser = team_b["roster_id"]
+                elif float(team_b_score) > float(team_a_score):
+                    winner = team_b["roster_id"]
+                    loser = team_a["roster_id"]
+                else:
+                    winner = "TIE"
+                    loser = "TIE"
+                bracket_entry = bracket.get(matchup_id)
+                if bracket_entry is None:
+                    playoff_tier_type = "NONE"
+                    playoff_round = None
+                else:
+                    playoff_tier_type = bracket_entry["tier"]
+                    if playoff_tier_type == "WINNERS_BRACKET":
+                        playoff_round = _ROUND_LABELS.get(bracket_entry["r"])
+                    else:
+                        playoff_round = "Losers Bracket"
+                team_a_starters_stats, team_a_starter_ids = (
+                    compile_sleeper_starter_stats(
+                        starters=team_a.get("starters", []),
+                        starters_points=team_a.get("starters_points", []),
+                    )
+                )
+                team_b_starters_stats, team_b_starter_ids = (
+                    compile_sleeper_starter_stats(
+                        starters=team_b.get("starters", []),
+                        starters_points=team_b.get("starters_points", []),
+                    )
+                )
+                team_a_bench_stats = compile_sleeper_bench_stats(
+                    players=team_a.get("players", []),
+                    players_points=team_a.get("players_points", {}),
+                    starter_ids=team_a_starter_ids,
+                )
+                team_b_bench_stats = compile_sleeper_bench_stats(
+                    players=team_b.get("players", []),
+                    players_points=team_b.get("players_points", {}),
+                    starter_ids=team_b_starter_ids,
+                )
+                all_matchups.append(
+                    {
+                        "team_a_roster_id": team_a["roster_id"],
+                        "team_a_points": team_a_score,
+                        "team_a_starters": team_a_starters_stats,
+                        "team_a_bench": team_a_bench_stats,
+                        "team_b_roster_id": team_b["roster_id"],
+                        "team_b_points": team_b_score,
+                        "team_b_starters": team_b_starters_stats,
+                        "team_b_bench": team_b_bench_stats,
+                        "playoff_tier_type": playoff_tier_type,
+                        "playoff_round": playoff_round,
+                        "winner": winner,
+                        "loser": loser,
+                        "team_a_week": week,
+                        "team_a_season": item["season"],
+                    }
+                )
+
+    return {"users": all_users, "rosters": all_rosters, "matchups": all_matchups}
+
+
+def register_raw_data(
+    raw_data: list[dict], con: duckdb.DuckDBPyConnection, platform: str
+) -> None:
+    """
+    Register raw API response data as DuckDB views, grouped by data_type.
+
+    Each view is named after its data_type (e.g. 'members', 'teams')
+    and contains all seasons for that type.
+
+    Args:
+        raw_data: List of dicts with keys: season, data_type, data.
+        con: A DuckDB connection object.
+        platform: The fantasy platform the data originates from (e.g. 'ESPN', 'SLEEPER').
+    """
+    if platform == "ESPN":
+        grouped = _register_espn_raw_data(raw_data)
+    else:
+        grouped = _register_sleeper_raw_data(raw_data)
 
     for data_type, rows in grouped.items():
         df = pd.DataFrame(rows)
@@ -330,6 +560,16 @@ def dataframe_to_dynamo_items(
 
 
 def _chunked(iterable, size: int) -> Iterator[list]:
+    """
+    Yield successive non-overlapping chunks of length `size` from `iterable`.
+
+    Args:
+        iterable: Any iterable to split.
+        size: Maximum number of elements per chunk.
+
+    Yields:
+        Lists of up to `size` elements.
+    """
     it = iter(iterable)
     while chunk := list(islice(it, size)):
         yield chunk
@@ -464,7 +704,7 @@ def lambda_handler(event, context) -> None:
                 logger.error("Season %s generated an exception: %s", season, exc)
 
     con = duckdb.connect()
-    register_raw_data(raw_data=raw_data, con=con)
+    register_raw_data(raw_data=raw_data, con=con, platform=platform)
 
     TEAMS_SCHEMA = KeySchema(
         pk=f"LEAGUE#{canonical_league_id}",

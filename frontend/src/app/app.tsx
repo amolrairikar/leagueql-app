@@ -1,4 +1,5 @@
 import { useUser } from '@clerk/react';
+import { type LucideProps } from 'lucide-react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
 import Header from '@/components/header';
@@ -10,11 +11,38 @@ import {
 } from '@/components/ui/sidebar';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import LeagueConnect from '@/features/connect_league/league-connect';
+import { NAV_LINKS } from '@/features/landing_page/constants';
 import LeagueQLLanding from '@/features/landing_page/landing-page';
+import type { NavLinkItem } from '@/features/landing_page/types';
 import LeagueSelection from '@/features/league_selection/league-selection';
 import Matchups from '@/features/matchups/matchups';
 import SeasonStandings from '@/features/season_standings/season-standings';
 import { AppSidebar } from '@/features/sidebar/app-sidebar';
+
+function NavLink({
+  href,
+  icon: Icon,
+  label,
+}: {
+  href: string;
+  icon: React.FC<LucideProps>;
+  label: string;
+}) {
+  return (
+    <a
+      href={href}
+      className="
+        flex items-center gap-1.5 px-3 py-1.5 rounded-md
+        text-muted-foreground hover:text-foreground hover:bg-accent
+        font-mono text-xs tracking-wide
+        transition-colors duration-200
+      "
+    >
+      <Icon size={13} className="opacity-70" />
+      <span className="hidden sm:inline">{label}</span>
+    </a>
+  );
+}
 
 function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -24,8 +52,13 @@ function AppLayout({ children }: { children: React.ReactNode }) {
         <SidebarInset>
           <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
             <SidebarTrigger className="cursor-pointer" />
-            <div className="ml-auto">
-              <ModeToggle />
+            <div className="ml-auto flex items-center gap-1">
+              {NAV_LINKS.map((link: NavLinkItem) => (
+                <NavLink key={link.label} {...link} />
+              ))}
+              <div className="ml-2">
+                <ModeToggle />
+              </div>
             </div>
           </header>
           {children}

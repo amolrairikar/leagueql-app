@@ -1,8 +1,7 @@
 import { Suspense, use, useMemo, useState } from 'react';
 
-import { Skeleton } from '@/components/ui/skeleton';
 import { avatarColor, TeamAvatar } from '@/components/team-avatar';
-import SeasonSelect from '@/features/season_select/season-select';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   getSeasonMatchups,
   getTeams,
@@ -10,6 +9,7 @@ import {
   type PlayerStat,
   type TeamItem,
 } from '@/features/matchups/api-calls';
+import SeasonSelect from '@/features/season_select/season-select';
 
 interface TeamSide {
   teamId: string;
@@ -315,7 +315,10 @@ function BoxScoreView({
                   </span>
                 )}
               </div>
-              <table className="w-full text-[12px]" style={{ tableLayout: 'fixed' }}>
+              <table
+                className="w-full text-[12px]"
+                style={{ tableLayout: 'fixed' }}
+              >
                 <thead>
                   <tr>
                     <th
@@ -336,22 +339,30 @@ function BoxScoreView({
                   </tr>
                 </thead>
                 <tbody>
-                  {[...team.starters].sort((a, b) => (FANTASY_POSITION_ORDER[a.fantasy_position ?? ''] ?? 99) - (FANTASY_POSITION_ORDER[b.fantasy_position ?? ''] ?? 99)).map((p) => (
-                    <tr
-                      key={p.player_id}
-                      className="border-b border-border/50 last:border-0"
-                    >
-                      <td className="px-3.5 py-2.5 text-[11px] font-medium text-muted-foreground">
-                        {p.fantasy_position ?? p.position}
-                      </td>
-                      <td className="px-3.5 py-2.5 text-[12px] text-foreground truncate">
-                        {p.full_name}
-                      </td>
-                      <td className="px-3.5 py-2.5 text-right text-[12px] tabular-nums text-foreground">
-                        {Number(p.points_scored).toFixed(2)}
-                      </td>
-                    </tr>
-                  ))}
+                  {[...team.starters]
+                    .sort(
+                      (a, b) =>
+                        (FANTASY_POSITION_ORDER[a.fantasy_position ?? ''] ??
+                          99) -
+                        (FANTASY_POSITION_ORDER[b.fantasy_position ?? ''] ??
+                          99),
+                    )
+                    .map((p) => (
+                      <tr
+                        key={p.player_id}
+                        className="border-b border-border/50 last:border-0"
+                      >
+                        <td className="px-3.5 py-2.5 text-[11px] font-medium text-muted-foreground">
+                          {p.fantasy_position ?? p.position}
+                        </td>
+                        <td className="px-3.5 py-2.5 text-[12px] text-foreground truncate">
+                          {p.full_name}
+                        </td>
+                        <td className="px-3.5 py-2.5 text-right text-[12px] tabular-nums text-foreground">
+                          {Number(p.points_scored).toFixed(2)}
+                        </td>
+                      </tr>
+                    ))}
                   <tr className="bg-muted">
                     <td
                       colSpan={2}
@@ -363,13 +374,18 @@ function BoxScoreView({
                       {team.score.toFixed(2)}
                     </td>
                   </tr>
-                  {team.bench.length === 0 && platform === 'ESPN' && Number(season) < 2018 && (
-                    <tr>
-                      <td colSpan={3} className="px-3.5 py-2.5 text-[11px] text-muted-foreground italic">
-                        Bench data unavailable for ESPN seasons prior to 2018.
-                      </td>
-                    </tr>
-                  )}
+                  {team.bench.length === 0 &&
+                    platform === 'ESPN' &&
+                    Number(season) < 2018 && (
+                      <tr>
+                        <td
+                          colSpan={3}
+                          className="px-3.5 py-2.5 text-[11px] text-muted-foreground italic"
+                        >
+                          Bench data unavailable for ESPN seasons prior to 2018.
+                        </td>
+                      </tr>
+                    )}
                   {team.bench.length > 0 && (
                     <>
                       <tr className="bg-muted">
@@ -413,7 +429,7 @@ function SkeletonMatchupsContent() {
     <div>
       <div className="flex gap-1.5 flex-wrap mb-6">
         {Array.from({ length: 13 }).map((_, i) => (
-          <Skeleton key={i} className="h-7 w-[52px] rounded-md" />
+          <Skeleton key={i} className="h-7 w-13 rounded-md" />
         ))}
       </div>
       <div className="grid grid-cols-2 gap-3">
@@ -477,7 +493,9 @@ function MatchupsContent({
   const activeWeek = selectedWeek ?? latestWeek;
   const currentMatchups = matchupsByWeek[activeWeek] ?? [];
   const activeMatchup =
-    selectedMatchup !== null ? (currentMatchups[selectedMatchup] ?? null) : null;
+    selectedMatchup !== null
+      ? (currentMatchups[selectedMatchup] ?? null)
+      : null;
 
   return (
     <div>
@@ -531,7 +549,9 @@ function MatchupsContent({
 
 export default function Matchups() {
   const leagueId = getCookie('leagueId');
-  const platform = (getCookie('leaguePlatform') || 'ESPN') as 'ESPN' | 'SLEEPER';
+  const platform = (getCookie('leaguePlatform') || 'ESPN') as
+    | 'ESPN'
+    | 'SLEEPER';
 
   const seasons = useMemo(() => {
     try {
@@ -560,12 +580,10 @@ export default function Matchups() {
               ok: true as const,
               data: processData(teamsRes.data, matchupsRes.data),
             }))
-            .catch((err: unknown) => ({
+            .catch((err) => ({
               ok: false as const,
               error:
-                err instanceof Error
-                  ? err.message
-                  : 'Failed to load matchups.',
+                err instanceof Error ? err.message : 'Failed to load matchups.',
             }))
         : Promise.resolve({
             ok: true as const,

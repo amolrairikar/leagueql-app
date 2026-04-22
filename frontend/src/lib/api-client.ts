@@ -95,8 +95,9 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
     throw error;
   }
 
+  const data: unknown = await response.json();
   clearApiError();
-  return response.json() as Promise<T>;
+  return data as T;
 }
 
 // ── Public client ─────────────────────────────────────────────────────────────
