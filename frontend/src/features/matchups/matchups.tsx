@@ -4,10 +4,8 @@ import { avatarColor, TeamAvatar } from '@/components/team-avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   getSeasonMatchups,
-  getTeams,
   type MatchupItem,
   type PlayerStat,
-  type TeamItem,
 } from '@/features/matchups/api-calls';
 import SeasonSelect from '@/features/season_select/season-select';
 
@@ -38,30 +36,29 @@ type MatchupsResult =
   | { ok: true; data: MatchupsData }
   | { ok: false; error: string };
 
-function processData(teams: TeamItem[], matchups: MatchupItem[]): MatchupsData {
-  const sortedTeams = [...teams].sort((a, b) =>
-    (a.display_name ?? '').localeCompare(b.display_name ?? ''),
-  );
-  const colorMap = new Map(
-    sortedTeams.map((t, i) => [t.team_id, avatarColor(i)]),
-  );
-  const teamMap = new Map(teams.map((t) => [t.team_id, t]));
+function processData(matchups: MatchupItem[]): MatchupsData {
+  const uniqueTeams = new Map<string, string>();
+  for (const m of matchups) {
+    uniqueTeams.set(m.team_a_id, m.team_a_display_name ?? '');
+    uniqueTeams.set(m.team_b_id, m.team_b_display_name ?? '');
+  }
+  const sortedTeamIds = [...uniqueTeams.entries()]
+    .sort((a, b) => a[1].localeCompare(b[1]))
+    .map(([id]) => id);
+  const colorMap = new Map(sortedTeamIds.map((id, i) => [id, avatarColor(i)]));
 
   const byWeek: Record<number, ProcessedMatchup[]> = {};
 
   for (const m of matchups) {
     const week = parseInt(m.week, 10);
     if (isNaN(week)) continue;
-    const tA = teamMap.get(m.team_a_id);
-    const tB = teamMap.get(m.team_b_id);
-    if (!tA || !tB) continue;
 
     const pm: ProcessedMatchup = {
       teamA: {
         teamId: m.team_a_id,
-        teamName: tA.team_name ?? '',
-        teamLogo: tA.team_logo ?? null,
-        ownerUsername: tA.display_name ?? '',
+        teamName: m.team_a_team_name ?? '',
+        teamLogo: m.team_a_team_logo ?? null,
+        ownerUsername: m.team_a_display_name ?? '',
         score: Number(m.team_a_score),
         avatarColor: colorMap.get(m.team_a_id) ?? avatarColor(0),
         starters: m.team_a_starters ?? [],
@@ -69,9 +66,9 @@ function processData(teams: TeamItem[], matchups: MatchupItem[]): MatchupsData {
       },
       teamB: {
         teamId: m.team_b_id,
-        teamName: tB.team_name ?? '',
-        teamLogo: tB.team_logo ?? null,
-        ownerUsername: tB.display_name ?? '',
+        teamName: m.team_b_team_name ?? '',
+        teamLogo: m.team_b_team_logo ?? null,
+        ownerUsername: m.team_b_display_name ?? '',
         score: Number(m.team_b_score),
         avatarColor: colorMap.get(m.team_b_id) ?? avatarColor(1),
         starters: m.team_b_starters ?? [],
@@ -580,13 +577,10 @@ export default function Matchups() {
   const matchupsPromise = useMemo(
     (): Promise<MatchupsResult> =>
       leagueId && selectedSeason
-        ? Promise.all([
-            getTeams(leagueId, platform, selectedSeason),
-            getSeasonMatchups(leagueId, platform, selectedSeason),
-          ])
-            .then(([teamsRes, matchupsRes]) => ({
+        ? getSeasonMatchups(leagueId, platform, selectedSeason)
+            .then((res) => ({
               ok: true as const,
-              data: processData(teamsRes.data, matchupsRes.data),
+              data: processData(res.data),
             }))
             .catch((err) => ({
               ok: false as const,

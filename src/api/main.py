@@ -521,6 +521,7 @@ def query_league(
     ],
     platform: Annotated[Platform, Query(description="The platform the league is on")],
     queryType: Annotated[str, Query(description="The precomputed view to retrieve")],
+    response: Response,
 ) -> QueryResponse:
     """Returns a precomputed data view for the specified league."""
     parts = queryType.split("#", 1)
@@ -555,15 +556,17 @@ def query_league(
             all_data: list[Any] = []
             for item in items:
                 all_data.extend(item.get("data", []))
+            response.headers["Cache-Control"] = "private, max-age=300"
             return QueryResponse(data=convert_decimals(all_data))
         else:
-            response = table.get_item(Key={"PK": pk, "SK": sk})
-            item = response.get("Item")
+            db_response = table.get_item(Key={"PK": pk, "SK": sk})
+            item = db_response.get("Item")
             if not item:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"No data found for queryType '{queryType}'",
                 )
+            response.headers["Cache-Control"] = "private, max-age=300"
             return QueryResponse(data=convert_decimals(item.get("data", [])))
     except HTTPException:
         raise
