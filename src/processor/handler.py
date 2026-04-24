@@ -46,6 +46,7 @@ class EntityType(str, Enum):
     TEAMS = "TEAMS"
     MATCHUPS = "MATCHUPS"
     STANDINGS = "STANDINGS"
+    PLAYOFF_BRACKET = "PLAYOFF_BRACKET"
 
 
 @dataclass(frozen=True)
@@ -390,6 +391,7 @@ def _register_sleeper_raw_data(
         Dict with keys 'users', 'rosters', and 'matchups', each mapping to a list of row dicts.
     """
     bracket_by_season: dict[str, dict[frozenset, dict]] = defaultdict(dict)
+    all_brackets: list[dict] = []
     for item in raw_data:
         if item["data_type"] == "playoff_bracket":
             for entry in item["data"]:
@@ -401,6 +403,24 @@ def _register_sleeper_raw_data(
                 bracket_by_season[item["season"]][frozenset([t1, t2])] = {
                     "tier": tier,
                 }
+                all_brackets.append(
+                    {
+                        "match_id": entry.get("m"),
+                        "round": entry.get("r"),
+                        "team_1": t1,
+                        "team_2": t2,
+                        "winner": entry.get("w"),
+                        "loser": entry.get("l"),
+                        "position": p,
+                        "team_1_from": json.dumps(entry["t1_from"])
+                        if "t1_from" in entry
+                        else None,
+                        "team_2_from": json.dumps(entry["t2_from"])
+                        if "t2_from" in entry
+                        else None,
+                        "season": item["season"],
+                    }
+                )
 
     all_users, all_rosters, all_matchups = [], [], []
     for item in raw_data:
@@ -486,7 +506,12 @@ def _register_sleeper_raw_data(
                     }
                 )
 
-    return {"users": all_users, "rosters": all_rosters, "matchups": all_matchups}
+    return {
+        "users": all_users,
+        "rosters": all_rosters,
+        "matchups": all_matchups,
+        "brackets": all_brackets,
+    }
 
 
 def register_raw_data(
@@ -713,10 +738,19 @@ def lambda_handler(event, context) -> None:
         entity_type=EntityType.STANDINGS,
     )
 
+    PLAYOFF_BRACKET_SCHEMA = KeySchema(
+        pk=f"LEAGUE#{canonical_league_id}",
+        sk=lambda row: f"PLAYOFF_BRACKET#{row['season']}",
+        entity_type=EntityType.PLAYOFF_BRACKET,
+    )
+
     schemas = [TEAMS_SCHEMA, MATCHUPS_SCHEMA, STANDINGS_SCHEMA]
+    if platform == "SLEEPER":
+        schemas.append(PLAYOFF_BRACKET_SCHEMA)
+
     for schema in schemas:
         logger.info(f"Converting {schema.entity_type} data to DynamoDB items.")
-        if schema in [TEAMS_SCHEMA, MATCHUPS_SCHEMA]:
+        if schema in [TEAMS_SCHEMA, MATCHUPS_SCHEMA, PLAYOFF_BRACKET_SCHEMA]:
             rel = con.sql(QUERIES[schema.entity_type.value][platform])
         else:
             rel = con.sql(QUERIES[schema.entity_type.value])

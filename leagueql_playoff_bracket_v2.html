@@ -1,0 +1,277 @@
+
+<style>
+  .root{font-family:var(--font-sans);padding:1.5rem 1rem;max-width:1050px;margin:0 auto}
+  .page-label{font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.1em;color:var(--color-text-secondary);text-align:center;margin-bottom:1.25rem}
+  .filter-bar{display:flex;align-items:center;gap:10px;margin-bottom:1.75rem;flex-wrap:wrap}
+  .filter-label{font-size:12px;color:var(--color-text-secondary);font-weight:500}
+  select{padding:7px 12px;font-size:13px;font-weight:500;background:var(--color-background-primary);border:.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);color:var(--color-text-primary);appearance:none;cursor:pointer}
+  .season-badge{display:inline-flex;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:500;background:var(--color-background-secondary);color:var(--color-text-secondary);margin-left:auto}
+  .bracket-outer{display:grid;grid-template-columns:1fr 8px 1fr 8px 1fr 8px 160px;gap:0;align-items:center}
+  .round-col{display:flex;flex-direction:column}
+  .round-label{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.08em;color:var(--color-text-secondary);text-align:center;padding-bottom:10px;border-bottom:.5px solid var(--color-border-tertiary);margin-bottom:0}
+  .matches-col{display:flex;flex-direction:column;padding:0 6px}
+  .mu-card{background:var(--color-background-primary);border:.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);overflow:hidden}
+  .mu-card.champion-border{border:2px solid #EF9F27}
+  .team-row{display:flex;align-items:center;gap:7px;padding:7px 9px;border-bottom:.5px solid var(--color-border-tertiary)}
+  .team-row:last-child{border-bottom:none}
+  .team-row.won{background:var(--color-background-secondary)}
+  .team-row.lost{opacity:.4}
+  .team-row.bye-row{opacity:.55}
+  .seed{font-size:10px;font-weight:500;color:var(--color-text-secondary);width:13px;text-align:center;flex-shrink:0}
+  .av{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:500;color:#fff;flex-shrink:0}
+  .tname{font-size:12px;font-weight:500;color:var(--color-text-primary);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tscore{font-size:12px;font-weight:500;margin-left:auto;flex-shrink:0}
+  .tscore.w{color:var(--color-text-primary)}
+  .tscore.l{color:var(--color-text-secondary)}
+  .tscore.tbd{color:var(--color-text-secondary);font-size:10px;font-style:italic}
+  .bye-badge{font-size:9px;font-weight:500;text-transform:uppercase;letter-spacing:.05em;color:#3C3489;background:#EEEDFE;padding:1px 5px;border-radius:3px;flex-shrink:0}
+  .connector-col{display:flex;flex-direction:column;align-items:center;justify-content:space-around}
+  .champ-col{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding-left:10px}
+  .champ-card{background:var(--color-background-primary);border:2px solid #EF9F27;border-radius:var(--border-radius-lg);padding:16px 14px;display:flex;flex-direction:column;align-items:center;gap:8px;width:100%}
+  .champ-trophy{font-size:24px;line-height:1}
+  .champ-lbl{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.08em;color:#BA7517}
+  .champ-av{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:500;color:#fff}
+  .champ-name{font-size:14px;font-weight:500;color:var(--color-text-primary);text-align:center}
+  .champ-team{font-size:11px;color:var(--color-text-secondary);text-align:center}
+  .champ-score{font-size:11px;font-weight:500;color:#BA7517;margin-top:2px;text-align:center}
+  .spacer-card{background:transparent;border:.5px dashed var(--color-border-tertiary);border-radius:var(--border-radius-md);display:flex;align-items:center;justify-content:center;padding:12px 9px}
+  .bye-label-inner{font-size:10px;color:var(--color-text-secondary);font-style:italic}
+  svg.conn{overflow:visible;display:block}
+  .consolation-wrap{margin-top:24px;padding-top:18px;border-top:.5px solid var(--color-border-tertiary)}
+  .consolation-label{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.08em;color:var(--color-text-secondary);text-align:center;margin-bottom:12px}
+  .consolation-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+</style>
+
+<div class="root">
+  <div class="page-label">LeagueQL — Playoff bracket</div>
+
+  <div class="filter-bar">
+    <span class="filter-label">Season</span>
+    <select id="season-sel" onchange="render()">
+      <option value="2024-25">2024–25</option>
+      <option value="2023-24">2023–24</option>
+      <option value="2022-23">2022–23</option>
+    </select>
+    <span class="season-badge" id="season-badge"></span>
+  </div>
+
+  <div id="bracket-root"></div>
+  <div id="consolation-wrap"></div>
+</div>
+
+<script>
+const mgrs=[
+  {name:"Alex M.",  short:"Alex M.",   init:"TB",color:"#4338ca",team:"Thunderbolts"},
+  {name:"Jordan K.",short:"Jordan K.", init:"RW",color:"#0f6e56",team:"Rim Wreckers"},
+  {name:"Sam T.",   short:"Sam T.",    init:"DD",color:"#993c1d",team:"Dunk Dynasty"},
+  {name:"Riley B.", short:"Riley B.",  init:"HM",color:"#185FA5",team:"Hoops Mafia"},
+  {name:"Casey W.", short:"Casey W.",  init:"NG",color:"#993556",team:"Net Gains"},
+  {name:"Drew L.",  short:"Drew L.",   init:"FB",color:"#854F0B",team:"Fast Breaks"},
+];
+
+const seasons={
+  "2024-25":{
+    label:"2024–25 · Weeks 14–16",
+    wildcard:[
+      {a:{mgr:2,seed:3,score:154.8},b:{mgr:5,seed:6,score:139.2},winner:2},
+      {a:{mgr:3,seed:4,score:148.1},b:{mgr:4,seed:5,score:141.6},winner:3},
+    ],
+    semis:[
+      {a:{mgr:0,seed:1,score:162.8},b:{mgr:2,seed:3,score:144.4},winner:0},
+      {a:{mgr:1,seed:2,score:155.4},b:{mgr:3,seed:4,score:138.7},winner:1},
+    ],
+    final:{a:{mgr:0,seed:1,score:178.2},b:{mgr:1,seed:2,score:159.6},winner:0},
+    thirdPlace:{a:{mgr:2,seed:3,score:141.2},b:{mgr:3,seed:4,score:136.4},winner:2},
+    consolation:{a:{mgr:4,seed:5,score:128.4},b:{mgr:5,seed:6,score:119.1},winner:4},
+  },
+  "2023-24":{
+    label:"2023–24 · Weeks 14–16",
+    wildcard:[
+      {a:{mgr:0,seed:3,score:161.2},b:{mgr:4,seed:6,score:130.5},winner:0},
+      {a:{mgr:3,seed:4,score:158.8},b:{mgr:5,seed:5,score:144.2},winner:3},
+    ],
+    semis:[
+      {a:{mgr:1,seed:1,score:171.3},b:{mgr:0,seed:3,score:148.2},winner:1},
+      {a:{mgr:2,seed:2,score:155.0},b:{mgr:3,seed:4,score:161.4},winner:3},
+    ],
+    final:{a:{mgr:1,seed:1,score:166.7},b:{mgr:3,seed:4,score:182.1},winner:3},
+    thirdPlace:{a:{mgr:0,seed:3,score:155.2},b:{mgr:2,seed:2,score:148.6},winner:0},
+    consolation:{a:{mgr:5,seed:5,score:138.0},b:{mgr:4,seed:6,score:122.3},winner:5},
+  },
+  "2022-23":{
+    label:"2022–23 · Weeks 14–16",
+    wildcard:[
+      {a:{mgr:2,seed:3,score:149.4},b:{mgr:3,seed:6,score:121.8},winner:2},
+      {a:{mgr:4,seed:4,score:162.2},b:{mgr:1,seed:5,score:138.0},winner:4},
+    ],
+    semis:[
+      {a:{mgr:0,seed:1,score:188.4},b:{mgr:2,seed:3,score:144.1},winner:0},
+      {a:{mgr:5,seed:2,score:160.2},b:{mgr:4,seed:4,score:172.8},winner:4},
+    ],
+    final:{a:{mgr:0,seed:1,score:174.6},b:{mgr:4,seed:4,score:168.3},winner:0},
+    thirdPlace:{a:{mgr:2,seed:3,score:138.2},b:{mgr:5,seed:2,score:151.7},winner:5},
+    consolation:{a:{mgr:1,seed:5,score:130.1},b:{mgr:3,seed:6,score:116.9},winner:1},
+  }
+};
+
+function teamRow(entry, isWinner, played, isBye){
+  if(!entry) return`<div class="team-row bye-row"><span class="seed">—</span><div class="av" style="background:var(--color-border-secondary)"></div><span class="tname" style="color:var(--color-text-secondary);font-style:italic">TBD</span></div>`;
+  const m=mgrs[entry.mgr];
+  let rowClass='';
+  if(played) rowClass=isWinner?'won':'lost';
+  if(isBye) rowClass='bye-row';
+  const scoreHtml=isBye
+    ?`<span class="bye-badge">BYE</span>`
+    :played
+      ?`<span class="tscore ${isWinner?'w':'l'}">${entry.score.toFixed(1)}</span>`
+      :`<span class="tscore tbd">TBD</span>`;
+  return`<div class="team-row ${rowClass}">
+    <span class="seed">${entry.seed}</span>
+    <div class="av" style="background:${m.color}">${m.init}</div>
+    <span class="tname">${m.short}</span>
+    ${scoreHtml}
+  </div>`;
+}
+
+function muCard(mu, extraClass, played){
+  if(!mu) return`<div class="spacer-card"><span class="bye-label-inner">bye week</span></div>`;
+  const aWins=mu.winner===mu.a.mgr;
+  return`<div class="mu-card ${extraClass||''}">
+    ${teamRow(mu.a, played&&aWins, played, false)}
+    ${teamRow(mu.b, played&&!aWins, played, false)}
+  </div>`;
+}
+
+function byeCard(seed){
+  const m=mgrs[seed.mgr];
+  return`<div class="mu-card" style="opacity:.7">
+    <div class="team-row">
+      <span class="seed">${seed.seed}</span>
+      <div class="av" style="background:${m.color}">${m.init}</div>
+      <span class="tname">${m.short}</span>
+      <span class="bye-badge">BYE</span>
+    </div>
+  </div>`;
+}
+
+function conn(h, direction){
+  const w=8;
+  const mid=h/2;
+  if(direction==='right'){
+    return`<svg class="conn" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+      <path d="M0,${mid} L${w},${mid}" stroke="var(--color-border-secondary)" stroke-width="1" fill="none"/>
+    </svg>`;
+  }
+  return`<svg class="conn" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+    <path d="M0,${h*.25} Q${w},${h*.25} ${w},${mid} Q${w},${h*.75} 0,${h*.75}" stroke="var(--color-border-secondary)" stroke-width="1" fill="none"/>
+  </svg>`;
+}
+
+function render(){
+  const s=document.getElementById("season-sel").value;
+  const d=seasons[s];
+  document.getElementById("season-badge").textContent=d.label;
+
+  const champ=mgrs[d.final.winner];
+  const champScore=(d.final.winner===d.final.a.mgr?d.final.a.score:d.final.b.score).toFixed(1);
+
+  const wc0h=64, wc1h=64, semiTop=78, semiBot=78, finalH=64, gap=40;
+  const totalWcH=wc0h+gap+wc1h;
+  const totalSemiH=semiTop+gap+semiBot;
+  const totalH=Math.max(totalWcH,totalSemiH);
+
+  document.getElementById("bracket-root").innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 20px 1fr 20px 1fr 20px 150px;gap:0;align-items:start">
+
+      <div class="round-col">
+        <div class="round-label" style="margin-bottom:12px">Wild card · Wk 14</div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          ${byeCard({mgr:d.semis[0].a.mgr,seed:d.semis[0].a.seed})}
+          <div style="height:10px"></div>
+          ${muCard(d.wildcard[0],'',true)}
+          <div style="height:18px"></div>
+          ${byeCard({mgr:d.semis[1].a.mgr,seed:d.semis[1].a.seed})}
+          <div style="height:10px"></div>
+          ${muCard(d.wildcard[1],'',true)}
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;justify-content:space-around;padding-top:44px;gap:0">
+        <svg width="20" height="58" viewBox="0 0 20 58" overflow="visible">
+          <path d="M0,15 H10 V43 H0" stroke="var(--color-border-secondary)" stroke-width="1" fill="none"/>
+          <line x1="10" y1="29" x2="20" y2="29" stroke="var(--color-border-secondary)" stroke-width="1"/>
+        </svg>
+        <div style="height:36px"></div>
+        <svg width="20" height="58" viewBox="0 0 20 58" overflow="visible">
+          <path d="M0,15 H10 V43 H0" stroke="var(--color-border-secondary)" stroke-width="1" fill="none"/>
+          <line x1="10" y1="29" x2="20" y2="29" stroke="var(--color-border-secondary)" stroke-width="1"/>
+        </svg>
+      </div>
+
+      <div class="round-col">
+        <div class="round-label" style="margin-bottom:12px">Semifinals · Wk 15</div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          ${muCard(d.semis[0],'',true)}
+          <div style="height:64px"></div>
+          ${muCard(d.semis[1],'',true)}
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;justify-content:space-around;padding-top:44px">
+        <svg width="20" height="130" viewBox="0 0 20 130" overflow="visible">
+          <path d="M0,25 H10 V105 H0" stroke="var(--color-border-secondary)" stroke-width="1" fill="none"/>
+          <line x1="10" y1="65" x2="20" y2="65" stroke="var(--color-border-secondary)" stroke-width="1"/>
+        </svg>
+      </div>
+
+      <div class="round-col">
+        <div class="round-label" style="margin-bottom:12px">Championship · Wk 16</div>
+        <div style="margin-top:58px">
+          ${muCard(d.final,'champion-border',true)}
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;justify-content:center;padding-top:44px">
+        <svg width="20" height="64" viewBox="0 0 20 64" overflow="visible">
+          <line x1="0" y1="32" x2="20" y2="32" stroke="var(--color-border-secondary)" stroke-width="1"/>
+        </svg>
+      </div>
+
+      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding-left:4px;padding-top:44px">
+        <div class="champ-card">
+          <div class="champ-trophy">🏆</div>
+          <div class="champ-lbl">Champion</div>
+          <div class="champ-av" style="background:${champ.color}">${champ.init}</div>
+          <div class="champ-name">${champ.name}</div>
+          <div class="champ-team">${champ.team}</div>
+          <div class="champ-score">${champScore} pts</div>
+        </div>
+      </div>
+
+    </div>
+  `;
+
+  document.getElementById("consolation-wrap").innerHTML=`
+    <div class="consolation-wrap">
+      <div class="consolation-label">Other playoff results</div>
+      <div class="consolation-grid">
+        <div>
+          <div style="font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.06em;color:var(--color-text-secondary);margin-bottom:6px;text-align:center">3rd place</div>
+          ${muCard(d.thirdPlace,'',true)}
+        </div>
+        <div>
+          <div style="font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.06em;color:var(--color-text-secondary);margin-bottom:6px;text-align:center">5th place</div>
+          ${muCard(d.consolation,'',true)}
+        </div>
+        <div style="display:flex;flex-direction:column;justify-content:flex-end">
+          <div style="background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:12px;font-size:12px;color:var(--color-text-secondary);text-align:center;line-height:1.6">
+            Seeds 3–6 all<br>competed for<br>final standings
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+render();
+</script>

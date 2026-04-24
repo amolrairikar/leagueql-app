@@ -134,6 +134,32 @@ QUERIES = {
             ON (CAST(m.team_b_roster_id AS STRING) = t2.team_id AND m.team_a_season = t2.season)
         """,
     },
+    "PLAYOFF_BRACKET": {
+        "SLEEPER": """
+        SELECT
+            b.match_id,
+            b.round,
+            CAST(b.team_1 AS STRING) AS team_1_id,
+            t1.display_name AS team_1_display_name,
+            t1.team_name AS team_1_team_name,
+            t1.team_logo AS team_1_team_logo,
+            CAST(b.team_2 AS STRING) AS team_2_id,
+            t2.display_name AS team_2_display_name,
+            t2.team_name AS team_2_team_name,
+            t2.team_logo AS team_2_team_logo,
+            CAST(b.winner AS STRING) AS winner,
+            CAST(b.loser AS STRING) AS loser,
+            b.position,
+            b.team_1_from,
+            b.team_2_from,
+            b.season
+        FROM brackets b
+        LEFT JOIN teams_output t1
+            ON (CAST(b.team_1 AS STRING) = t1.team_id AND b.season = t1.season)
+        LEFT JOIN teams_output t2
+            ON (CAST(b.team_2 AS STRING) = t2.team_id AND b.season = t2.season)
+        """,
+    },
     "STANDINGS": """
     WITH weekly_stats AS (
         SELECT 
