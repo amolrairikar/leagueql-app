@@ -1,8 +1,8 @@
 import { Clover, Info } from 'lucide-react';
 import { Suspense, use, useMemo, useState } from 'react';
 
-import { Skeleton } from '@/components/ui/skeleton';
 import { avatarColor, TeamAvatar } from '@/components/team-avatar';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Tooltip,
   TooltipContent,

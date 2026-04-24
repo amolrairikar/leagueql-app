@@ -32,13 +32,23 @@ QUERIES = {
         "ESPN": """
         SELECT
             CAST(m.team_a_id AS STRING) AS team_a_id,
+            t1.display_name AS team_a_display_name,
+            t1.team_name AS team_a_team_name,
+            t1.team_logo AS team_a_team_logo,
             m.team_a_score AS team_a_score,
             m.team_a_starters AS team_a_starters,
             m.team_a_bench AS team_a_bench,
+            t1.primary_owner_id AS team_a_primary_owner_id,
+            t1.secondary_owner_id AS team_a_secondary_owner_id,
             CAST(m.team_b_id AS STRING) AS team_b_id,
+            t2.display_name AS team_b_display_name,
+            t2.team_name AS team_b_team_name,
+            t2.team_logo AS team_b_team_logo,
             m.team_b_score AS team_b_score,
             m.team_b_starters AS team_b_starters,
             m.team_b_bench AS team_b_bench,
+            t2.primary_owner_id AS team_b_primary_owner_id,
+            t2.secondary_owner_id AS team_b_secondary_owner_id,
             m.playoff_tier_type AS playoff_tier_type,
             CASE
                 WHEN m.playoff_tier_type = 'WINNERS_BRACKET' THEN
@@ -64,11 +74,7 @@ QUERIES = {
             CAST(m.winner AS STRING) AS winner,
             CAST(m.loser AS STRING) AS loser,
             CAST(m.week AS STRING) AS week,
-            CAST(m.season AS STRING) AS season,
-            t1.primary_owner_id AS team_a_primary_owner_id,
-            t1.secondary_owner_id AS team_a_secondary_owner_id,
-            t2.primary_owner_id AS team_b_primary_owner_id,
-            t2.secondary_owner_id AS team_b_secondary_owner_id
+            CAST(m.season AS STRING) AS season
         FROM matchups m
         INNER JOIN teams_output t1
             ON (CAST(m.team_a_id AS STRING) = t1.team_id AND m.season = t1.season)
@@ -78,13 +84,23 @@ QUERIES = {
         "SLEEPER": """
         SELECT
             CAST(m.team_a_roster_id AS STRING) AS team_a_id,
+            t1.display_name AS team_a_display_name,
+            t1.team_name AS team_a_team_name,
+            t1.team_logo AS team_a_team_logo,
             m.team_a_points AS team_a_score,
             m.team_a_starters AS team_a_starters,
             m.team_a_bench AS team_a_bench,
+            t1.primary_owner_id AS team_a_primary_owner_id,
+            t1.secondary_owner_id AS team_a_secondary_owner_id,
             CAST(m.team_b_roster_id AS STRING) AS team_b_id,
+            t2.display_name AS team_b_display_name,
+            t2.team_name AS team_b_team_name,
+            t2.team_logo AS team_b_team_logo,
             m.team_b_points AS team_b_score,
             m.team_b_starters AS team_b_starters,
             m.team_b_bench AS team_b_bench,
+            t2.primary_owner_id AS team_b_primary_owner_id,
+            t2.secondary_owner_id AS team_b_secondary_owner_id,
             m.playoff_tier_type AS playoff_tier_type,
             CASE
                 WHEN m.playoff_tier_type = 'WINNERS_BRACKET' THEN
@@ -110,11 +126,7 @@ QUERIES = {
             CAST(m.winner AS STRING) AS winner,
             CAST(m.loser AS STRING) AS loser,
             CAST(m.team_a_week AS STRING) AS week,
-            CAST(m.team_a_season AS STRING) AS season,
-            t1.primary_owner_id AS team_a_primary_owner_id,
-            t1.secondary_owner_id AS team_a_secondary_owner_id,
-            t2.primary_owner_id AS team_b_primary_owner_id,
-            t2.secondary_owner_id AS team_b_secondary_owner_id
+            CAST(m.team_a_season AS STRING) AS season
         FROM matchups m
         INNER JOIN teams_output t1
             ON (CAST(m.team_a_roster_id AS STRING) = t1.team_id AND m.team_a_season = t1.season)

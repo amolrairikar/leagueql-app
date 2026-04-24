@@ -15,6 +15,7 @@ import { NAV_LINKS } from '@/features/landing_page/constants';
 import LeagueQLLanding from '@/features/landing_page/landing-page';
 import type { NavLinkItem } from '@/features/landing_page/types';
 import LeagueSelection from '@/features/league_selection/league-selection';
+import ManagerComparison from '@/features/manager_comparison/manager-comparison';
 import Matchups from '@/features/matchups/matchups';
 import SeasonStandings from '@/features/season_standings/season-standings';
 import { AppSidebar } from '@/features/sidebar/app-sidebar';
@@ -126,6 +127,16 @@ function App() {
             <ProtectedRoute>
               <AppLayout>
                 <Matchups />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/manager_comparison"
+          element={
+            <ProtectedRoute>
+              <AppLayout>
+                <ManagerComparison />
               </AppLayout>
             </ProtectedRoute>
           }

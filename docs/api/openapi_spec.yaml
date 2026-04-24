@@ -394,6 +394,12 @@ components:
 
     QuerySuccessResponse:
       description: Precomputed view returned successfully
+      headers:
+        Cache-Control:
+          description: Instructs the browser to cache the response privately for 5 minutes
+          schema:
+            type: string
+            example: "private, max-age=300"
       content:
         application/json:
           schema:

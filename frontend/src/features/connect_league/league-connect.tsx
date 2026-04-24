@@ -8,6 +8,7 @@ import {
 } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 
+import { Spinner } from '@/components/spinner';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,7 +21,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Spinner } from '@/components/spinner';
 import {
   type OnboardRequest,
   getLeague,

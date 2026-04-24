@@ -115,8 +115,20 @@ Represents all teams across all seasons in the fantasy league.
 | Attribute | Type | Required | Description |
 |---|---|---|---|
 | `PK` | String | Yes | `LEAGUE#{league_id}` |
-| `SK` | String | Yes | `METADATA` |
-| `data` | List\<Array\> | Yes | A list of objects containing team details |
+| `SK` | String | Yes | `TEAMS` |
+| `data` | List\<Object\> | Yes | A list of objects containing team details |
+
+**`data[n]` object:**
+
+| Attribute | Type | Description |
+|---|---|---|
+| `display_name` | String | Platform username of the team owner |
+| `team_id` | String | Team ID within the league |
+| `team_name` | String | Team name set by the owner |
+| `team_logo` | String \| null | URL to the team logo |
+| `season` | String | Season year (e.g. `"2025"`) |
+| `primary_owner_id` | String | Platform user ID of the primary owner |
+| `secondary_owner_id` | String \| null | Platform user ID of a co-owner, if present |
 
 **Example:**
 ```json
@@ -126,15 +138,12 @@ Represents all teams across all seasons in the fantasy league.
   "data": [
     {
       "display_name": "myusername123",
-      "owner_first_name": "Player",
-      "owner_last_name": "One",
-      "team_abbreviation": "P1",
       "team_id": "1",
       "team_name": "Player One's Team",
-      "team_logo": "www.logo.com",
+      "team_logo": "https://example.com/logo.png",
       "season": "2025",
       "primary_owner_id": "primary_owner_one_id",
-      "secondary_owner_id": "secondary_owner_one_id"
+      "secondary_owner_id": null
     }
   ]
 }
@@ -150,7 +159,36 @@ Represents matchups for a given week in the fantasy league.
 |---|---|---|---|
 | `PK` | String | Yes | `LEAGUE#{league_id}` |
 | `SK` | String | Yes | `MATCHUPS#{season}#{week}` |
-| `data` | List\<Array\> | Yes | A list of objects containing weekly matchups details |
+| `data` | List\<Object\> | Yes | A list of objects containing weekly matchup details |
+
+**`data[n]` object:**
+
+| Attribute | Type | Description |
+|---|---|---|
+| `team_a_id` | String | Team ID for the first team |
+| `team_a_display_name` | String | Platform username of team A's owner |
+| `team_a_team_name` | String | Team name for team A |
+| `team_a_team_logo` | String \| null | URL to team A's logo |
+| `team_a_score` | Float | Team A's score for the week |
+| `team_a_starters` | List\<Object\> | Team A's starting lineup with player stats |
+| `team_a_bench` | List\<Object\> | Team A's bench with player stats |
+| `team_a_primary_owner_id` | String | Platform user ID of team A's primary owner |
+| `team_a_secondary_owner_id` | String \| null | Platform user ID of team A's co-owner |
+| `team_b_id` | String | Team ID for the second team |
+| `team_b_display_name` | String | Platform username of team B's owner |
+| `team_b_team_name` | String | Team name for team B |
+| `team_b_team_logo` | String \| null | URL to team B's logo |
+| `team_b_score` | Float | Team B's score for the week |
+| `team_b_starters` | List\<Object\> | Team B's starting lineup with player stats |
+| `team_b_bench` | List\<Object\> | Team B's bench with player stats |
+| `team_b_primary_owner_id` | String | Platform user ID of team B's primary owner |
+| `team_b_secondary_owner_id` | String \| null | Platform user ID of team B's co-owner |
+| `playoff_tier_type` | String | Playoff bracket type. Enum: `NONE`, `WINNERS_BRACKET` |
+| `playoff_round` | String \| null | Human-readable round name (e.g. `"Semifinals"`); null for regular season |
+| `winner` | String | Team ID of the winner |
+| `loser` | String | Team ID of the loser |
+| `week` | String | Week number (e.g. `"1"`) |
+| `season` | String | Season year (e.g. `"2025"`) |
 
 **Example:**
 ```json
@@ -160,18 +198,29 @@ Represents matchups for a given week in the fantasy league.
   "data": [
     {
       "team_a_id": "1",
+      "team_a_display_name": "myusername123",
+      "team_a_team_name": "Player One's Team",
+      "team_a_team_logo": "https://example.com/logo1.png",
       "team_a_score": 95.46,
+      "team_a_starters": [],
+      "team_a_bench": [],
+      "team_a_primary_owner_id": "pid1",
+      "team_a_secondary_owner_id": null,
       "team_b_id": "2",
+      "team_b_display_name": "otherusername456",
+      "team_b_team_name": "Player Two's Team",
+      "team_b_team_logo": null,
       "team_b_score": 90.12,
+      "team_b_starters": [],
+      "team_b_bench": [],
+      "team_b_primary_owner_id": "pid2",
+      "team_b_secondary_owner_id": null,
       "playoff_tier_type": "NONE",
+      "playoff_round": null,
       "winner": "1",
       "loser": "2",
       "week": "1",
-      "season": "2025",
-      "team_a_primary_owner_id": "pid1",
-      "team_a_secondary_owner_id": "sid1",
-      "team_b_primary_owner_id": "pid2",
-      "team_b_secondary_owner_id": "sid2"
+      "season": "2025"
     }
   ]
 }
