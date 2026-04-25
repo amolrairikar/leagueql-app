@@ -1,4 +1,3 @@
-import asyncio
 import json
 import os
 from collections import defaultdict
@@ -14,7 +13,6 @@ import botocore.exceptions
 import duckdb
 import pandas as pd
 
-from ai_recap import generate_manager_recaps, generate_recaps_for_all_seasons
 from logging_utils import logger
 from queries import QUERIES
 
@@ -890,11 +888,11 @@ def lambda_handler(event, context) -> None:
     standings_df = con.sql("SELECT * FROM STANDINGS_output").df()
     matchups_df = con.sql("SELECT * FROM MATCHUPS_output").df()
 
-    standings_by_season: dict[str, list[dict]] = {
+    standings_by_season: dict[str, list[dict]] = {  # noqa: F841
         str(season): group.to_dict("records")
         for season, group in standings_df.groupby("season")
     }
-    matchups_by_season: dict[str, list[dict]] = {
+    matchups_by_season: dict[str, list[dict]] = {  # noqa: F841
         str(season): group.to_dict("records")
         for season, group in matchups_df.groupby("season")
     }
@@ -903,57 +901,54 @@ def lambda_handler(event, context) -> None:
         league_id=canonical_league_id, refresh=previous_version_id is not None
     )
 
-    # AI recap generation — load any additional seasons needed for all-time manager career stats
-    all_raw_data: list[dict[str, Any]] = list(raw_data)
-    additional_seasons = [s for s in all_seasons if s not in set(seasons_to_process)]
-    if additional_seasons:
-        logger.info(
-            "Loading additional seasons for manager recap: %s", additional_seasons
-        )
-        with ThreadPoolExecutor(max_workers=10) as executor:
-            future_to_season = {
-                executor.submit(read_s3_object, bucket, f"{prefix}/{s}.json"): s
-                for s in additional_seasons
-            }
-            for future in as_completed(future_to_season):
-                season = future_to_season[future]
-                try:
-                    all_raw_data.extend(future.result())
-                except Exception as exc:
-                    logger.error("Failed to load season %s for recap: %s", season, exc)
-
-    con_recap = duckdb.connect()
-    register_raw_data(raw_data=all_raw_data, con=con_recap, platform=platform)
-    recap_teams_rel = con_recap.sql(QUERIES["TEAMS"][platform])
-    con_recap.register("teams_output", recap_teams_rel)
-    recap_matchups_rel = con_recap.sql(QUERIES["MATCHUPS"][platform])
-    con_recap.register("matchups_output", recap_matchups_rel)
-    all_standings_rows = con_recap.sql(QUERIES["STANDINGS"]).df().to_dict("records")
-    all_matchups_rows = recap_matchups_rel.df().to_dict("records")
-
-    try:
-        asyncio.run(
-            generate_recaps_for_all_seasons(
-                table=table,
-                api_key=os.environ["ANTHROPIC_API_KEY"],
-                pk=f"LEAGUE#{canonical_league_id}",
-                seasons=seasons_to_process,
-                standings_by_season=standings_by_season,
-                matchups_by_season=matchups_by_season,
-            )
-        )
-    except Exception as e:
-        logger.error("Season AI recap generation failed: %s", e)
-
-    try:
-        asyncio.run(
-            generate_manager_recaps(
-                table=table,
-                api_key=os.environ["ANTHROPIC_API_KEY"],
-                pk=f"LEAGUE#{canonical_league_id}",
-                all_standings_rows=all_standings_rows,
-                all_matchups_rows=all_matchups_rows,
-            )
-        )
-    except Exception as e:
-        logger.error("Manager AI recap generation failed: %s", e)
+    # TODO: uncomment after deploying app to avoid wasted API costs
+    # all_raw_data: list[dict[str, Any]] = list(raw_data)  # noqa: ERA001
+    # additional_seasons = [s for s in all_seasons if s not in set(seasons_to_process)]  # noqa: ERA001
+    # if additional_seasons:  # noqa: ERA001
+    #     logger.info(  # noqa: ERA001
+    #         "Loading additional seasons for manager recap: %s", additional_seasons  # noqa: ERA001
+    #     )  # noqa: ERA001
+    #     with ThreadPoolExecutor(max_workers=10) as executor:  # noqa: ERA001
+    #         future_to_season = {  # noqa: ERA001
+    #             executor.submit(read_s3_object, bucket, f"{prefix}/{s}.json"): s  # noqa: ERA001
+    #             for s in additional_seasons  # noqa: ERA001
+    #         }  # noqa: ERA001
+    #         for future in as_completed(future_to_season):  # noqa: ERA001
+    #             season = future_to_season[future]  # noqa: ERA001
+    #             try:  # noqa: ERA001
+    #                 all_raw_data.extend(future.result())  # noqa: ERA001
+    #             except Exception as exc:  # noqa: ERA001
+    #                 logger.error("Failed to load season %s for recap: %s", season, exc)  # noqa: ERA001
+    # con_recap = duckdb.connect()  # noqa: ERA001
+    # register_raw_data(raw_data=all_raw_data, con=con_recap, platform=platform)  # noqa: ERA001
+    # recap_teams_rel = con_recap.sql(QUERIES["TEAMS"][platform])  # noqa: ERA001
+    # con_recap.register("teams_output", recap_teams_rel)  # noqa: ERA001
+    # recap_matchups_rel = con_recap.sql(QUERIES["MATCHUPS"][platform])  # noqa: ERA001
+    # con_recap.register("matchups_output", recap_matchups_rel)  # noqa: ERA001
+    # all_standings_rows = con_recap.sql(QUERIES["STANDINGS"]).df().to_dict("records")  # noqa: ERA001
+    # all_matchups_rows = recap_matchups_rel.df().to_dict("records")  # noqa: ERA001
+    # try:  # noqa: ERA001
+    #     asyncio.run(  # noqa: ERA001
+    #         generate_recaps_for_all_seasons(  # noqa: ERA001
+    #             table=table,  # noqa: ERA001
+    #             api_key=os.environ["ANTHROPIC_API_KEY"],  # noqa: ERA001
+    #             pk=f"LEAGUE#{canonical_league_id}",  # noqa: ERA001
+    #             seasons=seasons_to_process,  # noqa: ERA001
+    #             standings_by_season=standings_by_season,  # noqa: ERA001
+    #             matchups_by_season=matchups_by_season,  # noqa: ERA001
+    #         )  # noqa: ERA001
+    #     )  # noqa: ERA001
+    # except Exception as e:  # noqa: ERA001
+    #     logger.error("Season AI recap generation failed: %s", e)  # noqa: ERA001
+    # try:  # noqa: ERA001
+    #     asyncio.run(  # noqa: ERA001
+    #         generate_manager_recaps(  # noqa: ERA001
+    #             table=table,  # noqa: ERA001
+    #             api_key=os.environ["ANTHROPIC_API_KEY"],  # noqa: ERA001
+    #             pk=f"LEAGUE#{canonical_league_id}",  # noqa: ERA001
+    #             all_standings_rows=all_standings_rows,  # noqa: ERA001
+    #             all_matchups_rows=all_matchups_rows,  # noqa: ERA001
+    #         )  # noqa: ERA001
+    #     )  # noqa: ERA001
+    # except Exception as e:  # noqa: ERA001
+    #     logger.error("Manager AI recap generation failed: %s", e)  # noqa: ERA001
