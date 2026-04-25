@@ -167,7 +167,9 @@ QUERIES = {
             NULL AS position,
             NULL AS team_1_from,
             NULL AS team_2_from,
-            CAST(m.season AS STRING) AS season
+            CAST(m.season AS STRING) AS season,
+            CAST(m.team_a_score AS DOUBLE) AS team_1_score,
+            CAST(m.team_b_score AS DOUBLE) AS team_2_score
         FROM matchups m
         INNER JOIN teams_output t1
             ON (CAST(m.team_a_id AS STRING) = t1.team_id AND m.season = t1.season)
