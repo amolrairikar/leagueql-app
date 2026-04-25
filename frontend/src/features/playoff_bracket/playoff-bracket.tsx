@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
-import { Trophy } from 'lucide-react';
+import { Trophy, X } from 'lucide-react';
 
+import { BoxScoreCard } from '@/components/box-score-card';
 import SeasonSelect from '@/features/season_select/season-select';
-import { getPlayoffBracket, type BracketMatch } from './api-calls';
+import { getPlayoffBracket, getMatchups, type BracketMatch, type Matchup } from './api-calls';
 
 interface Team {
   team_id: string;
@@ -94,10 +95,12 @@ function MatchupCard({
   match,
   extraClass,
   played,
+  onClick,
 }: {
   match: BracketMatch | null;
   extraClass?: string;
   played: boolean;
+  onClick?: () => void;
 }) {
   if (!match) {
     return (
@@ -125,7 +128,10 @@ function MatchupCard({
   const score2 = match.team_2_score ?? null;
 
   return (
-    <div className={`bg-card border border-border/30 rounded-md overflow-hidden ${extraClass || ''}`}>
+    <div
+      className={`bg-card border border-border/30 rounded-md overflow-hidden ${extraClass || ''} ${onClick ? 'cursor-pointer hover:border-border/60' : ''}`}
+      onClick={onClick}
+    >
       <TeamRow team={team1} score={score1} isWinner={played && aWins} played={played} isBye={false} />
       <TeamRow team={team2} score={score2} isWinner={played && !aWins} played={played} isBye={false} />
     </div>
@@ -157,7 +163,7 @@ function ByeCard({ team }: { team: Team }) {
   );
 }
 
-function ChampionCard({ team, score }: { team: Team; score: string }) {
+function ChampionCard({ team }: { team: Team }) {
   const color = getTeamColor(team.team_id);
   const init = team.display_name.slice(0, 2).toUpperCase();
 
@@ -173,19 +179,29 @@ function ChampionCard({ team, score }: { team: Team; score: string }) {
       </div>
       <div className="text-[14px] font-medium text-foreground text-center">{team.display_name}</div>
       <div className="text-[11px] text-muted-foreground text-center">{team.team_name}</div>
-      <div className="text-[11px] font-medium text-[#BA7517] mt-0.5 text-center">{score} pts</div>
     </div>
   );
 }
 
 export default function PlayoffBracket() {
-  const [selectedSeason, setSelectedSeason] = useState('2025');
+  const leagueId = getCookie('leagueId');
+  const platform = (getCookie('leaguePlatform') || 'ESPN') as 'ESPN' | 'SLEEPER';
+  const rawSeasons = getCookie('leagueSeasons');
+  const allSeasons: string[] = useMemo(() => {
+    try {
+      return rawSeasons ? (JSON.parse(rawSeasons) as string[]) : [];
+    } catch {
+      return [];
+    }
+  }, [rawSeasons]);
+
+  const [selectedSeason, setSelectedSeason] = useState(() => allSeasons.length > 0 ? allSeasons[allSeasons.length - 1] : '2025');
   const [matches, setMatches] = useState<BracketMatch[]>([]);
+  const [matchups, setMatchups] = useState<Matchup[]>([]);
+  const [selectedMatchId, setSelectedMatchId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const leagueId = getCookie('leagueId');
-  const platform = (getCookie('leaguePlatform') || 'ESPN') as 'ESPN' | 'SLEEPER';
 
   useEffect(() => {
     if (!leagueId) {
@@ -198,8 +214,55 @@ export default function PlayoffBracket() {
       setLoading(true);
       setError(null);
       try {
-        const response = await getPlayoffBracket(leagueId!, platform, selectedSeason);
-        setMatches(response.data);
+        const [bracketResponse, matchupsResponse] = await Promise.all([
+          getPlayoffBracket(leagueId!, platform, selectedSeason),
+          getMatchups(leagueId!, platform, selectedSeason),
+        ]);
+
+        const bracketMatches = bracketResponse.data;
+        const matchupsData: Matchup[] = matchupsResponse.data;
+
+        // Store matchups in state for later use
+        setMatchups(matchupsData);
+
+        // Helper function to get week for a given round and season
+        const getWeekForRound = (round: number, season: string): number => {
+          const seasonYear = parseInt(season, 10);
+          if (seasonYear < 2021) {
+            // Pre-2021: round 1 = week 14, round 2 = week 15, round 3 = week 16
+            return round === 1 ? 14 : round === 2 ? 15 : 16;
+          } else {
+            // Post-2021: round 1 = week 15, round 2 = week 16, round 3 = week 17
+            return round === 1 ? 15 : round === 2 ? 16 : 17;
+          }
+        };
+
+        // Match each bracket match with its corresponding matchup to get scores
+        const matchesWithScores = bracketMatches.map((bracketMatch) => {
+          const week = getWeekForRound(bracketMatch.round, bracketMatch.season);
+          const matchup = matchupsData.find(
+            (m) =>
+              m.season === bracketMatch.season &&
+              parseInt(m.week, 10) === week &&
+              ((m.team_a_id === bracketMatch.team_1_id && m.team_b_id === bracketMatch.team_2_id) ||
+               (m.team_a_id === bracketMatch.team_2_id && m.team_b_id === bracketMatch.team_1_id))
+          );
+
+          if (matchup) {
+            // Match found, assign scores (handle team order)
+            const team1IsA = matchup.team_a_id === bracketMatch.team_1_id;
+            return {
+              ...bracketMatch,
+              team_1_score: team1IsA ? matchup.team_a_score : matchup.team_b_score,
+              team_2_score: team1IsA ? matchup.team_b_score : matchup.team_a_score,
+            };
+          }
+
+          // No matchup found, return bracket match without scores
+          return bracketMatch;
+        });
+
+        setMatches(matchesWithScores);
       } catch (err) {
         console.error('Failed to fetch playoff bracket:', err);
         setError('Failed to load playoff bracket data.');
@@ -270,14 +333,34 @@ export default function PlayoffBracket() {
       }
     : null;
 
-  const champScore = championship
-    ? (championship.winner === championship.team_1_id
-        ? championship.team_1_score
-        : championship.team_2_score
-      )?.toFixed(1) || '0'
-    : '0';
+  const seasonOptions = allSeasons;
 
-  const seasonOptions = [selectedSeason];
+  // Helper function to find the corresponding matchup data for a selected bracket match
+  const findMatchupForBracketMatch = (bracketMatch: BracketMatch): Matchup | null => {
+    const getWeekForRound = (round: number, season: string): number => {
+      const seasonYear = parseInt(season, 10);
+      if (seasonYear < 2021) {
+        return round === 1 ? 14 : round === 2 ? 15 : 16;
+      } else {
+        return round === 1 ? 15 : round === 2 ? 16 : 17;
+      }
+    };
+
+    const week = getWeekForRound(bracketMatch.round, bracketMatch.season);
+    return matchups.find(
+      (m) =>
+        m.season === bracketMatch.season &&
+        parseInt(m.week, 10) === week &&
+        ((m.team_a_id === bracketMatch.team_1_id && m.team_b_id === bracketMatch.team_2_id) ||
+         (m.team_a_id === bracketMatch.team_2_id && m.team_b_id === bracketMatch.team_1_id))
+    ) || null;
+  };
+
+  // Get the selected matchup data
+  const selectedMatch = selectedMatchId !== null
+    ? matches.find((m) => m.match_id === selectedMatchId)
+    : null;
+  const selectedMatchupData = selectedMatch ? findMatchupForBracketMatch(selectedMatch) : null;
 
   if (loading) {
     return (
@@ -337,7 +420,13 @@ export default function PlayoffBracket() {
                 <div key={idx}>
                   {item.byeTeam && <ByeCard team={item.byeTeam} />}
                   <div className="h-2.5" />
-                  {item.wildcardMatch && <MatchupCard match={item.wildcardMatch} played={true} />}
+                  {item.wildcardMatch && (
+                    <MatchupCard
+                      match={item.wildcardMatch}
+                      played={true}
+                      onClick={() => setSelectedMatchId(item.wildcardMatch?.match_id === selectedMatchId ? null : item.wildcardMatch?.match_id ?? null)}
+                    />
+                  )}
                   <div className="h-4.5" />
                 </div>
               ))}
@@ -364,10 +453,14 @@ export default function PlayoffBracket() {
             </div>
             <div className="flex flex-col gap-1.5">
               {semifinals.map((match) => (
-                <>
-                  <MatchupCard match={match} played={true} />
+                <div key={match.match_id}>
+                  <MatchupCard
+                    match={match}
+                    played={true}
+                    onClick={() => setSelectedMatchId(match.match_id === selectedMatchId ? null : match.match_id)}
+                  />
                   <div className="h-16" />
-                </>
+                </div>
               ))}
             </div>
           </div>
@@ -387,7 +480,12 @@ export default function PlayoffBracket() {
             </div>
             <div className="mt-14.5">
               {championship && (
-                <MatchupCard match={championship} extraClass="border-2 border-[#EF9F27]" played={true} />
+                <MatchupCard
+                  match={championship}
+                  extraClass="border-2 border-[#EF9F27]"
+                  played={true}
+                  onClick={() => setSelectedMatchId(championship.match_id === selectedMatchId ? null : championship.match_id)}
+                />
               )}
             </div>
           </div>
@@ -401,7 +499,7 @@ export default function PlayoffBracket() {
 
           {/* Champion Card */}
           <div className="flex flex-col items-center justify-center pt-11 pl-1">
-            {champTeam && <ChampionCard team={champTeam} score={champScore} />}
+            {champTeam && <ChampionCard team={champTeam} />}
           </div>
         </div>
 
@@ -415,16 +513,76 @@ export default function PlayoffBracket() {
               <div className="text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground mb-1.5 text-center">
                 3rd place
               </div>
-              {thirdPlace && <MatchupCard match={thirdPlace} played={true} />}
+              {thirdPlace && (
+                <MatchupCard
+                  match={thirdPlace}
+                  played={true}
+                  onClick={() => setSelectedMatchId(thirdPlace.match_id === selectedMatchId ? null : thirdPlace.match_id)}
+                />
+              )}
             </div>
             <div>
               <div className="text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground mb-1.5 text-center">
                 5th place
               </div>
-              {fifthPlace && <MatchupCard match={fifthPlace} played={true} />}
+              {fifthPlace && (
+                <MatchupCard
+                  match={fifthPlace}
+                  played={true}
+                  onClick={() => setSelectedMatchId(fifthPlace.match_id === selectedMatchId ? null : fifthPlace.match_id)}
+                />
+              )}
             </div>
           </div>
         </div>
+
+        {selectedMatchupData && selectedMatch && (
+          <>
+            <div className="mt-6 mb-2 border-t border-border/50" />
+            <div className="relative">
+              <button
+                onClick={() => setSelectedMatchId(null)}
+                className="absolute -top-2 right-0 p-1.5 rounded-md bg-muted hover:bg-muted/80 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+              <BoxScoreCard
+                left={{
+                  teamLogo: selectedMatch.team_1_team_logo,
+                  teamName: selectedMatch.team_1_team_name,
+                  ownerUsername: selectedMatch.team_1_display_name,
+                  color: getTeamColor(selectedMatch.team_1_id),
+                  score: selectedMatch.team_1_score ?? 0,
+                  starters: selectedMatchupData.team_a_id === selectedMatch.team_1_id
+                    ? selectedMatchupData.team_a_starters
+                    : selectedMatchupData.team_b_starters,
+                  bench: selectedMatchupData.team_a_id === selectedMatch.team_1_id
+                    ? selectedMatchupData.team_a_bench
+                    : selectedMatchupData.team_b_bench,
+                  isWinner: selectedMatch.winner === selectedMatch.team_1_id,
+                }}
+                right={{
+                  teamLogo: selectedMatch.team_2_team_logo,
+                  teamName: selectedMatch.team_2_team_name,
+                  ownerUsername: selectedMatch.team_2_display_name,
+                  color: getTeamColor(selectedMatch.team_2_id),
+                  score: selectedMatch.team_2_score ?? 0,
+                  starters: selectedMatchupData.team_a_id === selectedMatch.team_2_id
+                    ? selectedMatchupData.team_a_starters
+                    : selectedMatchupData.team_b_starters,
+                  bench: selectedMatchupData.team_a_id === selectedMatch.team_2_id
+                    ? selectedMatchupData.team_a_bench
+                    : selectedMatchupData.team_b_bench,
+                  isWinner: selectedMatch.winner === selectedMatch.team_2_id,
+                }}
+                subtitle={`${selectedMatch.season} · Final`}
+                platform={platform}
+                season={selectedMatch.season}
+                onClose={() => setSelectedMatchId(null)}
+              />
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
