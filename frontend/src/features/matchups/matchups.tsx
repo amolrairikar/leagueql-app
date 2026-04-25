@@ -370,6 +370,7 @@ function MatchupsContent({
       {/* Box score */}
       {activeMatchup !== null && (
         <BoxScoreView
+          key={selectedMatchup}
           matchup={activeMatchup}
           onClose={() => onMatchupSelect(null)}
           platform={platform}
