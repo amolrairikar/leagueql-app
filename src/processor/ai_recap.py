@@ -183,16 +183,16 @@ async def generate_recaps_for_all_seasons(
     matchups_by_season: dict[str, list[dict]],
 ) -> None:
     """
-    Generate and store AI recaps for all seasons that don't already have one.
+    Generate and store AI recaps for the given seasons.
 
-    Checks DynamoDB before generating to avoid redundant API calls. Failures
-    for individual seasons are logged and skipped without raising.
+    Always overwrites existing recap items. Seasons with no standings data are
+    skipped. Failures for individual seasons are logged without raising.
 
     Args:
         table: A boto3 DynamoDB Table resource.
         api_key: The Anthropic API key.
         pk: The DynamoDB partition key (e.g., "LEAGUE#abc123").
-        seasons: List of seasons to potentially generate recaps for.
+        seasons: List of seasons to generate recaps for.
         standings_by_season: Dict mapping season -> list of standings row dicts.
         matchups_by_season: Dict mapping season -> list of matchup row dicts.
     """
@@ -236,3 +236,252 @@ async def generate_recaps_for_all_seasons(
             }
         )
         logger.info("Stored AI recap for season %s", season)
+
+
+def build_manager_recap_prompt(
+    owner_id: str,
+    owner_username: str,
+    owner_standings: list[dict],
+    owner_matchups: list[dict],
+    all_owner_usernames: dict[str, str],
+) -> str:
+    """
+    Build a prompt for Claude to generate a fantasy football manager career retrospective.
+
+    Args:
+        owner_id: Platform user ID of the manager.
+        owner_username: Display name of the manager.
+        owner_standings: All seasons' standings rows for this owner.
+        owner_matchups: All matchups involving this owner as team_a or team_b.
+        all_owner_usernames: Mapping of owner_id -> username for all league members.
+
+    Returns:
+        A prompt string for Claude.
+    """
+    total_wins = sum(int(r["wins"]) for r in owner_standings)
+    total_losses = sum(int(r["losses"]) for r in owner_standings)
+    total_games = sum(int(r["games_played"]) for r in owner_standings)
+    total_pf = sum(float(r["total_pf"]) for r in owner_standings)
+    championships = sum(1 for r in owner_standings if r.get("champion") == "Yes")
+    avg_pf = total_pf / total_games if total_games > 0 else 0.0
+    win_pct = (
+        total_wins / (total_wins + total_losses)
+        if (total_wins + total_losses) > 0
+        else 0.0
+    )
+
+    # Playoff appearances and runner-up detection
+    playoff_seasons: set[str] = set()
+    runner_up_seasons: set[str] = set()
+    for m in owner_matchups:
+        if m.get("playoff_tier_type") != "WINNERS_BRACKET":
+            continue
+        season = str(m["season"])
+        playoff_seasons.add(season)
+        if m.get("playoff_round") == "Finals":
+            own_team_id = (
+                str(m["team_a_id"])
+                if str(m.get("team_a_primary_owner_id")) == owner_id
+                else str(m["team_b_id"])
+            )
+            if str(m.get("loser", "")) == own_team_id:
+                runner_up_seasons.add(season)
+
+    # Career high score (single game)
+    owner_scores = [
+        float(m["team_a_score"])
+        if str(m.get("team_a_primary_owner_id")) == owner_id
+        else float(m["team_b_score"])
+        for m in owner_matchups
+    ]
+    high_score = max(owner_scores) if owner_scores else 0.0
+
+    # Season-by-season table
+    season_lines = ["Season | Team | Record | Avg PF/wk | Season High | Result"]
+    season_lines.append("-" * 85)
+    for row in sorted(owner_standings, key=lambda r: str(r["season"])):
+        season_str = str(row["season"])
+        is_champion = row.get("champion") == "Yes"
+        is_runner_up = season_str in runner_up_seasons
+        made_playoffs = season_str in playoff_seasons
+
+        if is_champion:
+            result = "CHAMPION"
+        elif is_runner_up:
+            result = "Runner-up"
+        elif made_playoffs:
+            result = "Playoffs"
+        else:
+            result = "Missed Playoffs"
+
+        season_scores = [
+            float(m["team_a_score"])
+            if str(m.get("team_a_primary_owner_id")) == owner_id
+            else float(m["team_b_score"])
+            for m in owner_matchups
+            if str(m["season"]) == season_str
+        ]
+        season_high = max(season_scores) if season_scores else 0.0
+
+        season_lines.append(
+            f"{season_str} | {row['team_name']} | {row['record']} | "
+            f"{float(row['avg_pf']):.2f} | {season_high:.2f} | {result}"
+        )
+
+    # Head-to-head rivalry stats
+    rival_map: dict[str, dict] = {}
+    for m in owner_matchups:
+        is_team_a = str(m.get("team_a_primary_owner_id")) == owner_id
+        opp_id = (
+            str(m["team_b_primary_owner_id"])
+            if is_team_a
+            else str(m["team_a_primary_owner_id"])
+        )
+        if opp_id not in all_owner_usernames:
+            continue
+        own_score = float(m["team_a_score"]) if is_team_a else float(m["team_b_score"])
+        opp_score = float(m["team_b_score"]) if is_team_a else float(m["team_a_score"])
+
+        if opp_id not in rival_map:
+            rival_map[opp_id] = {
+                "w": 0,
+                "l": 0,
+                "total_for": 0.0,
+                "total_against": 0.0,
+                "count": 0,
+            }
+        r = rival_map[opp_id]
+        r["count"] += 1
+        r["total_for"] += own_score
+        r["total_against"] += opp_score
+        if own_score > opp_score:
+            r["w"] += 1
+        elif own_score < opp_score:
+            r["l"] += 1
+
+    rival_lines = ["Opponent | W-L | Win% | Avg For | Avg Against | Avg Margin"]
+    rival_lines.append("-" * 80)
+    for opp_id, data in sorted(
+        rival_map.items(), key=lambda x: -(x[1]["w"] + x[1]["l"])
+    )[:10]:
+        opp_name = all_owner_usernames.get(opp_id, opp_id)
+        total = data["w"] + data["l"]
+        h2h_win_pct = data["w"] / total if total > 0 else 0.0
+        avg_for = data["total_for"] / data["count"] if data["count"] > 0 else 0.0
+        avg_against = (
+            data["total_against"] / data["count"] if data["count"] > 0 else 0.0
+        )
+        rival_lines.append(
+            f"{opp_name} | {data['w']}-{data['l']} | {h2h_win_pct:.3f} | "
+            f"{avg_for:.2f} | {avg_against:.2f} | {avg_for - avg_against:+.2f}"
+        )
+
+    num_seasons = len(owner_standings)
+    prompt = (
+        f"You are a fantasy football analyst with the wit of a late-night comedian and the "
+        f"insight of a seasoned sports writer. Be funny and roast-y — ground every joke in "
+        f"the actual data. Do not use headers, titles, or bullet points. Do not begin with a "
+        f"title or heading of any kind. Write in flowing prose only, with a blank line between "
+        f"each paragraph.\n\n"
+        f"Write exactly 3 paragraphs as a career retrospective for {owner_username}, "
+        f"who has played {num_seasons} season(s) in this fantasy league.\n\n"
+        f"Paragraph 1 — Career Overview: Summarize their all-time record "
+        f"({total_wins}-{total_losses}, {win_pct:.3f} win%), {championships} championship(s) "
+        f"out of {num_seasons} seasons, {len(playoff_seasons)} playoff appearance(s), and "
+        f"scoring profile (avg {avg_pf:.2f} pts/wk, career high {high_score:.2f}). "
+        f"Were they a dynasty, a perennial contender, or a lovable bottom-feeder?\n\n"
+        f"Paragraph 2 — Best and Worst Seasons: Highlight their standout season(s) and most "
+        f"forgettable one(s). Ground every observation in the actual data — record, scoring, result.\n\n"
+        f"Paragraph 3 — Rivalries: Talk about their notable head-to-head matchups. "
+        f"Who do they dominate (win% ≥ 0.650)? Who is their nemesis (win% < 0.400)? "
+        f"Any particularly evenly-contested rivalries?\n\n"
+        f"Career Season-by-Season:\n{chr(10).join(season_lines)}\n\n"
+        f"Head-to-Head Records (all matchups):\n{chr(10).join(rival_lines)}\n\n"
+        "Write the career retrospective now:"
+    )
+    return prompt
+
+
+async def generate_manager_recaps(
+    table,
+    api_key: str,
+    pk: str,
+    all_standings_rows: list[dict],
+    all_matchups_rows: list[dict],
+) -> None:
+    """
+    Generate and store AI career recaps for all managers in the league.
+
+    Uses all-time standings and matchup data to build career summaries covering
+    record, championships, playoff appearances, and head-to-head rivalries.
+    Always overwrites any existing recap item.
+
+    Args:
+        table: A boto3 DynamoDB Table resource.
+        api_key: The Anthropic API key.
+        pk: The DynamoDB partition key (e.g., "LEAGUE#abc123").
+        all_standings_rows: All standings rows across all seasons.
+        all_matchups_rows: All matchup rows across all seasons.
+    """
+    client = AsyncAnthropic(api_key=api_key)
+
+    all_owner_usernames: dict[str, str] = {}
+    owner_standings_map: dict[str, list[dict]] = defaultdict(list)
+    for row in all_standings_rows:
+        owner_id = str(row["owner_id"])
+        all_owner_usernames[owner_id] = str(row["owner_username"])
+        owner_standings_map[owner_id].append(row)
+
+    owner_matchups_map: dict[str, list[dict]] = defaultdict(list)
+    for m in all_matchups_rows:
+        a_owner = str(m.get("team_a_primary_owner_id", ""))
+        b_owner = str(m.get("team_b_primary_owner_id", ""))
+        if a_owner:
+            owner_matchups_map[a_owner].append(m)
+        if b_owner:
+            owner_matchups_map[b_owner].append(m)
+
+    prompts: dict[str, str] = {}
+    for owner_id, standings_rows in owner_standings_map.items():
+        prompts[owner_id] = build_manager_recap_prompt(
+            owner_id=owner_id,
+            owner_username=all_owner_usernames[owner_id],
+            owner_standings=standings_rows,
+            owner_matchups=owner_matchups_map.get(owner_id, []),
+            all_owner_usernames=all_owner_usernames,
+        )
+
+    owner_ids = list(prompts.keys())
+    if not owner_ids:
+        return
+
+    logger.info("Generating AI manager recaps for %d owners", len(owner_ids))
+    results = await asyncio.gather(
+        *[
+            generate_single_recap(client, owner_id, prompts[owner_id])
+            for owner_id in owner_ids
+        ],
+        return_exceptions=True,
+    )
+
+    for owner_id, result in zip(owner_ids, results):
+        if isinstance(result, Exception):
+            logger.error(
+                "Failed to generate manager recap for owner %s: %s", owner_id, result
+            )
+            continue
+        table.put_item(
+            Item={
+                "PK": pk,
+                "SK": f"AI_RECAP#MANAGER#{owner_id}",
+                "data": [
+                    {
+                        "owner_id": owner_id,
+                        "owner_username": all_owner_usernames[owner_id],
+                        "recap_text": result["recap_text"],
+                        "generated_at": result["generated_at"],
+                    }
+                ],
+            }
+        )
+        logger.info("Stored AI manager recap for owner %s", owner_id)

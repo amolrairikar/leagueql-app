@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 from collections import defaultdict
@@ -13,6 +14,7 @@ import botocore.exceptions
 import duckdb
 import pandas as pd
 
+from ai_recap import generate_manager_recaps, generate_recaps_for_all_seasons
 from logging_utils import logger
 from queries import QUERIES
 
@@ -888,11 +890,11 @@ def lambda_handler(event, context) -> None:
     standings_df = con.sql("SELECT * FROM STANDINGS_output").df()
     matchups_df = con.sql("SELECT * FROM MATCHUPS_output").df()
 
-    standings_by_season: dict[str, list[dict]] = {  # noqa: F841
+    standings_by_season: dict[str, list[dict]] = {
         str(season): group.to_dict("records")
         for season, group in standings_df.groupby("season")
     }
-    matchups_by_season: dict[str, list[dict]] = {  # noqa: F841
+    matchups_by_season: dict[str, list[dict]] = {
         str(season): group.to_dict("records")
         for season, group in matchups_df.groupby("season")
     }
@@ -901,18 +903,57 @@ def lambda_handler(event, context) -> None:
         league_id=canonical_league_id, refresh=previous_version_id is not None
     )
 
-    # TODO: uncomment after deploying app to avoid wasted API costs
-    # try:  # noqa: ERA001
-    #     asyncio.run(  # noqa: ERA001
-    #         generate_recaps_for_all_seasons(  # noqa: ERA001
-    #             table=table,  # noqa: ERA001
-    #             api_key=os.environ["ANTHROPIC_API_KEY"],  # noqa: ERA001
-    #             pk=f"LEAGUE#{canonical_league_id}",  # noqa: ERA001
-    #             seasons=seasons_to_process,  # noqa: ERA001
-    #             standings_by_season=standings_by_season,  # noqa: ERA001
-    #             matchups_by_season=matchups_by_season,  # noqa: ERA001
-    #         )  # noqa: ERA001
-    #     )  # noqa: ERA001
-    # except Exception as e:  # noqa: ERA001
-    #     logger.error("AI recap generation failed: %s", e)  # noqa: ERA001
-    #     # Do not re-raise — recap failure should not fail the processor run
+    # AI recap generation — load any additional seasons needed for all-time manager career stats
+    all_raw_data: list[dict[str, Any]] = list(raw_data)
+    additional_seasons = [s for s in all_seasons if s not in set(seasons_to_process)]
+    if additional_seasons:
+        logger.info(
+            "Loading additional seasons for manager recap: %s", additional_seasons
+        )
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            future_to_season = {
+                executor.submit(read_s3_object, bucket, f"{prefix}/{s}.json"): s
+                for s in additional_seasons
+            }
+            for future in as_completed(future_to_season):
+                season = future_to_season[future]
+                try:
+                    all_raw_data.extend(future.result())
+                except Exception as exc:
+                    logger.error("Failed to load season %s for recap: %s", season, exc)
+
+    con_recap = duckdb.connect()
+    register_raw_data(raw_data=all_raw_data, con=con_recap, platform=platform)
+    recap_teams_rel = con_recap.sql(QUERIES["TEAMS"][platform])
+    con_recap.register("teams_output", recap_teams_rel)
+    recap_matchups_rel = con_recap.sql(QUERIES["MATCHUPS"][platform])
+    con_recap.register("matchups_output", recap_matchups_rel)
+    all_standings_rows = con_recap.sql(QUERIES["STANDINGS"]).df().to_dict("records")
+    all_matchups_rows = recap_matchups_rel.df().to_dict("records")
+
+    try:
+        asyncio.run(
+            generate_recaps_for_all_seasons(
+                table=table,
+                api_key=os.environ["ANTHROPIC_API_KEY"],
+                pk=f"LEAGUE#{canonical_league_id}",
+                seasons=seasons_to_process,
+                standings_by_season=standings_by_season,
+                matchups_by_season=matchups_by_season,
+            )
+        )
+    except Exception as e:
+        logger.error("Season AI recap generation failed: %s", e)
+
+    try:
+        asyncio.run(
+            generate_manager_recaps(
+                table=table,
+                api_key=os.environ["ANTHROPIC_API_KEY"],
+                pk=f"LEAGUE#{canonical_league_id}",
+                all_standings_rows=all_standings_rows,
+                all_matchups_rows=all_matchups_rows,
+            )
+        )
+    except Exception as e:
+        logger.error("Manager AI recap generation failed: %s", e)
