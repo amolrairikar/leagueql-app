@@ -1,7 +1,16 @@
 import { Clover, Info } from 'lucide-react';
 import { Suspense, use, useMemo, useState } from 'react';
+import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
 
 import { avatarColor, TeamAvatar } from '@/components/team-avatar';
+import {
+  ChartContainer,
+  ChartLegend,
+  ChartLegendContent,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from '@/components/ui/chart';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Tooltip,
@@ -9,11 +18,13 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import {
+  type WeeklyStandingItem,
+  getSeasonWeeklyStandings,
+} from '@/features/matchups/api-calls';
 import SeasonSelect from '@/features/season_select/season-select';
 import {
-  type SeasonRecapItem,
   type SeasonStandingsItem,
-  getSeasonRecap,
   getSeasonStandings,
 } from '@/features/season_standings/api-calls';
 
@@ -21,22 +32,86 @@ type StandingsResult =
   | { ok: true; data: SeasonStandingsItem[] }
   | { ok: false; error: string };
 
-function RecapBody({ promise }: { promise: Promise<SeasonRecapItem | null> }) {
+type WeeklyResult =
+  | { ok: true; data: WeeklyStandingItem[] }
+  | { ok: false; error: string };
+
+function SkeletonChart() {
+  return <Skeleton className="w-full h-80" />;
+}
+
+function WinsProgressionChart({ promise }: { promise: Promise<WeeklyResult> }) {
   const result = use(promise);
-  if (!result) {
+
+  if (!result.ok || result.data.length === 0) {
     return (
-      <p className="text-[13px] leading-[1.75] text-muted-foreground border-t border-border/50 pt-3">
-        Recap not yet available for this season.
+      <p className="text-[13px] text-muted-foreground text-center py-8">
+        {result.ok ? 'No data available for this season.' : result.error}
       </p>
     );
   }
-  const paragraphs = result.recap_text.split(/\n\n+/).filter(Boolean);
+
+  const weekly = result.data;
+
+  const maxWeek = Math.max(...weekly.map((d) => Number(d.snapshot_week)));
+  const finalWeek = weekly.filter((d) => Number(d.snapshot_week) === maxWeek);
+  const teams = [...finalWeek]
+    .sort((a, b) => b.wins - a.wins || a.owner_username.localeCompare(b.owner_username))
+    .map((d) => ({ team_id: d.team_id, owner_username: d.owner_username }));
+
+  const weeks = [...new Set(weekly.map((d) => Number(d.snapshot_week)))].sort(
+    (a, b) => a - b,
+  );
+
+  const chartData = weeks.map((week) => {
+    const point: Record<string, number | string> = { week };
+    for (const entry of weekly.filter((d) => Number(d.snapshot_week) === week)) {
+      point[entry.team_id] = entry.wins;
+    }
+    return point;
+  });
+
+  const chartConfig: ChartConfig = Object.fromEntries(
+    teams.map((team, i) => [
+      team.team_id,
+      { label: team.owner_username, color: avatarColor(i) },
+    ]),
+  );
+
   return (
-    <div className="text-[13px] leading-[1.75] text-muted-foreground border-t border-border/50 pt-3 space-y-3">
-      {paragraphs.map((p, i) => (
-        <p key={i}>{p}</p>
-      ))}
-    </div>
+    <ChartContainer config={chartConfig} className="h-80 w-full aspect-auto">
+      <LineChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 4 }}>
+        <CartesianGrid vertical={false} />
+        <XAxis
+          dataKey="week"
+          tickFormatter={(v: number) => `Wk ${v}`}
+          tickLine={false}
+          axisLine={false}
+          tickMargin={8}
+        />
+        <YAxis allowDecimals={false} tickLine={false} axisLine={false} width={28} />
+        <ChartTooltip
+          content={
+            <ChartTooltipContent
+              labelFormatter={(label) => `Week ${String(label)}`}
+              indicator="line"
+            />
+          }
+        />
+        <ChartLegend content={<ChartLegendContent className="flex-wrap" />} />
+        {teams.map((team) => (
+          <Line
+            key={team.team_id}
+            type="monotone"
+            dataKey={team.team_id}
+            stroke={`var(--color-${team.team_id})`}
+            strokeWidth={2}
+            dot={false}
+            activeDot={{ r: 4 }}
+          />
+        ))}
+      </LineChart>
+    </ChartContainer>
   );
 }
 
@@ -360,11 +435,19 @@ export default function SeasonStandings() {
     [leagueId, platform, selectedSeason],
   );
 
-  const recapPromise = useMemo(
-    (): Promise<SeasonRecapItem | null> =>
+  const weeklyStandingsPromise = useMemo(
+    (): Promise<WeeklyResult> =>
       leagueId && selectedSeason
-        ? getSeasonRecap(leagueId, platform, selectedSeason)
-        : Promise.resolve(null),
+        ? getSeasonWeeklyStandings(leagueId, platform, selectedSeason)
+            .then((res) => ({ ok: true as const, data: res.data }))
+            .catch((err: unknown) => ({
+              ok: false as const,
+              error:
+                err instanceof Error
+                  ? err.message
+                  : 'Failed to load weekly standings.',
+            }))
+        : Promise.resolve({ ok: true as const, data: [] }),
     [leagueId, platform, selectedSeason],
   );
 
@@ -461,22 +544,11 @@ export default function SeasonStandings() {
         </div>
 
         <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-2.5">
-          Season recap
+          Wins progression
         </p>
         <div className="bg-card border border-border/50 rounded-lg p-5">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-[13px] font-medium text-foreground">
-              Season summary
-            </span>
-            <span
-              className="text-[10px] font-medium px-2 py-0.5 rounded-full"
-              style={{ background: '#EEEDFE', color: '#3C3489' }}
-            >
-              LeagueQL AI
-            </span>
-          </div>
-          <Suspense fallback={<Skeleton className="h-20 w-full mt-3" />}>
-            <RecapBody promise={recapPromise} />
+          <Suspense fallback={<SkeletonChart />}>
+            <WinsProgressionChart promise={weeklyStandingsPromise} />
           </Suspense>
         </div>
       </div>

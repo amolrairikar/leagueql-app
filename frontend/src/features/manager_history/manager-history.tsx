@@ -1,7 +1,13 @@
 import { Info } from 'lucide-react';
 import { Suspense, use, useMemo, useState } from 'react';
+import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
 
 import { avatarColor } from '@/components/team-avatar';
+import {
+  ChartContainer,
+  ChartTooltip,
+  type ChartConfig,
+} from '@/components/ui/chart';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Tooltip,
@@ -370,12 +376,10 @@ function SkeletonManagerHistory() {
         ))}
       </div>
 
-      {/* Recap */}
-      <Skeleton className="h-3 w-24 mb-2.5" />
+      {/* Season finish chart */}
+      <Skeleton className="h-3 w-28 mb-2.5" />
       <div className="bg-card border border-border/50 rounded-lg p-5 mb-6">
-        <Skeleton className="h-3.5 w-28 mb-3" />
-        <Skeleton className="h-px w-full mb-3" />
-        <Skeleton className="h-16 w-full" />
+        <Skeleton className="w-full h-48" />
       </div>
 
       {/* Season cards */}
@@ -468,6 +472,14 @@ function ManagerHistoryContent({ promise }: { promise: Promise<DataResult> }) {
   const idx = Math.min(selectedManagerIndex, managers.length - 1);
   const m = managers[idx];
   const at = m.allTime;
+
+  const finishValues = m.seasons
+    .filter((s) => s.finish !== null)
+    .map((s) => s.finish!);
+  const maxFinish = finishValues.length > 0 ? Math.max(...finishValues) : 12;
+  const rankChartData = m.seasons.map((s) => ({ year: s.year, finish: s.finish }));
+  const rankChartConfig: ChartConfig = { finish: { label: 'Finish', color: m.color } };
+
   const winPct =
     at.wins + at.losses > 0
       ? (at.wins / (at.wins + at.losses)).toFixed(3)
@@ -585,38 +597,73 @@ function ManagerHistoryContent({ promise }: { promise: Promise<DataResult> }) {
         </div>
       </div>
 
-      {/* AI recap */}
+      {/* Season finish chart */}
       <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-2.5">
-        Manager recap
+        Season finish
       </p>
       <div className="bg-card border border-border/50 rounded-lg p-5 mb-6">
-        <div className="flex items-center justify-between mb-3">
-          <span className="text-[13px] font-medium text-foreground">
-            Career summary
-          </span>
-          <span
-            className="text-[10px] font-medium px-2 py-0.5 rounded-full"
-            style={{ background: '#EEEDFE', color: '#3C3489' }}
+        {finishValues.length > 0 ? (
+          <ChartContainer
+            config={rankChartConfig}
+            className="h-48 w-full aspect-auto"
           >
-            LeagueQL AI
-          </span>
-        </div>
-        <div className="border-t border-border/50 pt-3">
-          {m.recapText ? (
-            m.recapText.split('\n\n').map((para, i) => (
-              <p
-                key={i}
-                className={`text-[13px] leading-[1.75] text-muted-foreground${i > 0 ? ' mt-3' : ''}`}
-              >
-                {para}
-              </p>
-            ))
-          ) : (
-            <p className="text-[13px] leading-[1.75] text-muted-foreground">
-              Recap not yet available for this manager.
-            </p>
-          )}
-        </div>
+            <LineChart
+              data={rankChartData}
+              margin={{ top: 4, right: 4, left: 0, bottom: 4 }}
+            >
+              <CartesianGrid vertical={false} />
+              <XAxis
+                dataKey="year"
+                tickLine={false}
+                axisLine={false}
+                tickMargin={8}
+              />
+              <YAxis
+                reversed
+                allowDecimals={false}
+                domain={[1, maxFinish]}
+                tickFormatter={(v: number) => ordinal(v)}
+                tickLine={false}
+                axisLine={false}
+                width={36}
+              />
+              <ChartTooltip
+                content={({ active, payload, label }) => {
+                  if (!active || !payload?.length) return null;
+                  const finish = payload[0]?.value;
+                  return (
+                    <div className="grid min-w-32 items-start gap-1.5 rounded-lg border border-border/50 bg-background px-2.5 py-1.5 text-xs shadow-xl">
+                      <p className="font-medium">{String(label)} Season</p>
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="h-2 w-2 shrink-0 rounded-[2px]"
+                          style={{ backgroundColor: m.color }}
+                        />
+                        <span className="text-muted-foreground">Finish</span>
+                        <span className="font-mono font-medium text-foreground tabular-nums ml-auto">
+                          {finish != null ? ordinal(Number(finish)) : '—'}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                }}
+              />
+              <Line
+                type="monotone"
+                dataKey="finish"
+                stroke={`var(--color-finish)`}
+                strokeWidth={2}
+                dot={{ r: 4, fill: `var(--color-finish)`, strokeWidth: 0 }}
+                activeDot={{ r: 5 }}
+                connectNulls={false}
+              />
+            </LineChart>
+          </ChartContainer>
+        ) : (
+          <p className="text-[13px] text-muted-foreground text-center py-4">
+            No finish data available.
+          </p>
+        )}
       </div>
 
       {/* Season-by-season */}
