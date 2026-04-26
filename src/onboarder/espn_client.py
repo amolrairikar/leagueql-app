@@ -286,8 +286,10 @@ class ESPNClient:
                 processed_player_totals = []
                 for player_total in data["players"]:
                     if int(season) <= V2_CUTOFF:
-                        total_points = player_total.get("stats", [])[0].get(
-                            "appliedTotal"
+                        total_points = (
+                            player_total.get("player", {})
+                            .get("stats", [])[0]
+                            .get("appliedTotal")
                         )
                     else:
                         total_points = (
