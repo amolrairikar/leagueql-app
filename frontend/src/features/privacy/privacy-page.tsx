@@ -67,9 +67,9 @@ export default function PrivacyPage() {
         <section className="space-y-3">
           <h2 className="text-2xl font-semibold">4. Data Storage</h2>
           <ul className="list-disc pl-6 space-y-2 text-muted-foreground leading-relaxed">
-            <li>All league data is stored in AWS DynamoDB</li>
-            <li>Authentication data is managed by Clerk (see their privacy policy)</li>
-            <li>ESPN cookies are only used temporarily to fetch private league data and are not stored</li>
+            <li>All league data is stored in AWS</li>
+            <li>Authentication is managed by Clerk (see their privacy policy). Clerk uses cookies for session management.</li>
+            <li>ESPN cookies are only used temporarily to fetch private league data and are not stored on our servers</li>
           </ul>
         </section>
 
