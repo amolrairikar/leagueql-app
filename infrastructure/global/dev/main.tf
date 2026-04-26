@@ -319,6 +319,82 @@ module "processing-lambda-role" {
           "${local.primary_bucket_arn}/raw-api-data/*",
           "${local.secondary_bucket_arn}/raw-api-data/*"
         ]
+      },
+      {
+        Sid    = "ReadFromS3PlayerMetadataPrefix"
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+        ]
+        Resource = [
+          "${local.primary_bucket_arn}/player-metadata/*",
+          "${local.secondary_bucket_arn}/player-metadata/*"
+        ]
+      }
+    ]
+  })
+
+  tags = {
+    environment = var.environment
+    project     = "fantasy-football-recap"
+    component   = "api"
+    managed-by  = "terraform"
+  }
+}
+
+module "player-metadata-lambda-role" {
+  source = "../../modules/iam-role"
+  role_name = "fantasy-football-recap-player-metadata-lambda-${var.environment}-role"
+  role_description = "Execution role for player metadata lambda."
+  trust_policy_json = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+      }
+    ]
+  })
+  role_policy_json = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "CreateLogGroups"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup"
+        ]
+        Resource = [
+          "arn:aws:logs:us-east-1:${var.account_id}:*",
+          "arn:aws:logs:us-west-2:${var.account_id}:*"
+        ]
+      },
+      {
+        Sid    = "CreateLogEvents"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ],
+        Resource = [
+          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/lambda/fantasy-football-recap-player-metadata-${var.environment}-east:*",
+          "arn:aws:logs:us-west-2:${var.account_id}:log-group:/aws/lambda/fantasy-football-recap-player-metadata-${var.environment}-west:*"
+        ]
+      },
+      {
+        Sid    = "WriteToS3PlayerMetadataPrefix"
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:PutObjectAcl"
+        ]
+        Resource = [
+          "${local.primary_bucket_arn}/player-metadata/*",
+          "${local.secondary_bucket_arn}/player-metadata/*"
+        ]
       }
     ]
   })
