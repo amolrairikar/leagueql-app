@@ -8,8 +8,8 @@ import type {
 } from '@/features/landing_page/types';
 
 export const NAV_LINKS: NavLinkItem[] = [
-  { label: 'GitHub', href: '#', icon: GitHubIcon },
-  { label: 'Changelog', href: '#', icon: FileText },
+  { label: 'GitHub', href: 'https://github.com/amolrairikar/leagueql-app', icon: GitHubIcon },
+  { label: 'Changelog', href: 'https://github.com/amolrairikar/leagueql-app/blob/main/CHANGELOG.md', icon: FileText },
   { label: 'Docs', href: '#', icon: Info },
 ];
 

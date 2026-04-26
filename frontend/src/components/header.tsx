@@ -15,6 +15,8 @@ function NavLink({ href, icon: Icon, label }: NavLinkProps) {
   return (
     <a
       href={href}
+      target="_blank"
+      rel="noopener noreferrer"
       className="
         flex items-center gap-1.5 px-3 py-1.5 rounded-md
         text-muted-foreground hover:text-foreground hover:bg-accent

@@ -406,17 +406,16 @@ export default function PlayoffBracket() {
         </div>
 
         {/* Main bracket */}
-        <div className="grid grid-cols-[1fr_8px_1fr_8px_1fr_8px_160px] gap-0 items-start mb-6">
+        <div className="grid grid-cols-[1fr_8px_1fr_8px_1fr_8px_160px] gap-0 items-stretch mb-6">
           {/* Wild Card Round */}
           <div className="flex flex-col">
             <div className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground text-center pb-2.5 border-b border-border/20 mb-0">
-              Wild card · Wk 14
+              Wild card
             </div>
-            <div className="flex flex-col gap-1.5">
+            <div className="flex-1 flex flex-col justify-around">
               {wildcardRoundItems.map((item, idx) => (
-                <div key={idx}>
+                <div key={idx} className="flex flex-col gap-2.5">
                   {item.byeTeam && <ByeCard team={item.byeTeam} />}
-                  <div className="h-2.5" />
                   {item.wildcardMatch && (
                     <MatchupCard
                       match={item.wildcardMatch}
@@ -424,19 +423,18 @@ export default function PlayoffBracket() {
                       onClick={() => setSelectedMatchId(item.wildcardMatch?.match_id === selectedMatchId ? null : item.wildcardMatch?.match_id ?? null)}
                     />
                   )}
-                  <div className="h-4.5" />
+                  {idx === 0 && <div className="h-8" />}
                 </div>
               ))}
             </div>
           </div>
 
           {/* Connector 1 */}
-          <div className="flex flex-col justify-around pt-11 gap-0">
+          <div className="flex flex-col justify-around pt-11">
             <svg width="20" height="58" viewBox="0 0 20 58" overflow="visible" className="block">
               <path d="M0,15 H10 V43 H0" stroke="hsl(var(--border))" strokeWidth="1" fill="none" />
               <line x1="10" y1="29" x2="20" y2="29" stroke="hsl(var(--border))" strokeWidth="1" />
             </svg>
-            <div className="h-9" />
             <svg width="20" height="58" viewBox="0 0 20 58" overflow="visible" className="block">
               <path d="M0,15 H10 V43 H0" stroke="hsl(var(--border))" strokeWidth="1" fill="none" />
               <line x1="10" y1="29" x2="20" y2="29" stroke="hsl(var(--border))" strokeWidth="1" />
@@ -446,18 +444,16 @@ export default function PlayoffBracket() {
           {/* Semifinals */}
           <div className="flex flex-col">
             <div className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground text-center pb-2.5 border-b border-border/20 mb-0">
-              Semifinals · Wk 15
+              Semifinals
             </div>
-            <div className="flex flex-col gap-1.5">
+            <div className="flex-1 flex flex-col justify-around">
               {semifinals.map((match) => (
-                <div key={match.match_id}>
-                  <MatchupCard
-                    match={match}
-                    played={true}
-                    onClick={() => setSelectedMatchId(match.match_id === selectedMatchId ? null : match.match_id)}
-                  />
-                  <div className="h-16" />
-                </div>
+                <MatchupCard
+                  key={match.match_id}
+                  match={match}
+                  played={true}
+                  onClick={() => setSelectedMatchId(match.match_id === selectedMatchId ? null : match.match_id)}
+                />
               ))}
             </div>
           </div>
@@ -473,9 +469,9 @@ export default function PlayoffBracket() {
           {/* Championship */}
           <div className="flex flex-col">
             <div className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground text-center pb-2.5 border-b border-border/20 mb-0">
-              Championship · Wk 16
+              Championship
             </div>
-            <div className="mt-14.5">
+            <div className="flex-1 flex flex-col justify-around">
               {championship && (
                 <MatchupCard
                   match={championship}
@@ -503,7 +499,7 @@ export default function PlayoffBracket() {
         {/* Consolation bracket */}
         <div className="mt-6 pt-4.5 border-t border-border/30">
           <div className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground text-center mb-3">
-            Other playoff results
+            Winners Consolation Bracket Results
           </div>
           <div className="grid grid-cols-2 gap-2.5">
             <div>
