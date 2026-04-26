@@ -19,6 +19,7 @@ import ManagerComparison from '@/features/manager_comparison/manager-comparison'
 import ManagerHistory from '@/features/manager_history/manager-history';
 import Matchups from '@/features/matchups/matchups';
 import PlayoffBracket from '@/features/playoff_bracket/playoff-bracket';
+import ScoringRecords from '@/features/scoring_records/scoring-records';
 import SeasonStandings from '@/features/season_standings/season-standings';
 import { AppSidebar } from '@/features/sidebar/app-sidebar';
 
@@ -159,6 +160,16 @@ function App() {
             <ProtectedRoute>
               <AppLayout>
                 <ManagerHistory />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/scoring_records"
+          element={
+            <ProtectedRoute>
+              <AppLayout>
+                <ScoringRecords />
               </AppLayout>
             </ProtectedRoute>
           }

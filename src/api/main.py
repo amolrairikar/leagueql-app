@@ -561,10 +561,17 @@ def query_league(
 
     try:
         if sk.endswith("#"):
-            db_response = table.query(
-                KeyConditionExpression=Key("PK").eq(pk) & Key("SK").begins_with(sk),
-            )
-            items = db_response.get("Items", [])
+            items: list[Any] = []
+            kwargs: dict[str, Any] = {
+                "KeyConditionExpression": Key("PK").eq(pk) & Key("SK").begins_with(sk),
+            }
+            while True:
+                db_response = table.query(**kwargs)
+                items.extend(db_response.get("Items", []))
+                last_key = db_response.get("LastEvaluatedKey")
+                if not last_key:
+                    break
+                kwargs["ExclusiveStartKey"] = last_key
             if not items:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
