@@ -507,34 +507,15 @@ def _register_espn_raw_data(
                     }
                 )
         elif item["data_type"] == "draft_picks":
-            for record in item["data"].get("picks", []):
+            for record in item["data"].get("draft_picks", []):
                 record_copy = record.copy()
                 record_copy["season"] = item["season"]
                 all_draft_picks.append(record_copy)
         elif item["data_type"] == "player_scoring_totals":
-            for record in item["data"].get("players", []):
-                if ESPN_POSITION_ID_MAPPING.get(
-                    record["player"]["defaultPositionId"], ""
-                ):
-                    player_scoring_info = {}
-                    player_scoring_info["player_id"] = record["id"]
-                    player_scoring_info["player_name"] = record["player"]["fullName"]
-                    player_scoring_info["position"] = ESPN_POSITION_ID_MAPPING[
-                        record["player"]["defaultPositionId"]
-                    ]
-                    player_scoring_info["season"] = item["season"]
-                    if int(item["season"]) >= 2018:
-                        if record.get("ratings", {}):
-                            player_scoring_info["total_points"] = round(
-                                record["ratings"]["0"]["totalRating"], 2
-                            )
-                        else:
-                            continue  # No scoring data available for player, do not add to results
-                    else:
-                        player_scoring_info["total_points"] = round(
-                            record["player"]["stats"][0]["appliedTotal"], 2
-                        )
-                    all_player_scoring_totals.append(player_scoring_info)
+            for record in item["data"].get("player_scoring_totals", []):
+                record_copy = record.copy()
+                record_copy["season"] = item["season"]
+                all_player_scoring_totals.append(record_copy)
 
     brackets = _build_espn_brackets(all_matchups)
     return {

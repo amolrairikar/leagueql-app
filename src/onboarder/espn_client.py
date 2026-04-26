@@ -285,24 +285,21 @@ class ESPNClient:
             elif data_type == "player_scoring_totals":
                 processed_player_totals = []
                 for player_total in data["players"]:
+                    if int(season) <= V2_CUTOFF:
+                        total_points = player_total.get("stats", []).get("appliedTotal")
+                    else:
+                        total_points = (
+                            player_total.get("ratings", {})
+                            .get("0", {})
+                            .get("totalRating")
+                        )
                     processed_player_total = {
                         "player_id": player_total.get("player", {}).get("id"),
                         "player_name": player_total.get("player", {}).get("fullName"),
                         "position": player_total.get("player", {}).get(
                             "defaultPositionId"
                         ),
-                        "team": player_total.get("player", {}).get(
-                            "proTeamId"
-                        ),  # TODO: determine if we want to use this
-                        "total_points": player_total.get("ratings", {})
-                        .get("0", {})
-                        .get("totalRating"),
-                        "positional_rank": player_total.get("ratings", {})
-                        .get("0", {})
-                        .get("positionalRanking"),
-                        "overall_rank": player_total.get("ratings", {})
-                        .get("0", {})
-                        .get("totalRanking"),
+                        "total_points": total_points,
                     }
                     processed_player_totals.append(processed_player_total)
                 processed_data = {"player_scoring_totals": processed_player_totals}
