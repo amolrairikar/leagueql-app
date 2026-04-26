@@ -85,6 +85,7 @@ class QueryType(str, Enum):
     WEEKLY_STANDINGS = "WEEKLY_STANDINGS"
     AI_RECAP = "AI_RECAP"
     PLAYOFF_BRACKET = "PLAYOFF_BRACKET"
+    DRAFT = "DRAFT"
 
 
 QUERY_TYPE_TO_SK_BASE = {
@@ -94,6 +95,7 @@ QUERY_TYPE_TO_SK_BASE = {
     QueryType.WEEKLY_STANDINGS: "WEEKLY_STANDINGS",
     QueryType.AI_RECAP: "AI_RECAP",
     QueryType.PLAYOFF_BRACKET: "PLAYOFF_BRACKET",
+    QueryType.DRAFT: "DRAFT",
 }
 
 
@@ -500,6 +502,7 @@ def delete_league(
             "WEEKLY_STANDINGS#",
             "PLAYOFF_BRACKET#",
             "AI_RECAP#",
+            "DRAFT#",
         ]
         for prefix in prefixes_to_clear:
             delete_prefixed_items(
