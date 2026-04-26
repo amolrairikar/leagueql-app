@@ -216,6 +216,96 @@ QUERIES = {
             ON (CAST(b.team_2 AS STRING) = t2.team_id AND b.season = t2.season)
         """,
     },
+    "WEEKLY_STANDINGS": """
+    WITH weekly_stats AS (
+        SELECT
+            season,
+            week,
+            team_a_id AS team_id,
+            team_a_primary_owner_id AS owner_id,
+            team_a_score AS points_for,
+            CAST(team_b_score AS DOUBLE) AS points_against
+        FROM matchups_output
+        WHERE playoff_tier_type = 'NONE'
+        UNION ALL
+        SELECT
+            season,
+            week,
+            team_b_id AS team_id,
+            team_b_primary_owner_id AS owner_id,
+            CAST(team_b_score AS DOUBLE) AS points_for,
+            team_a_score AS points_against
+        FROM matchups_output
+        WHERE playoff_tier_type = 'NONE'
+    ),
+    league_rankings AS (
+        SELECT
+            *,
+            RANK() OVER (PARTITION BY season, week ORDER BY points_for DESC) AS weekly_rank,
+            COUNT(*) OVER (PARTITION BY season, week) AS total_teams_that_week
+        FROM weekly_stats
+    ),
+    processed_performance AS (
+        SELECT
+            season,
+            week,
+            team_id,
+            owner_id,
+            points_for,
+            points_against,
+            CASE WHEN points_for > points_against THEN 1 ELSE 0 END AS win,
+            CASE WHEN points_for < points_against THEN 1 ELSE 0 END AS loss,
+            CASE WHEN points_for = points_against THEN 1 ELSE 0 END AS tie,
+            (total_teams_that_week - weekly_rank) AS vs_league_wins,
+            (weekly_rank - 1) AS vs_league_losses
+        FROM league_rankings
+    ),
+    cumulative_stats AS (
+        SELECT
+            season,
+            week,
+            team_id,
+            owner_id,
+            ROW_NUMBER() OVER (PARTITION BY season, team_id ORDER BY CAST(week AS INTEGER)) AS games_played,
+            SUM(win) OVER (PARTITION BY season, team_id ORDER BY CAST(week AS INTEGER)) AS wins,
+            SUM(loss) OVER (PARTITION BY season, team_id ORDER BY CAST(week AS INTEGER)) AS losses,
+            SUM(tie) OVER (PARTITION BY season, team_id ORDER BY CAST(week AS INTEGER)) AS ties,
+            SUM(points_for) OVER (PARTITION BY season, team_id ORDER BY CAST(week AS INTEGER)) AS total_pf,
+            SUM(points_against) OVER (PARTITION BY season, team_id ORDER BY CAST(week AS INTEGER)) AS total_pa,
+            SUM(vs_league_wins) OVER (PARTITION BY season, team_id ORDER BY CAST(week AS INTEGER)) AS total_vs_league_wins,
+            SUM(vs_league_losses) OVER (PARTITION BY season, team_id ORDER BY CAST(week AS INTEGER)) AS total_vs_league_losses
+        FROM processed_performance
+    )
+    SELECT
+        c.season,
+        c.week AS snapshot_week,
+        c.team_id,
+        c.owner_id,
+        t.team_name,
+        t.team_logo,
+        t.display_name AS owner_username,
+        c.games_played,
+        c.wins,
+        c.losses,
+        c.ties,
+        CONCAT(
+            CAST(c.wins AS STRING), '-',
+            CAST(c.losses AS STRING), '-',
+            CAST(c.ties AS STRING)
+        ) AS record,
+        ROUND(c.wins / c.games_played::DOUBLE, 3) AS win_pct,
+        c.total_vs_league_wins,
+        c.total_vs_league_losses,
+        ROUND(c.total_vs_league_wins / (c.total_vs_league_wins + c.total_vs_league_losses)::DOUBLE, 3) AS win_pct_vs_league,
+        c.total_pf,
+        c.total_pa,
+        ROUND(c.total_pf / c.games_played::DOUBLE, 2) AS avg_pf,
+        ROUND(c.total_pa / c.games_played::DOUBLE, 2) AS avg_pa
+    FROM cumulative_stats c
+    INNER JOIN teams_output t
+        ON (c.team_id = t.team_id AND c.season = t.season)
+    ORDER BY season DESC, CAST(snapshot_week AS INTEGER) DESC, wins DESC, total_pf DESC;
+    """,
     "STANDINGS": """
     WITH weekly_stats AS (
         SELECT 

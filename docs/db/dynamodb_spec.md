@@ -268,6 +268,97 @@ Represents standings for a given season in the fantasy league.
 </details>
 
 <details>
+<summary><b>WEEKLY_STANDINGS</b></summary>
+
+Represents cumulative standings snapshots through each regular-season week for a given season. All weekly snapshots for a season are stored in a single item.
+
+| Attribute | Type | Required | Description |
+|---|---|---|---|
+| `PK` | String | Yes | `LEAGUE#{league_id}` |
+| `SK` | String | Yes | `WEEKLY_STANDINGS#{season}` |
+| `data` | List\<Object\> | Yes | A list of objects, one per team per week snapshot |
+
+**`data[n]` object:**
+
+| Attribute | Type | Description |
+|---|---|---|
+| `season` | String | Season year (e.g. `"2025"`) |
+| `snapshot_week` | String | Week number this snapshot represents (e.g. `"3"`) |
+| `team_id` | String | Team ID within the league |
+| `owner_id` | String | Platform user ID of the primary owner |
+| `team_name` | String | Team name set by the owner |
+| `team_logo` | String \| null | URL to the team logo |
+| `owner_username` | String | Platform display name of the team owner |
+| `games_played` | Integer | Cumulative games played through this week |
+| `wins` | Integer | Cumulative wins through this week |
+| `losses` | Integer | Cumulative losses through this week |
+| `ties` | Integer | Cumulative ties through this week |
+| `record` | String | Formatted record (e.g. `"3-1-0"`) |
+| `win_pct` | Float | Win percentage (wins / games_played), rounded to 3 decimal places |
+| `total_vs_league_wins` | Integer | Cumulative vs-league wins (beat all teams with a lower score each week) |
+| `total_vs_league_losses` | Integer | Cumulative vs-league losses (lost to all teams with a higher score each week) |
+| `win_pct_vs_league` | Float | vs-league win percentage, rounded to 3 decimal places |
+| `total_pf` | Float | Cumulative points scored through this week |
+| `total_pa` | Float | Cumulative points allowed through this week |
+| `avg_pf` | Float | Average points scored per game, rounded to 2 decimal places |
+| `avg_pa` | Float | Average points allowed per game, rounded to 2 decimal places |
+
+**Example:**
+```json
+{
+  "PK": "LEAGUE#123456789",
+  "SK": "WEEKLY_STANDINGS#2025",
+  "data": [
+    {
+      "season": "2025",
+      "snapshot_week": "1",
+      "team_id": "1",
+      "owner_id": "pid1",
+      "team_name": "Player One's Team",
+      "team_logo": "https://example.com/logo.png",
+      "owner_username": "myusername123",
+      "games_played": 1,
+      "wins": 1,
+      "losses": 0,
+      "ties": 0,
+      "record": "1-0-0",
+      "win_pct": 1.0,
+      "total_vs_league_wins": 8,
+      "total_vs_league_losses": 1,
+      "win_pct_vs_league": 0.889,
+      "total_pf": 130.45,
+      "total_pa": 102.30,
+      "avg_pf": 130.45,
+      "avg_pa": 102.30
+    },
+    {
+      "season": "2025",
+      "snapshot_week": "2",
+      "team_id": "1",
+      "owner_id": "pid1",
+      "team_name": "Player One's Team",
+      "team_logo": "https://example.com/logo.png",
+      "owner_username": "myusername123",
+      "games_played": 2,
+      "wins": 2,
+      "losses": 0,
+      "ties": 0,
+      "record": "2-0-0",
+      "win_pct": 1.0,
+      "total_vs_league_wins": 17,
+      "total_vs_league_losses": 2,
+      "win_pct_vs_league": 0.895,
+      "total_pf": 265.10,
+      "total_pa": 198.75,
+      "avg_pf": 132.55,
+      "avg_pa": 99.38
+    }
+  ]
+}
+```
+</details>
+
+<details>
 <summary><b>PLAYOFF_BRACKET</b></summary>
 
 Represents the playoff bracket structure for a given season. One item per season; each match in the bracket is an element in the `data` list.

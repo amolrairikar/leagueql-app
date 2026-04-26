@@ -82,6 +82,7 @@ class QueryType(str, Enum):
     TEAMS = "TEAMS"
     MATCHUPS = "MATCHUPS"
     SEASON_STANDINGS = "SEASON_STANDINGS"
+    WEEKLY_STANDINGS = "WEEKLY_STANDINGS"
     AI_RECAP = "AI_RECAP"
     PLAYOFF_BRACKET = "PLAYOFF_BRACKET"
 
@@ -90,6 +91,7 @@ QUERY_TYPE_TO_SK_BASE = {
     QueryType.TEAMS: "TEAMS",
     QueryType.MATCHUPS: "MATCHUPS",
     QueryType.SEASON_STANDINGS: "STANDINGS",
+    QueryType.WEEKLY_STANDINGS: "WEEKLY_STANDINGS",
     QueryType.AI_RECAP: "AI_RECAP",
     QueryType.PLAYOFF_BRACKET: "PLAYOFF_BRACKET",
 }
@@ -495,6 +497,7 @@ def delete_league(
             "MATCHUPS#",
             "TEAMS#",
             "STANDINGS#",
+            "WEEKLY_STANDINGS#",
             "PLAYOFF_BRACKET#",
             "AI_RECAP#",
         ]

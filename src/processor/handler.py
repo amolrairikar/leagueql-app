@@ -46,6 +46,7 @@ class EntityType(str, Enum):
     TEAMS = "TEAMS"
     MATCHUPS = "MATCHUPS"
     STANDINGS = "STANDINGS"
+    WEEKLY_STANDINGS = "WEEKLY_STANDINGS"
     PLAYOFF_BRACKET = "PLAYOFF_BRACKET"
 
 
@@ -913,11 +914,25 @@ def lambda_handler(event, context) -> None:
         entity_type=EntityType.PLAYOFF_BRACKET,
     )
 
-    schemas = [TEAMS_SCHEMA, MATCHUPS_SCHEMA, STANDINGS_SCHEMA, PLAYOFF_BRACKET_SCHEMA]
+    WEEKLY_STANDINGS_SCHEMA = KeySchema(
+        pk=f"LEAGUE#{canonical_league_id}",
+        sk=lambda row: f"WEEKLY_STANDINGS#{row['season']}",
+        entity_type=EntityType.WEEKLY_STANDINGS,
+    )
+
+    schemas = [
+        TEAMS_SCHEMA,
+        MATCHUPS_SCHEMA,
+        STANDINGS_SCHEMA,
+        WEEKLY_STANDINGS_SCHEMA,
+        PLAYOFF_BRACKET_SCHEMA,
+    ]
+
+    platform_specific_schemas = [TEAMS_SCHEMA, MATCHUPS_SCHEMA, PLAYOFF_BRACKET_SCHEMA]
 
     for schema in schemas:
         logger.info(f"Converting {schema.entity_type} data to DynamoDB items.")
-        if schema in [TEAMS_SCHEMA, MATCHUPS_SCHEMA, PLAYOFF_BRACKET_SCHEMA]:
+        if schema in platform_specific_schemas:
             rel = con.sql(QUERIES[schema.entity_type.value][platform])
         else:
             rel = con.sql(QUERIES[schema.entity_type.value])
