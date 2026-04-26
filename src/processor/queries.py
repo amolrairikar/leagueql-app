@@ -388,34 +388,63 @@ QUERIES = {
     """,
     "DRAFT": {
         "ESPN": """
+        WITH actual_position_ranks AS (
+            SELECT
+                player_id,
+                season,
+                player_name,
+                position,
+                total_points,
+                RANK() OVER (
+                    PARTITION BY season, position
+                    ORDER BY total_points DESC
+                ) AS actual_position_rank
+            FROM player_scoring_totals
+        ),
+        draft_with_scoring AS (
+            SELECT
+                dp.*,
+                apr.player_name,
+                apr.position,
+                apr.total_points,
+                apr.actual_position_rank,
+                RANK() OVER (
+                    PARTITION BY dp.season, apr.position
+                    ORDER BY dp.overallPickNumber ASC
+                ) AS drafted_position_rank
+            FROM draft_picks dp
+            LEFT JOIN actual_position_ranks apr
+                ON (dp.playerId = apr.player_id AND dp.season = apr.season)
+        )
         SELECT
-            CAST(dp.teamId AS STRING) AS team_id,
+            CAST(ds.teamId AS STRING) AS team_id,
             t.display_name AS owner_username,
             t.team_name,
             t.team_logo,
-            dp.id AS pick_id,
-            dp.roundId AS round,
-            dp.roundPickNumber AS round_pick_number,
-            dp.overallPickNumber AS overall_pick_number,
-            CAST(dp.playerId AS STRING) AS player_id,
-            pst.player_name,
-            pst.position,
-            pst.total_points,
-            dp.keeper,
-            dp.reservedForKeeper AS reserved_for_keeper,
-            dp.autoDraftTypeId AS auto_draft_type_id,
-            dp.bidAmount AS bid_amount,
-            dp.lineupSlotId AS lineup_slot_id,
-            dp.memberId AS member_id,
-            dp.nominatingTeamId AS nominating_team_id,
-            dp.tradeLocked AS trade_locked,
-            dp.season
-        FROM draft_picks dp
+            ds.id AS pick_id,
+            ds.roundId AS round,
+            ds.roundPickNumber AS round_pick_number,
+            ds.overallPickNumber AS overall_pick_number,
+            CAST(ds.playerId AS STRING) AS player_id,
+            ds.player_name,
+            ds.position,
+            ds.total_points,
+            ds.keeper,
+            ds.reservedForKeeper AS reserved_for_keeper,
+            ds.autoDraftTypeId AS auto_draft_type_id,
+            ds.bidAmount AS bid_amount,
+            ds.lineupSlotId AS lineup_slot_id,
+            ds.memberId AS member_id,
+            ds.nominatingTeamId AS nominating_team_id,
+            ds.tradeLocked AS trade_locked,
+            ds.season,
+            ds.drafted_position_rank,
+            ds.actual_position_rank,
+            ds.drafted_position_rank - ds.actual_position_rank AS draft_rank_delta
+        FROM draft_with_scoring ds
         INNER JOIN teams_output t
-            ON (CAST(dp.teamId AS STRING) = t.team_id AND dp.season = t.season)
-        LEFT JOIN player_scoring_totals pst
-            ON (dp.playerId = pst.player_id AND dp.season = pst.season)
-        ORDER BY dp.season, dp.overallPickNumber
+            ON (CAST(ds.teamId AS STRING) = t.team_id AND ds.season = t.season)
+        ORDER BY ds.season, ds.overallPickNumber
         """,
         "SLEEPER": "",
     },
