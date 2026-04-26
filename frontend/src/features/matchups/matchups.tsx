@@ -5,8 +5,10 @@ import { avatarColor, TeamAvatar } from '@/components/team-avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   getSeasonMatchups,
+  getSeasonWeeklyStandings,
   type MatchupItem,
   type PlayerStat,
+  type WeeklyStandingItem,
 } from '@/features/matchups/api-calls';
 import SeasonSelect from '@/features/season_select/season-select';
 
@@ -19,6 +21,7 @@ interface TeamSide {
   avatarColor: string;
   starters: PlayerStat[];
   bench: PlayerStat[];
+  record: string | null;
 }
 
 interface ProcessedMatchup {
@@ -37,7 +40,18 @@ type MatchupsResult =
   | { ok: true; data: MatchupsData }
   | { ok: false; error: string };
 
-function processData(matchups: MatchupItem[]): MatchupsData {
+function processData(matchups: MatchupItem[], standings: WeeklyStandingItem[]): MatchupsData {
+  const recordsByWeek: Record<number, Record<string, string>> = {};
+  for (const s of standings) {
+    const week = parseInt(s.snapshot_week, 10);
+    if (isNaN(week)) continue;
+    (recordsByWeek[week] ??= {})[s.team_id] = s.record;
+  }
+  const regularSeasonWeeks = Object.keys(recordsByWeek).map(Number);
+  const lastRegularSeasonRecords = regularSeasonWeeks.length > 0
+    ? recordsByWeek[Math.max(...regularSeasonWeeks)]
+    : {};
+
   const uniqueTeams = new Map<string, string>();
   for (const m of matchups) {
     uniqueTeams.set(m.team_a_id, m.team_a_display_name ?? '');
@@ -53,6 +67,7 @@ function processData(matchups: MatchupItem[]): MatchupsData {
   for (const m of matchups) {
     const week = parseInt(m.week, 10);
     if (isNaN(week)) continue;
+    const weekRecords = recordsByWeek[week] ?? lastRegularSeasonRecords;
 
     const pm: ProcessedMatchup = {
       teamA: {
@@ -64,6 +79,7 @@ function processData(matchups: MatchupItem[]): MatchupsData {
         avatarColor: colorMap.get(m.team_a_id) ?? avatarColor(0),
         starters: m.team_a_starters ?? [],
         bench: m.team_a_bench ?? [],
+        record: weekRecords[m.team_a_id] ?? null,
       },
       teamB: {
         teamId: m.team_b_id,
@@ -74,6 +90,7 @@ function processData(matchups: MatchupItem[]): MatchupsData {
         avatarColor: colorMap.get(m.team_b_id) ?? avatarColor(1),
         starters: m.team_b_starters ?? [],
         bench: m.team_b_bench ?? [],
+        record: weekRecords[m.team_b_id] ?? null,
       },
       week,
       playoffRound: m.playoff_round ?? null,
@@ -155,7 +172,7 @@ function MatchupCard({
                 {matchup.teamA.ownerUsername}
               </div>
               <div className="text-[11px] text-muted-foreground">
-                {matchup.teamA.teamName}
+                {matchup.teamA.teamName}{matchup.teamA.record ? ` (${matchup.teamA.record})` : ''}
               </div>
             </div>
           </div>
@@ -183,7 +200,7 @@ function MatchupCard({
                 {matchup.teamB.ownerUsername}
               </div>
               <div className="text-[11px] text-muted-foreground">
-                {matchup.teamB.teamName}
+                {matchup.teamB.teamName}{matchup.teamB.record ? ` (${matchup.teamB.record})` : ''}
               </div>
             </div>
           </div>
@@ -406,10 +423,13 @@ export default function Matchups() {
   const matchupsPromise = useMemo(
     (): Promise<MatchupsResult> =>
       leagueId && selectedSeason
-        ? getSeasonMatchups(leagueId, platform, selectedSeason)
-            .then((res) => ({
+        ? Promise.all([
+            getSeasonMatchups(leagueId, platform, selectedSeason),
+            getSeasonWeeklyStandings(leagueId, platform, selectedSeason),
+          ])
+            .then(([matchupsRes, standingsRes]) => ({
               ok: true as const,
-              data: processData(res.data),
+              data: processData(matchupsRes.data, standingsRes.data),
             }))
             .catch((err) => ({
               ok: false as const,

@@ -35,6 +35,31 @@ export interface MatchupItem {
   season: string;
 }
 
+export interface WeeklyStandingItem {
+  season: string;
+  snapshot_week: string;
+  team_id: string;
+  owner_id: string;
+  owner_username: string;
+  games_played: number;
+  wins: number;
+  losses: number;
+  ties: number;
+  record: string;
+}
+
+export function getSeasonWeeklyStandings(
+  leagueId: string,
+  platform: 'ESPN' | 'SLEEPER',
+  season: string,
+): Promise<{ data: WeeklyStandingItem[] }> {
+  const params = new URLSearchParams({
+    platform,
+    queryType: `WEEKLY_STANDINGS#${season}`,
+  });
+  return apiClient.get(`/leagues/${leagueId}/query?${params}`);
+}
+
 export function getSeasonMatchups(
   leagueId: string,
   platform: 'ESPN' | 'SLEEPER',
