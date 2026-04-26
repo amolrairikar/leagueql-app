@@ -132,7 +132,7 @@ def compile_espn_starter_stats(
 
 
 def compile_sleeper_starter_stats(
-    starters: list[str], starters_points: list[float]
+    starters: list[str], starters_points: list[float], player_metadata: dict
 ) -> tuple[list[dict], list[str]]:
     """
     Build a list of stat dicts for every starter in a Sleeper roster.
@@ -140,6 +140,7 @@ def compile_sleeper_starter_stats(
     Args:
         starters: Ordered list of starter player IDs.
         starters_points: Points scored by each starter, in the same order as starters.
+        player_metadata: Mapping of player ID to metadata dict (full_name, position, etc.).
 
     Returns:
         Tuple of (stats, ids) where stats is a list of dicts with player_id and
@@ -148,9 +149,9 @@ def compile_sleeper_starter_stats(
     stats = [
         {
             "player_id": player_id,
-            "full_name": None,
+            "full_name": player_metadata.get(player_id, {}).get("full_name"),
             "points_scored": points,
-            "position": None,
+            "position": player_metadata.get(player_id, {}).get("position"),
             "fantasy_position": None,
         }
         for player_id, points in zip(starters, starters_points)
@@ -162,6 +163,7 @@ def compile_sleeper_bench_stats(
     players: list[str],
     players_points: dict[str, float],
     starter_ids: list[str],
+    player_metadata: dict,
 ) -> list[dict]:
     """
     Build a list of stat dicts for every bench player in a Sleeper roster.
@@ -170,6 +172,7 @@ def compile_sleeper_bench_stats(
         players: Full list of player IDs on the roster (starters + bench).
         players_points: Mapping of player ID to points scored.
         starter_ids: Player IDs already counted as starters, excluded from bench output.
+        player_metadata: Mapping of player ID to metadata dict (full_name, position, etc.).
 
     Returns:
         List of dicts with player_id and points_scored.
@@ -177,9 +180,9 @@ def compile_sleeper_bench_stats(
     return [
         {
             "player_id": player_id,
-            "full_name": None,
+            "full_name": player_metadata.get(player_id, {}).get("full_name"),
             "points_scored": players_points.get(player_id, 0.0),
-            "position": None,
+            "position": player_metadata.get(player_id, {}).get("position"),
         }
         for player_id in players
         if player_id not in starter_ids
@@ -507,12 +510,14 @@ def _register_espn_raw_data(
 
 def _register_sleeper_raw_data(
     raw_data: list[dict],
+    player_metadata: dict,
 ) -> dict[str, list[dict]]:
     """
     Parse raw Sleeper API data into grouped lists ready for DuckDB registration.
 
     Args:
         raw_data: List of dicts with keys: season, data_type, data.
+        player_metadata: Mapping of Sleeper player ID to metadata dict (full_name, position, etc.).
 
     Returns:
         Dict with keys 'users', 'rosters', and 'matchups', each mapping to a list of row dicts.
@@ -605,23 +610,27 @@ def _register_sleeper_raw_data(
                     compile_sleeper_starter_stats(
                         starters=team_a.get("starters", []),
                         starters_points=team_a.get("starters_points", []),
+                        player_metadata=player_metadata,
                     )
                 )
                 team_b_starters_stats, team_b_starter_ids = (
                     compile_sleeper_starter_stats(
                         starters=team_b.get("starters", []),
                         starters_points=team_b.get("starters_points", []),
+                        player_metadata=player_metadata,
                     )
                 )
                 team_a_bench_stats = compile_sleeper_bench_stats(
                     players=team_a.get("players", []),
                     players_points=team_a.get("players_points", {}),
                     starter_ids=team_a_starter_ids,
+                    player_metadata=player_metadata,
                 )
                 team_b_bench_stats = compile_sleeper_bench_stats(
                     players=team_b.get("players", []),
                     players_points=team_b.get("players_points", {}),
                     starter_ids=team_b_starter_ids,
+                    player_metadata=player_metadata,
                 )
                 all_matchups.append(
                     {
@@ -650,7 +659,10 @@ def _register_sleeper_raw_data(
 
 
 def register_raw_data(
-    raw_data: list[dict], con: duckdb.DuckDBPyConnection, platform: str
+    raw_data: list[dict],
+    con: duckdb.DuckDBPyConnection,
+    platform: str,
+    player_metadata: dict | None = None,
 ) -> None:
     """
     Register raw API response data as DuckDB views, grouped by data_type.
@@ -662,11 +674,14 @@ def register_raw_data(
         raw_data: List of dicts with keys: season, data_type, data.
         con: A DuckDB connection object.
         platform: The fantasy platform the data originates from (e.g. 'ESPN', 'SLEEPER').
+        player_metadata: Sleeper player ID → metadata mapping; only used when platform is SLEEPER.
     """
     if platform == "ESPN":
         grouped = _register_espn_raw_data(raw_data)
     else:
-        grouped = _register_sleeper_raw_data(raw_data)
+        grouped = _register_sleeper_raw_data(
+            raw_data, player_metadata=player_metadata or {}
+        )
 
     for data_type, rows in grouped.items():
         df = pd.DataFrame(rows)
@@ -852,8 +867,27 @@ def lambda_handler(event, context) -> None:
             except Exception as exc:
                 logger.error("Season %s generated an exception: %s", season, exc)
 
+    player_metadata: dict = {}
+    if platform == "SLEEPER":
+        try:
+            player_metadata = read_s3_object(
+                bucket=bucket, key="player-metadata/sleeper_nfl_players.json"
+            )
+            logger.info(
+                "Loaded Sleeper player metadata (%d players)", len(player_metadata)
+            )
+        except botocore.exceptions.ClientError as e:
+            if e.response["Error"]["Code"] in ("NoSuchKey", "404"):
+                logger.warning(
+                    "Sleeper player metadata not found in S3; player names/positions will be null"
+                )
+            else:
+                raise
+
     con = duckdb.connect()
-    register_raw_data(raw_data=raw_data, con=con, platform=platform)
+    register_raw_data(
+        raw_data=raw_data, con=con, platform=platform, player_metadata=player_metadata
+    )
 
     TEAMS_SCHEMA = KeySchema(
         pk=f"LEAGUE#{canonical_league_id}",

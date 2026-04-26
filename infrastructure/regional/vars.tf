@@ -38,3 +38,8 @@ variable "anthropic_api_key" {
   type        = string
   sensitive   = true
 }
+
+variable "player_metadata_lambda_role_arn" {
+  description = "IAM role ARN for the player metadata Lambda function execution role"
+  type        = string
+}

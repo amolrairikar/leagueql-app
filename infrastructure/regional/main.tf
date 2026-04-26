@@ -98,6 +98,57 @@ module "api_lambda" {
   }
 }
 
+module "player_metadata_lambda" {
+  source = "../modules/lambda"
+
+  function_name        = "fantasy-football-recap-player-metadata-${var.environment}-${local.region}"
+  function_description = "Fetches and caches Sleeper NFL player metadata to S3"
+  role_arn             = var.player_metadata_lambda_role_arn
+  handler              = "handler.lambda_handler"
+  memory_size          = 512
+  timeout              = 30
+  log_retention        = 7
+  s3_bucket            = "fantasy-football-recap-${var.environment}-bucket-${local.region}-${local.account_id}"
+  s3_key               = "lambda-code-artifacts/player_metadata-lambda.zip"
+
+  environment_variables = {
+    S3_BUCKET_NAME = "fantasy-football-recap-${var.environment}-bucket-${local.region}-${local.account_id}"
+  }
+
+  tags = {
+    environment = var.environment
+    project     = "fantasy-football-recap"
+    component   = "api"
+    managed-by  = "terraform"
+  }
+}
+
+resource "aws_cloudwatch_event_rule" "player_metadata_schedule" {
+  name                = "player-metadata-refresh-${var.environment}-${local.region}"
+  schedule_expression = "cron(0 6 */2 * ? *)"
+  state               = local.region == "east" ? "ENABLED" : "DISABLED"
+
+  tags = {
+    environment = var.environment
+    project     = "fantasy-football-recap"
+    component   = "api"
+    managed-by  = "terraform"
+  }
+}
+
+resource "aws_cloudwatch_event_target" "player_metadata_target" {
+  rule = aws_cloudwatch_event_rule.player_metadata_schedule.name
+  arn  = module.player_metadata_lambda.lambda_arn
+}
+
+resource "aws_lambda_permission" "allow_eventbridge_player_metadata" {
+  statement_id  = "AllowEventBridgeInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = module.player_metadata_lambda.lambda_arn
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.player_metadata_schedule.arn
+}
+
 module "backend_api" {
   source = "../modules/api-gw"
 
