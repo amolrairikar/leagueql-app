@@ -151,9 +151,13 @@ def compile_sleeper_starter_stats(
     stats = [
         {
             "player_id": player_id,
-            "full_name": player_metadata.get(player_id, {}).get("full_name"),
+            "full_name": (player_metadata.get(player_id, {}).get("first_name") or "")
+            + " "
+            + (player_metadata.get(player_id, {}).get("last_name") or ""),
             "points_scored": points,
-            "position": player_metadata.get(player_id, {}).get("position"),
+            "position": "D/ST"
+            if player_metadata.get(player_id, {}).get("position") == "DEF"
+            else player_metadata.get(player_id, {}).get("position"),
             "fantasy_position": None,
         }
         for player_id, points in zip(starters, starters_points)
@@ -189,6 +193,55 @@ def compile_sleeper_bench_stats(
         for player_id in players
         if player_id not in starter_ids
     ]
+
+
+def compile_sleeper_player_scoring_totals(
+    player_stats: dict,
+    scoring_settings_by_season: dict[str, dict],
+    player_metadata: dict,
+) -> list[dict]:
+    """
+    Calculate total fantasy points per player per season using the league's scoring settings.
+
+    Args:
+        player_stats: Mapping of player_id → season → stat_name → value (from S3).
+        scoring_settings_by_season: Mapping of season → scoring_settings dict (from league API).
+        player_metadata: Mapping of player_id → metadata dict (full_name, position, etc.).
+
+    Returns:
+        List of dicts with player_id, player_name, position, total_points, and season.
+    """
+    rows = []
+    for player_id, season_stats in player_stats.items():
+        meta = player_metadata.get(player_id, {})
+        first_name = meta.get("first_name") or ""
+        last_name = meta.get("last_name") or ""
+        player_name = f"{first_name} {last_name}".strip()
+        position_raw = meta.get("position")
+        position = "D/ST" if position_raw == "DEF" else position_raw
+
+        for season, scoring_settings in scoring_settings_by_season.items():
+            stats = season_stats.get(season)
+            if not stats:
+                continue
+            total_points = round(
+                sum(
+                    stats[stat] * multiplier
+                    for stat, multiplier in scoring_settings.items()
+                    if stat in stats
+                ),
+                2,
+            )
+            rows.append(
+                {
+                    "player_id": player_id,
+                    "player_name": player_name,
+                    "position": position,
+                    "total_points": total_points,
+                    "season": season,
+                }
+            )
+    return rows
 
 
 def sanitize_value(val: Any) -> Any:
@@ -534,6 +587,7 @@ def _register_espn_raw_data(
 def _register_sleeper_raw_data(
     raw_data: list[dict],
     player_metadata: dict,
+    player_stats: dict | None = None,
 ) -> dict[str, list[dict]]:
     """
     Parse raw Sleeper API data into grouped lists ready for DuckDB registration.
@@ -541,9 +595,11 @@ def _register_sleeper_raw_data(
     Args:
         raw_data: List of dicts with keys: season, data_type, data.
         player_metadata: Mapping of Sleeper player ID to metadata dict (full_name, position, etc.).
+        player_stats: Mapping of player_id → season → stat_name → value (from S3).
 
     Returns:
-        Dict with keys 'users', 'rosters', and 'matchups', each mapping to a list of row dicts.
+        Dict with keys 'users', 'rosters', 'matchups', 'brackets', 'draft_picks', and
+        'player_scoring_totals', each mapping to a list of row dicts.
     """
     bracket_by_season: dict[str, dict[frozenset, dict]] = defaultdict(dict)
     all_brackets: list[dict] = []
@@ -585,7 +641,7 @@ def _register_sleeper_raw_data(
                     }
                 )
 
-    all_users, all_rosters, all_matchups = [], [], []
+    all_users, all_rosters, all_matchups, all_draft_picks = [], [], [], []
     for item in raw_data:
         if item["data_type"] == "users":
             for record in item["data"]:
@@ -672,12 +728,32 @@ def _register_sleeper_raw_data(
                         "team_a_season": item["season"],
                     }
                 )
+        elif item["data_type"] == "draft_picks":
+            for record in item["data"]:
+                record_copy = record.copy()
+                record_copy["season"] = item["season"]
+                all_draft_picks.append(record_copy)
+
+    scoring_settings_by_season: dict[str, dict] = {}
+    for item in raw_data:
+        if item["data_type"] == "league_settings":
+            scoring_settings_by_season[item["season"]] = item["data"].get(
+                "scoring_settings", {}
+            )
+
+    player_scoring_totals = compile_sleeper_player_scoring_totals(
+        player_stats=player_stats or {},
+        scoring_settings_by_season=scoring_settings_by_season,
+        player_metadata=player_metadata,
+    )
 
     return {
         "users": all_users,
         "rosters": all_rosters,
         "matchups": all_matchups,
         "brackets": all_brackets,
+        "draft_picks": all_draft_picks,
+        "player_scoring_totals": player_scoring_totals,
     }
 
 
@@ -686,6 +762,7 @@ def register_raw_data(
     con: duckdb.DuckDBPyConnection,
     platform: str,
     player_metadata: dict | None = None,
+    player_stats: dict | None = None,
 ) -> None:
     """
     Register raw API response data as DuckDB views, grouped by data_type.
@@ -698,12 +775,15 @@ def register_raw_data(
         con: A DuckDB connection object.
         platform: The fantasy platform the data originates from (e.g. 'ESPN', 'SLEEPER').
         player_metadata: Sleeper player ID → metadata mapping; only used when platform is SLEEPER.
+        player_stats: Sleeper player ID → season → stat mapping; only used when platform is SLEEPER.
     """
     if platform == "ESPN":
         grouped = _register_espn_raw_data(raw_data)
     else:
         grouped = _register_sleeper_raw_data(
-            raw_data, player_metadata=player_metadata or {}
+            raw_data,
+            player_metadata=player_metadata or {},
+            player_stats=player_stats or {},
         )
 
     for data_type, rows in grouped.items():
@@ -891,6 +971,7 @@ def lambda_handler(event, context) -> None:
                 logger.error("Season %s generated an exception: %s", season, exc)
 
     player_metadata: dict = {}
+    player_stats: dict = {}
     if platform == "SLEEPER":
         try:
             player_metadata = read_s3_object(
@@ -907,9 +988,26 @@ def lambda_handler(event, context) -> None:
             else:
                 raise
 
+        try:
+            player_stats = read_s3_object(
+                bucket=bucket, key="player-stats/sleeper_nfl_player_stats.json"
+            )
+            logger.info("Loaded Sleeper player stats (%d players)", len(player_stats))
+        except botocore.exceptions.ClientError as e:
+            if e.response["Error"]["Code"] in ("NoSuchKey", "404"):
+                logger.warning(
+                    "Sleeper player stats not found in S3; draft scoring totals will be unavailable"
+                )
+            else:
+                raise
+
     con = duckdb.connect()
     register_raw_data(
-        raw_data=raw_data, con=con, platform=platform, player_metadata=player_metadata
+        raw_data=raw_data,
+        con=con,
+        platform=platform,
+        player_metadata=player_metadata,
+        player_stats=player_stats,
     )
 
     TEAMS_SCHEMA = KeySchema(

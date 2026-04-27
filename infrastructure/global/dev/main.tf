@@ -330,6 +330,17 @@ module "processing-lambda-role" {
           "${local.primary_bucket_arn}/player-metadata/*",
           "${local.secondary_bucket_arn}/player-metadata/*"
         ]
+      },
+      {
+        Sid    = "ReadFromS3PlayerStatsPrefix"
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+        ]
+        Resource = [
+          "${local.primary_bucket_arn}/player-stats/*",
+          "${local.secondary_bucket_arn}/player-stats/*"
+        ]
       }
     ]
   })
