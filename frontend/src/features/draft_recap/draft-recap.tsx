@@ -146,35 +146,7 @@ function DraftRecapContent({
   const busts = picks.filter((p) => p.draft_rank_delta <= -10 && p.round <= maxRound - 4).length;
   const steals = picks.filter((p) => p.draft_rank_delta >= 5).length;
 
-  const replacementPoints = useMemo(() => {
-    const n = managers.length;
-    const byPosition: Record<string, DraftPickItem[]> = {};
-    for (const p of allPicks) {
-      (byPosition[p.position] ??= []).push(p);
-    }
-    const result: Record<string, number> = {};
-    for (const [pos, players] of Object.entries(byPosition)) {
-      if (['K', 'D/ST'].includes(pos)) continue;
-      const repRank = ['RB', 'WR'].includes(pos) ? Math.floor(2.5 * n) + 1 : n + 1;
-      // Find the drafted player whose actual league-wide rank equals the replacement threshold
-      const exact = players.find((p) => p.actual_position_rank === repRank);
-      if (exact) {
-        result[pos] = exact.total_points;
-      } else {
-        // Replacement-level player was undrafted; use the closest drafted player
-        // just below replacement (lowest actual_position_rank still above the threshold)
-        const sorted = [...players].sort((a, b) => a.actual_position_rank - b.actual_position_rank);
-        const justBelow = sorted.find((p) => p.actual_position_rank > repRank);
-        const justAbove = [...sorted].reverse().find((p) => p.actual_position_rank < repRank);
-        result[pos] = (justBelow ?? justAbove)?.total_points ?? 0;
-      }
-    }
-    return result;
-  }, [allPicks, managers.length]);
-
-  const totalVorp = picks
-    .filter((p) => !['K', 'D/ST'].includes(p.position))
-    .reduce((sum, p) => sum + (p.total_points - (replacementPoints[p.position] ?? 0)), 0);
+  const totalVorp = picks.reduce((sum, p) => sum + (p.vorp ?? 0), 0);
 
   const toggleBust = (key: string) => {
     setOpenBusts((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -331,17 +303,13 @@ function DraftRecapContent({
                       </div>
                     </td>
                     <td className="border-b border-border/50">
-                      {['K', 'D/ST'].includes(pick.position) ? (
+                      {pick.vorp === null ? (
                         <div className="px-3 py-2.5 text-center text-[12px] text-muted-foreground">N/A</div>
-                      ) : (() => {
-                        const vorp = pick.total_points - (replacementPoints[pick.position] ?? 0);
-                        const vorpStr = (vorp >= 0 ? '+' : '') + vorp.toFixed(1);
-                        return (
-                          <div className="px-3 py-2.5 text-center text-[13px] font-medium" style={{ color: vorp >= 0 ? '#27500A' : '#791F1F' }}>
-                            {vorpStr}
-                          </div>
-                        );
-                      })()}
+                      ) : (
+                        <div className="px-3 py-2.5 text-center text-[13px] font-medium" style={{ color: pick.vorp >= 0 ? '#27500A' : '#791F1F' }}>
+                          {(pick.vorp >= 0 ? '+' : '') + pick.vorp.toFixed(1)}
+                        </div>
+                      )}
                     </td>
                     <td className="border-b border-border/50">
                       <div className="px-3 py-2.5 text-center text-[13px] font-medium text-foreground">

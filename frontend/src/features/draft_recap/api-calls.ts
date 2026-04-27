@@ -25,6 +25,7 @@ export interface DraftPickItem {
   team_name: string;
   total_points: number;
   trade_locked: boolean;
+  vorp: number | null;
 }
 
 export function getDraftData(

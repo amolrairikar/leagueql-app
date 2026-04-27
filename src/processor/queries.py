@@ -401,6 +401,26 @@ QUERIES = {
                 ) AS actual_position_rank
             FROM player_scoring_totals
         ),
+        team_counts AS (
+            SELECT season, COUNT(DISTINCT CAST(teamId AS STRING)) AS num_teams
+            FROM draft_picks
+            GROUP BY season
+        ),
+        replacement_level AS (
+            SELECT
+                apr.season,
+                apr.position,
+                apr.total_points AS replacement_points
+            FROM actual_position_ranks apr
+            INNER JOIN team_counts tc ON apr.season = tc.season
+            WHERE
+                apr.position NOT IN ('K', 'D/ST')
+                AND (
+                    (apr.position IN ('RB', 'WR') AND apr.actual_position_rank = CAST(FLOOR(2.5 * tc.num_teams) AS INTEGER) + 1)
+                    OR
+                    (apr.position NOT IN ('RB', 'WR') AND apr.actual_position_rank = tc.num_teams + 1)
+                )
+        ),
         draft_with_scoring AS (
             SELECT
                 dp.*,
@@ -440,10 +460,16 @@ QUERIES = {
             ds.season,
             ds.drafted_position_rank,
             ds.actual_position_rank,
-            ds.drafted_position_rank - ds.actual_position_rank AS draft_rank_delta
+            ds.drafted_position_rank - ds.actual_position_rank AS draft_rank_delta,
+            CASE
+                WHEN ds.position IN ('K', 'D/ST') THEN NULL
+                ELSE ds.total_points - rl.replacement_points
+            END AS vorp
         FROM draft_with_scoring ds
         INNER JOIN teams_output t
             ON (CAST(ds.teamId AS STRING) = t.team_id AND ds.season = t.season)
+        LEFT JOIN replacement_level rl
+            ON (ds.position = rl.position AND ds.season = rl.season)
         ORDER BY ds.season, ds.overallPickNumber
         """,
         "SLEEPER": "",
