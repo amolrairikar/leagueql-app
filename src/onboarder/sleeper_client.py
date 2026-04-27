@@ -262,7 +262,7 @@ class SleeperClient:
                         draft_id = draft.get("draft_id")
                         if draft_id:
                             url = f"{SLEEPER_BASE_URL}/draft/{draft_id}/picks"
-                            urls.append((season, f"draft_picks_{draft_id}", url))
+                            urls.append((season, "draft_picks", url))
         return urls
 
     async def _fetch(
