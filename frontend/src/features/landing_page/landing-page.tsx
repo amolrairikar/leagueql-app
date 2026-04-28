@@ -252,7 +252,7 @@ export default function LeagueQLLanding() {
     document.cookie = 'leaguePlatform=ESPN; path=/; max-age=86400';
     document.cookie = `leagueSeasons=${seasons}; path=/; max-age=86400`;
     document.cookie = 'demo_mode=true; path=/; max-age=86400';
-    void navigate('/standings');
+    void navigate('/home');
   }
 
   function handleFooterLinkClick(link: string) {

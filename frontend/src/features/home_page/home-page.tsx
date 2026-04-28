@@ -382,7 +382,7 @@ export default function HomePage() {
           if (champion) {
             return {
               season,
-              name: champion.team_name,
+              name: champion.team_name || `Team ${champion.owner_username}`,
               owner: champion.owner_username,
               record: champion.record,
               pfGame: champion.avg_pf.toFixed(1),

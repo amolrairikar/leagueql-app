@@ -649,6 +649,7 @@ def _register_sleeper_raw_data(
                 )
 
     all_users, all_rosters, all_matchups, all_draft_picks = [], [], [], []
+    league_name_by_season: dict[str, str] = {}
     for item in raw_data:
         if item["data_type"] == "users":
             for record in item["data"]:
@@ -740,6 +741,10 @@ def _register_sleeper_raw_data(
                 record_copy = record.copy()
                 record_copy["season"] = item["season"]
                 all_draft_picks.append(record_copy)
+        elif item["data_type"] == "league_settings":
+            league_name = item["data"].get("name")
+            if league_name:
+                league_name_by_season[item["season"]] = league_name
 
     scoring_settings_by_season: dict[str, dict] = {}
     for item in raw_data:
@@ -761,6 +766,7 @@ def _register_sleeper_raw_data(
         "brackets": all_brackets,
         "draft_picks": all_draft_picks,
         "player_scoring_totals": player_scoring_totals,
+        "league_name_by_season": league_name_by_season,
     }
 
 
@@ -1037,9 +1043,9 @@ def lambda_handler(event, context) -> None:
         player_stats=player_stats,
     )
 
-    # Extract league name from most recent season (for ESPN leagues)
+    # Extract league name from most recent season
     league_name = None
-    if platform == "ESPN" and "league_name_by_season" in grouped:
+    if "league_name_by_season" in grouped:
         league_name_by_season = grouped["league_name_by_season"]
         if league_name_by_season:
             most_recent_season = max(league_name_by_season.keys())
