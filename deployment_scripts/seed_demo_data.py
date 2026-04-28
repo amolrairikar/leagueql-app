@@ -23,6 +23,7 @@ import boto3
 SEED = 42
 DEMO_LEAGUE_ID = "999999999"
 DEMO_CANONICAL_ID = "demo-league-canonical"
+DEMO_LEAGUE_NAME = "Demo Fantasy League"
 PLATFORM = "ESPN"
 SEASONS = ["2022", "2023", "2024"]
 ONBOARDED_AT = "2024-09-01T00:00:00"
@@ -1143,6 +1144,7 @@ def build_all_items() -> list[dict]:
             "PK": f"LEAGUE#{DEMO_CANONICAL_ID}",
             "SK": "METADATA",
             "platform": PLATFORM,
+            "league_name": DEMO_LEAGUE_NAME,
             "onboarding_status": "COMPLETED",
             "onboarded_at": ONBOARDED_AT,
         }

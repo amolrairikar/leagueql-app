@@ -340,9 +340,14 @@ def get_league(
         canonical_league_id,
     )
     seasons = get_league_seasons(canonical_league_id=canonical_league_id)
+    metadata = get_league_metadata(canonical_league_id=canonical_league_id)
     return APIResponse(
         detail="Found league",
-        data={"canonical_league_id": canonical_league_id, "seasons": seasons},
+        data={
+            "canonical_league_id": canonical_league_id,
+            "seasons": seasons,
+            "league_name": metadata.get("league_name"),
+        },
     )
 
 

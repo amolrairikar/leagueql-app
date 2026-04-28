@@ -93,6 +93,7 @@ the league will not appear as onboarded and a retry will re-run the full onboard
 | `onboarding_status` | String | Yes | Current onboarding status for league. Enum: `onboarding`, `failed`, `succeeded` |
 | `last_refreshed_date` | String | No | ISO 8601 timestamp of when league data was last refreshed |
 | `refresh_status` | String | No | Current refresh status for league. Enum: `refreshing`, `failed`, `succeeded` |
+| `league_name` | String | No | League name from the most recent season's settings |
 
 **Example:**
 ```json

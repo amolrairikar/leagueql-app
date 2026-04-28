@@ -53,7 +53,6 @@ interface ManagerData {
   init: string;
   color: string;
   currentTeam: string;
-  recapText: string | null;
   allTime: {
     wins: number;
     losses: number;
@@ -155,7 +154,6 @@ function pct(a: number, b: number) {
 function processData(
   standings: ManagerStandingsItem[],
   matchups: MatchupItem[],
-  recaps: Record<string, string>,
 ): ManagerData[] {
   const ownerStandingsMap = new Map<string, ManagerStandingsItem[]>();
   for (const row of standings) {
@@ -332,7 +330,6 @@ function processData(
       init: managerInitials(mostRecent.owner_username),
       color: colorMap.get(ownerId) ?? avatarColor(colorIdx),
       currentTeam: mostRecent.team_name,
-      recapText: recaps[ownerId] ?? null,
       allTime: {
         wins: allWins,
         losses: allLosses,
@@ -636,7 +633,7 @@ function ManagerHistoryContent({ promise }: { promise: Promise<DataResult> }) {
                       <p className="font-medium">{String(label)} Season</p>
                       <div className="flex items-center gap-2">
                         <div
-                          className="h-2 w-2 shrink-0 rounded-[2px]"
+                          className="h-2 w-2 shrink-0 rounded-xs"
                           style={{ backgroundColor: m.color }}
                         />
                         <span className="text-muted-foreground">Finish</span>
@@ -938,9 +935,9 @@ export default function ManagerHistory() {
     (): Promise<DataResult> =>
       leagueId && seasons.length > 0
         ? getManagerHistoryData(leagueId, platform, seasons)
-            .then(({ standings, matchups, managerRecaps }) => ({
+            .then(({ standings, matchups }) => ({
               ok: true as const,
-              data: processData(standings, matchups, managerRecaps),
+              data: processData(standings, matchups),
             }))
             .catch((err: unknown) => ({
               ok: false as const,
