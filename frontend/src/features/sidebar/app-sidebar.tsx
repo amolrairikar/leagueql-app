@@ -1,6 +1,8 @@
 import { UserButton } from '@clerk/react';
 import {
   History,
+  LogIn,
+  LogOut,
   RefreshCw,
   Scroll,
   Star,
@@ -68,6 +70,18 @@ export function AppSidebar() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
+  const demoMode = document.cookie
+    .split('; ')
+    .some((row) => row === 'demo_mode=true');
+
+  function handleExitDemo() {
+    document.cookie = 'leagueId=; path=/; max-age=0';
+    document.cookie = 'leaguePlatform=; path=/; max-age=0';
+    document.cookie = 'leagueSeasons=; path=/; max-age=0';
+    document.cookie = 'demo_mode=; path=/; max-age=0';
+    void navigate('/');
+  }
+
   async function handleDeleteLeague() {
     const leagueId = getCookie('leagueId');
     const platform = (getCookie('leaguePlatform') || 'ESPN') as
@@ -120,73 +134,99 @@ export function AppSidebar() {
           <SidebarGroupLabel>Settings</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  asChild
-                  tooltip="Refresh League"
-                  className="cursor-pointer"
-                >
-                  <Link to="/connect_league">
-                    <RefreshCw />
-                    <span>Refresh League</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <Dialog
-                  open={dialogOpen}
-                  onOpenChange={(open) => {
-                    setDialogOpen(open);
-                    if (!open) setDeleteError(null);
-                  }}
-                >
-                  <DialogTrigger asChild>
+              {demoMode ? (
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    tooltip="Connect Your League"
+                    className="cursor-pointer"
+                    onClick={handleExitDemo}
+                  >
+                    <LogIn />
+                    <span>Connect Your League</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ) : (
+                <>
+                  <SidebarMenuItem>
                     <SidebarMenuButton
-                      tooltip="Delete League"
-                      className="text-destructive hover:text-destructive hover:bg-destructive/10 cursor-pointer"
+                      asChild
+                      tooltip="Refresh League"
+                      className="cursor-pointer"
                     >
-                      <Trash2 />
-                      <span>Delete League</span>
+                      <Link to="/connect_league">
+                        <RefreshCw />
+                        <span>Refresh League</span>
+                      </Link>
                     </SidebarMenuButton>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Delete League</DialogTitle>
-                      <DialogDescription>
-                        This will permanently delete all data for this league.
-                        This action cannot be undone.
-                      </DialogDescription>
-                    </DialogHeader>
-                    {deleteError && (
-                      <p className="text-sm text-destructive">{deleteError}</p>
-                    )}
-                    <DialogFooter>
-                      <Button
-                        className="cursor-pointer"
-                        variant="destructive"
-                        onClick={() => void handleDeleteLeague()}
-                        disabled={isDeleting}
-                      >
-                        {isDeleting ? 'Deleting…' : 'Delete League'}
-                      </Button>
-                      <Button
-                        className="cursor-pointer"
-                        variant="outline"
-                        onClick={() => setDialogOpen(false)}
-                        disabled={isDeleting}
-                      >
-                        Cancel
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-              </SidebarMenuItem>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <Dialog
+                      open={dialogOpen}
+                      onOpenChange={(open) => {
+                        setDialogOpen(open);
+                        if (!open) setDeleteError(null);
+                      }}
+                    >
+                      <DialogTrigger asChild>
+                        <SidebarMenuButton
+                          tooltip="Delete League"
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10 cursor-pointer"
+                        >
+                          <Trash2 />
+                          <span>Delete League</span>
+                        </SidebarMenuButton>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Delete League</DialogTitle>
+                          <DialogDescription>
+                            This will permanently delete all data for this league.
+                            This action cannot be undone.
+                          </DialogDescription>
+                        </DialogHeader>
+                        {deleteError && (
+                          <p className="text-sm text-destructive">{deleteError}</p>
+                        )}
+                        <DialogFooter>
+                          <Button
+                            className="cursor-pointer"
+                            variant="destructive"
+                            onClick={() => void handleDeleteLeague()}
+                            disabled={isDeleting}
+                          >
+                            {isDeleting ? 'Deleting…' : 'Delete League'}
+                          </Button>
+                          <Button
+                            className="cursor-pointer"
+                            variant="outline"
+                            onClick={() => setDialogOpen(false)}
+                            disabled={isDeleting}
+                          >
+                            Cancel
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+                  </SidebarMenuItem>
+                </>
+              )}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter className="p-3">
-        <UserButton showName={state === 'expanded'} />
+        {demoMode ? (
+          <SidebarMenuButton
+            tooltip="Exit Demo"
+            className="cursor-pointer text-muted-foreground hover:text-foreground"
+            onClick={handleExitDemo}
+          >
+            <LogOut />
+            {state === 'expanded' && <span>Exit Demo</span>}
+          </SidebarMenuButton>
+        ) : (
+          <UserButton showName={state === 'expanded'} />
+        )}
       </SidebarFooter>
     </Sidebar>
   );

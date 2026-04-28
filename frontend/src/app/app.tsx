@@ -58,6 +58,13 @@ function AppLayout({ children }: { children: React.ReactNode }) {
       <SidebarProvider>
         <AppSidebar />
         <SidebarInset>
+          {isDemoMode() && (
+            <div className="flex h-8 shrink-0 items-center justify-center bg-primary/20 border-b border-primary/20 px-4">
+              <span className="font-mono text-[0.72rem] text-primary tracking-wide">
+                Demo Mode — connect your own league to see your data
+              </span>
+            </div>
+          )}
           <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
             <SidebarTrigger className="cursor-pointer" />
             <div className="ml-auto flex items-center gap-1">
@@ -76,7 +83,12 @@ function AppLayout({ children }: { children: React.ReactNode }) {
   );
 }
 
+function isDemoMode(): boolean {
+  return document.cookie.split('; ').some((row) => row === 'demo_mode=true');
+}
+
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  if (isDemoMode()) return <>{children}</>;
   const { isSignedIn, isLoaded } = useUser();
   if (!isLoaded) return null;
   if (!isSignedIn) return <Navigate to="/" replace />;

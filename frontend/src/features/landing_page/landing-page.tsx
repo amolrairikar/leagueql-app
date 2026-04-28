@@ -148,7 +148,15 @@ function Slideshow() {
                   ${i === current ? 'opacity-100' : 'opacity-0 pointer-events-none'}
                 `}
               >
-                <ScreenshotPlaceholder title={s.title} badge={s.badge} />
+                {s.image ? (
+                  <img
+                    src={s.image}
+                    alt={s.title}
+                    className="w-full h-full object-contain bg-card"
+                  />
+                ) : (
+                  <ScreenshotPlaceholder title={s.title} badge={s.badge} />
+                )}
               </div>
             ))}
           </div>
@@ -239,6 +247,15 @@ export default function LeagueQLLanding() {
     }
   }
 
+  function handleViewDemo() {
+    const seasons = encodeURIComponent(JSON.stringify(['2022', '2023', '2024']));
+    document.cookie = 'leagueId=999999999; path=/; max-age=86400';
+    document.cookie = 'leaguePlatform=ESPN; path=/; max-age=86400';
+    document.cookie = `leagueSeasons=${seasons}; path=/; max-age=86400`;
+    document.cookie = 'demo_mode=true; path=/; max-age=86400';
+    void navigate('/standings');
+  }
+
   function handleFooterLinkClick(link: string) {
     if (link === 'About') {
       setAboutOpen(true);
@@ -295,10 +312,10 @@ export default function LeagueQLLanding() {
           <Button
             variant="outline"
             size="lg"
-            className="font-mono text-[0.82rem] px-6"
-            asChild
+            className="font-mono text-[0.82rem] px-6 cursor-pointer"
+            onClick={handleViewDemo}
           >
-            <a href="#">View Demo</a>
+            View Demo
           </Button>
         </div>
       </section>

@@ -11,6 +11,7 @@ export interface Slide {
   badge: string;
   url: string;
   caption: string;
+  image?: string;
 }
 
 export interface Feature {
