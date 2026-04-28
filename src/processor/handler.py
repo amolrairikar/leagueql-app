@@ -481,6 +481,7 @@ def _register_espn_raw_data(
         [],
         [],
     )
+    league_name_by_season: dict[str, str] = {}
     for item in raw_data:
         if item["data_type"] == "users":
             for record in item["data"].get("members", []):
@@ -491,6 +492,11 @@ def _register_espn_raw_data(
                 record_copy = record.copy()
                 record_copy["season"] = item["season"]
                 all_teams.append(record_copy)
+        elif item["data_type"] == "settings":
+            settings = item["data"].get("settings", {})
+            league_name = settings.get("name")
+            if league_name:
+                league_name_by_season[item["season"]] = league_name
         elif item["data_type"].startswith("matchups"):
             for record in item["data"].get("matchups", []):
                 team_a_id = record.get("home", {}).get("teamId", "")
@@ -581,6 +587,7 @@ def _register_espn_raw_data(
         "brackets": brackets,
         "draft_picks": all_draft_picks,
         "player_scoring_totals": all_player_scoring_totals,
+        "league_name_by_season": league_name_by_season,
     }
 
 
@@ -763,7 +770,7 @@ def register_raw_data(
     platform: str,
     player_metadata: dict | None = None,
     player_stats: dict | None = None,
-) -> None:
+) -> dict[str, list[dict]]:
     """
     Register raw API response data as DuckDB views, grouped by data_type.
 
@@ -776,6 +783,9 @@ def register_raw_data(
         platform: The fantasy platform the data originates from (e.g. 'ESPN', 'SLEEPER').
         player_metadata: Sleeper player ID → metadata mapping; only used when platform is SLEEPER.
         player_stats: Sleeper player ID → season → stat mapping; only used when platform is SLEEPER.
+
+    Returns:
+        Dict containing the grouped data, including league_name_by_season for ESPN leagues.
     """
     if platform == "ESPN":
         grouped = _register_espn_raw_data(raw_data)
@@ -787,8 +797,12 @@ def register_raw_data(
         )
 
     for data_type, rows in grouped.items():
+        if data_type == "league_name_by_season":
+            continue
         df = pd.DataFrame(rows)
         con.register(data_type, df)
+
+    return grouped
 
 
 def dataframe_to_dynamo_items(
@@ -862,16 +876,24 @@ def write_items(
     logger.info("Wrote %d items to %s", len(items), table_name)
 
 
-def write_metadata_items(league_id: str, refresh: bool) -> None:
+def write_metadata_items(
+    league_id: str, refresh: bool, league_name: str | None = None
+) -> None:
     """
     Writes metadata items to DynamoDB to track onboarding/refresh status.
 
     Args:
         league_id: The league ID for which the metadata is being written.
         refresh: Whether this is a refresh operation (vs initial onboarding).
+        league_name: Optional league name to include in the metadata.
     """
     transact_items = []
     if refresh:
+        update_expression = "SET refresh_status = :val"
+        expression_values = {":val": {"S": "COMPLETED"}}
+        if league_name:
+            update_expression += ", league_name = :league_name"
+            expression_values[":league_name"] = {"S": league_name}
         transact_items.append(
             {
                 "Update": {
@@ -880,12 +902,17 @@ def write_metadata_items(league_id: str, refresh: bool) -> None:
                         "PK": {"S": f"LEAGUE#{league_id}"},
                         "SK": {"S": "METADATA"},
                     },
-                    "UpdateExpression": "SET refresh_status = :val",
-                    "ExpressionAttributeValues": {":val": {"S": "COMPLETED"}},
+                    "UpdateExpression": update_expression,
+                    "ExpressionAttributeValues": expression_values,
                 }
             }
         )
     else:
+        update_expression = "SET onboarding_status = :val"
+        expression_values = {":val": {"S": "COMPLETED"}}
+        if league_name:
+            update_expression += ", league_name = :league_name"
+            expression_values[":league_name"] = {"S": league_name}
         transact_items.append(
             {
                 "Update": {
@@ -894,8 +921,8 @@ def write_metadata_items(league_id: str, refresh: bool) -> None:
                         "PK": {"S": f"LEAGUE#{league_id}"},
                         "SK": {"S": "METADATA"},
                     },
-                    "UpdateExpression": "SET onboarding_status = :val",
-                    "ExpressionAttributeValues": {":val": {"S": "COMPLETED"}},
+                    "UpdateExpression": update_expression,
+                    "ExpressionAttributeValues": expression_values,
                 }
             }
         )
@@ -1002,13 +1029,21 @@ def lambda_handler(event, context) -> None:
                 raise
 
     con = duckdb.connect()
-    register_raw_data(
+    grouped = register_raw_data(
         raw_data=raw_data,
         con=con,
         platform=platform,
         player_metadata=player_metadata,
         player_stats=player_stats,
     )
+
+    # Extract league name from most recent season (for ESPN leagues)
+    league_name = None
+    if platform == "ESPN" and "league_name_by_season" in grouped:
+        league_name_by_season = grouped["league_name_by_season"]
+        if league_name_by_season:
+            most_recent_season = max(league_name_by_season.keys())
+            league_name = league_name_by_season[most_recent_season]
 
     TEAMS_SCHEMA = KeySchema(
         pk=f"LEAGUE#{canonical_league_id}",
@@ -1075,5 +1110,7 @@ def lambda_handler(event, context) -> None:
         )
 
     write_metadata_items(
-        league_id=canonical_league_id, refresh=previous_version_id is not None
+        league_id=canonical_league_id,
+        refresh=previous_version_id is not None,
+        league_name=league_name,
     )

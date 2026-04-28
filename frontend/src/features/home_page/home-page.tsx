@@ -14,6 +14,7 @@ import { getSeasonStandings } from '@/features/season_standings/api-calls';
 import { getSeasonMatchups } from '@/features/matchups/api-calls';
 import { getManagerHistoryData } from '@/features/manager_history/api-calls';
 import type { ManagerStandingsItem } from '@/features/manager_history/api-calls';
+import { getLeague } from './api-calls';
 
 type StatItem = { label: string; value: string; sub?: string };
 
@@ -64,6 +65,17 @@ function ChampionsSkeleton() {
           <Skeleton className="h-3 w-20" />
         </div>
       ))}
+    </div>
+  );
+}
+
+function LeagueNameHeader({ promise }: { promise: Promise<string | undefined> }) {
+  const leagueName = use(promise);
+  return (
+    <div className="mb-6">
+      <h1 className="text-2xl font-bold text-foreground">
+        {leagueName || 'League Name'}
+      </h1>
     </div>
   );
 }
@@ -325,6 +337,14 @@ export default function HomePage() {
     }
   }, []);
 
+  const leagueNamePromise = useMemo(
+    (): Promise<string | undefined> =>
+      leagueId
+        ? getLeague(leagueId, platform).then((res) => res.data.league_name)
+        : Promise.resolve(undefined),
+    [leagueId, platform],
+  );
+
   const stats = useMemo(() => {
     if (seasons.length > 0) {
       const sortedSeasons = seasons.sort();
@@ -463,9 +483,9 @@ export default function HomePage() {
     <div className="flex flex-1 flex-col p-6 overflow-auto">
       <div className="max-w-225 mx-auto w-full">
         {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-foreground">League Name</h1>
-        </div>
+        <Suspense fallback={<div className="mb-6"><h1 className="text-2xl font-bold text-foreground">League Name</h1></div>}>
+          <LeagueNameHeader promise={leagueNamePromise} />
+        </Suspense>
 
         {/* Stats Grid */}
         <Suspense fallback={<StatsSkeleton />}>
