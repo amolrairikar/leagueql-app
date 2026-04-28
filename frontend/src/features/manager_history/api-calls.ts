@@ -21,13 +21,6 @@ export interface ManagerStandingsItem {
   champion: string;
 }
 
-export interface ManagerRecapItem {
-  owner_id: string;
-  owner_username: string;
-  recap_text: string;
-  generated_at: string;
-}
-
 export async function getManagerHistoryData(
   leagueId: string,
   platform: 'ESPN' | 'SLEEPER',
@@ -35,55 +28,27 @@ export async function getManagerHistoryData(
 ): Promise<{
   standings: ManagerStandingsItem[];
   matchups: MatchupItem[];
-  managerRecaps: Record<string, string>;
 }> {
-  const [standingsResults, matchupResults] = await Promise.all([
-    Promise.all(
-      seasons.map((season) =>
-        apiClient
-          .get<{
-            data: ManagerStandingsItem[];
-          }>(
-            `/leagues/${leagueId}/query?${new URLSearchParams({ platform, queryType: `SEASON_STANDINGS#${season}` })}`,
-          )
-          .then((r) => r.data),
-      ),
-    ),
-    Promise.all(
-      seasons.map((season) =>
-        apiClient
-          .get<{
-            data: MatchupItem[];
-          }>(
-            `/leagues/${leagueId}/query?${new URLSearchParams({ platform, queryType: `MATCHUPS#${season}#` })}`,
-          )
-          .then((r) => r.data),
-      ),
-    ),
+  console.log('[getManagerHistoryData] Fetching all standings and matchups in single queries');
+  const [standingsResult, matchupResult] = await Promise.all([
+    apiClient
+      .get<{
+        data: ManagerStandingsItem[];
+      }>(
+        `/leagues/${leagueId}/query?${new URLSearchParams({ platform, queryType: 'SEASON_STANDINGS#' })}`,
+      )
+      .then((r) => r.data),
+    apiClient
+      .get<{
+        data: MatchupItem[];
+      }>(
+        `/leagues/${leagueId}/query?${new URLSearchParams({ platform, queryType: 'MATCHUPS#' })}`,
+      )
+      .then((r) => r.data),
   ]);
 
-  const standings = standingsResults.flat();
-  const matchups = matchupResults.flat();
+  const standings = standingsResult.filter((s) => seasons.includes(s.season));
+  const matchups = matchupResult.filter((m) => seasons.includes(m.season));
 
-  const ownerIds = [...new Set(standings.map((s) => s.owner_id))];
-
-  const recapResults = await Promise.all(
-    ownerIds.map((ownerId) =>
-      apiClient
-        .get<{ data: ManagerRecapItem[] }>(
-          `/leagues/${leagueId}/query?${new URLSearchParams({ platform, queryType: `AI_RECAP#MANAGER#${ownerId}` })}`,
-        )
-        .then((r) => ({ ownerId, items: r.data }))
-        .catch(() => ({ ownerId, items: [] as ManagerRecapItem[] })),
-    ),
-  );
-
-  const managerRecaps: Record<string, string> = {};
-  for (const { ownerId, items } of recapResults) {
-    if (items.length > 0 && items[0]) {
-      managerRecaps[ownerId] = items[0].recap_text;
-    }
-  }
-
-  return { standings, matchups, managerRecaps };
+  return { standings, matchups };
 }

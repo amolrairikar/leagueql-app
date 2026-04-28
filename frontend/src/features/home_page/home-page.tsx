@@ -10,10 +10,9 @@ import {
   type ChartConfig,
 } from '@/components/ui/chart';
 import { Skeleton } from '@/components/ui/skeleton';
-import { getSeasonStandings } from '@/features/season_standings/api-calls';
-import { getSeasonMatchups } from '@/features/matchups/api-calls';
 import { getManagerHistoryData } from '@/features/manager_history/api-calls';
 import type { ManagerStandingsItem } from '@/features/manager_history/api-calls';
+import type { MatchupItem } from '@/features/matchups/api-calls';
 import { getLeague } from './api-calls';
 
 type StatItem = { label: string; value: string; sub?: string };
@@ -362,121 +361,102 @@ export default function HomePage() {
     return [];
   }, [seasons]);
 
-  const championsPromise = useMemo(
-    (): Promise<ChampionItem[]> =>
-      leagueId && seasons.length > 0
-        ? Promise.all(
-            seasons.map(async (season) => {
-              try {
-                const res = await getSeasonStandings(leagueId, platform, season);
-                const champion = res.data.find((s) => s.champion === 'Yes');
-                if (champion) {
-                  return {
-                    season,
-                    name: champion.team_name,
-                    owner: champion.owner_username,
-                    record: champion.record,
-                    pfGame: champion.avg_pf.toFixed(1),
-                  };
-                }
-                return {
-                  season,
-                  name: 'TBD',
-                  owner: '—',
-                  record: '—',
-                  pfGame: '—',
-                  highlight: true,
-                };
-              } catch {
-                return {
-                  season,
-                  name: 'TBD',
-                  owner: '—',
-                  record: '—',
-                  pfGame: '—',
-                  highlight: true,
-                };
-              }
-            }),
-          )
-        : Promise.resolve([]),
-    [leagueId, platform, seasons],
-  );
-
-  const totalGamesPromise = useMemo(
-    (): Promise<number> =>
-      leagueId && seasons.length > 0
-        ? Promise.all(
-            seasons.map(async (season) => {
-              const res = await getSeasonMatchups(leagueId, platform, season);
-              return res.data.length;
-            }),
-          ).then((counts) => counts.reduce((sum, count) => sum + count, 0))
-        : Promise.resolve(1120),
-    [leagueId, platform, seasons],
-  );
-
-  const totalMembersPromise = useMemo(
-    (): Promise<number> =>
-      leagueId && seasons.length > 0
-        ? Promise.all(
-            seasons.map(async (season) => {
-              const res = await getSeasonStandings(leagueId, platform, season);
-              return res.data;
-            }),
-          ).then((allStandings) => {
-            const allOwners = new Set(
-              allStandings.flatMap((standings) =>
-                standings.map((s) => s.owner_username),
-              ),
-            );
-            return allOwners.size;
-          })
-        : Promise.resolve(10),
-    [leagueId, platform, seasons],
-  );
-
-  const recordScorePromise = useMemo(
-    (): Promise<{ score: number; week: string; season: string }> =>
-      leagueId && seasons.length > 0
-        ? Promise.all(
-            seasons.map(async (season) => {
-              const res = await getSeasonMatchups(leagueId, platform, season);
-              return res.data;
-            }),
-          ).then((allMatchups) => {
-            let maxScore = 0;
-            let maxWeek = '';
-            let maxSeason = '';
-
-            for (const matchups of allMatchups) {
-              for (const matchup of matchups) {
-                if (matchup.team_a_score > maxScore) {
-                  maxScore = matchup.team_a_score;
-                  maxWeek = matchup.week;
-                  maxSeason = matchup.season;
-                }
-                if (matchup.team_b_score > maxScore) {
-                  maxScore = matchup.team_b_score;
-                  maxWeek = matchup.week;
-                  maxSeason = matchup.season;
-                }
-              }
-            }
-
-            return { score: maxScore, week: maxWeek, season: maxSeason };
-          })
-        : Promise.resolve({ score: 198.7, week: '11', season: '2021' }),
-    [leagueId, platform, seasons],
-  );
-
-  const standingsPromise = useMemo(
-    (): Promise<ManagerStandingsItem[]> =>
+  // Single API call for all data (getManagerHistoryData already uses optimized single queries)
+  const allDataPromise = useMemo(
+    (): Promise<{ standings: ManagerStandingsItem[]; matchups: MatchupItem[] }> =>
       leagueId && seasons.length > 0
         ? getManagerHistoryData(leagueId, platform, seasons)
-            .then((data) => data.standings)
-        : Promise.resolve([]),
+            .catch(() => ({ standings: [], matchups: [] }))
+        : Promise.resolve({ standings: [], matchups: [] }),
     [leagueId, platform, seasons],
+  );
+
+  // Derive champions from the single data call
+  const championsPromise = useMemo(
+    (): Promise<ChampionItem[]> =>
+      allDataPromise.then(({ standings }) => {
+        if (seasons.length === 0) return [];
+        return seasons.map((season) => {
+          const seasonStandings = standings.filter((s) => s.season === season);
+          const champion = seasonStandings.find((s) => s.champion === 'Yes');
+          if (champion) {
+            return {
+              season,
+              name: champion.team_name,
+              owner: champion.owner_username,
+              record: champion.record,
+              pfGame: champion.avg_pf.toFixed(1),
+            };
+          }
+          return {
+            season,
+            name: 'TBD',
+            owner: '—',
+            record: '—',
+            pfGame: '—',
+            highlight: true,
+          };
+        });
+      }),
+    [allDataPromise, seasons],
+  );
+
+  // Derive total games from the single data call
+  const totalGamesPromise = useMemo(
+    (): Promise<number> =>
+      allDataPromise.then(({ matchups }) => {
+        if (seasons.length === 0) return 1120;
+        const seasonMatchups = seasons.map((season) =>
+          matchups.filter((m) => m.season === season).length,
+        );
+        return seasonMatchups.reduce((sum, count) => sum + count, 0);
+      }),
+    [allDataPromise, seasons],
+  );
+
+  // Derive total members from the single data call
+  const totalMembersPromise = useMemo(
+    (): Promise<number> =>
+      allDataPromise.then(({ standings }) => {
+        if (standings.length === 0) return 10;
+        const allOwners = new Set(standings.map((s) => s.owner_username));
+        return allOwners.size;
+      }),
+    [allDataPromise],
+  );
+
+  // Derive record score from the single data call
+  const recordScorePromise = useMemo(
+    (): Promise<{ score: number; week: string; season: string }> =>
+      allDataPromise.then(({ matchups }) => {
+        if (matchups.length === 0) return { score: 198.7, week: '11', season: '2021' };
+        let maxScore = 0;
+        let maxWeek = '';
+        let maxSeason = '';
+
+        for (const matchup of matchups) {
+          if (matchup.team_a_score > maxScore) {
+            maxScore = matchup.team_a_score;
+            maxWeek = matchup.week;
+            maxSeason = matchup.season;
+          }
+          if (matchup.team_b_score > maxScore) {
+            maxScore = matchup.team_b_score;
+            maxWeek = matchup.week;
+            maxSeason = matchup.season;
+          }
+        }
+
+        return { score: maxScore, week: maxWeek, season: maxSeason };
+      }),
+    [allDataPromise],
+  );
+
+  // Use standings from the single data call for chart
+  const standingsPromise = useMemo(
+    (): Promise<ManagerStandingsItem[]> =>
+      allDataPromise.then(({ standings }) => standings),
+    [allDataPromise],
   );
 
   return (
