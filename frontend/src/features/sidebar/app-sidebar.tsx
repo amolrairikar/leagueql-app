@@ -1,6 +1,7 @@
 import { UserButton } from '@clerk/react';
 import {
   History,
+  Home,
   LogIn,
   LogOut,
   RefreshCw,
@@ -11,6 +12,7 @@ import {
   Trophy,
   Trash2,
   Users,
+  Zap,
 } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
@@ -41,6 +43,7 @@ import {
 import { deleteLeague } from '@/features/sidebar/api-calls';
 
 const navItems = [
+  { title: 'Home', url: '/home', icon: Home },
   { title: 'Standings', url: '/standings', icon: TableProperties },
   { title: 'Matchups', url: '/matchups', icon: Swords },
   { title: 'Playoff Bracket', url: '/playoff_bracket', icon: Trophy },
@@ -48,6 +51,7 @@ const navItems = [
   { title: 'Manager History', url: '/manager_history', icon: History },
   { title: 'Draft Recap', url: '/draft_recap', icon: Scroll },
   { title: 'Player Records', url: '/player_records', icon: Star },
+  { title: 'Matchup Records', url: '/matchup_records', icon: Zap },
 ];
 
 function getCookie(name: string): string {

@@ -16,10 +16,9 @@ import type { Slide, Feature } from '@/features/landing_page/types';
 
 interface ScreenshotPlaceholderProps {
   title: string;
-  badge: string;
 }
 
-function ScreenshotPlaceholder({ title, badge }: ScreenshotPlaceholderProps) {
+function ScreenshotPlaceholder({ title }: ScreenshotPlaceholderProps) {
   return (
     <div className="w-full h-full flex flex-col items-center justify-center gap-4 bg-card">
       <div className="flex flex-col items-center gap-2 opacity-40">
@@ -79,7 +78,7 @@ function ScreenshotPlaceholder({ title, badge }: ScreenshotPlaceholderProps) {
           Screenshot placeholder
         </p>
         <p className="font-mono text-[0.65rem] text-muted-foreground/60">
-          {title} · {badge}
+          {title}
         </p>
       </div>
     </div>
@@ -155,7 +154,7 @@ function Slideshow() {
                     className="w-full h-full object-contain bg-card"
                   />
                 ) : (
-                  <ScreenshotPlaceholder title={s.title} badge={s.badge} />
+                  <ScreenshotPlaceholder title={s.title} />
                 )}
               </div>
             ))}

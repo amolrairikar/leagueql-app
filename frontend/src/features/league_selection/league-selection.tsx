@@ -39,7 +39,7 @@ export default function LeagueSelection() {
       document.cookie = `leagueId=${encodeURIComponent(leagueId.trim())}; path=/`;
       document.cookie = `leaguePlatform=${encodeURIComponent(platform)}; path=/`;
       document.cookie = `leagueSeasons=${encodeURIComponent(JSON.stringify(leagueData.data.seasons))}; path=/`;
-      void navigate('/standings');
+      void navigate('/home');
     } catch (err) {
       const message =
         err instanceof ApiError

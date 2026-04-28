@@ -108,7 +108,7 @@ export default function LeagueConnect() {
             document.cookie = `leagueId=${encodeURIComponent(data.leagueId)}; path=/`;
             document.cookie = `leaguePlatform=${encodeURIComponent(apiPlatform)}; path=/`;
             document.cookie = `leagueSeasons=${encodeURIComponent(JSON.stringify(leagueData.data.seasons))}; path=/`;
-            void navigate('/standings');
+            void navigate('/home');
           })();
         } else {
           setTimeout(() => setPollStatus('idle'), 10000);

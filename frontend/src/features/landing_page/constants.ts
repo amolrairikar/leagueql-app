@@ -3,6 +3,7 @@ import { FileText, Info } from 'lucide-react';
 import draftRecapScreenshot from '@/assets/draft-recap-screenshot.png';
 import managerComparisonScreenshot from '@/assets/manager-comparison-screenshot.png';
 import managerHistoryScreenshot from '@/assets/manager-history-screenshot.png';
+import matchupRecordsScreenshot from '@/assets/matchup-records-screenshot.png';
 import matchupsScreenshot from '@/assets/matchups-screenshot.png';
 import playoffBracketScreenshot from '@/assets/playoff-bracket-screenshot.png';
 import playerRecordsScreenshot from '@/assets/player-records-screenshot.png';
@@ -23,52 +24,51 @@ export const NAV_LINKS: NavLinkItem[] = [
 export const SLIDES: Slide[] = [
   {
     title: 'Standings',
-    badge: 'League Table',
     url: 'leagueql.app/standings',
     caption: 'Current season standings',
     image: standingsScreenshot,
   },
   {
     title: 'Matchups',
-    badge: 'Weekly Results',
     url: 'leagueql.app/matchups',
     caption: 'Weekly matchup results',
     image: matchupsScreenshot,
   },
   {
     title: 'Playoff Bracket',
-    badge: 'Tournament',
     url: 'leagueql.app/playoff_bracket',
     caption: 'Visual playoff bracket',
     image: playoffBracketScreenshot,
   },
   {
     title: 'Manager Comparison',
-    badge: 'Head-to-Head',
     url: 'leagueql.app/manager_comparison',
     caption: 'Compare any two managers across all seasons',
     image: managerComparisonScreenshot,
   },
   {
     title: 'Manager History',
-    badge: 'All Seasons',
     url: 'leagueql.app/manager_history',
     caption: 'Individual manager performance over time',
     image: managerHistoryScreenshot,
   },
   {
     title: 'Draft Recap',
-    badge: 'Draft Analysis',
     url: 'leagueql.app/draft_recap',
     caption: 'Draft picks and their season performance',
     image: draftRecapScreenshot,
   },
   {
     title: 'Player Records',
-    badge: 'All-Time Best',
     url: 'leagueql.app/player_records',
     caption: 'Single-game and season player records',
     image: playerRecordsScreenshot,
+  },
+  {
+    title: 'Matchup Records',
+    url: 'leagueql.app/matchup_records',
+    caption: 'All-time matchup records between managers',
+    image: matchupRecordsScreenshot,
   },
 ];
 

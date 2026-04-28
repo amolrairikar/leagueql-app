@@ -22,8 +22,10 @@ import PlayoffBracket from '@/features/playoff_bracket/playoff-bracket';
 import PlayerRecords from '@/features/player_records/player-records';
 import SeasonStandings from '@/features/season_standings/season-standings';
 import DraftRecap from '@/features/draft_recap/draft-recap';
+import HomePage from '@/features/home_page/home-page';
 import PrivacyPage from '@/features/privacy/privacy-page';
 import { AppSidebar } from '@/features/sidebar/app-sidebar';
+import MatchupRecords from '@/features/matchup_records/matchup-records';
 
 function NavLink({
   href,
@@ -131,6 +133,16 @@ function App() {
           }
         />
         <Route
+          path="/home"
+          element={
+            <ProtectedRoute>
+              <AppLayout>
+                <HomePage />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/standings"
           element={
             <ProtectedRoute>
@@ -186,6 +198,16 @@ function App() {
             <ProtectedRoute>
               <AppLayout>
                 <PlayerRecords />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/matchup_records"
+          element={
+            <ProtectedRoute>
+              <AppLayout>
+                <MatchupRecords />
               </AppLayout>
             </ProtectedRoute>
           }

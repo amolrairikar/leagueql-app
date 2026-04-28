@@ -8,7 +8,6 @@ export interface NavLinkItem {
 
 export interface Slide {
   title: string;
-  badge: string;
   url: string;
   caption: string;
   image?: string;
