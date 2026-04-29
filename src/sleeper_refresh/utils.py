@@ -8,6 +8,7 @@ import requests
 SLEEPER_BASE_URL = "https://api.sleeper.app/v1"
 
 
+# TODO: Replace with proper logging
 def logger() -> None:
     """Simple logger function for Lambda."""
     # In Lambda, this will use the default logger
@@ -80,7 +81,7 @@ def get_sleeper_leagues() -> list[str]:
 
 def invoke_onboarder_lambda(league_id: str) -> None:
     """
-    Invokes the onboarder lambda to refresh a specific Sleeper league.
+    Invokes the onboarder lambda to refresh a specific Sleeper league asynchronously.
 
     Args:
         league_id: The Sleeper league ID to refresh.

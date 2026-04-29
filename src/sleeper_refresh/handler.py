@@ -15,6 +15,7 @@ def lambda_handler(event, context) -> dict[str, str | int]:
         dict: A response indicating the success of the operation.
     """
     logger.info("Starting Sleeper refresh execution.")
+    logger.info("Event data: %s", event)
     logger.info("Context data: %s", context)
 
     # Fetch current NFL state

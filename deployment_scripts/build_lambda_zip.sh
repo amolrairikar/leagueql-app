@@ -44,12 +44,19 @@ OUTPUT_DIR="$(mktemp -d)"
 trap 'rm -rf "$OUTPUT_DIR"' EXIT
 
 FAILED=()
+PIDS=()
 
-for SOURCE_DIR in "$@"; do
+# Function to process a single Lambda directory
+process_lambda() {
+    local SOURCE_DIR="$1"
+    local OUTPUT_DIR="$2"
+    local S3_BUCKET="$3"
+    local AWS_ACCOUNT_ID="$4"
+
     if [[ ! -d "$SOURCE_DIR" ]]; then
         echo "Warning: '$SOURCE_DIR' is not a directory, skipping."
-        FAILED+=("$SOURCE_DIR (not a directory)")
-        continue
+        echo "$SOURCE_DIR (not a directory)" >> "$OUTPUT_DIR/failed.txt"
+        return 1
     fi
 
     FUNCTION_NAME="$(basename "$SOURCE_DIR")"
@@ -65,7 +72,7 @@ for SOURCE_DIR in "$@"; do
     # 1. Install dependencies
     if [[ -f "$SOURCE_DIR/requirements.txt" ]]; then
         echo "    Installing dependencies..."
-        pipenv run pip install \
+        pip install \
             --quiet \
             --requirement "$SOURCE_DIR/requirements.txt" \
             --target "$BUILD_DIR" \
@@ -86,18 +93,45 @@ for SOURCE_DIR in "$@"; do
     rm -rf "$BUILD_DIR"
     echo "    Packaged: $ZIP_NAME ($(du -sh "$ZIP_PATH" | cut -f1))"
 
-    # 4. Upload to each region
+    # 4. Upload to each region in parallel
+    UPLOAD_PIDS=()
     for REGION in "${REGIONS[@]}"; do
-        S3_URI="s3://${S3_BUCKET}-$(region_suffix "$REGION")-${AWS_ACCOUNT_ID}/lambda-code-artifacts/${ZIP_NAME}"
-        echo "    Uploading to $S3_URI ..."
-        if aws s3 cp "$ZIP_PATH" "$S3_URI" --region "$REGION" --no-progress; then
-            echo "    ✓ $REGION"
-        else
-            echo "    ✗ Upload failed: $S3_URI"
-            FAILED+=("$FUNCTION_NAME (upload $REGION)")
-        fi
+        (
+            S3_URI="s3://${S3_BUCKET}-$(region_suffix "$REGION")-${AWS_ACCOUNT_ID}/lambda-code-artifacts/${ZIP_NAME}"
+            echo "    Uploading to $S3_URI ..."
+            if aws s3 cp "$ZIP_PATH" "$S3_URI" --region "$REGION" --no-progress; then
+                echo "    ✓ $REGION"
+            else
+                echo "    ✗ Upload failed: $S3_URI"
+                echo "$FUNCTION_NAME (upload $REGION)" >> "$OUTPUT_DIR/failed.txt"
+            fi
+        ) &
+        UPLOAD_PIDS+=($!)
     done
+
+    # Wait for all uploads to complete
+    for pid in "${UPLOAD_PIDS[@]}"; do
+        wait $pid
+    done
+}
+
+# Process all Lambda directories in parallel
+for SOURCE_DIR in "$@"; do
+    process_lambda "$SOURCE_DIR" "$OUTPUT_DIR" "$S3_BUCKET" "$AWS_ACCOUNT_ID" &
+    PIDS+=($!)
 done
+
+# Wait for all Lambda processing to complete
+for pid in "${PIDS[@]}"; do
+    wait $pid
+done
+
+# Collect failures from the failed.txt file
+if [[ -f "$OUTPUT_DIR/failed.txt" ]]; then
+    while IFS= read -r line; do
+        FAILED+=("$line")
+    done < "$OUTPUT_DIR/failed.txt"
+fi
 
 echo ""
 echo "══════════════════════════════════════════════"
