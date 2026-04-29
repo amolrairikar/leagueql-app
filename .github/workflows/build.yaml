@@ -102,7 +102,7 @@ jobs:
         run: bash deployment_scripts/setup_python.sh "3.13"
 
       - name: Install pipenv
-        run: pip install pipenv
+        run: python3.13 -m pip install pipenv
 
       - name: Make packaging script executable
         run: chmod +x deployment_scripts/build_lambda_zip.sh
