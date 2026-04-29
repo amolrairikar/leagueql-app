@@ -120,7 +120,7 @@ jobs:
           S3_BUCKET: fantasy-football-recap-${{ env.ENVIRONMENT }}-bucket
           AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
         # NOTE: The script here handles us-east-1 and us-west-2
-        run: bash deployment_scripts/build_lambda_zip.sh ./src/onboarder ./src/processor ./src/api ./src/player_metadata
+        run: bash deployment_scripts/build_lambda_zip.sh ./src/onboarder ./src/processor ./src/api ./src/player_metadata ./src/sleeper_refresh
 
   deploy-regional:
     name: Deploy Regional Infrastructure - ${{ needs.set-env.outputs.environment }} - ${{ matrix.region }}
