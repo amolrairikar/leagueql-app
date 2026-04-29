@@ -46,14 +46,8 @@ else
     # Update package list
     sudo apt-get update
     
-    # Install Python and dev packages
-    sudo apt-get install -y "$PYTHON_BIN" "$PYTHON_BIN"-dev "$PYTHON_BIN"-venv
-    
-    # Install pip if not available
-    if ! command -v "pip${PYTHON_VERSION}" &> /dev/null; then
-      echo "Installing pip for Python ${PYTHON_VERSION}..."
-      curl -fsSL https://bootstrap.pypa.io/get-pip.py | sudo "$PYTHON_BIN" --ignore-installed
-    fi
+    # Install Python, dev packages, and pip
+    sudo apt-get install -y "$PYTHON_BIN" "$PYTHON_BIN"-dev "$PYTHON_BIN"-venv "$PYTHON_BIN"-pip
   else
     echo "Error: Unsupported OS: $OS"
     echo "This script currently only supports Ubuntu"
