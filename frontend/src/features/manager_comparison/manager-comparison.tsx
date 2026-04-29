@@ -651,21 +651,10 @@ export default function ManagerComparison() {
   const platform = (getCookie('leaguePlatform') || 'ESPN') as
     | 'ESPN'
     | 'SLEEPER';
-  const rawSeasons = getCookie('leagueSeasons');
-  const seasons: string[] = useMemo(() => {
-    try {
-      return rawSeasons ? (JSON.parse(rawSeasons) as string[]) : [];
-    } catch {
-      return [];
-    }
-  }, [rawSeasons]);
-
   const matchupsPromise = useMemo(
     () =>
-      leagueId && seasons.length > 0
-        ? getAllSeasonsMatchups(leagueId, platform, seasons)
-        : Promise.resolve([] as MatchupItem[]),
-    [leagueId, platform, seasons],
+      leagueId ? getAllSeasonsMatchups(leagueId, platform) : Promise.resolve([] as MatchupItem[]),
+    [leagueId, platform],
   );
 
   return (

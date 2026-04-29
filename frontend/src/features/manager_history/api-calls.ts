@@ -1,5 +1,5 @@
-import type { MatchupItem } from '@/features/matchups/api-calls';
 import { apiClient } from '@/lib/api-client';
+import type { Platform, MatchupItem } from '@/components/api/types';
 
 export type { MatchupItem };
 
@@ -23,7 +23,7 @@ export interface ManagerStandingsItem {
 
 export async function getManagerHistoryData(
   leagueId: string,
-  platform: 'ESPN' | 'SLEEPER',
+  platform: Platform,
   seasons: string[],
 ): Promise<{
   standings: ManagerStandingsItem[];

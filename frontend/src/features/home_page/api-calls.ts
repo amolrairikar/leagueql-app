@@ -1,27 +1,12 @@
 import { apiClient } from '@/lib/api-client';
-import type { SeasonStandingsItem } from '@/features/season_standings/api-calls';
-import type { MatchupItem } from '@/features/matchups/api-calls';
+import type { Platform, SeasonStandingsItem, MatchupItem } from '@/components/api/types';
 
-export interface LeagueResponse {
-  detail: string;
-  data: {
-    canonical_league_id: string;
-    seasons: string[];
-    league_name?: string;
-  };
-}
-
-export function getLeague(
-  leagueId: string,
-  platform: 'ESPN' | 'SLEEPER',
-): Promise<LeagueResponse> {
-  const params = new URLSearchParams({ platform });
-  return apiClient.get<LeagueResponse>(`/leagues/${leagueId}?${params}`);
-}
+export type { GetLeagueResponse } from '@/components/api/types';
+export { getLeague } from '@/components/api/leagues';
 
 export function getAllSeasonStandings(
   leagueId: string,
-  platform: 'ESPN' | 'SLEEPER',
+  platform: Platform,
 ): Promise<{ data: SeasonStandingsItem[] }> {
   const params = new URLSearchParams({
     platform,
@@ -33,7 +18,7 @@ export function getAllSeasonStandings(
 
 export function getAllSeasonMatchups(
   leagueId: string,
-  platform: 'ESPN' | 'SLEEPER',
+  platform: Platform,
 ): Promise<{ data: MatchupItem[] }> {
   const params = new URLSearchParams({
     platform,
