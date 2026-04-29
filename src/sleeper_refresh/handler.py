@@ -5,7 +5,7 @@ from utils import logger, get_nfl_state, get_sleeper_leagues, invoke_onboarder_l
 
 def lambda_handler(event, context) -> dict[str, str | int]:
     """
-    Main handler function for Sleeper refresh orchestrator.
+    Main handler function for Sleeper refresh.
 
     Args:
         event: The event data that triggered the Lambda function.
@@ -14,7 +14,7 @@ def lambda_handler(event, context) -> dict[str, str | int]:
     Returns:
         dict: A response indicating the success of the operation.
     """
-    logger.info("Starting Sleeper refresh orchestrator execution.")
+    logger.info("Starting Sleeper refresh execution.")
     logger.info("Context data: %s", context)
 
     # Fetch current NFL state
@@ -90,7 +90,7 @@ def lambda_handler(event, context) -> dict[str, str | int]:
             logger.error("Failed to trigger refresh for league %s: %s", league_id, e)
 
     logger.info(
-        "Refresh orchestration complete: %d succeeded, %d failed",
+        "Refresh complete: %d succeeded, %d failed",
         success_count,
         failure_count,
     )

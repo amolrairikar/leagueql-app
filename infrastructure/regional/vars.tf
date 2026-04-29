@@ -44,7 +44,7 @@ variable "player_metadata_lambda_role_arn" {
   type        = string
 }
 
-variable "sleeper_refresh_orchestrator_lambda_role_arn" {
-  description = "IAM role ARN for the Sleeper refresh orchestrator Lambda function execution role"
+variable "sleeper_refresh_lambda_role_arn" {
+  description = "IAM role ARN for the Sleeper refresh Lambda function execution role"
   type        = string
 }

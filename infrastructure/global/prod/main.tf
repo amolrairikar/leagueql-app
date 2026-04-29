@@ -578,10 +578,10 @@ module "api-gateway-role" {
   }
 }
 
-module "sleeper-refresh-orchestrator-lambda-role" {
+module "sleeper-refresh-lambda-role" {
   source = "../../modules/iam-role"
-  role_name = "fantasy-football-recap-sleeper-refresh-orchestrator-lambda-${var.environment}-role"
-  role_description = "Execution role for Sleeper refresh orchestrator lambda."
+  role_name = "fantasy-football-recap-sleeper-refresh-lambda-${var.environment}-role"
+  role_description = "Execution role for Sleeper refresh lambda."
   trust_policy_json = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -616,8 +616,8 @@ module "sleeper-refresh-orchestrator-lambda-role" {
           "logs:PutLogEvents"
         ],
         Resource = [
-          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/lambda/fantasy-football-recap-sleeper-refresh-orchestrator-${var.environment}-east:*",
-          "arn:aws:logs:us-west-2:${var.account_id}:log-group:/aws/lambda/fantasy-football-recap-sleeper-refresh-orchestrator-${var.environment}-west:*"
+          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/lambda/fantasy-football-recap-sleeper-refresh-${var.environment}-east:*",
+          "arn:aws:logs:us-west-2:${var.account_id}:log-group:/aws/lambda/fantasy-football-recap-sleeper-refresh-${var.environment}-west:*"
         ]
       },
       {

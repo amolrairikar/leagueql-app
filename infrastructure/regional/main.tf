@@ -149,18 +149,18 @@ resource "aws_lambda_permission" "allow_eventbridge_player_metadata" {
   source_arn    = aws_cloudwatch_event_rule.player_metadata_schedule.arn
 }
 
-module "sleeper_refresh_orchestrator_lambda" {
+module "sleeper_refresh_lambda" {
   source = "../modules/lambda"
 
-  function_name        = "fantasy-football-recap-sleeper-refresh-orchestrator-${var.environment}-${local.region}"
-  function_description = "Lambda function to orchestrate scheduled Sleeper league refreshes"
-  role_arn             = var.sleeper_refresh_orchestrator_lambda_role_arn
+  function_name        = "fantasy-football-recap-sleeper-refresh-${var.environment}-${local.region}"
+  function_description = "Lambda function to schedule Sleeper league refreshes"
+  role_arn             = var.sleeper_refresh_lambda_role_arn
   handler              = "handler.lambda_handler"
   memory_size          = 512
   timeout              = 60
   log_retention        = 7
   s3_bucket            = "fantasy-football-recap-${var.environment}-bucket-${local.region}-${local.account_id}"
-  s3_key               = "lambda-code-artifacts/sleeper_refresh_orchestrator-lambda.zip"
+  s3_key               = "lambda-code-artifacts/sleeper_refresh-lambda.zip"
 
   environment_variables = {
     DYNAMODB_TABLE_NAME   = "fantasy-football-recap-table-${var.environment}"
@@ -190,13 +190,13 @@ resource "aws_cloudwatch_event_rule" "sleeper_refresh_schedule" {
 
 resource "aws_cloudwatch_event_target" "sleeper_refresh_target" {
   rule = aws_cloudwatch_event_rule.sleeper_refresh_schedule.name
-  arn  = module.sleeper_refresh_orchestrator_lambda.lambda_arn
+  arn  = module.sleeper_refresh_lambda.lambda_arn
 }
 
 resource "aws_lambda_permission" "allow_eventbridge_sleeper_refresh" {
   statement_id  = "AllowEventBridgeInvoke"
   action        = "lambda:InvokeFunction"
-  function_name = module.sleeper_refresh_orchestrator_lambda.lambda_arn
+  function_name = module.sleeper_refresh_lambda.lambda_arn
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.sleeper_refresh_schedule.arn
 }
