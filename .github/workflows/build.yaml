@@ -82,20 +82,20 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      - name: Make AWS credentials script executable
+        run: chmod +x deployment_scripts/configure_aws_credentials.sh
+
       - name: Configure AWS credentials via OIDC
-        uses: aws-actions/configure-aws-credentials@v6
-        with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-${{ env.ENVIRONMENT }}-role 
-          aws-region: us-east-1
-          role-session-name: GitHubActions-${{ github.run_id }}
+        run: bash deployment_scripts/configure_aws_credentials.sh "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-${{ env.ENVIRONMENT }}-role" "us-east-1" "GitHubActions-${{ github.run_id }}"
 
       - name: Verify AWS identity
         run: aws sts get-caller-identity
 
+      - name: Make Python setup script executable
+        run: chmod +x deployment_scripts/setup_python.sh
+
       - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.13"
+        run: bash deployment_scripts/setup_python.sh "3.13"
 
       - name: Install pipenv
         run: pip install pipenv
