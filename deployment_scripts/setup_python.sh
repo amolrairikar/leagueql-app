@@ -46,8 +46,11 @@ else
     # Update package list
     sudo apt-get update
     
-    # Install Python, dev packages, and pip
-    sudo apt-get install -y "$PYTHON_BIN" "$PYTHON_BIN"-dev "$PYTHON_BIN"-venv "$PYTHON_BIN"-pip
+    # Install Python and dev packages
+    sudo apt-get install -y "$PYTHON_BIN" "$PYTHON_BIN"-dev "$PYTHON_BIN"-venv
+    
+    # Install pip using ensurepip (built into Python)
+    sudo "$PYTHON_BIN" -m ensurepip --upgrade --default-pip
   else
     echo "Error: Unsupported OS: $OS"
     echo "This script currently only supports Ubuntu"
