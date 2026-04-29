@@ -8,6 +8,7 @@ import requests
 SLEEPER_BASE_URL = "https://api.sleeper.app/v1"
 
 
+# TODO: Replace with proper logging
 def logger() -> None:
     """Simple logger function for Lambda."""
     # In Lambda, this will use the default logger
