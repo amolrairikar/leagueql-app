@@ -577,3 +577,80 @@ module "api-gateway-role" {
     managed-by  = "terraform"
   }
 }
+
+module "sleeper-refresh-orchestrator-lambda-role" {
+  source = "../../modules/iam-role"
+  role_name = "fantasy-football-recap-sleeper-refresh-orchestrator-lambda-${var.environment}-role"
+  role_description = "Execution role for Sleeper refresh orchestrator lambda."
+  trust_policy_json = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+      }
+    ]
+  })
+  role_policy_json = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "CreateLogGroups"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup"
+        ]
+        Resource = [
+          "arn:aws:logs:us-east-1:${var.account_id}:*",
+          "arn:aws:logs:us-west-2:${var.account_id}:*"
+        ]
+      },
+      {
+        Sid    = "CreateLogEvents"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ],
+        Resource = [
+          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/lambda/fantasy-football-recap-sleeper-refresh-orchestrator-${var.environment}-east:*",
+          "arn:aws:logs:us-west-2:${var.account_id}:log-group:/aws/lambda/fantasy-football-recap-sleeper-refresh-orchestrator-${var.environment}-west:*"
+        ]
+      },
+      {
+        Sid    = "QueryDynamoDB"
+        Effect = "Allow"
+        Action = [
+          "dynamodb:Query"
+        ]
+        Resource = [
+          module.dynamodb.primary_table_arn,
+          module.dynamodb.replica_table_arn,
+          "${module.dynamodb.primary_table_arn}/index/GSI2",
+          "${module.dynamodb.replica_table_arn}/index/GSI2"
+        ]
+      },
+      {
+        Sid    = "InvokeOnboarderLambda"
+        Effect = "Allow"
+        Action = [
+          "lambda:InvokeFunction"
+        ]
+        Resource = [
+          "arn:aws:lambda:us-east-1:${var.account_id}:function:fantasy-football-recap-onboarder-${var.environment}-east",
+          "arn:aws:lambda:us-west-2:${var.account_id}:function:fantasy-football-recap-onboarder-${var.environment}-west"
+        ]
+      }
+    ]
+  })
+
+  tags = {
+    environment = var.environment
+    project     = "fantasy-football-recap"
+    component   = "api"
+    managed-by  = "terraform"
+  }
+}

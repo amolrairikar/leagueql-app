@@ -25,6 +25,12 @@
 |---|---|---|---|
 | `canonical_league_id` | String | Partition key | The unified UUID for the league |
 
+### GSI2: Platform index
+| Attribute | Type | Role | Description |
+|---|---|---|---|
+| `platform` | String | Partition key | The platform the league belongs to (e.g., "ESPN", "SLEEPER") |
+| `league_id` | String | Sort key | The league ID for the platform |
+
 ---
 
 ## Items
@@ -65,6 +71,8 @@ Mapping allowing for lookup of a ESPN/SLEEPER league ID to its canonical league 
 | `SK` | String | Yes | `LEAGUE_LOOKUP` |
 | `canonical_league_id` | String | Yes | The UUID associated with this league |
 | `seasons` | List\<String\> | Yes | List of seasons onboarded (e.g. `["2022", "2023", "2024"]`) |
+| `platform` | String | Yes | The platform the league belongs to (e.g., "ESPN", "SLEEPER") |
+| `league_id` | String | Yes | The league ID for the platform |
 
 **Example:**
 ```json
@@ -72,7 +80,9 @@ Mapping allowing for lookup of a ESPN/SLEEPER league ID to its canonical league 
   "PK": "LEAGUE#12345678#PLATFORM#ESPN",
   "SK": "LEAGUE_LOOKUP",
   "canonical_league_id": "uuid-string",
-  "seasons": ["2022", "2023", "2024"]
+  "seasons": ["2022", "2023", "2024"],
+  "platform": "ESPN",
+  "league_id": "12345678"
 }
 ```
 </details>

@@ -108,6 +108,8 @@ def write_onboarding_status_to_dynamodb(
                             "SK": {"S": "LEAGUE_LOOKUP"},
                             "canonical_league_id": {"S": canonical_league_id},
                             "seasons": {"SS": seasons},
+                            "platform": {"S": platform},
+                            "league_id": {"S": league_id},
                         },
                     }
                 }
@@ -119,9 +121,11 @@ def write_onboarding_status_to_dynamodb(
                             "PK": {"S": f"LEAGUE#{league_id}#PLATFORM#{platform}"},
                             "SK": {"S": "LEAGUE_LOOKUP"},
                         },
-                        "UpdateExpression": "ADD seasons :s",
+                        "UpdateExpression": "ADD seasons :s SET platform = :p, league_id = :l",
                         "ExpressionAttributeValues": {
                             ":s": {"SS": seasons},
+                            ":p": {"S": platform},
+                            ":l": {"S": league_id},
                         },
                     }
                 }
@@ -165,6 +169,8 @@ def write_onboarding_status_to_dynamodb(
                             "SK": {"S": "LEAGUE_LOOKUP"},
                             "canonical_league_id": {"S": canonical_league_id},
                             "seasons": {"SS": seasons},
+                            "platform": {"S": platform},
+                            "league_id": {"S": league_id},
                         },
                     }
                 },

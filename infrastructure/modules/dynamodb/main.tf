@@ -32,9 +32,18 @@ resource "aws_dynamodb_table" "global_table" {
     enabled = true
   }
 
-  # TODO: Figure out how to make this part dynamic
   attribute {
     name = "canonical_league_id"
+    type = "S"
+  }
+
+  attribute {
+    name = "platform"
+    type = "S"
+  }
+
+  attribute {
+    name = "league_id"
     type = "S"
   }
 
@@ -45,6 +54,19 @@ resource "aws_dynamodb_table" "global_table" {
     key_schema {
       attribute_name = "canonical_league_id"
       key_type       = "HASH"
+    }
+  }
+
+  global_secondary_index {
+    name            = "GSI2"
+    projection_type = "ALL"
+    key_schema {
+      attribute_name = "platform"
+      key_type       = "HASH"
+    }
+    key_schema {
+      attribute_name = "league_id"
+      key_type       = "RANGE"
     }
   }
 
