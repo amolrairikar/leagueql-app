@@ -3,6 +3,7 @@ import { Fragment, Suspense, use, useEffect, useMemo, useRef, useState } from 'r
 import { BoxScoreCard, type BoxScoreSide } from '@/components/box-score-card';
 import { avatarColor } from '@/components/team-avatar';
 import { Skeleton } from '@/components/ui/skeleton';
+import { getLeagueCookies } from '@/lib/cookie-handler';
 import {
   getAllSeasonsMatchups,
   type MatchupItem,
@@ -95,13 +96,6 @@ const STAT_DEFS: StatDef[] = [
 function pct(a: number, b: number): number {
   const total = a + b;
   return total === 0 ? 50 : Math.round((a / total) * 100);
-}
-
-function getCookie(name: string): string {
-  const match = document.cookie
-    .split('; ')
-    .find((row) => row.startsWith(`${name}=`));
-  return match ? decodeURIComponent(match.split('=')[1] ?? '') : '';
 }
 
 function initials(name: string): string {
@@ -647,25 +641,11 @@ function ManagerComparisonSkeleton() {
 }
 
 export default function ManagerComparison() {
-  const leagueId = getCookie('leagueId');
-  const platform = (getCookie('leaguePlatform') || 'ESPN') as
-    | 'ESPN'
-    | 'SLEEPER';
-  const rawSeasons = getCookie('leagueSeasons');
-  const seasons: string[] = useMemo(() => {
-    try {
-      return rawSeasons ? (JSON.parse(rawSeasons) as string[]) : [];
-    } catch {
-      return [];
-    }
-  }, [rawSeasons]);
-
+  const { leagueId, platform } = getLeagueCookies();
   const matchupsPromise = useMemo(
     () =>
-      leagueId && seasons.length > 0
-        ? getAllSeasonsMatchups(leagueId, platform, seasons)
-        : Promise.resolve([] as MatchupItem[]),
-    [leagueId, platform, seasons],
+      leagueId ? getAllSeasonsMatchups(leagueId, platform) : Promise.resolve([] as MatchupItem[]),
+    [leagueId, platform],
   );
 
   return (

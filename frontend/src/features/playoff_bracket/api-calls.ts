@@ -1,4 +1,7 @@
 import { apiClient } from '@/lib/api-client';
+import type { Platform, MatchupItem } from '@/components/api/types';
+
+export type Matchup = MatchupItem;
 
 export interface BracketMatch {
   match_id: number;
@@ -21,40 +24,17 @@ export interface BracketMatch {
   team_2_score?: number;
 }
 
-export interface Matchup {
-  team_a_id: string;
-  team_a_display_name: string;
-  team_a_team_name: string;
-  team_a_team_logo: string | null;
-  team_a_score: number;
-  team_a_starters: any[];
-  team_a_bench: any[];
-  team_b_id: string;
-  team_b_display_name: string;
-  team_b_team_name: string;
-  team_b_team_logo: string | null;
-  team_b_score: number;
-  team_b_starters: any[];
-  team_b_bench: any[];
-  week: string;
-  season: string;
-  playoff_tier_type: string;
-  playoff_round: string | null;
-  winner: string;
-  loser: string;
-}
-
 export interface GetPlayoffBracketResponse {
   data: BracketMatch[];
 }
 
 export interface GetMatchupsResponse {
-  data: Matchup[];
+  data: MatchupItem[];
 }
 
 export function getPlayoffBracket(
   leagueId: string,
-  platform: 'ESPN' | 'SLEEPER',
+  platform: Platform,
   season: string,
 ): Promise<GetPlayoffBracketResponse> {
   const params = new URLSearchParams({
@@ -68,7 +48,7 @@ export function getPlayoffBracket(
 
 export function getMatchups(
   leagueId: string,
-  platform: 'ESPN' | 'SLEEPER',
+  platform: Platform,
   season: string,
 ): Promise<GetMatchupsResponse> {
   const params = new URLSearchParams({

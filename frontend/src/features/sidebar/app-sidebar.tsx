@@ -40,6 +40,12 @@ import {
   SidebarSeparator,
   useSidebar,
 } from '@/components/ui/sidebar';
+import {
+  clearAllLeagueCookies,
+  clearLeagueCookies,
+  getLeagueCookies,
+  isDemoMode,
+} from '@/lib/cookie-handler';
 import { deleteLeague } from '@/features/sidebar/api-calls';
 
 const navItems = [
@@ -54,18 +60,6 @@ const navItems = [
   { title: 'Matchup Records', url: '/matchup_records', icon: Zap },
 ];
 
-function getCookie(name: string): string {
-  const match = document.cookie
-    .split('; ')
-    .find((row) => row.startsWith(`${name}=`));
-  return match ? decodeURIComponent(match.split('=')[1] ?? '') : '';
-}
-
-function clearLeagueCookies() {
-  document.cookie = 'leagueId=; path=/; max-age=0';
-  document.cookie = 'leaguePlatform=; path=/; max-age=0';
-}
-
 export function AppSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -74,23 +68,15 @@ export function AppSidebar() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  const demoMode = document.cookie
-    .split('; ')
-    .some((row) => row === 'demo_mode=true');
+  const demoMode = isDemoMode();
 
   function handleExitDemo() {
-    document.cookie = 'leagueId=; path=/; max-age=0';
-    document.cookie = 'leaguePlatform=; path=/; max-age=0';
-    document.cookie = 'leagueSeasons=; path=/; max-age=0';
-    document.cookie = 'demo_mode=; path=/; max-age=0';
+    clearAllLeagueCookies();
     void navigate('/');
   }
 
   async function handleDeleteLeague() {
-    const leagueId = getCookie('leagueId');
-    const platform = (getCookie('leaguePlatform') || 'ESPN') as
-      | 'ESPN'
-      | 'SLEEPER';
+    const { leagueId, platform } = getLeagueCookies();
 
     setIsDeleting(true);
     setDeleteError(null);

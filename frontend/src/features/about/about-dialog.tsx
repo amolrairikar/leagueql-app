@@ -1,4 +1,3 @@
-import { useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -12,20 +11,6 @@ interface AboutDialogProps {
 }
 
 export function AboutDialog({ open, onOpenChange }: AboutDialogProps) {
-  useEffect(() => {
-    if (open) {
-      const script = document.createElement('script');
-      script.src = 'https://cdnjs.buymeacoffee.com/1.0.0/button.prod.min.js';
-      script.type = 'text/javascript';
-      script.async = true;
-      document.body.appendChild(script);
-
-      return () => {
-        document.body.removeChild(script);
-      };
-    }
-  }, [open]);
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>

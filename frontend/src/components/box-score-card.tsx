@@ -2,6 +2,8 @@ import { X } from 'lucide-react';
 
 import type { PlayerStat } from '@/features/matchups/api-calls';
 import { TeamAvatar } from '@/components/team-avatar';
+import { FANTASY_POSITION_ORDER } from '@/lib/position-constants';
+import { UI_COLORS } from '@/lib/color-constants';
 
 export type { PlayerStat };
 
@@ -15,16 +17,6 @@ export interface BoxScoreSide {
   bench: PlayerStat[];
   isWinner: boolean;
 }
-
-const FANTASY_POSITION_ORDER: Record<string, number> = {
-  QB: 0,
-  RB: 1,
-  WR: 2,
-  TE: 3,
-  FLEX: 4,
-  'D/ST': 5,
-  K: 6,
-};
 
 export function BoxScoreCard({
   left,
@@ -116,7 +108,7 @@ export function BoxScoreCard({
               {side.isWinner && (
                 <span
                   className="ml-auto text-[10px] font-medium px-2 py-0.5 rounded-full"
-                  style={{ background: '#EAF3DE', color: '#27500A' }}
+                  style={{ background: UI_COLORS.winner.bg, color: UI_COLORS.winner.text }}
                 >
                   Winner
                 </span>

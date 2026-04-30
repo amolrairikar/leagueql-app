@@ -10,6 +10,8 @@ import {
   type PlayerStat,
   type WeeklyStandingItem,
 } from '@/features/matchups/api-calls';
+import { getLeagueCookies } from '@/lib/cookie-handler';
+import { MATCHUP_STATUS_COLORS } from '@/lib/color-constants';
 import SeasonSelect from '@/features/season_select/season-select';
 
 interface TeamSide {
@@ -114,12 +116,6 @@ function processData(matchups: MatchupItem[], standings: WeeklyStandingItem[]): 
   return { weeks, matchupsByWeek: byWeek };
 }
 
-function getCookie(name: string): string {
-  const match = document.cookie
-    .split('; ')
-    .find((row) => row.startsWith(`${name}=`));
-  return match ? decodeURIComponent(match.split('=')[1] ?? '') : '';
-}
 
 function MatchupCard({
   matchup,
@@ -136,9 +132,10 @@ function MatchupCard({
     <div
       className={`bg-card rounded-lg overflow-hidden cursor-pointer transition-colors ${
         isSelected
-          ? 'border-2 border-[#4338ca]'
+          ? 'border-2'
           : 'border border-border/50 hover:border-border'
       }`}
+      style={isSelected ? { borderColor: MATCHUP_STATUS_COLORS.selected.border } : undefined}
       onClick={onClick}
     >
       <div className="px-3.5 pt-2.5 pb-0 flex items-center justify-between">
@@ -150,8 +147,8 @@ function MatchupCard({
             className="text-[10px] font-medium px-2 py-0.5 rounded-full"
             style={
               matchup.playoffRound === 'Losers Bracket'
-                ? { background: '#f1f5f9', color: '#64748b' }
-                : { background: '#fef3c7', color: '#92400e' }
+                ? { background: MATCHUP_STATUS_COLORS.pending.bg, color: MATCHUP_STATUS_COLORS.pending.text }
+                : { background: MATCHUP_STATUS_COLORS.completed.bg, color: MATCHUP_STATUS_COLORS.completed.text }
             }
           >
             {matchup.playoffRound}
@@ -214,7 +211,7 @@ function MatchupCard({
         </div>
 
         <div className="mt-2.5 flex justify-end">
-          <span className="text-[11px] font-medium text-[#4338ca]">
+          <span className="text-[11px] font-medium" style={{ color: MATCHUP_STATUS_COLORS.selected.border }}>
             View box score →
           </span>
         </div>
@@ -356,9 +353,10 @@ function MatchupsContent({
             key={w}
             className={`px-2.5 py-1.5 text-[12px] font-medium border rounded-md cursor-pointer transition-colors ${
               w === activeWeek
-                ? 'bg-[#4338ca] border-[#4338ca] text-white'
+                ? 'text-white'
                 : 'bg-card border-border/50 text-muted-foreground hover:border-border'
             }`}
+            style={w === activeWeek ? { background: MATCHUP_STATUS_COLORS.selected.border, borderColor: MATCHUP_STATUS_COLORS.selected.border } : undefined}
             onClick={() => onWeekChange(w)}
           >
             Wk {w}
@@ -399,20 +397,7 @@ function MatchupsContent({
 }
 
 export default function Matchups() {
-  const leagueId = getCookie('leagueId');
-  const platform = (getCookie('leaguePlatform') || 'ESPN') as
-    | 'ESPN'
-    | 'SLEEPER';
-
-  const seasons = useMemo(() => {
-    try {
-      return JSON.parse(
-        decodeURIComponent(getCookie('leagueSeasons')),
-      ) as string[];
-    } catch {
-      return [];
-    }
-  }, []);
+  const { leagueId, platform, seasons } = useMemo(() => getLeagueCookies(), []);
 
   const defaultSeason =
     [...seasons].sort((a, b) => Number(b) - Number(a))[0] ?? '';

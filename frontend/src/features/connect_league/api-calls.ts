@@ -1,20 +1,5 @@
 import { apiClient } from '@/lib/api-client';
-
-export interface GetLeagueResponse {
-  detail: string;
-  data: {
-    canonical_league_id: string;
-    seasons: string[];
-  };
-}
-
-export function getLeague(
-  leagueId: string,
-  platform: 'ESPN' | 'SLEEPER',
-): Promise<GetLeagueResponse> {
-  const params = new URLSearchParams({ platform });
-  return apiClient.get<GetLeagueResponse>(`/leagues/${leagueId}?${params}`);
-}
+import type { Platform } from '@/components/api/types';
 
 export interface GetRefreshStatusResponse {
   detail: string;
@@ -27,7 +12,7 @@ export interface GetRefreshStatusResponse {
 
 export function getRefreshStatus(
   leagueId: string,
-  platform: 'ESPN' | 'SLEEPER',
+  platform: Platform,
   refreshOperation: 'ONBOARD' | 'REFRESH',
 ): Promise<GetRefreshStatusResponse> {
   const params = new URLSearchParams({ platform, refreshOperation });
@@ -38,7 +23,7 @@ export function getRefreshStatus(
 
 export interface OnboardRequest {
   leagueId: string;
-  platform: 'ESPN' | 'SLEEPER';
+  platform: Platform;
   season?: string;
   s2?: string;
   swid?: string;

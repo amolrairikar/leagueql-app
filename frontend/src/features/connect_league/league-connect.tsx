@@ -21,9 +21,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { getLeague } from '@/components/api/leagues';
 import {
   type OnboardRequest,
-  getLeague,
   getRefreshStatus,
   onboardLeague,
 } from '@/features/connect_league/api-calls';
@@ -32,6 +32,7 @@ import {
   type LeagueConnectFormValues,
   leagueConnectSchema,
 } from '@/features/connect_league/league-connect-schema';
+import { clearEspnCookies, setLeagueCookies } from '@/lib/cookie-handler';
 import { ApiError, clearApiError } from '@/lib/api-client';
 
 function getCookieValue(name: string): string {
@@ -89,12 +90,31 @@ export default function LeagueConnect() {
       swid: data.platform === 'espn' ? data.swid : undefined,
     };
 
-    await onboardLeague(requestType, body);
+    const MAX_ONBOARD_ATTEMPTS = 3;
+    let onboardSucceeded = false;
+    for (let attempt = 1; attempt <= MAX_ONBOARD_ATTEMPTS; attempt++) {
+      try {
+        await onboardLeague(requestType, body);
+        onboardSucceeded = true;
+        clearEspnCookies();
+        break;
+      } catch (err) {
+        const status = err instanceof ApiError ? err.status : 0;
+        const isRetryable = status === 0 || status >= 500;
+        if (!isRetryable || attempt === MAX_ONBOARD_ATTEMPTS) break;
+        await new Promise<void>((r) => setTimeout(r, 2000));
+      }
+    }
+    if (!onboardSucceeded) {
+      return;
+    }
 
     await new Promise<void>((r) => setTimeout(r, 5000));
-
     await new Promise<void>((resolve) => {
       let done = false;
+      let pollCount = 0;
+      let consecutiveErrors = 0;
+      const MAX_CONSECUTIVE_ERRORS = 3;
 
       const cleanup = (status: 'success' | 'failed') => {
         if (done) return;
@@ -105,9 +125,7 @@ export default function LeagueConnect() {
         if (status === 'success') {
           void (async () => {
             const leagueData = await getLeague(data.leagueId, apiPlatform);
-            document.cookie = `leagueId=${encodeURIComponent(data.leagueId)}; path=/`;
-            document.cookie = `leaguePlatform=${encodeURIComponent(apiPlatform)}; path=/`;
-            document.cookie = `leagueSeasons=${encodeURIComponent(JSON.stringify(leagueData.data.seasons))}; path=/`;
+            setLeagueCookies(data.leagueId, apiPlatform, leagueData.data.seasons);
             void navigate('/home');
           })();
         } else {
@@ -118,6 +136,7 @@ export default function LeagueConnect() {
 
       const intervalId = setInterval(() => {
         void (async () => {
+          pollCount += 1;
           try {
             const statusData = await getRefreshStatus(
               data.leagueId,
@@ -125,18 +144,24 @@ export default function LeagueConnect() {
               requestType,
             );
             const { refresh_status } = statusData.data;
+            consecutiveErrors = 0;
             if (refresh_status === 'COMPLETED') {
               cleanup('success');
             } else if (refresh_status === 'FAILED') {
               cleanup('failed');
             }
           } catch {
-            cleanup('failed');
+            consecutiveErrors += 1;
+            if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+              cleanup('failed');
+            }
           }
         })();
       }, 1000);
 
-      const timeoutId = setTimeout(() => cleanup('failed'), 30000);
+      const timeoutId = setTimeout(() => {
+        cleanup('failed');
+      }, 30000);
     });
   };
 

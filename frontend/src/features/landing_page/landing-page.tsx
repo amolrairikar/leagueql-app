@@ -5,6 +5,9 @@ import { useNavigate } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { setDemoMode } from '@/lib/cookie-handler';
+import { DEMO_SEASONS } from '@/lib/demo-constants';
+import { BROWSER_CHROME_COLORS } from '@/lib/color-constants';
 import { AboutDialog } from '@/features/about/about-dialog';
 import { PrivacyDialog } from '@/features/privacy/privacy-dialog';
 import {
@@ -95,15 +98,15 @@ function BrowserChrome({ url }: BrowserChromeProps) {
       <div className="flex gap-1.25">
         <span
           className="w-2.5 h-2.5 rounded-full"
-          style={{ backgroundColor: '#FF5F57' }}
+          style={{ backgroundColor: BROWSER_CHROME_COLORS.red }}
         />
         <span
           className="w-2.5 h-2.5 rounded-full"
-          style={{ backgroundColor: '#FFBD2E' }}
+          style={{ backgroundColor: BROWSER_CHROME_COLORS.yellow }}
         />
         <span
           className="w-2.5 h-2.5 rounded-full"
-          style={{ backgroundColor: '#28C840' }}
+          style={{ backgroundColor: BROWSER_CHROME_COLORS.green }}
         />
       </div>
       <div className="flex-1 bg-background/50 rounded h-5.5 flex items-center px-2.5">
@@ -247,11 +250,7 @@ export default function LeagueQLLanding() {
   }
 
   function handleViewDemo() {
-    const seasons = encodeURIComponent(JSON.stringify(['2022', '2023', '2024']));
-    document.cookie = 'leagueId=999999999; path=/; max-age=86400';
-    document.cookie = 'leaguePlatform=ESPN; path=/; max-age=86400';
-    document.cookie = `leagueSeasons=${seasons}; path=/; max-age=86400`;
-    document.cookie = 'demo_mode=true; path=/; max-age=86400';
+    setDemoMode(DEMO_SEASONS);
     void navigate('/home');
   }
 

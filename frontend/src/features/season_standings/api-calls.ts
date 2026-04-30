@@ -1,27 +1,7 @@
 import { apiClient } from '@/lib/api-client';
+import type { Platform, SeasonStandingsItem } from '@/components/api/types';
 
-export interface SeasonStandingsItem {
-  season: string;
-  team_id: string;
-  owner_id: string;
-  team_name: string;
-  team_logo: string;
-  owner_username: string;
-  games_played: number;
-  wins: number;
-  losses: number;
-  ties: number;
-  record: string;
-  win_pct: number;
-  total_vs_league_wins: number;
-  total_vs_league_losses: number;
-  win_pct_vs_league: number;
-  total_pf: number;
-  total_pa: number;
-  avg_pf: number;
-  avg_pa: number;
-  champion: string;
-}
+export type { SeasonStandingsItem } from '@/components/api/types';
 
 export interface GetSeasonStandingsResponse {
   data: SeasonStandingsItem[];
@@ -29,7 +9,7 @@ export interface GetSeasonStandingsResponse {
 
 export function getSeasonStandings(
   leagueId: string,
-  platform: 'ESPN' | 'SLEEPER',
+  platform: Platform,
   season: string,
 ): Promise<GetSeasonStandingsResponse> {
   const params = new URLSearchParams({

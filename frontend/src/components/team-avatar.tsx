@@ -1,21 +1,8 @@
 import { useCallback, useState } from 'react';
 
-export const AVATAR_COLORS = [
-  '#4338ca',
-  '#0f6e56',
-  '#993c1d',
-  '#993556',
-  '#185FA5',
-  '#854F0B',
-  '#5F5E5A',
-  '#A32D2D',
-  '#7c3aed',
-  '#b45309',
-  '#0891b2',
-  '#be185d',
-  '#1d6f6f',
-  '#6b4f9c',
-];
+import { AVATAR_COLORS } from '@/lib/color-constants';
+
+export { AVATAR_COLORS };
 
 export function avatarColor(index: number): string {
   return AVATAR_COLORS[index % AVATAR_COLORS.length] as string;

@@ -13,7 +13,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { getManagerHistoryData } from '@/features/manager_history/api-calls';
 import type { ManagerStandingsItem } from '@/features/manager_history/api-calls';
 import type { MatchupItem } from '@/features/matchups/api-calls';
-import { getLeague } from './api-calls';
+import { getLeagueCookies } from '@/lib/cookie-handler';
+import { getLeague } from '@/components/api/leagues';
 
 type StatItem = { label: string; value: string; sub?: string };
 
@@ -25,13 +26,6 @@ type ChampionItem = {
   pfGame: string;
   highlight?: boolean;
 };
-
-function getCookie(name: string): string {
-  const match = document.cookie
-    .split('; ')
-    .find((row) => row.startsWith(`${name}=`));
-  return match ? decodeURIComponent(match.split('=')[1] ?? '') : '';
-}
 
 function StatsSkeleton() {
   return (
@@ -265,7 +259,7 @@ function StatsWithTotalGames({
   totalGamesPromise: Promise<number>;
   championsPromise: Promise<ChampionItem[]>;
   totalMembersPromise: Promise<number>;
-  recordScorePromise: Promise<{ score: number; week: string; season: string }>;
+  recordScorePromise: Promise<{ score: number; week: string; season: string } | null>;
 }) {
   const totalGames = use(totalGamesPromise);
   const champions = use(championsPromise);
@@ -284,11 +278,9 @@ function StatsWithTotalGames({
       label: 'Total games',
       value: totalGames.toLocaleString(),
     },
-    {
-      label: 'Record score',
-      value: recordScore.score.toFixed(2),
-      sub: `Week ${recordScore.week}, ${recordScore.season}`,
-    },
+    recordScore
+      ? { label: 'Record score', value: recordScore.score.toFixed(2), sub: `Week ${recordScore.week}, ${recordScore.season}` }
+      : { label: 'Record score', value: '—' },
     {
       label: 'Total members',
       value: String(totalMembers),
@@ -323,18 +315,7 @@ function StatsWithTotalGames({
 }
 
 export default function HomePage() {
-  const leagueId = getCookie('leagueId');
-  const platform = (getCookie('leaguePlatform') || 'ESPN') as 'ESPN' | 'SLEEPER';
-
-  const seasons: string[] = useMemo(() => {
-    try {
-      return JSON.parse(
-        decodeURIComponent(getCookie('leagueSeasons')),
-      ) as string[];
-    } catch {
-      return [];
-    }
-  }, []);
+  const { leagueId, platform, seasons } = useMemo(() => getLeagueCookies(), []);
 
   const leagueNamePromise = useMemo(
     (): Promise<string | undefined> =>
@@ -405,7 +386,6 @@ export default function HomePage() {
   const totalGamesPromise = useMemo(
     (): Promise<number> =>
       allDataPromise.then(({ matchups }) => {
-        if (seasons.length === 0) return 1120;
         const seasonMatchups = seasons.map((season) =>
           matchups.filter((m) => m.season === season).length,
         );
@@ -418,7 +398,6 @@ export default function HomePage() {
   const totalMembersPromise = useMemo(
     (): Promise<number> =>
       allDataPromise.then(({ standings }) => {
-        if (standings.length === 0) return 10;
         const allOwners = new Set(standings.map((s) => s.owner_username));
         return allOwners.size;
       }),
@@ -427,9 +406,9 @@ export default function HomePage() {
 
   // Derive record score from the single data call
   const recordScorePromise = useMemo(
-    (): Promise<{ score: number; week: string; season: string }> =>
+    (): Promise<{ score: number; week: string; season: string } | null> =>
       allDataPromise.then(({ matchups }) => {
-        if (matchups.length === 0) return { score: 198.7, week: '11', season: '2021' };
+        if (matchups.length === 0) return null;
         let maxScore = 0;
         let maxWeek = '';
         let maxSeason = '';
