@@ -1,9 +1,6 @@
 import { apiClient } from '@/lib/api-client';
 import type { Platform } from '@/components/api/types';
 
-export type { GetLeagueResponse } from '@/components/api/types';
-export { getLeague } from '@/components/api/leagues';
-
 export interface GetRefreshStatusResponse {
   detail: string;
   data: {

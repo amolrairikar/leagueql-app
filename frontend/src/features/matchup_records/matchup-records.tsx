@@ -10,6 +10,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { getLeagueCookies } from '@/lib/cookie-handler';
+import { RECORD_COLORS, UI_COLORS } from '@/lib/color-constants';
 import {
   getAllMatchups,
   type MatchupItem,
@@ -31,22 +33,15 @@ interface MatchupRecord {
 }
 
 const RECORD_TYPES = [
-  { key: 'highest_team_score', label: 'Highest Team Score', color: '#4338ca' },
-  { key: 'lowest_team_score', label: 'Lowest Team Score', color: '#993c1d' },
-  { key: 'highest_matchup_score', label: 'Highest Matchup Score', color: '#0f6e56' },
-  { key: 'lowest_matchup_score', label: 'Lowest Matchup Score', color: '#BA7517' },
-  { key: 'biggest_blowout', label: 'Biggest Blowout', color: '#185FA5' },
-  { key: 'closest_game', label: 'Closest Game', color: '#5F5E5A' },
+  { key: 'highest_team_score', label: 'Highest Team Score', color: RECORD_COLORS.highestTeamScore },
+  { key: 'lowest_team_score', label: 'Lowest Team Score', color: RECORD_COLORS.lowestTeamScore },
+  { key: 'highest_matchup_score', label: 'Highest Matchup Score', color: RECORD_COLORS.highestMatchupScore },
+  { key: 'lowest_matchup_score', label: 'Lowest Matchup Score', color: RECORD_COLORS.lowestMatchupScore },
+  { key: 'biggest_blowout', label: 'Biggest Blowout', color: RECORD_COLORS.biggestBlowout },
+  { key: 'closest_game', label: 'Closest Game', color: RECORD_COLORS.closestGame },
 ];
 
 const EMPTY_MATCHUPS: MatchupItem[] = [];
-
-function getCookie(name: string): string {
-  const match = document.cookie
-    .split('; ')
-    .find((row) => row.startsWith(`${name}=`));
-  return match ? decodeURIComponent(match.split('=')[1] ?? '') : '';
-}
 
 function buildColorMap(matchups: MatchupItem[]): Map<string, string> {
   const uniqueTeams = new Map<string, string>();
@@ -80,8 +75,8 @@ function extractRecords(
     const week = parseInt(m.week, 10);
     if (isNaN(week)) continue;
 
-    const aColor = colorMap.get(m.team_a_id) ?? '#6b7280';
-    const bColor = colorMap.get(m.team_b_id) ?? '#6b7280';
+    const aColor = colorMap.get(m.team_a_id) ?? UI_COLORS.default;
+    const bColor = colorMap.get(m.team_b_id) ?? UI_COLORS.default;
     const aScore = m.team_a_score ?? 0;
     const bScore = m.team_b_score ?? 0;
     const matchupScore = aScore + bScore;
@@ -281,7 +276,7 @@ function RecordCard({
                 <td
                   className="px-3 py-2"
                   style={
-                    isGold ? { borderLeft: '2px solid #EF9F27' } : undefined
+                    isGold ? { borderLeft: `2px solid ${UI_COLORS.gold}` } : undefined
                   }
                 >
                   <span className="text-[11px] text-muted-foreground">
@@ -379,7 +374,7 @@ function BoxScoreView({
     teamLogo: matchup.team_a_team_logo,
     teamName: matchup.team_a_team_name,
     ownerUsername: matchup.team_a_display_name,
-    color: colorMap.get(matchup.team_a_id) ?? '#6b7280',
+    color: colorMap.get(matchup.team_a_id) ?? UI_COLORS.default,
     score: matchup.team_a_score,
     starters: matchup.team_a_starters ?? [],
     bench: matchup.team_a_bench ?? [],
@@ -389,7 +384,7 @@ function BoxScoreView({
     teamLogo: matchup.team_b_team_logo,
     teamName: matchup.team_b_team_name,
     ownerUsername: matchup.team_b_display_name,
-    color: colorMap.get(matchup.team_b_id) ?? '#6b7280',
+    color: colorMap.get(matchup.team_b_id) ?? UI_COLORS.default,
     score: matchup.team_b_score,
     starters: matchup.team_b_starters ?? [],
     bench: matchup.team_b_bench ?? [],
@@ -581,10 +576,7 @@ function MatchupRecordsContent({
 }
 
 export default function MatchupRecords() {
-  const leagueId = getCookie('leagueId');
-  const platform = (getCookie('leaguePlatform') || 'ESPN') as
-    | 'ESPN'
-    | 'SLEEPER';
+  const { leagueId, platform } = getLeagueCookies();
 
   const promise = useMemo(
     (): Promise<Result> =>

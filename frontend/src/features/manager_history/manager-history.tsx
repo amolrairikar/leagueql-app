@@ -15,6 +15,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { getLeagueCookies } from '@/lib/cookie-handler';
+import { NEMESIS_COLORS, POSITION_COLORS, UI_COLORS } from '@/lib/color-constants';
 import {
   getManagerHistoryData,
   type ManagerStandingsItem,
@@ -80,14 +82,12 @@ interface RivalryAcc {
   lastWon: boolean;
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Constants ─────────────────────────────────────────────────────────────────
 
-function getCookie(name: string): string {
-  const match = document.cookie
-    .split('; ')
-    .find((row) => row.startsWith(`${name}=`));
-  return match ? decodeURIComponent(match.split('=')[1] ?? '') : '';
-}
+const DOMINATION_WIN_RATE = 0.65; // win rate at or above this → domination rivalry
+const NEMESIS_WIN_RATE    = 0.40; // win rate below this → nemesis rivalry
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function managerInitials(username: string): string {
   const parts = username
@@ -105,7 +105,7 @@ function resultBadge(result: string) {
     return (
       <span
         className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium"
-        style={{ background: '#EEEDFE', color: '#3C3489' }}
+        style={{ background: UI_COLORS.champion.bg, color: UI_COLORS.champion.text }}
       >
         Champion
       </span>
@@ -114,7 +114,7 @@ function resultBadge(result: string) {
     return (
       <span
         className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium"
-        style={{ background: '#FAEEDA', color: '#633806' }}
+        style={{ background: POSITION_COLORS.TE.bg, color: POSITION_COLORS.TE.tc }}
       >
         Runner-up
       </span>
@@ -123,7 +123,7 @@ function resultBadge(result: string) {
     return (
       <span
         className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium"
-        style={{ background: '#E1F5EE', color: '#085041' }}
+        style={{ background: POSITION_COLORS.RB.bg, color: POSITION_COLORS.RB.tc }}
       >
         Playoffs
       </span>
@@ -131,7 +131,7 @@ function resultBadge(result: string) {
   return (
     <span
       className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium"
-      style={{ background: '#F1EFE8', color: '#444441' }}
+      style={{ background: POSITION_COLORS.K.bg, color: POSITION_COLORS.K.tc }}
     >
       <span className="whitespace-nowrap">Missed Playoffs</span>
     </span>
@@ -488,11 +488,11 @@ function ManagerHistoryContent({ promise }: { promise: Promise<DataResult> }) {
     return bRate - aRate;
   });
   const best = sorted
-    .filter((r) => r.w + r.l > 0 && r.w / (r.w + r.l) >= 0.65)
+    .filter((r) => r.w + r.l > 0 && r.w / (r.w + r.l) >= DOMINATION_WIN_RATE)
     .slice(0, 2);
   const worst = [...sorted]
     .reverse()
-    .filter((r) => r.w + r.l > 0 && r.w / (r.w + r.l) < 0.4)
+    .filter((r) => r.w + r.l > 0 && r.w / (r.w + r.l) < NEMESIS_WIN_RATE)
     .slice(0, 2);
   const closest = [...m.rivalries]
     .sort((a, b) => {
@@ -674,7 +674,7 @@ function ManagerHistoryContent({ promise }: { promise: Promise<DataResult> }) {
             className={`bg-card border border-border/50 rounded-lg p-3.5 grid grid-cols-[80px_1fr_auto] gap-3 items-center ${
               s.result === 'champion' ? 'border-2' : ''
             }`}
-            style={s.result === 'champion' ? { borderColor: '#534AB7' } : {}}
+            style={s.result === 'champion' ? { borderColor: UI_COLORS.champion.border } : {}}
           >
             <div>
               <div className="text-[13px] font-medium text-foreground">
@@ -749,11 +749,11 @@ function ManagerHistoryContent({ promise }: { promise: Promise<DataResult> }) {
                 >
                   <p className="text-[12px]">
                     <span className="font-semibold">Domination</span> win
-                    pct ≥ 0.650
+                    {` pct ≥ ${DOMINATION_WIN_RATE.toFixed(3)}`}
                   </p>
                   <p className="text-[12px] mt-1">
                     <span className="font-semibold">Nemesis</span> win
-                    pct &lt; 0.400
+                    {` pct < ${NEMESIS_WIN_RATE.toFixed(3)}`}
                   </p>
                   <p className="text-[12px] mt-1">
                     <span className="font-semibold">Rival</span> lowest
@@ -779,32 +779,32 @@ function ManagerHistoryContent({ promise }: { promise: Promise<DataResult> }) {
                 typeBadge = (
                   <span
                     className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium"
-                    style={{ background: '#E1F5EE', color: '#085041' }}
+                    style={{ background: POSITION_COLORS.RB.bg, color: POSITION_COLORS.RB.tc }}
                   >
                     Domination
                   </span>
                 );
-                typeColor = '#0F6E56';
+                typeColor = POSITION_COLORS.RB.color;
               } else if (type === 'worst') {
                 typeBadge = (
                   <span
                     className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium"
-                    style={{ background: '#FCEBEB', color: '#791F1F' }}
+                    style={{ background: NEMESIS_COLORS.bg, color: NEMESIS_COLORS.text }}
                   >
                     Nemesis
                   </span>
                 );
-                typeColor = '#E24B4A';
+                typeColor = NEMESIS_COLORS.accent;
               } else {
                 typeBadge = (
                   <span
                     className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium"
-                    style={{ background: '#FAEEDA', color: '#633806' }}
+                    style={{ background: POSITION_COLORS.TE.bg, color: POSITION_COLORS.TE.tc }}
                   >
                     Rival
                   </span>
                 );
-                typeColor = '#BA7517';
+                typeColor = POSITION_COLORS.TE.color;
               }
               const margin = (r.avgFor - r.avgAgainst).toFixed(1);
               const marginSign = parseFloat(margin) > 0 ? '+' : '';
@@ -882,7 +882,7 @@ function ManagerHistoryContent({ promise }: { promise: Promise<DataResult> }) {
                         className="text-[13px] font-medium"
                         style={{
                           color:
-                            parseFloat(margin) >= 0 ? '#27500A' : '#791F1F',
+                            parseFloat(margin) >= 0 ? UI_COLORS.positive : UI_COLORS.negative,
                         }}
                       >
                         {marginSign}
@@ -896,7 +896,7 @@ function ManagerHistoryContent({ promise }: { promise: Promise<DataResult> }) {
                       <div
                         className="text-[13px] font-medium"
                         style={{
-                          color: r.lastResult === 'W' ? '#27500A' : '#791F1F',
+                          color: r.lastResult === 'W' ? UI_COLORS.positive : UI_COLORS.negative,
                         }}
                       >
                         {r.lastResult}
@@ -916,20 +916,7 @@ function ManagerHistoryContent({ promise }: { promise: Promise<DataResult> }) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function ManagerHistory() {
-  const leagueId = getCookie('leagueId');
-  const platform = (getCookie('leaguePlatform') || 'ESPN') as
-    | 'ESPN'
-    | 'SLEEPER';
-
-  const seasons = useMemo(() => {
-    try {
-      return JSON.parse(
-        decodeURIComponent(getCookie('leagueSeasons')),
-      ) as string[];
-    } catch {
-      return [];
-    }
-  }, []);
+  const { leagueId, platform, seasons } = useMemo(() => getLeagueCookies(), []);
 
   const dataPromise = useMemo(
     (): Promise<DataResult> =>

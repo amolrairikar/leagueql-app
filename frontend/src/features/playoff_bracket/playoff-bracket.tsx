@@ -4,6 +4,8 @@ import { Trophy } from 'lucide-react';
 
 import { BoxScoreCard } from '@/components/box-score-card';
 import SeasonSelect from '@/features/season_select/season-select';
+import { getLeagueCookies } from '@/lib/cookie-handler';
+import { AVATAR_COLORS, UI_COLORS, POSITION_COLORS } from '@/lib/color-constants';
 import { getPlayoffBracket, getMatchups, type BracketMatch, type Matchup } from './api-calls';
 
 interface Team {
@@ -14,23 +16,13 @@ interface Team {
 }
 
 
-// Helper function to get cookie value
-function getCookie(name: string): string | undefined {
-  const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
-  return match ? decodeURIComponent(match[2]) : undefined;
-}
-
 // Generate consistent color from team ID
 function getTeamColor(teamId: string): string {
-  const colors = [
-    '#4338ca', '#0f6e56', '#993c1d', '#185FA5', '#993556', '#854F0B',
-    '#7c3aed', '#0891b2', '#c2410c', '#1d4ed8', '#be185d', '#b45309',
-  ];
   let hash = 0;
   for (let i = 0; i < teamId.length; i++) {
     hash = teamId.charCodeAt(i) + ((hash << 5) - hash);
   }
-  return colors[Math.abs(hash) % colors.length];
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
 
 function TeamRow({
@@ -63,7 +55,7 @@ function TeamRow({
   const rowClass = played ? (isWinner ? 'bg-muted' : 'opacity-40') : isBye ? 'opacity-55' : '';
 
   const scoreHtml = isBye ? (
-    <span className="text-[9px] font-medium uppercase tracking-[0.05em] text-[#3C3489] bg-[#EEEDFE] px-1 py-0.5 rounded">
+    <span className="text-[9px] font-medium uppercase tracking-[0.05em] px-1 py-0.5 rounded" style={{ color: UI_COLORS.champion.text, background: UI_COLORS.champion.bg }}>
       BYE
     </span>
   ) : played && score !== null ? (
@@ -94,11 +86,13 @@ function TeamRow({
 function MatchupCard({
   match,
   extraClass,
+  extraStyle,
   played,
   onClick,
 }: {
   match: BracketMatch | null;
   extraClass?: string;
+  extraStyle?: React.CSSProperties;
   played: boolean;
   onClick?: () => void;
 }) {
@@ -130,6 +124,7 @@ function MatchupCard({
   return (
     <div
       className={`bg-card border border-border/30 rounded-md overflow-hidden ${extraClass || ''} ${onClick ? 'cursor-pointer hover:border-border/60' : ''}`}
+      style={extraStyle}
       onClick={onClick}
     >
       <TeamRow team={team1} score={score1} isWinner={played && aWins} played={played} isBye={false} />
@@ -155,7 +150,7 @@ function ByeCard({ team }: { team: Team }) {
           <div className="text-[12px] font-medium text-foreground truncate">{team.display_name}</div>
           <div className="text-[10px] text-muted-foreground truncate">{team.team_name}</div>
         </div>
-        <span className="text-[9px] font-medium uppercase tracking-[0.05em] text-[#3C3489] bg-[#EEEDFE] px-1 py-0.5 rounded">
+        <span className="text-[9px] font-medium uppercase tracking-[0.05em] px-1 py-0.5 rounded" style={{ color: UI_COLORS.champion.text, background: UI_COLORS.champion.bg }}>
           BYE
         </span>
       </div>
@@ -168,9 +163,9 @@ function ChampionCard({ team }: { team: Team }) {
   const init = team.display_name.slice(0, 2).toUpperCase();
 
   return (
-    <div className="bg-card border-2 border-[#EF9F27] rounded-lg p-4 flex flex-col items-center gap-2 w-full">
+    <div className="bg-card border-2 rounded-lg p-4 flex flex-col items-center gap-2 w-full" style={{ borderColor: UI_COLORS.gold }}>
       <Trophy className="w-6 h-6" />
-      <div className="text-[10px] font-medium uppercase tracking-[0.08em] text-[#BA7517]">Champion</div>
+      <div className="text-[10px] font-medium uppercase tracking-[0.08em]" style={{ color: POSITION_COLORS.TE.color }}>Champion</div>
       <div
         className="w-10 h-10 rounded-full flex items-center justify-center text-[14px] font-medium text-white"
         style={{ background: color }}
@@ -184,16 +179,7 @@ function ChampionCard({ team }: { team: Team }) {
 }
 
 export default function PlayoffBracket() {
-  const leagueId = getCookie('leagueId');
-  const platform = (getCookie('leaguePlatform') || 'ESPN') as 'ESPN' | 'SLEEPER';
-  const rawSeasons = getCookie('leagueSeasons');
-  const allSeasons: string[] = useMemo(() => {
-    try {
-      return rawSeasons ? (JSON.parse(rawSeasons) as string[]) : [];
-    } catch {
-      return [];
-    }
-  }, [rawSeasons]);
+  const { leagueId, platform, seasons: allSeasons } = useMemo(() => getLeagueCookies(), []);
 
   const [selectedSeason, setSelectedSeason] = useState(() => allSeasons.length > 0 ? allSeasons[allSeasons.length - 1] : '2025');
   const [matches, setMatches] = useState<BracketMatch[]>([]);
@@ -474,7 +460,8 @@ export default function PlayoffBracket() {
               {championship && (
                 <MatchupCard
                   match={championship}
-                  extraClass="border-2 border-[#EF9F27]"
+                  extraClass={`border-2`}
+                  extraStyle={{ borderColor: UI_COLORS.gold }}
                   played={true}
                   onClick={() => setSelectedMatchId(championship.match_id === selectedMatchId ? null : championship.match_id)}
                 />

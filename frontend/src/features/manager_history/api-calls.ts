@@ -29,7 +29,6 @@ export async function getManagerHistoryData(
   standings: ManagerStandingsItem[];
   matchups: MatchupItem[];
 }> {
-  console.log('[getManagerHistoryData] Fetching all standings and matchups in single queries');
   const [standingsResult, matchupResult] = await Promise.all([
     apiClient
       .get<{

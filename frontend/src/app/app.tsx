@@ -2,7 +2,10 @@ import { useUser } from '@clerk/react';
 import { type LucideProps } from 'lucide-react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
+import { ErrorBoundary } from '@/components/error-boundary';
 import Header from '@/components/header';
+import { Spinner } from '@/components/spinner';
+import { isDemoMode } from '@/lib/cookie-handler';
 import { ModeToggle } from '@/components/mode-toggle';
 import {
   SidebarInset,
@@ -78,27 +81,24 @@ function AppLayout({ children }: { children: React.ReactNode }) {
               </div>
             </div>
           </header>
-          {children}
+          <ErrorBoundary>{children}</ErrorBoundary>
         </SidebarInset>
       </SidebarProvider>
     </TooltipProvider>
   );
 }
 
-function isDemoMode(): boolean {
-  return document.cookie.split('; ').some((row) => row === 'demo_mode=true');
-}
-
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   if (isDemoMode()) return <>{children}</>;
   const { isSignedIn, isLoaded } = useUser();
-  if (!isLoaded) return null;
+  if (!isLoaded) return <div className="flex min-h-screen items-center justify-center"><Spinner className="size-6 text-muted-foreground" /></div>;
   if (!isSignedIn) return <Navigate to="/" replace />;
   return <>{children}</>;
 }
 
 function App() {
   return (
+    <ErrorBoundary>
     <BrowserRouter>
       <Routes>
         <Route
@@ -233,6 +233,7 @@ function App() {
         />
       </Routes>
     </BrowserRouter>
+    </ErrorBoundary>
   );
 }
 

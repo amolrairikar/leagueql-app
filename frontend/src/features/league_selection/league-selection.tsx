@@ -14,7 +14,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { getLeague } from '@/features/connect_league/api-calls';
+import { getLeague } from '@/components/api/leagues';
+import { setLeagueCookies } from '@/lib/cookie-handler';
 import { ApiError } from '@/lib/api-client';
 
 type View = 'select' | 'view-league';
@@ -36,9 +37,7 @@ export default function LeagueSelection() {
 
     try {
       const leagueData = await getLeague(leagueId.trim(), platform);
-      document.cookie = `leagueId=${encodeURIComponent(leagueId.trim())}; path=/`;
-      document.cookie = `leaguePlatform=${encodeURIComponent(platform)}; path=/`;
-      document.cookie = `leagueSeasons=${encodeURIComponent(JSON.stringify(leagueData.data.seasons))}; path=/`;
+      setLeagueCookies(leagueId.trim(), platform, leagueData.data.seasons);
       void navigate('/home');
     } catch (err) {
       const message =

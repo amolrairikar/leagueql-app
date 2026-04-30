@@ -3,17 +3,19 @@ import { ChevronDown, Gem, X } from 'lucide-react';
 
 import { Skeleton } from '@/components/ui/skeleton';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { getLeagueCookies } from '@/lib/cookie-handler';
+import { NEMESIS_COLORS, POSITION_COLORS, UI_COLORS } from '@/lib/color-constants';
 import { type DraftPickItem, getDraftData } from './api-calls';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const posMeta: Record<string, { bg: string; tc: string }> = {
-  QB: { bg: '#EEEDFE', tc: '#3C3489' },
-  RB: { bg: '#E1F5EE', tc: '#085041' },
-  WR: { bg: '#FAECE7', tc: '#712B13' },
-  TE: { bg: '#FAEEDA', tc: '#633806' },
-  K: { bg: '#F1EFE8', tc: '#444441' },
-  'D/ST': { bg: '#E6F1FB', tc: '#0C447C' },
+  QB: { bg: POSITION_COLORS.QB.bg, tc: POSITION_COLORS.QB.tc },
+  RB: { bg: POSITION_COLORS.RB.bg, tc: POSITION_COLORS.RB.tc },
+  WR: { bg: POSITION_COLORS.WR.bg, tc: POSITION_COLORS.WR.tc },
+  TE: { bg: POSITION_COLORS.TE.bg, tc: POSITION_COLORS.TE.tc },
+  K: { bg: POSITION_COLORS.K.bg, tc: POSITION_COLORS.K.tc },
+  'D/ST': { bg: POSITION_COLORS.DEF.bg, tc: POSITION_COLORS.DEF.tc },
 };
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -22,41 +24,17 @@ type DraftResult =
   | { ok: true; data: DraftPickItem[] }
   | { ok: false; error: string };
 
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const STEAL_DELTA_MIN       = 5;   // draft_rank_delta >= this → steal
+const BUST_DELTA_MAX        = -10; // draft_rank_delta <= this → potential bust
+const BUST_ROUND_BUFFER     = 4;   // bust only when picked more than this many rounds before the last
+const ALT_PICK_ROUND_WINDOW = 2;   // suggest alternatives within this many rounds of the pick
+
+const DELTA_PILL_POS = 3;
+const DELTA_PILL_NEG = -3;
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function getCookie(name: string): string {
-  const match = document.cookie
-    .split('; ')
-    .find((row) => row.startsWith(`${name}=`));
-  return match ? decodeURIComponent(match.split('=')[1] ?? '') : '';
-}
-
-function grade(pick: DraftPickItem): { g: string; cls: string; score: number } {
-  const d = pick.draft_rank_delta;
-  const r = pick.drafted_position_rank;
-
-  if (r <= 5) {
-    if (d >= 3)  return { g: 'A', cls: 'grade-a', score: 95 };
-    if (d >= -1) return { g: 'B', cls: 'grade-b', score: 85 };
-    if (d >= -4) return { g: 'C', cls: 'grade-c', score: 75 };
-    if (d >= -6) return { g: 'D', cls: 'grade-d', score: 65 };
-    return             { g: 'F', cls: 'grade-f', score: 55 };
-  }
-
-  if (r <= 14) {
-    if (d >= 5)  return { g: 'A', cls: 'grade-a', score: 95 };
-    if (d >= -2) return { g: 'B', cls: 'grade-b', score: 85 };
-    if (d >= -5) return { g: 'C', cls: 'grade-c', score: 75 };
-    if (d >= -9) return { g: 'D', cls: 'grade-d', score: 65 };
-    return             { g: 'F', cls: 'grade-f', score: 55 };
-  }
-
-  // Deep picks (rank 15+): speculative, no F
-  if (d >= 8)  return { g: 'A', cls: 'grade-a', score: 95 };
-  if (d >= 0)  return { g: 'B', cls: 'grade-b', score: 85 };
-  if (d >= -5) return { g: 'C', cls: 'grade-c', score: 75 };
-  return             { g: 'D', cls: 'grade-d', score: 65 };
-}
 
 function getAlts(pick: DraftPickItem, allPicks: DraftPickItem[]): DraftPickItem[] {
   return allPicks
@@ -64,7 +42,7 @@ function getAlts(pick: DraftPickItem, allPicks: DraftPickItem[]): DraftPickItem[
       (a) =>
         a.position === pick.position &&
         a.overall_pick_number > pick.overall_pick_number &&
-        a.round <= pick.round + 2 &&
+        a.round <= pick.round + ALT_PICK_ROUND_WINDOW &&
         a.player_name !== pick.player_name &&
         a.total_points > pick.total_points,
     )
@@ -138,13 +116,13 @@ function DraftRecapContent({
 
   const bestPick = picks.length
     ? picks.reduce((best, p) =>
-        grade(p).score > grade(best).score ? p : best,
+        p.draft_rank_delta > best.draft_rank_delta ? p : best,
       )
     : null;
 
   const maxRound = allPicks.length ? Math.max(...allPicks.map((p) => p.round)) : 0;
-  const busts = picks.filter((p) => p.draft_rank_delta <= -10 && p.round <= maxRound - 4).length;
-  const steals = picks.filter((p) => p.draft_rank_delta >= 5).length;
+  const busts = picks.filter((p) => p.draft_rank_delta <= BUST_DELTA_MAX && p.round <= maxRound - BUST_ROUND_BUFFER).length;
+  const steals = picks.filter((p) => p.draft_rank_delta >= STEAL_DELTA_MIN).length;
 
   const totalVorp = picks.reduce((sum, p) => sum + (p.vorp ?? 0), 0);
 
@@ -209,7 +187,7 @@ function DraftRecapContent({
           <div className="text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground mb-1">
             Steals
           </div>
-          <div className="text-[22px] font-medium" style={{ color: '#27500A' }}>
+          <div className="text-[22px] font-medium" style={{ color: UI_COLORS.positive }}>
             {steals}
           </div>
         </div>
@@ -217,7 +195,7 @@ function DraftRecapContent({
           <div className="text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground mb-1">
             Busts
           </div>
-          <div className="text-[22px] font-medium" style={{ color: '#791F1F' }}>
+          <div className="text-[22px] font-medium" style={{ color: UI_COLORS.negative }}>
             {busts}
           </div>
         </div>
@@ -257,12 +235,11 @@ function DraftRecapContent({
           </thead>
           <tbody>
             {picks.map((pick, i) => {
-              const pm = posMeta[pick.position] ?? { bg: '#F1EFE8', tc: '#444441' };
+              const pm = posMeta[pick.position] ?? { bg: POSITION_COLORS.K.bg, tc: POSITION_COLORS.K.tc };
               const delta = pick.draft_rank_delta;
               const deltaStr = (delta >= 0 ? '+' : '') + delta;
-              const dpillCls = delta >= 3 ? 'delta-pos' : delta <= -3 ? 'delta-neg' : 'delta-neu';
-              const { g } = grade(pick);
-              const isBust = delta <= -10 && pick.round <= maxRound - 4;
+              const dpillCls = delta >= DELTA_PILL_POS ? 'delta-pos' : delta <= DELTA_PILL_NEG ? 'delta-neg' : 'delta-neu';
+              const isBust = delta <= BUST_DELTA_MAX && pick.round <= maxRound - BUST_ROUND_BUFFER;
               const alts = isBust ? getAlts(pick, allPicks) : [];
               const bustKey = `${selectedManager}-${selectedSeason}-${i}`;
               const isOpen = !!openBusts[bustKey];
@@ -277,8 +254,8 @@ function DraftRecapContent({
                       <div className="px-3 py-2.5">
                         <div className="text-[13px] font-medium text-foreground flex items-center gap-1">
                           {pick.player_name}
-                          {pick.draft_rank_delta >= 5 && <Gem className="w-3 h-3 shrink-0" style={{ color: '#27500A' }} />}
-                          {pick.draft_rank_delta <= -10 && pick.round <= maxRound - 4 && <X className="w-3 h-3 shrink-0" style={{ color: '#791F1F' }} />}
+                          {pick.draft_rank_delta >= STEAL_DELTA_MIN && <Gem className="w-3 h-3 shrink-0" style={{ color: UI_COLORS.positive }} />}
+                          {pick.draft_rank_delta <= BUST_DELTA_MAX && pick.round <= maxRound - BUST_ROUND_BUFFER && <X className="w-3 h-3 shrink-0" style={{ color: UI_COLORS.negative }} />}
                         </div>
                         <div className="text-[11px] text-muted-foreground mt-0.5">
                           <span className="inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium bg-muted text-muted-foreground">
@@ -306,7 +283,7 @@ function DraftRecapContent({
                       {pick.vorp === null ? (
                         <div className="px-3 py-2.5 text-center text-[12px] text-muted-foreground">N/A</div>
                       ) : (
-                        <div className="px-3 py-2.5 text-center text-[13px] font-medium" style={{ color: pick.vorp >= 0 ? '#27500A' : '#791F1F' }}>
+                        <div className="px-3 py-2.5 text-center text-[13px] font-medium" style={{ color: pick.vorp >= 0 ? UI_COLORS.positive : UI_COLORS.negative }}>
                           {(pick.vorp >= 0 ? '+' : '') + pick.vorp.toFixed(1)}
                         </div>
                       )}
@@ -326,8 +303,8 @@ function DraftRecapContent({
                         <span
                           className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium whitespace-nowrap ${dpillCls}`}
                           style={{
-                            background: dpillCls === 'delta-pos' ? '#EAF3DE' : dpillCls === 'delta-neg' ? '#FCEBEB' : '#F1EFE8',
-                            color: dpillCls === 'delta-pos' ? '#27500A' : dpillCls === 'delta-neg' ? '#791F1F' : '#444441',
+                            background: dpillCls === 'delta-pos' ? UI_COLORS.winner.bg : dpillCls === 'delta-neg' ? NEMESIS_COLORS.bg : POSITION_COLORS.K.bg,
+                            color: dpillCls === 'delta-pos' ? UI_COLORS.winner.text : dpillCls === 'delta-neg' ? UI_COLORS.negative : POSITION_COLORS.K.tc,
                           }}
                         >
                           {deltaStr} places
@@ -335,12 +312,12 @@ function DraftRecapContent({
                       </div>
                     </td>
                   </tr>
-                  {(g === 'D' || g === 'F') && alts.length > 0 && (
+                  {alts.length > 0 && (
                     <tr>
                       <td colSpan={8} className="p-0">
                         <div className="bg-muted/50 border-t border-border/50 p-2.5 flex flex-col gap-1.5">
                           <div className="flex items-center justify-between mb-1">
-                            <div className="text-[10px] font-medium uppercase tracking-[0.06em]" style={{ color: '#791F1F' }}>
+                            <div className="text-[10px] font-medium uppercase tracking-[0.06em]" style={{ color: UI_COLORS.negative }}>
                               Could have picked instead
                             </div>
                             <button
@@ -357,7 +334,7 @@ function DraftRecapContent({
                           {isOpen && (
                             <div className="flex flex-col gap-1">
                               {alts.map((alt) => {
-                                const altPm = posMeta[alt.position] ?? { bg: '#F1EFE8', tc: '#444441' };
+                                const altPm = posMeta[alt.position] ?? { bg: POSITION_COLORS.K.bg, tc: POSITION_COLORS.K.tc };
                                 const diff = (alt.total_points - pick.total_points).toFixed(2);
                                 const spotsLater = alt.overall_pick_number - pick.overall_pick_number;
                                 return (
@@ -376,7 +353,7 @@ function DraftRecapContent({
                                     <span className="text-[12px] font-medium text-foreground ml-auto">{alt.total_points.toFixed(2)} pts</span>
                                     <span
                                       className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium whitespace-nowrap"
-                                      style={{ background: '#EAF3DE', color: '#27500A' }}
+                                      style={{ background: UI_COLORS.winner.bg, color: UI_COLORS.winner.text }}
                                     >
                                       +{diff} more points
                                     </span>
@@ -403,16 +380,7 @@ function DraftRecapContent({
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function DraftRecap() {
-  const leagueId = getCookie('leagueId');
-  const platform = (getCookie('leaguePlatform') || 'ESPN') as 'ESPN' | 'SLEEPER';
-
-  const seasons: string[] = useMemo(() => {
-    try {
-      return JSON.parse(getCookie('leagueSeasons')) as string[];
-    } catch {
-      return [];
-    }
-  }, []);
+  const { leagueId, platform, seasons } = useMemo(() => getLeagueCookies(), []);
 
   const defaultSeason = [...seasons].sort((a, b) => Number(b) - Number(a))[0] ?? '';
   const [selectedSeason, setSelectedSeason] = useState(defaultSeason);

@@ -21,9 +21,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { getLeague } from '@/components/api/leagues';
 import {
   type OnboardRequest,
-  getLeague,
   getRefreshStatus,
   onboardLeague,
 } from '@/features/connect_league/api-calls';
@@ -32,6 +32,7 @@ import {
   type LeagueConnectFormValues,
   leagueConnectSchema,
 } from '@/features/connect_league/league-connect-schema';
+import { clearEspnCookies, setLeagueCookies } from '@/lib/cookie-handler';
 import { ApiError, clearApiError } from '@/lib/api-client';
 
 function getCookieValue(name: string): string {
@@ -67,26 +68,16 @@ export default function LeagueConnect() {
     setPollStatus('idle');
     const apiPlatform = data.platform.toUpperCase() as 'ESPN' | 'SLEEPER';
 
-    console.log('[LeagueConnect] Submit started', {
-      leagueId: data.leagueId,
-      platform: apiPlatform,
-    });
-
     let requestType: 'ONBOARD' | 'REFRESH';
 
     try {
       await getLeague(data.leagueId, apiPlatform);
       requestType = 'REFRESH';
-      console.log('[LeagueConnect] League exists — using REFRESH flow');
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) {
         clearApiError();
         requestType = 'ONBOARD';
-        console.log('[LeagueConnect] League not found — using ONBOARD flow');
       } else {
-        console.error('[LeagueConnect] getLeague check failed', {
-          status: err instanceof ApiError ? err.status : 'unknown',
-        });
         return;
       }
     }
@@ -99,43 +90,26 @@ export default function LeagueConnect() {
       swid: data.platform === 'espn' ? data.swid : undefined,
     };
 
-    console.log('[LeagueConnect] Sending onboard request', {
-      requestType,
-      leagueId: body.leagueId,
-      platform: body.platform,
-      season: body.season,
-    });
-
     const MAX_ONBOARD_ATTEMPTS = 3;
-    let onboardErr: unknown;
     let onboardSucceeded = false;
     for (let attempt = 1; attempt <= MAX_ONBOARD_ATTEMPTS; attempt++) {
       try {
         await onboardLeague(requestType, body);
-        console.log(`[LeagueConnect] Onboard request triggered (attempt ${attempt})`);
         onboardSucceeded = true;
+        clearEspnCookies();
         break;
       } catch (err) {
-        onboardErr = err;
         const status = err instanceof ApiError ? err.status : 0;
-        console.error(`[LeagueConnect] Onboard request failed (attempt ${attempt})`, { status });
         const isRetryable = status === 0 || status >= 500;
         if (!isRetryable || attempt === MAX_ONBOARD_ATTEMPTS) break;
-        console.log(`[LeagueConnect] Retrying in 2s...`);
         await new Promise<void>((r) => setTimeout(r, 2000));
       }
     }
     if (!onboardSucceeded) {
-      console.error('[LeagueConnect] All onboard attempts exhausted', {
-        status: onboardErr instanceof ApiError ? onboardErr.status : 'unknown',
-      });
       return;
     }
 
-    console.log('[LeagueConnect] Waiting 5s before polling...');
     await new Promise<void>((r) => setTimeout(r, 5000));
-
-    console.log('[LeagueConnect] Starting status polling');
     await new Promise<void>((resolve) => {
       let done = false;
       let pollCount = 0;
@@ -147,16 +121,11 @@ export default function LeagueConnect() {
         done = true;
         clearInterval(intervalId);
         clearTimeout(timeoutId);
-        console.log(`[LeagueConnect] Polling finished — status: ${status}`, {
-          pollCount,
-        });
         setPollStatus(status);
         if (status === 'success') {
           void (async () => {
             const leagueData = await getLeague(data.leagueId, apiPlatform);
-            document.cookie = `leagueId=${encodeURIComponent(data.leagueId)}; path=/`;
-            document.cookie = `leaguePlatform=${encodeURIComponent(apiPlatform)}; path=/`;
-            document.cookie = `leagueSeasons=${encodeURIComponent(JSON.stringify(leagueData.data.seasons))}; path=/`;
+            setLeagueCookies(data.leagueId, apiPlatform, leagueData.data.seasons);
             void navigate('/home');
           })();
         } else {
@@ -175,18 +144,14 @@ export default function LeagueConnect() {
               requestType,
             );
             const { refresh_status } = statusData.data;
-            console.log(`[LeagueConnect] Poll #${pollCount} — refresh_status: ${refresh_status}`);
             consecutiveErrors = 0;
             if (refresh_status === 'COMPLETED') {
               cleanup('success');
             } else if (refresh_status === 'FAILED') {
               cleanup('failed');
             }
-          } catch (err) {
+          } catch {
             consecutiveErrors += 1;
-            console.error(`[LeagueConnect] Poll #${pollCount} error (${consecutiveErrors}/${MAX_CONSECUTIVE_ERRORS} consecutive)`, {
-              status: err instanceof ApiError ? err.status : 'unknown',
-            });
             if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
               cleanup('failed');
             }
@@ -195,7 +160,6 @@ export default function LeagueConnect() {
       }, 1000);
 
       const timeoutId = setTimeout(() => {
-        console.warn('[LeagueConnect] Polling timed out after 30s');
         cleanup('failed');
       }, 30000);
     });

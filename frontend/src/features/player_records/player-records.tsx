@@ -10,17 +10,13 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { getLeagueCookies } from '@/lib/cookie-handler';
+import { POS_NORMALIZE } from '@/lib/position-constants';
+import { POSITION_COLORS, UI_COLORS } from '@/lib/color-constants';
 import {
   getAllMatchups,
   type MatchupItem,
 } from '@/features/player_records/api-calls';
-
-interface PositionMeta {
-  color: string;
-  bg: string;
-  tc: string;
-  label: string;
-}
 
 interface ScoringRecord {
   pos: string;
@@ -33,36 +29,9 @@ interface ScoringRecord {
   week: number;
 }
 
-const POS_META: Record<string, PositionMeta> = {
-  QB: { color: '#4338ca', bg: '#EEEDFE', tc: '#3C3489', label: 'Quarterbacks' },
-  WR: {
-    color: '#993c1d',
-    bg: '#FAECE7',
-    tc: '#712B13',
-    label: 'Wide receivers',
-  },
-  RB: {
-    color: '#0f6e56',
-    bg: '#E1F5EE',
-    tc: '#085041',
-    label: 'Running backs',
-  },
-  TE: { color: '#BA7517', bg: '#FAEEDA', tc: '#633806', label: 'Tight ends' },
-  DEF: { color: '#185FA5', bg: '#E6F1FB', tc: '#0C447C', label: 'Defenses' },
-  K: { color: '#5F5E5A', bg: '#F1EFE8', tc: '#444441', label: 'Kickers' },
-};
-
 const POS_ORDER = ['QB', 'WR', 'RB', 'TE', 'DEF', 'K'];
 const POS_SET = new Set(POS_ORDER);
-const POS_NORMALIZE: Record<string, string> = { 'D/ST': 'DEF' };
 const EMPTY_MATCHUPS: MatchupItem[] = [];
-
-function getCookie(name: string): string {
-  const match = document.cookie
-    .split('; ')
-    .find((row) => row.startsWith(`${name}=`));
-  return match ? decodeURIComponent(match.split('=')[1] ?? '') : '';
-}
 
 function buildColorMap(matchups: MatchupItem[]): Map<string, string> {
   const uniqueTeams = new Map<string, string>();
@@ -96,8 +65,8 @@ function extractEntries(
     const week = parseInt(m.week, 10);
     if (isNaN(week)) continue;
 
-    const aColor = colorMap.get(m.team_a_id) ?? '#6b7280';
-    const bColor = colorMap.get(m.team_b_id) ?? '#6b7280';
+    const aColor = colorMap.get(m.team_a_id) ?? UI_COLORS.default;
+    const bColor = colorMap.get(m.team_b_id) ?? UI_COLORS.default;
 
     for (const player of m.team_a_starters ?? []) {
       const pos = POS_NORMALIZE[player.position] ?? player.position;
@@ -144,7 +113,7 @@ function PositionCard({
   selectedKey: string | null;
   onRowClick: (key: string) => void;
 }) {
-  const meta = POS_META[pos];
+  const meta = POSITION_COLORS[pos];
   const maxPts = rows[0]?.pts ?? 1;
 
   return (
@@ -200,7 +169,7 @@ function PositionCard({
                 <td
                   className="px-3 py-2"
                   style={
-                    isGold ? { borderLeft: '2px solid #EF9F27' } : undefined
+                    isGold ? { borderLeft: `2px solid ${UI_COLORS.gold}` } : undefined
                   }
                 >
                   <span className="text-[11px] text-muted-foreground">
@@ -269,7 +238,7 @@ function BoxScoreView({
     teamLogo: matchup.team_a_team_logo,
     teamName: matchup.team_a_team_name,
     ownerUsername: matchup.team_a_display_name,
-    color: colorMap.get(matchup.team_a_id) ?? '#6b7280',
+    color: colorMap.get(matchup.team_a_id) ?? UI_COLORS.default,
     score: matchup.team_a_score,
     starters: matchup.team_a_starters ?? [],
     bench: matchup.team_a_bench ?? [],
@@ -279,7 +248,7 @@ function BoxScoreView({
     teamLogo: matchup.team_b_team_logo,
     teamName: matchup.team_b_team_name,
     ownerUsername: matchup.team_b_display_name,
-    color: colorMap.get(matchup.team_b_id) ?? '#6b7280',
+    color: colorMap.get(matchup.team_b_id) ?? UI_COLORS.default,
     score: matchup.team_b_score,
     starters: matchup.team_b_starters ?? [],
     bench: matchup.team_b_bench ?? [],
@@ -498,10 +467,7 @@ function PlayerRecordsContent({
 }
 
 export default function PlayerRecords() {
-  const leagueId = getCookie('leagueId');
-  const platform = (getCookie('leaguePlatform') || 'ESPN') as
-    | 'ESPN'
-    | 'SLEEPER';
+  const { leagueId, platform } = getLeagueCookies();
 
   const promise = useMemo(
     (): Promise<Result> =>

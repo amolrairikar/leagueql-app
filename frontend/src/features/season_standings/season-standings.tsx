@@ -22,6 +22,8 @@ import {
   type WeeklyStandingItem,
   getSeasonWeeklyStandings,
 } from '@/features/matchups/api-calls';
+import { getLeagueCookies } from '@/lib/cookie-handler';
+import { POSITION_COLORS, UI_COLORS } from '@/lib/color-constants';
 import SeasonSelect from '@/features/season_select/season-select';
 import {
   type SeasonStandingsItem,
@@ -206,7 +208,7 @@ function AwardsGrid({ promise }: { promise: Promise<StandingsResult> }) {
         <div className="flex items-center gap-2.5">
           <div
             className="w-9 h-9 rounded-md flex items-center justify-center shrink-0"
-            style={{ background: '#EEEDFE' }}
+            style={{ background: UI_COLORS.champion.bg }}
           >
             <svg
               className="w-4.5 h-4.5"
@@ -216,14 +218,14 @@ function AwardsGrid({ promise }: { promise: Promise<StandingsResult> }) {
             >
               <path
                 d="M12 2v14M8 20h8M6 2h12v8a6 6 0 01-12 0V2z"
-                stroke="#534AB7"
+                stroke={UI_COLORS.champion.border}
                 strokeWidth="1.5"
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />
               <path
                 d="M6 6H3a2 2 0 002 2h1M18 6h3a2 2 0 01-2 2h-1"
-                stroke="#534AB7"
+                stroke={UI_COLORS.champion.border}
                 strokeWidth="1.5"
                 strokeLinecap="round"
               />
@@ -231,7 +233,7 @@ function AwardsGrid({ promise }: { promise: Promise<StandingsResult> }) {
           </div>
           <span
             className="text-[11px] font-medium uppercase tracking-[0.07em]"
-            style={{ color: '#534AB7' }}
+            style={{ color: UI_COLORS.champion.border }}
           >
             Season Champion
           </span>
@@ -247,7 +249,7 @@ function AwardsGrid({ promise }: { promise: Promise<StandingsResult> }) {
               </div>
               <div
                 className="text-[11px] font-medium mt-0.5"
-                style={{ color: '#534AB7' }}
+                style={{ color: UI_COLORS.champion.border }}
               >
                 {champion.record} · {champion.win_pct.toFixed(3)} Win%
               </div>
@@ -270,7 +272,7 @@ function AwardsGrid({ promise }: { promise: Promise<StandingsResult> }) {
         <div className="flex items-center gap-2.5">
           <div
             className="w-9 h-9 rounded-md flex items-center justify-center shrink-0"
-            style={{ background: '#FAEEDA' }}
+            style={{ background: POSITION_COLORS.TE.bg }}
           >
             <svg
               className="w-4.5 h-4.5"
@@ -280,7 +282,7 @@ function AwardsGrid({ promise }: { promise: Promise<StandingsResult> }) {
             >
               <path
                 d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"
-                stroke="#BA7517"
+                stroke={POSITION_COLORS.TE.color}
                 strokeWidth="1.5"
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -289,7 +291,7 @@ function AwardsGrid({ promise }: { promise: Promise<StandingsResult> }) {
           </div>
           <span
             className="text-[11px] font-medium uppercase tracking-[0.07em]"
-            style={{ color: '#BA7517' }}
+            style={{ color: POSITION_COLORS.TE.color }}
           >
             High Scorer
           </span>
@@ -303,7 +305,7 @@ function AwardsGrid({ promise }: { promise: Promise<StandingsResult> }) {
           </div>
           <div
             className="text-[11px] font-medium mt-0.5"
-            style={{ color: '#BA7517' }}
+            style={{ color: POSITION_COLORS.TE.color }}
           >
             {highScorer.avg_pf.toFixed(1)} PF/Game
           </div>
@@ -315,13 +317,13 @@ function AwardsGrid({ promise }: { promise: Promise<StandingsResult> }) {
         <div className="flex items-center gap-2.5">
           <div
             className="w-9 h-9 rounded-md flex items-center justify-center shrink-0"
-            style={{ background: '#E1F5EE' }}
+            style={{ background: POSITION_COLORS.RB.bg }}
           >
-            <Clover size={18} stroke="#0F6E56" strokeWidth={1.5} />
+            <Clover size={18} stroke={POSITION_COLORS.RB.color} strokeWidth={1.5} />
           </div>
           <span
             className="text-[11px] font-medium uppercase tracking-[0.07em]"
-            style={{ color: '#0F6E56' }}
+            style={{ color: POSITION_COLORS.RB.color }}
           >
             Luckiest Team
           </span>
@@ -335,7 +337,7 @@ function AwardsGrid({ promise }: { promise: Promise<StandingsResult> }) {
           </div>
           <div
             className="text-[11px] font-medium mt-0.5"
-            style={{ color: '#0F6E56' }}
+            style={{ color: POSITION_COLORS.RB.color }}
           >
             {luckDiff >= 0 ? '+' : ''}
             {luckDiff.toFixed(3)} vs. expected Win%
@@ -392,28 +394,8 @@ function SkeletonBody() {
   );
 }
 
-function getCookie(name: string): string {
-  const match = document.cookie
-    .split('; ')
-    .find((row) => row.startsWith(`${name}=`));
-  return match ? decodeURIComponent(match.split('=')[1] ?? '') : '';
-}
-
 export default function SeasonStandings() {
-  const leagueId = getCookie('leagueId');
-  const platform = (getCookie('leaguePlatform') || 'ESPN') as
-    | 'ESPN'
-    | 'SLEEPER';
-
-  const seasons: string[] = useMemo(() => {
-    try {
-      return JSON.parse(
-        decodeURIComponent(getCookie('leagueSeasons')),
-      ) as string[];
-    } catch {
-      return [];
-    }
-  }, []);
+  const { leagueId, platform, seasons } = useMemo(() => getLeagueCookies(), []);
 
   const defaultSeason =
     [...seasons].sort((a, b) => Number(b) - Number(a))[0] ?? '';
