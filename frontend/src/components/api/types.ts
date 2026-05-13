@@ -61,7 +61,6 @@ export interface SeasonStandingsItem {
 export interface GetLeagueResponse {
   detail: string;
   data: {
-    canonical_league_id: string;
     seasons: string[];
     league_name?: string;
   };
