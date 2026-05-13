@@ -4,7 +4,6 @@ import type { Platform } from '@/components/api/types';
 export interface GetRefreshStatusResponse {
   detail: string;
   data: {
-    canonical_league_id: string;
     refresh_operation: 'ONBOARD' | 'REFRESH';
     refresh_status: string;
   };

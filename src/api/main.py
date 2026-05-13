@@ -179,7 +179,7 @@ def lookup_league(league_id: str, platform: Platform) -> str:
         logger.warning("League %s not found for %s platform", league_id, platform.value)
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"League {league_id} not found for {platform.value} platform",
+            detail="League not found",
         )
 
     if not item.get("canonical_league_id"):
@@ -221,8 +221,8 @@ def get_league_metadata(canonical_league_id: str) -> dict:
     if not item:
         logger.warning("League with canonical ID %s not found", canonical_league_id)
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"League with canonical ID {canonical_league_id} not found",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error",
         )
 
     return item
@@ -260,8 +260,8 @@ def get_league_seasons(canonical_league_id: str) -> list[str]:
             canonical_league_id,
         )
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"No seasons found for canonical league ID {canonical_league_id}",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error",
         )
 
     seasons: set[str] = set()
@@ -336,7 +336,6 @@ def get_league(
     return APIResponse(
         detail="Found league",
         data={
-            "canonical_league_id": canonical_league_id,
             "seasons": seasons,
             "league_name": metadata.get("league_name"),
         },
@@ -369,7 +368,6 @@ def get_refresh_status(
     return APIResponse(
         detail="Found refresh status",
         data={
-            "canonical_league_id": canonical_league_id,
             "refresh_operation": refreshOperation.value,
             "refresh_status": refresh_status,
         },
@@ -401,10 +399,7 @@ def onboard_league(
             "League %s already onboarded, returning existing data", payload.leagueId
         )
         response.status_code = status.HTTP_200_OK
-        return APIResponse(
-            detail="League already onboarded",
-            data={"canonical_league_id": canonical_league_id},
-        )
+        return APIResponse(detail="League already onboarded")
 
     if requestType == RequestType.REFRESH and not canonical_league_id:
         if platform != Platform.SLEEPER:
@@ -415,7 +410,7 @@ def onboard_league(
             )
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"League {payload.leagueId} not found for {platform.value} platform, unable to refresh league",
+                detail="League not found",
             )
         logger.info(
             "Sleeper league %s not found in LEAGUE_LOOKUP; onboarder will resolve via previous_league_id chain",
@@ -548,7 +543,7 @@ def query_league(
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid queryType '{base_type_str}'. Must be one of: {', '.join(qt.value for qt in QueryType)}",
+            detail="Invalid queryType. See API documentation for supported values.",
         )
 
     sk_base = QUERY_TYPE_TO_SK_BASE[base_type]
@@ -573,7 +568,7 @@ def query_league(
             if not items:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"No data found for queryType '{queryType}'",
+                    detail="No data found for the requested query",
                 )
             all_data: list[Any] = []
             for item in items:
@@ -586,7 +581,7 @@ def query_league(
             if not item:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"No data found for queryType '{queryType}'",
+                    detail="No data found for the requested query",
                 )
             response.headers["Cache-Control"] = "private, max-age=300"
             return QueryResponse(data=convert_decimals(item.get("data", [])))
