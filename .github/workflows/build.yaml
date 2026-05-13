@@ -41,19 +41,19 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
 
       - name: Make AWS credentials script executable
-        run: chmod +x deployment_scripts/configure_aws_credentials.sh
+        run: chmod +x scripts/deployment_scripts/configure_aws_credentials.sh
 
       - name: Configure AWS credentials via OIDC
-        run: bash deployment_scripts/configure_aws_credentials.sh "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-${{ env.ENVIRONMENT }}-role" "us-east-1" "GitHubActions-${{ github.run_id }}"
+        run: bash scripts/deployment_scripts/configure_aws_credentials.sh "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-${{ env.ENVIRONMENT }}-role" "us-east-1" "GitHubActions-${{ github.run_id }}"
 
       - name: Verify AWS identity
         run: aws sts get-caller-identity
 
       - name: Make Terraform setup script executable
-        run: chmod +x deployment_scripts/setup_terraform.sh
+        run: chmod +x scripts/deployment_scripts/setup_terraform.sh
 
       - name: Setup Terraform
-        run: bash deployment_scripts/setup_terraform.sh "1.14.7"
+        run: bash scripts/deployment_scripts/setup_terraform.sh "1.14.7"
 
       - name: Initialize & Apply Terraform
         working-directory: infrastructure/global/${{ env.ENVIRONMENT }}
@@ -85,10 +85,10 @@ jobs:
           fetch-depth: 0
 
       - name: Make AWS credentials script executable
-        run: chmod +x deployment_scripts/configure_aws_credentials.sh
+        run: chmod +x scripts/deployment_scripts/configure_aws_credentials.sh
 
       - name: Configure AWS credentials via OIDC
-        run: bash deployment_scripts/configure_aws_credentials.sh "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-${{ env.ENVIRONMENT }}-role" "us-east-1" "GitHubActions-${{ github.run_id }}"
+        run: bash scripts/deployment_scripts/configure_aws_credentials.sh "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-${{ env.ENVIRONMENT }}-role" "us-east-1" "GitHubActions-${{ github.run_id }}"
 
       - name: Verify AWS identity
         run: aws sts get-caller-identity
@@ -102,10 +102,10 @@ jobs:
         run: python3.13 -m pip install pipenv
 
       - name: Make packaging script executable
-        run: chmod +x deployment_scripts/build_lambda_zip.sh
+        run: chmod +x scripts/deployment_scripts/build_lambda_zip.sh
 
       - name: Make changed files check script executable
-        run: chmod +x deployment_scripts/check_changed_files.sh
+        run: chmod +x scripts/deployment_scripts/check_changed_files.sh
 
       - name: Check for Lambda code changes
         id: changed
@@ -116,7 +116,7 @@ jobs:
         run: |
           # TODO: Remove this temporary workaround
           echo "any_changed=true" >> $GITHUB_OUTPUT
-          # bash deployment_scripts/check_changed_files.sh "src/**"
+          # bash scripts/deployment_scripts/check_changed_files.sh "src/**"
 
       - name: Package and upload Lambda functions
         if: steps.changed.outputs.any_changed == 'true'
@@ -124,7 +124,7 @@ jobs:
           S3_BUCKET: leagueql-${{ env.ENVIRONMENT }}-bucket
           AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
         # NOTE: The script here handles us-east-1 and us-west-2
-        run: bash deployment_scripts/build_lambda_zip.sh ./src/onboarder ./src/processor ./src/api ./src/player_metadata ./src/sleeper_refresh ./src/sleeper_player_stats_orchestrator ./src/sleeper_player_stats_processor ./src/sleeper_player_stats_aggregator
+        run: bash scripts/deployment_scripts/build_lambda_zip.sh ./src/onboarder ./src/processor ./src/api ./src/player_metadata ./src/sleeper_refresh ./src/sleeper_player_stats_orchestrator ./src/sleeper_player_stats_processor ./src/sleeper_player_stats_aggregator
 
   deploy-regional:
     name: Deploy Regional Infrastructure - ${{ needs.set-env.outputs.environment }} - ${{ matrix.region }}
@@ -146,19 +146,19 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
 
       - name: Make AWS credentials script executable
-        run: chmod +x deployment_scripts/configure_aws_credentials.sh
+        run: chmod +x scripts/deployment_scripts/configure_aws_credentials.sh
 
       - name: Configure AWS credentials via OIDC
-        run: bash deployment_scripts/configure_aws_credentials.sh "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-${{ env.ENVIRONMENT }}-role" "${{ matrix.region }}" "GitHubActions-${{ github.run_id }}-${{ matrix.region }}"
+        run: bash scripts/deployment_scripts/configure_aws_credentials.sh "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-${{ env.ENVIRONMENT }}-role" "${{ matrix.region }}" "GitHubActions-${{ github.run_id }}-${{ matrix.region }}"
 
       - name: Verify AWS identity
         run: aws sts get-caller-identity
 
       - name: Make Terraform setup script executable
-        run: chmod +x deployment_scripts/setup_terraform.sh
+        run: chmod +x scripts/deployment_scripts/setup_terraform.sh
 
       - name: Setup Terraform
-        run: bash deployment_scripts/setup_terraform.sh "1.14.7"
+        run: bash scripts/deployment_scripts/setup_terraform.sh "1.14.7"
 
       - name: Set Clerk issuer URL
         run: |
