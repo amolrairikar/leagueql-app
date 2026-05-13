@@ -214,6 +214,7 @@ QUERIES = {
             ON (CAST(b.team_1 AS STRING) = t1.team_id AND b.season = t1.season)
         LEFT JOIN teams_output t2
             ON (CAST(b.team_2 AS STRING) = t2.team_id AND b.season = t2.season)
+        WHERE b.bracket_type = 'WINNERS_BRACKET'
         """,
     },
     "WEEKLY_STANDINGS": """
