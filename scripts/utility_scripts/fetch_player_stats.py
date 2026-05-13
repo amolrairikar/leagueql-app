@@ -15,7 +15,7 @@ Output shape (written to player-stats/sleeper_nfl_player_stats.json):
     }
 
 Rate limiting: a semaphore caps concurrent requests so throughput stays at
-~750 req/min (well under Sleeper's 1000 req/min hard limit). Each semaphore
+~800 req/min (well under Sleeper's 1000 req/min hard limit). Each semaphore
 slot is held for at least MIN_SLOT_TIME seconds, giving:
     max_throughput = CONCURRENCY / MIN_SLOT_TIME req/s
 
@@ -24,10 +24,10 @@ Usage:
     pipenv shell
 
     # Fetch all player stats (2017 - current season) and write to S3
-    pipenv run python deployment_scripts/fetch_player_stats.py --bucket my-bucket
+    pipenv run python scripts/utility_scripts/fetch_player_stats.py --bucket my-bucket
 
     # Resume from a previous run's local checkpoint
-    pipenv run python deployment_scripts/fetch_player_stats.py --bucket my-bucket --checkpoint player_stats_checkpoint.json
+    pipenv run python scripts/utility_scripts/fetch_player_stats.py --bucket my-bucket --checkpoint player_stats_checkpoint.json
 """
 
 import argparse
@@ -54,11 +54,11 @@ SLEEPER_STATS_URL = (
 PLAYER_METADATA_S3_KEY = "player-metadata/sleeper_nfl_players.json"
 PLAYER_STATS_S3_KEY = "player-stats/sleeper_nfl_player_stats.json"
 
-FIRST_SEASON = 2017
-TARGET_RPS = 750 / 60  # ~12.5 requests/second
+FIRST_SEASON = 2017  # Sleeper data starts from 2017
+TARGET_RPS = 800 / 60
 CONCURRENCY = 10  # concurrent in-flight requests
 # Each semaphore slot is held for at least this long → max CONCURRENCY/MIN_SLOT_TIME req/s
-MIN_SLOT_TIME = CONCURRENCY / TARGET_RPS  # ~0.8 s
+MIN_SLOT_TIME = CONCURRENCY / TARGET_RPS  # ~0.75 s
 
 CHECKPOINT_EVERY = 200  # checkpoint after every N fully-completed players
 MAX_RETRIES = 3
@@ -107,7 +107,7 @@ async def fetch_player_stats(
                     data = await resp.json()
                     result = data.get("stats") if data else None
                     break
-            except aiohttp.ClientError as exc:
+            except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
                 if attempt == MAX_RETRIES:
                     logger.warning(
                         "Giving up on player %s season %d after %d attempts: %s",
