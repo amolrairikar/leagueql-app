@@ -1,5 +1,38 @@
 # Unit Tests
 
+## Agent workflow for writing tests
+
+Follow these steps in order when writing or modifying unit tests:
+
+1. **Write tests** — create or update test files under `tests/unit/`, mirroring the source layout. Follow the structure, modularity, and coverage standards below.
+
+2. **Validate tests pass**
+   ```bash
+   pipenv run pytest tests/unit/
+   ```
+   All tests must pass with no errors or failures before proceeding.
+
+3. **Validate coverage** — run with coverage and confirm close to 100% line and branch coverage for the module(s) under test:
+   ```bash
+   pipenv run pytest tests/unit/ --cov=src --cov-report=term-missing --cov-fail-under=90
+   ```
+   Identify any uncovered lines or branches and add tests to cover them.
+
+4. **Run Ruff linter and formatter** — test code must be lint- and format-clean:
+   ```bash
+   pipenv run ruff check --fix tests/
+   pipenv run ruff format tests/
+   ```
+   Fix any remaining issues that `--fix` did not auto-resolve before proceeding.
+
+5. **Run pre-commit checks** — simulate what CI will validate on commit:
+   ```bash
+   pipenv run pre-commit run --files $(git diff --name-only HEAD)
+   ```
+   Resolve all hook failures before marking the task complete.
+
+---
+
 ## Running tests
 
 Run the full test suite from the project root using pipenv:
