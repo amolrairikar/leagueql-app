@@ -1,9 +1,29 @@
 import os
 from decimal import Decimal
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _bootstrap_main():
+    """Import main once with boto3 mocked to prevent real AWS calls at module load time."""
+    with patch.dict(
+        os.environ,
+        {
+            "DYNAMODB_TABLE_NAME": "test-table",
+            "S3_BUCKET_NAME": "test-bucket",
+            "ONBOARDER_LAMBDA_NAME": "test-onboarder",
+        },
+    ):
+        with (
+            patch("boto3.resource") as mock_resource,
+            patch("boto3.client") as mock_client,
+        ):
+            mock_resource.return_value.Table.return_value = MagicMock()
+            mock_client.return_value = MagicMock()
+            import main  # noqa: F401
 
 
 @pytest.fixture(autouse=True)
