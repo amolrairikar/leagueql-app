@@ -34,6 +34,7 @@ module "onboarder_lambda" {
   function_description = "Lambda function for onboarding a fantasy football league"
   role_arn             = local.onboarder_role_arn
   handler              = "handler.lambda_handler"
+  layers               = [var.otel_layer_arn]
   memory_size          = 2048
   timeout              = 30
   log_retention        = 7
@@ -41,8 +42,13 @@ module "onboarder_lambda" {
   s3_key               = "lambda-code-artifacts/onboarder-lambda.zip"
 
   environment_variables = {
-    DYNAMODB_TABLE_NAME = "leagueql-table-${var.environment}"
-    S3_BUCKET_NAME      = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
+    DYNAMODB_TABLE_NAME                 = "leagueql-table-${var.environment}"
+    S3_BUCKET_NAME                      = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
+    AWS_LAMBDA_EXEC_WRAPPER             = "/opt/otel-instrument"
+    OPENTELEMETRY_COLLECTOR_CONFIG_FILE = "/var/task/otel-collector-config.yaml"
+    HONEYCOMB_API_KEY                   = var.honeycomb_api_key
+    OTEL_SERVICE_NAME                   = "leagueql-onboarder"
+    OTEL_RESOURCE_ATTRIBUTES            = "deployment.environment=${var.environment}"
   }
 
   tags = {
@@ -61,6 +67,7 @@ module "processor_lambda" {
   function_description = "Lambda function for processing raw fantasy football league data"
   role_arn             = local.processor_role_arn
   handler              = "handler.lambda_handler"
+  layers               = [var.otel_layer_arn]
   memory_size          = 2048
   timeout              = 120
   log_retention        = 7
@@ -68,8 +75,13 @@ module "processor_lambda" {
   s3_key               = "lambda-code-artifacts/processor-lambda.zip"
 
   environment_variables = {
-    DYNAMODB_TABLE_NAME = "leagueql-table-${var.environment}"
-    S3_BUCKET_NAME      = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
+    DYNAMODB_TABLE_NAME                 = "leagueql-table-${var.environment}"
+    S3_BUCKET_NAME                      = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
+    AWS_LAMBDA_EXEC_WRAPPER             = "/opt/otel-instrument"
+    OPENTELEMETRY_COLLECTOR_CONFIG_FILE = "/var/task/otel-collector-config.yaml"
+    HONEYCOMB_API_KEY                   = var.honeycomb_api_key
+    OTEL_SERVICE_NAME                   = "leagueql-processor"
+    OTEL_RESOURCE_ATTRIBUTES            = "deployment.environment=${var.environment}"
   }
 
   tags = {
@@ -87,6 +99,7 @@ module "api_lambda" {
   function_description = "Lambda function containing API handler for fantasy football recap app"
   role_arn             = local.api_role_arn
   handler              = "main.handler"
+  layers               = [var.otel_layer_arn]
   memory_size          = 1024
   timeout              = 15
   log_retention        = 7
@@ -94,9 +107,14 @@ module "api_lambda" {
   s3_key               = "lambda-code-artifacts/api-lambda.zip"
 
   environment_variables = {
-    DYNAMODB_TABLE_NAME   = "leagueql-table-${var.environment}"
-    ONBOARDER_LAMBDA_NAME = "leagueql-onboarder-${var.environment}"
-    S3_BUCKET_NAME        = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
+    DYNAMODB_TABLE_NAME                 = "leagueql-table-${var.environment}"
+    ONBOARDER_LAMBDA_NAME               = "leagueql-onboarder-${var.environment}"
+    S3_BUCKET_NAME                      = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
+    AWS_LAMBDA_EXEC_WRAPPER             = "/opt/otel-instrument"
+    OPENTELEMETRY_COLLECTOR_CONFIG_FILE = "/var/task/otel-collector-config.yaml"
+    HONEYCOMB_API_KEY                   = var.honeycomb_api_key
+    OTEL_SERVICE_NAME                   = "leagueql-api"
+    OTEL_RESOURCE_ATTRIBUTES            = "deployment.environment=${var.environment}"
   }
 
   tags = {
@@ -115,6 +133,7 @@ module "player_metadata_lambda" {
   function_description = "Fetches and caches Sleeper NFL player metadata to S3"
   role_arn             = local.player_metadata_role_arn
   handler              = "handler.lambda_handler"
+  layers               = [var.otel_layer_arn]
   memory_size          = 512
   timeout              = 30
   log_retention        = 7
@@ -122,7 +141,12 @@ module "player_metadata_lambda" {
   s3_key               = "lambda-code-artifacts/player_metadata-lambda.zip"
 
   environment_variables = {
-    S3_BUCKET_NAME = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
+    S3_BUCKET_NAME                      = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
+    AWS_LAMBDA_EXEC_WRAPPER             = "/opt/otel-instrument"
+    OPENTELEMETRY_COLLECTOR_CONFIG_FILE = "/var/task/otel-collector-config.yaml"
+    HONEYCOMB_API_KEY                   = var.honeycomb_api_key
+    OTEL_SERVICE_NAME                   = "leagueql-player-metadata"
+    OTEL_RESOURCE_ATTRIBUTES            = "deployment.environment=${var.environment}"
   }
 
   tags = {
@@ -170,6 +194,7 @@ module "sleeper_refresh_lambda" {
   function_description = "Lambda function to schedule Sleeper league refreshes"
   role_arn             = local.sleeper_refresh_role_arn
   handler              = "handler.lambda_handler"
+  layers               = [var.otel_layer_arn]
   memory_size          = 512
   timeout              = 60
   log_retention        = 7
@@ -177,8 +202,13 @@ module "sleeper_refresh_lambda" {
   s3_key               = "lambda-code-artifacts/sleeper_refresh-lambda.zip"
 
   environment_variables = {
-    DYNAMODB_TABLE_NAME   = "leagueql-table-${var.environment}"
-    ONBOARDER_LAMBDA_NAME = "leagueql-onboarder-${var.environment}"
+    DYNAMODB_TABLE_NAME                 = "leagueql-table-${var.environment}"
+    ONBOARDER_LAMBDA_NAME               = "leagueql-onboarder-${var.environment}"
+    AWS_LAMBDA_EXEC_WRAPPER             = "/opt/otel-instrument"
+    OPENTELEMETRY_COLLECTOR_CONFIG_FILE = "/var/task/otel-collector-config.yaml"
+    HONEYCOMB_API_KEY                   = var.honeycomb_api_key
+    OTEL_SERVICE_NAME                   = "leagueql-sleeper-refresh"
+    OTEL_RESOURCE_ATTRIBUTES            = "deployment.environment=${var.environment}"
   }
 
   tags = {
@@ -254,6 +284,7 @@ module "sleeper_player_stats_refresher_lambda" {
   function_description = "Fetches stats for all active NFL players from Sleeper API and writes to S3"
   role_arn             = local.sleeper_player_stats_refresher_role_arn
   handler              = "handler.lambda_handler"
+  layers               = [var.otel_layer_arn]
   memory_size          = 512
   timeout              = 300
   log_retention        = 7
@@ -261,7 +292,12 @@ module "sleeper_player_stats_refresher_lambda" {
   s3_key               = "lambda-code-artifacts/sleeper_player_stats_refresher-lambda.zip"
 
   environment_variables = {
-    S3_BUCKET_NAME = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
+    S3_BUCKET_NAME                      = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
+    AWS_LAMBDA_EXEC_WRAPPER             = "/opt/otel-instrument"
+    OPENTELEMETRY_COLLECTOR_CONFIG_FILE = "/var/task/otel-collector-config.yaml"
+    HONEYCOMB_API_KEY                   = var.honeycomb_api_key
+    OTEL_SERVICE_NAME                   = "leagueql-sleeper-player-stats-refresher"
+    OTEL_RESOURCE_ATTRIBUTES            = "deployment.environment=${var.environment}"
   }
 
   tags = {

@@ -1,10 +1,13 @@
 import json
 
 import requests
+from opentelemetry import trace
 
 from onboarding_service import OnboardingService
 from sleeper_client import resolve_sleeper_canonical_league_id
 from utils import logger
+
+tracer = trace.get_tracer(__name__)
 
 
 def lambda_handler(event, context) -> dict[str, str | int]:
@@ -32,6 +35,11 @@ def lambda_handler(event, context) -> dict[str, str | int]:
     # NOTE: We cannot log the event due to the potential for sensitive ESPN cookies
     logger.info("Starting league onboarding process execution.")
     logger.info("Context data: %s", context)
+
+    span = trace.get_current_span()
+    span.set_attribute("request_type", request_type)
+    span.set_attribute("platform", body.get("platform", "unknown"))
+    span.set_attribute("league.id", str(body.get("leagueId", "")))
 
     canonical_league_id = event.get("canonicalLeagueId")
     is_new_season_refresh = False
@@ -138,7 +146,12 @@ def lambda_handler(event, context) -> dict[str, str | int]:
         }
 
     try:
-        onboarding_service.run()
+        with tracer.start_as_current_span("onboarding_service.run") as run_span:
+            run_span.set_attribute("platform", body.get("platform", "unknown"))
+            run_span.set_attribute(
+                "canonical_league_id", onboarding_service.canonical_league_id
+            )
+            onboarding_service.run()
     except KeyError as e:
         logger.error("Missing required environment variable: %s", e)
         return {

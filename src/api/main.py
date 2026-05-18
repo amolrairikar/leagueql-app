@@ -7,6 +7,7 @@ from enum import Enum
 from typing import Annotated, Any, Optional
 
 import boto3
+from opentelemetry import trace
 import botocore.config
 import botocore.exceptions
 from boto3.dynamodb.conditions import Key
@@ -323,6 +324,9 @@ def get_league(
     response: Response,
 ) -> APIResponse:
     """Gets league by league ID and platform."""
+    span = trace.get_current_span()
+    span.set_attribute("league.id", leagueId)
+    span.set_attribute("platform", platform.value)
     canonical_league_id = lookup_league(league_id=leagueId, platform=platform)
     logger.info(
         "Canonical league for league ID %s and platform %s: %s",
@@ -357,6 +361,10 @@ def get_refresh_status(
     response: Response,
 ) -> APIResponse:
     """Gets the refresh status for a given league."""
+    span = trace.get_current_span()
+    span.set_attribute("league.id", leagueId)
+    span.set_attribute("platform", platform.value)
+    span.set_attribute("refresh_operation", refreshOperation.value)
     canonical_league_id = lookup_league(league_id=leagueId, platform=platform)
     league_metadata = get_league_metadata(canonical_league_id=canonical_league_id)
     if refreshOperation == RequestType.ONBOARD:
@@ -383,6 +391,10 @@ def onboard_league(
     ] = RequestType.ONBOARD,
 ) -> APIResponse:
     """Onboard a league to the application."""
+    span = trace.get_current_span()
+    span.set_attribute("league.id", payload.leagueId)
+    span.set_attribute("platform", payload.platform)
+    span.set_attribute("request_type", requestType.value)
     platform = Platform(payload.platform)
     canonical_league_id = None
 
@@ -458,6 +470,9 @@ def delete_league(
     platform: Annotated[Platform, Query(description="The platform the league is on")],
 ) -> APIResponse:
     """Deletes an onboarded league."""
+    span = trace.get_current_span()
+    span.set_attribute("league.id", leagueId)
+    span.set_attribute("platform", platform.value)
     canonical_league_id = lookup_league(league_id=leagueId, platform=platform)
     logger.info(
         "Proceeding with delete for canonical_league_id: %s", canonical_league_id
@@ -534,6 +549,10 @@ def query_league(
     response: Response,
 ) -> QueryResponse:
     """Returns a precomputed data view for the specified league."""
+    span = trace.get_current_span()
+    span.set_attribute("league.id", leagueId)
+    span.set_attribute("platform", platform.value)
+    span.set_attribute("query_type", queryType)
     parts = queryType.split("#", 1)
     base_type_str = parts[0].upper()
     suffix = parts[1] if len(parts) > 1 else None

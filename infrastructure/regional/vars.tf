@@ -19,3 +19,14 @@ variable "clerk_jwt_audience" {
   type        = string
 }
 
+variable "otel_layer_arn" {
+  description = "ARN of the AWS OpenTelemetry Distribution Lambda layer"
+  type        = string
+}
+
+variable "honeycomb_api_key" {
+  description = "Honeycomb API key for trace export"
+  type        = string
+  sensitive   = true
+}
+

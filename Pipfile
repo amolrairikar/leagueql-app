@@ -17,6 +17,7 @@ pandas = "*"
 pyyaml = "*"
 requests = "*"
 uvicorn = "*"
+opentelemetry-api = "*"
 
 [dev-packages]
 behave = "*"

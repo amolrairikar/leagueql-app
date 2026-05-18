@@ -1,5 +1,7 @@
 import json
 
+from opentelemetry import trace
+
 from utils import logger, get_nfl_state, get_sleeper_leagues, invoke_onboarder_lambda
 
 
@@ -35,6 +37,10 @@ def lambda_handler(event, context) -> dict[str, str | int]:
     # Check if season_type is "off" or week is 1
     season_type = nfl_state.get("season_type")
     week = nfl_state.get("week")
+
+    span = trace.get_current_span()
+    span.set_attribute("nfl.season_type", season_type or "unknown")
+    span.set_attribute("nfl.week", week or 0)
 
     if season_type == "off":
         logger.info("NFL season_type is 'off', skipping refresh")
@@ -97,6 +103,10 @@ def lambda_handler(event, context) -> dict[str, str | int]:
         success_count,
         failure_count,
     )
+
+    span.set_attribute("leagues.total", len(sleeper_leagues))
+    span.set_attribute("leagues.success_count", success_count)
+    span.set_attribute("leagues.failure_count", failure_count)
 
     return {
         "statusCode": 200,

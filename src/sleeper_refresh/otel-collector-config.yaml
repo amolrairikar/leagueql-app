@@ -1,0 +1,30 @@
+#otel-collector-config.yaml in the root directory
+#Set an environment variable 'OPENTELEMETRY_COLLECTOR_CONFIG_FILE' to '/var/task/otel-collector-config.yaml'
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+exporters:
+  otlp_http:
+    endpoint: "https://api.honeycomb.io:443" # US instance
+    #endpoint: "https://api.eu1.honeycomb.io:443" # EU instance
+    headers:
+      "x-honeycomb-team": "${env:HONEYCOMB_API_KEY}"
+      #"x-honeycomb-dataset": "YOUR_DATASET" #If you are a Honeycomb Classic user, you must also specify the Dataset for traces. 
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      exporters: [otlp_http]
+    metrics:
+      receivers: [otlp]
+      exporters: [otlp_http]
+    logs:
+      receivers: [otlp]
+      exporters: [otlp_http]

@@ -3,6 +3,7 @@ import os
 import random
 
 import boto3
+from opentelemetry import trace
 
 from utils import build_retry_session, logger
 
@@ -55,6 +56,8 @@ def lambda_handler(event, context) -> None:
                 f"Player metadata missing required fields: {missing_fields}"
             )
         logger.info("Fetched metadata for %d players", len(players_data))
+        span = trace.get_current_span()
+        span.set_attribute("players.count", len(players_data))
     except Exception as e:
         logger.error("Failed to fetch player metadata: %s", e)
         raise
