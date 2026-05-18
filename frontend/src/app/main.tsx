@@ -8,7 +8,7 @@ import ClerkWithTheme from './clerk-with-theme.tsx';
 
 import { ThemeProvider } from '@/components/theme-provider';
 
-if (import.meta.env.VITE_NEW_RELIC_LICENSE_KEY) {
+if (import.meta.env.PROD && import.meta.env.VITE_NEW_RELIC_LICENSE_KEY) {
   new BrowserAgent({
     init: {
       distributed_tracing: { enabled: true },

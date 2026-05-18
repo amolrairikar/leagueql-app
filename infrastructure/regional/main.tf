@@ -34,6 +34,7 @@ module "onboarder_lambda" {
   function_description = "Lambda function for onboarding a fantasy football league"
   role_arn             = local.onboarder_role_arn
   handler              = "handler.lambda_handler"
+  layers               = [var.new_relic_extension_layer_arn]
   memory_size          = 2048
   timeout              = 30
   log_retention        = 7
@@ -65,6 +66,7 @@ module "processor_lambda" {
   function_description = "Lambda function for processing raw fantasy football league data"
   role_arn             = local.processor_role_arn
   handler              = "handler.lambda_handler"
+  layers               = [var.new_relic_extension_layer_arn]
   memory_size          = 2048
   timeout              = 120
   log_retention        = 7
@@ -95,6 +97,7 @@ module "api_lambda" {
   function_description = "Lambda function containing API handler for fantasy football recap app"
   role_arn             = local.api_role_arn
   handler              = "main.handler"
+  layers               = [var.new_relic_extension_layer_arn]
   memory_size          = 1024
   timeout              = 15
   log_retention        = 7
