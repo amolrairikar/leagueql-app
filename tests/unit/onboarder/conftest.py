@@ -33,6 +33,11 @@ def _bootstrap_onboarder():
     }
     env = {"DYNAMODB_TABLE_NAME": "test-table", "S3_BUCKET_NAME": "test-bucket"}
 
+    _nr_mock = MagicMock()
+    _nr_mock.agent.lambda_handler.return_value = lambda f: f
+    sys.modules.setdefault("newrelic", _nr_mock)
+    sys.modules.setdefault("newrelic.agent", _nr_mock.agent)
+
     with patch.dict(os.environ, env):
         with patch("boto3.client") as mock_client:
             mock_client.return_value = MagicMock()

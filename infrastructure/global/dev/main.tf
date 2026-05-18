@@ -136,12 +136,12 @@ module "s3-bidirectional-replication" {
       filter_prefix       = "raw-api-data/"
       filter_suffix       = "manifest.json"
     },
-    # {
-    #   lambda_function_arn = "arn:aws:lambda:us-east-1:${var.account_id}:function:leagueql-sleeper-player-stats-refresher-${var.environment}"
-    #   events              = ["s3:ObjectCreated:Put"]
-    #   filter_prefix       = "player-metadata/"
-    #   filter_suffix       = "sleeper_nfl_players.json"
-    # }
+    {
+      lambda_function_arn = "arn:aws:lambda:us-east-1:${var.account_id}:function:leagueql-sleeper-player-stats-refresher-${var.environment}"
+      events              = ["s3:ObjectCreated:Put"]
+      filter_prefix       = "player-metadata/"
+      filter_suffix       = "sleeper_nfl_players.json"
+    }
   ]
 
   tags = {

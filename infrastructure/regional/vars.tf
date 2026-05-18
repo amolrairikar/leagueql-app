@@ -18,3 +18,9 @@ variable "clerk_jwt_audience" {
   description = "Audience value that must match the `aud` claim in Clerk session tokens"
   type        = string
 }
+
+variable "new_relic_license_key" {
+  description = "New Relic ingest license key"
+  type        = string
+  sensitive   = true
+}

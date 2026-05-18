@@ -1,4 +1,5 @@
 import os
+import sys
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
@@ -9,6 +10,11 @@ from fastapi.testclient import TestClient
 @pytest.fixture(scope="session", autouse=True)
 def _bootstrap_main():
     """Import main once with boto3 mocked to prevent real AWS calls at module load time."""
+    _nr_mock = MagicMock()
+    _nr_mock.agent.lambda_handler.return_value = lambda f: f
+    sys.modules.setdefault("newrelic", _nr_mock)
+    sys.modules.setdefault("newrelic.agent", _nr_mock.agent)
+
     with patch.dict(
         os.environ,
         {
