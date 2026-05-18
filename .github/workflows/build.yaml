@@ -192,10 +192,6 @@ jobs:
             echo "CLERK_ISSUER_URL=${{ secrets.CLERK_ISSUER_URL_DEV }}" >> $GITHUB_ENV
           fi
 
-      - name: Set New Relic extension layer ARN
-        run: |
-          echo "NEW_RELIC_EXTENSION_LAYER_ARN=arn:aws:lambda:${{ matrix.region }}:451483290750:layer:NewRelicLambdaExtension:70" >> $GITHUB_ENV
-
       - name: Initialize & Apply Terraform
         working-directory: infrastructure/regional
         env:
@@ -210,9 +206,7 @@ jobs:
             -var="environment=${{ env.ENVIRONMENT }}" \
             -var="aws_region=${{ matrix.region }}" \
             -var="clerk_issuer_url=${{ env.CLERK_ISSUER_URL }}" \
-            -var="clerk_jwt_audience=${{ secrets.CLERK_JWT_AUDIENCE }}" \
-            -var="new_relic_license_key=${{ secrets.NEW_RELIC_LICENSE_KEY }}" \
-            -var="new_relic_extension_layer_arn=${{ env.NEW_RELIC_EXTENSION_LAYER_ARN }}"
+            -var="clerk_jwt_audience=${{ secrets.CLERK_JWT_AUDIENCE }}"
 
   # live-dependency-tests:
   #   name: Live Dependency Tests

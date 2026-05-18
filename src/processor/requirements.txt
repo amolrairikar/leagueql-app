@@ -1,3 +1,2 @@
 duckdb
-newrelic
 pandas

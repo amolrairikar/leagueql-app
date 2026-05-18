@@ -9,7 +9,6 @@ from typing import Annotated, Any, Optional
 import boto3
 import botocore.config
 import botocore.exceptions
-import newrelic.agent
 from boto3.dynamodb.conditions import Key
 from fastapi import FastAPI, HTTPException, Path, Response, status, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -424,8 +423,6 @@ def onboard_league(
     logger.info("%s, proceeding with Lambda trigger...", log_msg)
 
     try:
-        nr_trace: dict = {}
-        newrelic.agent.insert_distributed_trace_headers(nr_trace)
         lambda_client.invoke(
             FunctionName=os.environ["ONBOARDER_LAMBDA_NAME"],
             InvocationType="Event",
@@ -434,7 +431,6 @@ def onboard_league(
                     "body": payload.model_dump(),
                     "requestType": requestType.value,
                     "canonicalLeagueId": canonical_league_id,
-                    "nr_trace": nr_trace,
                 }
             ),
         )
@@ -599,4 +595,4 @@ def query_league(
         )
 
 
-handler = Mangum(newrelic.agent.ASGIApplicationWrapper(app))
+handler = Mangum(app)

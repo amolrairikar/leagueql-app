@@ -1,6 +1,5 @@
 import json
 
-import newrelic.agent
 import requests
 
 from onboarding_service import OnboardingService
@@ -8,7 +7,6 @@ from sleeper_client import resolve_sleeper_canonical_league_id
 from utils import logger
 
 
-@newrelic.agent.background_task()
 def lambda_handler(event, context) -> dict[str, str | int]:
     """
     Main handler function for league onboarder.
@@ -20,13 +18,6 @@ def lambda_handler(event, context) -> dict[str, str | int]:
     Returns:
         dict: A response indicating the success of the operation.
     """
-    nr_trace_in = event.get("nr_trace", {})
-    if nr_trace_in:
-        newrelic.agent.accept_distributed_trace_headers(nr_trace_in, "Other")
-
-    nr_trace_out: dict = {}
-    newrelic.agent.insert_distributed_trace_headers(nr_trace_out)
-
     try:
         body = event["body"]
         request_type = event["requestType"]
@@ -109,7 +100,6 @@ def lambda_handler(event, context) -> dict[str, str | int]:
             request_type=request_type,
             canonical_league_id=canonical_league_id,
             is_new_season_refresh=is_new_season_refresh,
-            nr_trace_headers=nr_trace_out or None,
         )
     except KeyError as e:
         logger.error("Missing required field in request body: %s", e)

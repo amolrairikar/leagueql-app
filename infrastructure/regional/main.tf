@@ -34,7 +34,6 @@ module "onboarder_lambda" {
   function_description = "Lambda function for onboarding a fantasy football league"
   role_arn             = local.onboarder_role_arn
   handler              = "handler.lambda_handler"
-  layers               = [var.new_relic_extension_layer_arn]
   memory_size          = 2048
   timeout              = 30
   log_retention        = 7
@@ -42,12 +41,8 @@ module "onboarder_lambda" {
   s3_key               = "lambda-code-artifacts/onboarder-lambda.zip"
 
   environment_variables = {
-    DYNAMODB_TABLE_NAME                   = "leagueql-table-${var.environment}"
-    S3_BUCKET_NAME                        = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
-    NEW_RELIC_LICENSE_KEY                 = var.new_relic_license_key
-    NEW_RELIC_APP_NAME                    = "leagueql-onboarder-${var.environment}"
-    NEW_RELIC_DISTRIBUTED_TRACING_ENABLED = "true"
-    NEW_RELIC_NO_CONFIG_FILE              = "true"
+    DYNAMODB_TABLE_NAME = "leagueql-table-${var.environment}"
+    S3_BUCKET_NAME      = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
   }
 
   tags = {
@@ -66,7 +61,6 @@ module "processor_lambda" {
   function_description = "Lambda function for processing raw fantasy football league data"
   role_arn             = local.processor_role_arn
   handler              = "handler.lambda_handler"
-  layers               = [var.new_relic_extension_layer_arn]
   memory_size          = 2048
   timeout              = 120
   log_retention        = 7
@@ -74,12 +68,8 @@ module "processor_lambda" {
   s3_key               = "lambda-code-artifacts/processor-lambda.zip"
 
   environment_variables = {
-    DYNAMODB_TABLE_NAME                   = "leagueql-table-${var.environment}"
-    S3_BUCKET_NAME                        = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
-    NEW_RELIC_LICENSE_KEY                 = var.new_relic_license_key
-    NEW_RELIC_APP_NAME                    = "leagueql-processor-${var.environment}"
-    NEW_RELIC_DISTRIBUTED_TRACING_ENABLED = "true"
-    NEW_RELIC_NO_CONFIG_FILE              = "true"
+    DYNAMODB_TABLE_NAME = "leagueql-table-${var.environment}"
+    S3_BUCKET_NAME      = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
   }
 
   tags = {
@@ -97,7 +87,6 @@ module "api_lambda" {
   function_description = "Lambda function containing API handler for fantasy football recap app"
   role_arn             = local.api_role_arn
   handler              = "main.handler"
-  layers               = [var.new_relic_extension_layer_arn]
   memory_size          = 1024
   timeout              = 15
   log_retention        = 7
@@ -105,13 +94,9 @@ module "api_lambda" {
   s3_key               = "lambda-code-artifacts/api-lambda.zip"
 
   environment_variables = {
-    DYNAMODB_TABLE_NAME                   = "leagueql-table-${var.environment}"
-    ONBOARDER_LAMBDA_NAME                 = "leagueql-onboarder-${var.environment}"
-    S3_BUCKET_NAME                        = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
-    NEW_RELIC_LICENSE_KEY                 = var.new_relic_license_key
-    NEW_RELIC_APP_NAME                    = "leagueql-api-${var.environment}"
-    NEW_RELIC_DISTRIBUTED_TRACING_ENABLED = "true"
-    NEW_RELIC_NO_CONFIG_FILE              = "true"
+    DYNAMODB_TABLE_NAME   = "leagueql-table-${var.environment}"
+    ONBOARDER_LAMBDA_NAME = "leagueql-onboarder-${var.environment}"
+    S3_BUCKET_NAME        = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
   }
 
   tags = {

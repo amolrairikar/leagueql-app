@@ -11,7 +11,6 @@ import boto3
 import botocore.config
 import botocore.exceptions
 import duckdb
-import newrelic.agent
 import pandas as pd
 
 from logging_utils import logger
@@ -900,7 +899,6 @@ def write_metadata_items(
     )
 
 
-@newrelic.agent.background_task()
 def lambda_handler(event, context) -> None:
     """
     Main handler function for processing raw API data fetched by onboarder.
@@ -934,9 +932,6 @@ def lambda_handler(event, context) -> None:
 
     manifest = read_s3_object(bucket=bucket, key=key)
     logger.info("Successfully read manifest file")
-    nr_trace = manifest.pop("nr_trace", None)
-    if nr_trace:
-        newrelic.agent.accept_distributed_trace_headers(nr_trace, "Other")
     platform = next(iter(manifest))
     all_seasons = manifest[platform]
     prefix = "/".join(key.split("/")[:2])
