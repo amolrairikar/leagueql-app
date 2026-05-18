@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-_SRC = Path(__file__).parents[3] / "src" / "sleeper_player_stats_aggregator"
+_SRC = Path(__file__).parents[3] / "src" / "sleeper_player_stats_refresher"
 
 
 def _load_module(unique_name: str, path: Path) -> object:
@@ -18,18 +18,18 @@ def _load_module(unique_name: str, path: Path) -> object:
 
 
 @pytest.fixture(scope="session", autouse=True)
-def _bootstrap_stats_aggregator():
+def _bootstrap_stats_refresher():
     saved = {n: sys.modules.get(n) for n in ["utils", "handler"]}
     env = {"S3_BUCKET_NAME": "test-bucket"}
 
     with patch.dict(os.environ, env):
         with patch("boto3.client") as mock_client:
             mock_client.return_value = MagicMock()
+            with patch("requests.Session"):
+                utils_mod = _load_module("stats_refresher.utils", _SRC / "utils.py")
+                sys.modules["utils"] = utils_mod
 
-            utils_mod = _load_module("stats_aggregator.utils", _SRC / "utils.py")
-            sys.modules["utils"] = utils_mod
-
-            _load_module("stats_aggregator.handler", _SRC / "handler.py")
+                _load_module("stats_refresher.handler", _SRC / "handler.py")
 
     for name, prev in saved.items():
         if prev is None:
@@ -41,8 +41,8 @@ def _bootstrap_stats_aggregator():
 
 
 @pytest.fixture(scope="session")
-def stats_aggregator_handler():
-    return sys.modules["stats_aggregator.handler"]
+def stats_refresher_handler():
+    return sys.modules["stats_refresher.handler"]
 
 
 @pytest.fixture(autouse=True)

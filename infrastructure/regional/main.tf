@@ -23,9 +23,7 @@ locals {
   api_role_arn = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-api-role"
   player_metadata_role_arn = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-sleeper-player-metadata-fetcher-role"
   sleeper_refresh_role_arn = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-sleeper-league-refresh-role"
-  sleeper_player_stats_orchestrator_role_arn = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-sleeper-player-stats-orchestrator-role"
-  sleeper_player_stats_processor_role_arn = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-sleeper-player-stats-processor-role"
-  sleeper_player_stats_aggregator_role_arn = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-sleeper-player-stats-aggregator-role"
+  sleeper_player_stats_refresher_role_arn = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-sleeper-player-stats-refresher-role"
 }
 
 module "onboarder_lambda" {
@@ -248,106 +246,19 @@ module "backend_api" {
   }
 }
 
-resource "aws_sqs_queue" "sleeper_player_stats_dlq" {
-  count                     = local.region == "east" ? 1 : 0
-  name                      = "sleeper-player-stats-processor-dlq-${var.environment}-${local.region}"
-  message_retention_seconds = 1209600
-
-  tags = {
-    environment = var.environment
-    project     = "leagueql"
-    component   = "api"
-    managed-by  = "terraform"
-  }
-}
-
-resource "aws_sqs_queue" "sleeper_player_stats_queue" {
-  count                      = local.region == "east" ? 1 : 0
-  name                       = "sleeper-player-stats-processor-${var.environment}-${local.region}"
-  visibility_timeout_seconds = 120
-  message_retention_seconds  = 86400
-  receive_wait_time_seconds  = 20
-  redrive_policy = jsonencode({
-    deadLetterTargetArn = aws_sqs_queue.sleeper_player_stats_dlq[0].arn
-    maxReceiveCount     = 3
-  })
-
-  tags = {
-    environment = var.environment
-    project     = "leagueql"
-    component   = "api"
-    managed-by  = "terraform"
-  }
-}
-
-module "sleeper_player_stats_orchestrator_lambda" {
+module "sleeper_player_stats_refresher_lambda" {
   source = "../modules/lambda"
   count  = local.region == "east" ? 1 : 0
 
-  function_name        = "leagueql-sleeper-player-stats-orchestrator-${var.environment}"
-  function_description = "Reads active players from S3 and enqueues per-player stats fetch messages to SQS"
-  role_arn             = local.sleeper_player_stats_orchestrator_role_arn
+  function_name        = "leagueql-sleeper-player-stats-refresher-${var.environment}"
+  function_description = "Fetches stats for all active NFL players from Sleeper API and writes to S3"
+  role_arn             = local.sleeper_player_stats_refresher_role_arn
   handler              = "handler.lambda_handler"
   memory_size          = 512
   timeout              = 300
   log_retention        = 7
   s3_bucket            = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
-  s3_key               = "lambda-code-artifacts/sleeper_player_stats_orchestrator-lambda.zip"
-
-  environment_variables = {
-    S3_BUCKET_NAME = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
-    SQS_QUEUE_URL  = aws_sqs_queue.sleeper_player_stats_queue[0].url
-  }
-
-  tags = {
-    environment = var.environment
-    project     = "leagueql"
-    component   = "api"
-    managed-by  = "terraform"
-  }
-}
-
-module "sleeper_player_stats_processor_lambda" {
-  source = "../modules/lambda"
-  count  = local.region == "east" ? 1 : 0
-
-  function_name                   = "leagueql-sleeper-player-stats-processor-${var.environment}"
-  function_description            = "Fetches stats for one player per SQS message and writes to S3 staging"
-  role_arn                        = local.sleeper_player_stats_processor_role_arn
-  handler                         = "handler.lambda_handler"
-  memory_size                     = 256
-  timeout                         = 60
-  log_retention                   = 7
-  reserved_concurrent_executions  = 8
-  s3_bucket                       = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
-  s3_key                          = "lambda-code-artifacts/sleeper_player_stats_processor-lambda.zip"
-
-  environment_variables = {
-    S3_BUCKET_NAME = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
-    SQS_QUEUE_URL  = aws_sqs_queue.sleeper_player_stats_queue[0].url
-  }
-
-  tags = {
-    environment = var.environment
-    project     = "leagueql"
-    component   = "api"
-    managed-by  = "terraform"
-  }
-}
-
-module "sleeper_player_stats_aggregator_lambda" {
-  source = "../modules/lambda"
-  count  = local.region == "east" ? 1 : 0
-
-  function_name        = "leagueql-sleeper-player-stats-aggregator-${var.environment}"
-  function_description = "Merges all staging player stats files into the final JSON and cleans up staging"
-  role_arn             = local.sleeper_player_stats_aggregator_role_arn
-  handler              = "handler.lambda_handler"
-  memory_size          = 1024
-  timeout              = 300
-  log_retention        = 7
-  s3_bucket            = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
-  s3_key               = "lambda-code-artifacts/sleeper_player_stats_aggregator-lambda.zip"
+  s3_key               = "lambda-code-artifacts/sleeper_player_stats_refresher-lambda.zip"
 
   environment_variables = {
     S3_BUCKET_NAME = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
@@ -359,15 +270,6 @@ module "sleeper_player_stats_aggregator_lambda" {
     component   = "api"
     managed-by  = "terraform"
   }
-}
-
-resource "aws_lambda_event_source_mapping" "sleeper_player_stats_processor_sqs" {
-  count                              = local.region == "east" ? 1 : 0
-  event_source_arn                   = aws_sqs_queue.sleeper_player_stats_queue[0].arn
-  function_name                      = module.sleeper_player_stats_processor_lambda[0].lambda_arn
-  batch_size                         = 1
-  maximum_batching_window_in_seconds = 0
-  enabled                            = true
 }
 
 resource "aws_cloudwatch_log_resource_policy" "apigateway_log_delivery" {
