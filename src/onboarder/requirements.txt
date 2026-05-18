@@ -1,4 +1,3 @@
 aiohttp
 asyncio
 requests
-opentelemetry-api

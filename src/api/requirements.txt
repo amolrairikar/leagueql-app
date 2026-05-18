@@ -1,4 +1,3 @@
 fastapi
 mangum
 uvicorn
-opentelemetry-api
