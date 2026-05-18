@@ -19,13 +19,3 @@ variable "clerk_jwt_audience" {
   type        = string
 }
 
-variable "new_relic_license_key" {
-  description = "New Relic ingest license key"
-  type        = string
-  sensitive   = true
-}
-
-variable "new_relic_extension_layer_arn" {
-  description = "ARN of the NewRelicLambdaExtension layer for the deployment region"
-  type        = string
-}

@@ -1,4 +1,3 @@
 aiohttp
 asyncio
-newrelic
 requests

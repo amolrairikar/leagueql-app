@@ -19,7 +19,6 @@ def upload_results_to_s3(
     bucket_name: str,
     prefix: str,
     platform: str,
-    nr_trace_headers: dict | None = None,
 ) -> None:
     """
     Uploads raw API data to S3 as per-season files plus a manifest.
@@ -67,8 +66,6 @@ def upload_results_to_s3(
         existing_seasons = set(full_manifest.get(platform, []))
         new_seasons = set(seasons_data.keys())
         full_manifest[platform] = sorted(existing_seasons.union(new_seasons))
-        if nr_trace_headers:
-            full_manifest["nr_trace"] = nr_trace_headers
 
         _s3.put_object(
             Bucket=bucket_name,
