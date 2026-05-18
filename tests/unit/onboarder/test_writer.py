@@ -85,6 +85,51 @@ class TestUploadResultsToS3:
                     platform="SLEEPER",
                 )
 
+    def test_nr_trace_headers_written_to_manifest_after_platform_key(
+        self, onboarder_writer
+    ):
+        mock_s3 = MagicMock()
+        mock_s3.get_object.side_effect = botocore.exceptions.ClientError(
+            {"Error": {"Code": "NoSuchKey"}}, "GetObject"
+        )
+        with patch.object(onboarder_writer, "_s3", mock_s3):
+            onboarder_writer.upload_results_to_s3(
+                results=self._make_results(),
+                bucket_name="test-bucket",
+                prefix="raw-api-data/league-abc",
+                platform="SLEEPER",
+                nr_trace_headers={"traceparent": "00-abc-def-01"},
+            )
+        manifest_call = next(
+            c
+            for c in mock_s3.put_object.call_args_list
+            if "manifest.json" in c[1]["Key"]
+        )
+        written = json.loads(manifest_call[1]["Body"])
+        assert written["nr_trace"] == {"traceparent": "00-abc-def-01"}
+        keys = list(written.keys())
+        assert keys.index("SLEEPER") < keys.index("nr_trace")
+
+    def test_no_nr_trace_headers_omits_nr_trace_from_manifest(self, onboarder_writer):
+        mock_s3 = MagicMock()
+        mock_s3.get_object.side_effect = botocore.exceptions.ClientError(
+            {"Error": {"Code": "NoSuchKey"}}, "GetObject"
+        )
+        with patch.object(onboarder_writer, "_s3", mock_s3):
+            onboarder_writer.upload_results_to_s3(
+                results=self._make_results(),
+                bucket_name="test-bucket",
+                prefix="raw-api-data/league-abc",
+                platform="SLEEPER",
+            )
+        manifest_call = next(
+            c
+            for c in mock_s3.put_object.call_args_list
+            if "manifest.json" in c[1]["Key"]
+        )
+        written = json.loads(manifest_call[1]["Body"])
+        assert "nr_trace" not in written
+
 
 class TestWriteOnboardingStatusToDynamoDB:
     def test_onboard_writes_metadata_and_lookup(self, onboarder_writer, monkeypatch):
