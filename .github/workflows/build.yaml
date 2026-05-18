@@ -206,7 +206,8 @@ jobs:
             -var="environment=${{ env.ENVIRONMENT }}" \
             -var="aws_region=${{ matrix.region }}" \
             -var="clerk_issuer_url=${{ env.CLERK_ISSUER_URL }}" \
-            -var="clerk_jwt_audience=${{ secrets.CLERK_JWT_AUDIENCE }}"
+            -var="clerk_jwt_audience=${{ secrets.CLERK_JWT_AUDIENCE }}" \
+            -var="new_relic_license_key=${{ secrets.NEW_RELIC_LICENSE_KEY }}"
 
   # live-dependency-tests:
   #   name: Live Dependency Tests

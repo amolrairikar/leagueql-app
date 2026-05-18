@@ -43,6 +43,7 @@ class OnboardingService:
         swid_cookie: str | None = None,
         canonical_league_id: str | None = None,
         is_new_season_refresh: bool = False,
+        nr_trace_headers: dict | None = None,
     ):
         """Constructor."""
         self.league_id = league_id
@@ -50,6 +51,7 @@ class OnboardingService:
         self.request_type = request_type
         self.is_new_season_refresh = is_new_season_refresh
         self.latest_season = str(latest_season) if latest_season else None
+        self.nr_trace_headers = nr_trace_headers
         self.client = self._build_client(
             league_id=league_id,
             platform=platform,
@@ -82,6 +84,7 @@ class OnboardingService:
             bucket_name=os.environ["S3_BUCKET_NAME"],
             prefix=f"raw-api-data/{self.canonical_league_id}",
             platform=self.platform,
+            nr_trace_headers=self.nr_trace_headers,
         )
         logger.info("Wrote raw data to S3")
 
