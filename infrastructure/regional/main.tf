@@ -51,6 +51,7 @@ module "onboarder_lambda" {
     OTEL_EXPORTER_OTLP_PROTOCOL                      = "http/protobuf"
     OTEL_EXPORTER_OTLP_HEADERS                       = "x-honeycomb-team=${var.honeycomb_api_key}"
     HONEYCOMB_API_KEY                                = var.honeycomb_api_key
+    OPENTELEMETRY_COLLECTOR_CONFIG_URI               = "file:///var/task/otel-collector-config.yaml"
     OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED = "true"
     OTEL_SERVICE_NAME                                = "leagueql-onboarder"
     OTEL_RESOURCE_ATTRIBUTES            = "deployment.environment=${var.environment}"
@@ -89,6 +90,7 @@ module "processor_lambda" {
     OTEL_EXPORTER_OTLP_PROTOCOL                      = "http/protobuf"
     OTEL_EXPORTER_OTLP_HEADERS                       = "x-honeycomb-team=${var.honeycomb_api_key}"
     HONEYCOMB_API_KEY                                = var.honeycomb_api_key
+    OPENTELEMETRY_COLLECTOR_CONFIG_URI               = "file:///var/task/otel-collector-config.yaml"
     OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED = "true"
     OTEL_SERVICE_NAME                                = "leagueql-processor"
     OTEL_RESOURCE_ATTRIBUTES            = "deployment.environment=${var.environment}"
@@ -127,6 +129,7 @@ module "api_lambda" {
     OTEL_EXPORTER_OTLP_PROTOCOL                      = "http/protobuf"
     OTEL_EXPORTER_OTLP_HEADERS                       = "x-honeycomb-team=${var.honeycomb_api_key}"
     HONEYCOMB_API_KEY                                = var.honeycomb_api_key
+    OPENTELEMETRY_COLLECTOR_CONFIG_URI               = "file:///var/task/otel-collector-config.yaml"
     OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED = "true"
     OTEL_PYTHON_DISABLED_INSTRUMENTATIONS            = "starlette,fastapi"
     OTEL_SERVICE_NAME                                = "leagueql-api"
@@ -165,6 +168,7 @@ module "player_metadata_lambda" {
     OTEL_EXPORTER_OTLP_PROTOCOL                      = "http/protobuf"
     OTEL_EXPORTER_OTLP_HEADERS                       = "x-honeycomb-team=${var.honeycomb_api_key}"
     HONEYCOMB_API_KEY                                = var.honeycomb_api_key
+    OPENTELEMETRY_COLLECTOR_CONFIG_URI               = "file:///var/task/otel-collector-config.yaml"
     OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED = "true"
     OTEL_SERVICE_NAME                                = "leagueql-player-metadata"
     OTEL_RESOURCE_ATTRIBUTES            = "deployment.environment=${var.environment}"
@@ -232,6 +236,7 @@ module "sleeper_refresh_lambda" {
     OTEL_EXPORTER_OTLP_PROTOCOL                      = "http/protobuf"
     OTEL_EXPORTER_OTLP_HEADERS                       = "x-honeycomb-team=${var.honeycomb_api_key}"
     HONEYCOMB_API_KEY                                = var.honeycomb_api_key
+    OPENTELEMETRY_COLLECTOR_CONFIG_URI               = "file:///var/task/otel-collector-config.yaml"
     OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED = "true"
     OTEL_SERVICE_NAME                                = "leagueql-sleeper-refresh"
     OTEL_RESOURCE_ATTRIBUTES            = "deployment.environment=${var.environment}"
@@ -326,6 +331,7 @@ module "sleeper_player_stats_refresher_lambda" {
     OTEL_EXPORTER_OTLP_PROTOCOL                      = "http/protobuf"
     OTEL_EXPORTER_OTLP_HEADERS                       = "x-honeycomb-team=${var.honeycomb_api_key}"
     HONEYCOMB_API_KEY                                = var.honeycomb_api_key
+    OPENTELEMETRY_COLLECTOR_CONFIG_URI               = "file:///var/task/otel-collector-config.yaml"
     OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED = "true"
     OTEL_SERVICE_NAME                                = "leagueql-sleeper-player-stats-refresher"
     OTEL_RESOURCE_ATTRIBUTES            = "deployment.environment=${var.environment}"
