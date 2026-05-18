@@ -44,12 +44,14 @@ module "onboarder_lambda" {
   environment_variables = {
     DYNAMODB_TABLE_NAME                 = "leagueql-table-${var.environment}"
     S3_BUCKET_NAME                      = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
-    AWS_LAMBDA_EXEC_WRAPPER             = "/opt/otel-instrument"
-    OTEL_TRACES_EXPORTER               = "otlp"
-    OTEL_EXPORTER_OTLP_ENDPOINT        = "https://api.honeycomb.io:443"
-    OTEL_EXPORTER_OTLP_PROTOCOL        = "http/protobuf"
-    OTEL_EXPORTER_OTLP_HEADERS         = "x-honeycomb-team=${var.honeycomb_api_key}"
-    OTEL_SERVICE_NAME                   = "leagueql-onboarder"
+    AWS_LAMBDA_EXEC_WRAPPER                          = "/opt/otel-instrument"
+    OTEL_TRACES_EXPORTER                             = "otlp"
+    OTEL_LOGS_EXPORTER                               = "otlp"
+    OTEL_EXPORTER_OTLP_ENDPOINT                      = "https://api.honeycomb.io:443"
+    OTEL_EXPORTER_OTLP_PROTOCOL                      = "http/protobuf"
+    OTEL_EXPORTER_OTLP_HEADERS                       = "x-honeycomb-team=${var.honeycomb_api_key}"
+    OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED = "true"
+    OTEL_SERVICE_NAME                                = "leagueql-onboarder"
     OTEL_RESOURCE_ATTRIBUTES            = "deployment.environment=${var.environment}"
   }
 
@@ -79,12 +81,14 @@ module "processor_lambda" {
   environment_variables = {
     DYNAMODB_TABLE_NAME                 = "leagueql-table-${var.environment}"
     S3_BUCKET_NAME                      = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
-    AWS_LAMBDA_EXEC_WRAPPER             = "/opt/otel-instrument"
-    OTEL_TRACES_EXPORTER               = "otlp"
-    OTEL_EXPORTER_OTLP_ENDPOINT        = "https://api.honeycomb.io:443"
-    OTEL_EXPORTER_OTLP_PROTOCOL        = "http/protobuf"
-    OTEL_EXPORTER_OTLP_HEADERS         = "x-honeycomb-team=${var.honeycomb_api_key}"
-    OTEL_SERVICE_NAME                   = "leagueql-processor"
+    AWS_LAMBDA_EXEC_WRAPPER                          = "/opt/otel-instrument"
+    OTEL_TRACES_EXPORTER                             = "otlp"
+    OTEL_LOGS_EXPORTER                               = "otlp"
+    OTEL_EXPORTER_OTLP_ENDPOINT                      = "https://api.honeycomb.io:443"
+    OTEL_EXPORTER_OTLP_PROTOCOL                      = "http/protobuf"
+    OTEL_EXPORTER_OTLP_HEADERS                       = "x-honeycomb-team=${var.honeycomb_api_key}"
+    OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED = "true"
+    OTEL_SERVICE_NAME                                = "leagueql-processor"
     OTEL_RESOURCE_ATTRIBUTES            = "deployment.environment=${var.environment}"
   }
 
@@ -114,13 +118,15 @@ module "api_lambda" {
     DYNAMODB_TABLE_NAME                 = "leagueql-table-${var.environment}"
     ONBOARDER_LAMBDA_NAME               = "leagueql-onboarder-${var.environment}"
     S3_BUCKET_NAME                      = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
-    AWS_LAMBDA_EXEC_WRAPPER               = "/opt/otel-instrument"
-    OTEL_TRACES_EXPORTER                  = "otlp"
-    OTEL_EXPORTER_OTLP_ENDPOINT           = "https://api.honeycomb.io:443"
-    OTEL_EXPORTER_OTLP_PROTOCOL           = "http/protobuf"
-    OTEL_EXPORTER_OTLP_HEADERS            = "x-honeycomb-team=${var.honeycomb_api_key}"
-    OTEL_PYTHON_DISABLED_INSTRUMENTATIONS = "starlette,fastapi"
-    OTEL_SERVICE_NAME                     = "leagueql-api"
+    AWS_LAMBDA_EXEC_WRAPPER                          = "/opt/otel-instrument"
+    OTEL_TRACES_EXPORTER                             = "otlp"
+    OTEL_LOGS_EXPORTER                               = "otlp"
+    OTEL_EXPORTER_OTLP_ENDPOINT                      = "https://api.honeycomb.io:443"
+    OTEL_EXPORTER_OTLP_PROTOCOL                      = "http/protobuf"
+    OTEL_EXPORTER_OTLP_HEADERS                       = "x-honeycomb-team=${var.honeycomb_api_key}"
+    OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED = "true"
+    OTEL_PYTHON_DISABLED_INSTRUMENTATIONS            = "starlette,fastapi"
+    OTEL_SERVICE_NAME                                = "leagueql-api"
     OTEL_RESOURCE_ATTRIBUTES            = "deployment.environment=${var.environment}"
   }
 
@@ -149,12 +155,14 @@ module "player_metadata_lambda" {
 
   environment_variables = {
     S3_BUCKET_NAME                      = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
-    AWS_LAMBDA_EXEC_WRAPPER             = "/opt/otel-instrument"
-    OTEL_TRACES_EXPORTER               = "otlp"
-    OTEL_EXPORTER_OTLP_ENDPOINT        = "https://api.honeycomb.io:443"
-    OTEL_EXPORTER_OTLP_PROTOCOL        = "http/protobuf"
-    OTEL_EXPORTER_OTLP_HEADERS         = "x-honeycomb-team=${var.honeycomb_api_key}"
-    OTEL_SERVICE_NAME                   = "leagueql-player-metadata"
+    AWS_LAMBDA_EXEC_WRAPPER                          = "/opt/otel-instrument"
+    OTEL_TRACES_EXPORTER                             = "otlp"
+    OTEL_LOGS_EXPORTER                               = "otlp"
+    OTEL_EXPORTER_OTLP_ENDPOINT                      = "https://api.honeycomb.io:443"
+    OTEL_EXPORTER_OTLP_PROTOCOL                      = "http/protobuf"
+    OTEL_EXPORTER_OTLP_HEADERS                       = "x-honeycomb-team=${var.honeycomb_api_key}"
+    OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED = "true"
+    OTEL_SERVICE_NAME                                = "leagueql-player-metadata"
     OTEL_RESOURCE_ATTRIBUTES            = "deployment.environment=${var.environment}"
   }
 
@@ -213,12 +221,14 @@ module "sleeper_refresh_lambda" {
   environment_variables = {
     DYNAMODB_TABLE_NAME                 = "leagueql-table-${var.environment}"
     ONBOARDER_LAMBDA_NAME               = "leagueql-onboarder-${var.environment}"
-    AWS_LAMBDA_EXEC_WRAPPER             = "/opt/otel-instrument"
-    OTEL_TRACES_EXPORTER               = "otlp"
-    OTEL_EXPORTER_OTLP_ENDPOINT        = "https://api.honeycomb.io:443"
-    OTEL_EXPORTER_OTLP_PROTOCOL        = "http/protobuf"
-    OTEL_EXPORTER_OTLP_HEADERS         = "x-honeycomb-team=${var.honeycomb_api_key}"
-    OTEL_SERVICE_NAME                   = "leagueql-sleeper-refresh"
+    AWS_LAMBDA_EXEC_WRAPPER                          = "/opt/otel-instrument"
+    OTEL_TRACES_EXPORTER                             = "otlp"
+    OTEL_LOGS_EXPORTER                               = "otlp"
+    OTEL_EXPORTER_OTLP_ENDPOINT                      = "https://api.honeycomb.io:443"
+    OTEL_EXPORTER_OTLP_PROTOCOL                      = "http/protobuf"
+    OTEL_EXPORTER_OTLP_HEADERS                       = "x-honeycomb-team=${var.honeycomb_api_key}"
+    OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED = "true"
+    OTEL_SERVICE_NAME                                = "leagueql-sleeper-refresh"
     OTEL_RESOURCE_ATTRIBUTES            = "deployment.environment=${var.environment}"
   }
 
@@ -304,12 +314,14 @@ module "sleeper_player_stats_refresher_lambda" {
 
   environment_variables = {
     S3_BUCKET_NAME                      = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
-    AWS_LAMBDA_EXEC_WRAPPER             = "/opt/otel-instrument"
-    OTEL_TRACES_EXPORTER               = "otlp"
-    OTEL_EXPORTER_OTLP_ENDPOINT        = "https://api.honeycomb.io:443"
-    OTEL_EXPORTER_OTLP_PROTOCOL        = "http/protobuf"
-    OTEL_EXPORTER_OTLP_HEADERS         = "x-honeycomb-team=${var.honeycomb_api_key}"
-    OTEL_SERVICE_NAME                   = "leagueql-sleeper-player-stats-refresher"
+    AWS_LAMBDA_EXEC_WRAPPER                          = "/opt/otel-instrument"
+    OTEL_TRACES_EXPORTER                             = "otlp"
+    OTEL_LOGS_EXPORTER                               = "otlp"
+    OTEL_EXPORTER_OTLP_ENDPOINT                      = "https://api.honeycomb.io:443"
+    OTEL_EXPORTER_OTLP_PROTOCOL                      = "http/protobuf"
+    OTEL_EXPORTER_OTLP_HEADERS                       = "x-honeycomb-team=${var.honeycomb_api_key}"
+    OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED = "true"
+    OTEL_SERVICE_NAME                                = "leagueql-sleeper-player-stats-refresher"
     OTEL_RESOURCE_ATTRIBUTES            = "deployment.environment=${var.environment}"
   }
 
