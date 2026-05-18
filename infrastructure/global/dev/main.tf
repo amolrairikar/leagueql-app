@@ -136,18 +136,12 @@ module "s3-bidirectional-replication" {
       filter_prefix       = "raw-api-data/"
       filter_suffix       = "manifest.json"
     },
-    {
-      lambda_function_arn = "arn:aws:lambda:us-east-1:${var.account_id}:function:leagueql-sleeper-player-stats-orchestrator-${var.environment}"
-      events              = ["s3:ObjectCreated:Put"]
-      filter_prefix       = "player-metadata/"
-      filter_suffix       = "sleeper_nfl_players.json"
-    },
-    {
-      lambda_function_arn = "arn:aws:lambda:us-east-1:${var.account_id}:function:leagueql-sleeper-player-stats-aggregator-${var.environment}"
-      events              = ["s3:ObjectCreated:Put"]
-      filter_prefix       = "player-stats/staging/"
-      filter_suffix       = "complete.json"
-    }
+    # {
+    #   lambda_function_arn = "arn:aws:lambda:us-east-1:${var.account_id}:function:leagueql-sleeper-player-stats-refresher-${var.environment}"
+    #   events              = ["s3:ObjectCreated:Put"]
+    #   filter_prefix       = "player-metadata/"
+    #   filter_suffix       = "sleeper_nfl_players.json"
+    # }
   ]
 
   tags = {
@@ -580,10 +574,10 @@ module "api-gateway-role" {
   }
 }
 
-module "sleeper-player-stats-orchestrator-lambda-role" {
+module "sleeper-player-stats-refresher-lambda-role" {
   source = "../../modules/iam-role"
-  role_name = "leagueql-${var.environment}-sleeper-player-stats-orchestrator-role"
-  role_description = "Execution role for Sleeper player stats orchestrator lambda."
+  role_name = "leagueql-${var.environment}-sleeper-player-stats-refresher-role"
+  role_description = "Execution role for Sleeper player stats refresher lambda."
   trust_policy_json = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -617,7 +611,7 @@ module "sleeper-player-stats-orchestrator-lambda-role" {
           "logs:PutLogEvents"
         ]
         Resource = [
-          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/lambda/leagueql-sleeper-player-stats-orchestrator-${var.environment}:*"
+          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/lambda/leagueql-sleeper-player-stats-refresher-${var.environment}:*"
         ]
       },
       {
@@ -631,175 +625,7 @@ module "sleeper-player-stats-orchestrator-lambda-role" {
         ]
       },
       {
-        Sid    = "SendSQSMessages"
-        Effect = "Allow"
-        Action = [
-          "sqs:SendMessage",
-          "sqs:SendMessageBatch",
-          "sqs:GetQueueUrl"
-        ]
-        Resource = [
-          "arn:aws:sqs:us-east-1:${var.account_id}:sleeper-player-stats-processor-${var.environment}-east"
-        ]
-      }
-    ]
-  })
-
-  tags = {
-    environment = var.environment
-    project     = "leagueql"
-    component   = "data-processing"
-    managed-by  = "terraform"
-  }
-}
-
-module "sleeper-player-stats-processor-lambda-role" {
-  source = "../../modules/iam-role"
-  role_name = "leagueql-${var.environment}-sleeper-player-stats-processor-role"
-  role_description = "Execution role for Sleeper player stats processor lambda."
-  trust_policy_json = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "lambda.amazonaws.com"
-        }
-      }
-    ]
-  })
-  role_policy_json = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "CreateLogGroups"
-        Effect = "Allow"
-        Action = [
-          "logs:CreateLogGroup"
-        ]
-        Resource = [
-          "arn:aws:logs:us-east-1:${var.account_id}:*"
-        ]
-      },
-      {
-        Sid    = "CreateLogEvents"
-        Effect = "Allow"
-        Action = [
-          "logs:CreateLogStream",
-          "logs:PutLogEvents"
-        ]
-        Resource = [
-          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/lambda/leagueql-sleeper-player-stats-processor-${var.environment}:*"
-        ]
-      },
-      {
-        Sid    = "WriteStagingFiles"
-        Effect = "Allow"
-        Action = [
-          "s3:PutObject"
-        ]
-        Resource = [
-          "${local.primary_bucket_arn}/player-stats/staging/*"
-        ]
-      },
-      {
-        Sid    = "ReadCompleteSentinel"
-        Effect = "Allow"
-        Action = [
-          "s3:GetObject"
-        ]
-        Resource = [
-          "${local.primary_bucket_arn}/player-stats/staging/complete.json"
-        ]
-      },
-      {
-        Sid    = "SQSConsume"
-        Effect = "Allow"
-        Action = [
-          "sqs:ReceiveMessage",
-          "sqs:DeleteMessage",
-          "sqs:GetQueueAttributes",
-          "sqs:GetQueueUrl"
-        ]
-        Resource = [
-          "arn:aws:sqs:us-east-1:${var.account_id}:sleeper-player-stats-processor-${var.environment}-east"
-        ]
-      }
-    ]
-  })
-
-  tags = {
-    environment = var.environment
-    project     = "leagueql"
-    component   = "data-processing"
-    managed-by  = "terraform"
-  }
-}
-
-module "sleeper-player-stats-aggregator-lambda-role" {
-  source = "../../modules/iam-role"
-  role_name = "leagueql-${var.environment}-sleeper-player-stats-aggregator-role"
-  role_description = "Execution role for Sleeper player stats aggregator lambda."
-  trust_policy_json = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "lambda.amazonaws.com"
-        }
-      }
-    ]
-  })
-  role_policy_json = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "CreateLogGroups"
-        Effect = "Allow"
-        Action = [
-          "logs:CreateLogGroup"
-        ]
-        Resource = [
-          "arn:aws:logs:us-east-1:${var.account_id}:*"
-        ]
-      },
-      {
-        Sid    = "CreateLogEvents"
-        Effect = "Allow"
-        Action = [
-          "logs:CreateLogStream",
-          "logs:PutLogEvents"
-        ]
-        Resource = [
-          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/lambda/leagueql-sleeper-player-stats-aggregator-${var.environment}:*"
-        ]
-      },
-      {
-        Sid    = "ListStagingBucket"
-        Effect = "Allow"
-        Action = [
-          "s3:ListBucket"
-        ]
-        Resource = [
-          local.primary_bucket_arn
-        ]
-      },
-      {
-        Sid    = "ReadDeleteStagingFiles"
-        Effect = "Allow"
-        Action = [
-          "s3:GetObject",
-          "s3:DeleteObject"
-        ]
-        Resource = [
-          "${local.primary_bucket_arn}/player-stats/staging/*"
-        ]
-      },
-      {
-        Sid    = "WriteFinalStats"
+        Sid    = "WritePlayerStats"
         Effect = "Allow"
         Action = [
           "s3:PutObject"

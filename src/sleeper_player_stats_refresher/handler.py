@@ -1,0 +1,82 @@
+# Handler for sleeper player stats refresher lambda.
+import json
+import os
+import time
+import boto3
+from utils import build_retry_session, logger
+
+s3_client = boto3.client("s3")
+http_session = build_retry_session()
+
+SLEEPER_NFL_STATE_URL = "https://api.sleeper.app/v1/state/nfl"
+SLEEPER_STATS_URL = "https://api.sleeper.com/stats/nfl/player/{player_id}?season_type=regular&season={season}"
+PLAYER_METADATA_S3_KEY = "player-metadata/sleeper_nfl_players.json"
+PLAYER_STATS_S3_KEY = "player-stats/sleeper_nfl_player_stats.json"
+TARGET_INTERVAL = 60 / 850  # ~0.0706s between requests to stay under 850 req/min
+
+
+def fetch_nfl_state() -> dict | None:
+    try:
+        response = http_session.get(SLEEPER_NFL_STATE_URL, timeout=10)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        logger.warning("Failed to fetch NFL state: %s", e)
+        return None
+
+
+def fetch_stats(player_id: str, season: str) -> dict | None:
+    url = SLEEPER_STATS_URL.format(player_id=player_id, season=season)
+    t_start = time.monotonic()
+    try:
+        response = http_session.get(url, timeout=10)
+        if response.status_code == 404:
+            return None
+        response.raise_for_status()
+        data = response.json()
+        return data.get("stats") if isinstance(data, dict) else None
+    finally:
+        remaining = TARGET_INTERVAL - (time.monotonic() - t_start)
+        if remaining > 0:
+            time.sleep(remaining)
+
+
+def lambda_handler(event, context) -> None:
+    logger.info("Event data: %s", event)
+    bucket = os.environ["S3_BUCKET_NAME"]
+
+    nfl_state = fetch_nfl_state()
+    if not nfl_state:
+        logger.error("Could not fetch NFL state — aborting.")
+        raise RuntimeError("Failed to fetch NFL state")
+    if nfl_state.get("season_type") == "off":
+        logger.info("NFL season is off — skipping player stats refresh.")
+        return
+
+    season = str(nfl_state["season"])
+    response = s3_client.get_object(Bucket=bucket, Key=PLAYER_METADATA_S3_KEY)
+    players = json.loads(response["Body"].read())
+
+    active_ids = [
+        pid for pid, meta in players.items() if meta.get("status") == "Active"
+    ]
+    logger.info("Processing %d active players for season %s", len(active_ids), season)
+
+    all_stats = {}
+    for player_id in active_ids:
+        stats = fetch_stats(player_id, season)
+        if stats is not None:
+            all_stats[player_id] = {season: stats}
+
+    s3_client.put_object(
+        Bucket=bucket,
+        Key=PLAYER_STATS_S3_KEY,
+        Body=json.dumps(all_stats),
+        ContentType="application/json",
+    )
+    logger.info(
+        "Wrote stats for %d players to s3://%s/%s",
+        len(all_stats),
+        bucket,
+        PLAYER_STATS_S3_KEY,
+    )
