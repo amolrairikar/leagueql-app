@@ -82,17 +82,11 @@ process_lambda() {
         echo "    No requirements.txt found, skipping dependency install."
     fi
 
-    # 2. Copy .py files and OTEL config
+    # 2. Copy .py files
     echo "    Copying Python source files..."
     find "$SOURCE_DIR" -maxdepth 1 -name "*.py" | while read -r pyfile; do
         cp "$pyfile" "$BUILD_DIR/"
     done
-
-    # Copy the OTEL config file if it exists
-    if [[ -f "$SOURCE_DIR/otel-collector-config.yaml" ]]; then
-        echo "    Found otel-collector-config.yaml, copying..."
-        cp "$SOURCE_DIR/otel-collector-config.yaml" "$BUILD_DIR/"
-    fi
 
     # 3. Zip
     (cd "$BUILD_DIR" && zip -r9 -q "$ZIP_PATH" .)
