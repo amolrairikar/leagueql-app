@@ -900,7 +900,7 @@ def write_metadata_items(
     )
 
 
-@newrelic.agent.lambda_handler()
+@newrelic.agent.background_task()
 def lambda_handler(event, context) -> None:
     """
     Main handler function for processing raw API data fetched by onboarder.

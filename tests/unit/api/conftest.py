@@ -11,7 +11,8 @@ from fastapi.testclient import TestClient
 def _bootstrap_main():
     """Import main once with boto3 mocked to prevent real AWS calls at module load time."""
     _nr_mock = MagicMock()
-    _nr_mock.agent.lambda_handler.return_value = lambda f: f
+    _nr_mock.agent.ASGIApplicationWrapper.side_effect = lambda app: app
+    _nr_mock.agent.background_task.return_value = lambda f: f
     sys.modules.setdefault("newrelic", _nr_mock)
     sys.modules.setdefault("newrelic.agent", _nr_mock.agent)
 
