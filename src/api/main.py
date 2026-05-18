@@ -599,4 +599,4 @@ def query_league(
         )
 
 
-handler = newrelic.agent.lambda_handler()(Mangum(app))
+handler = Mangum(newrelic.agent.ASGIApplicationWrapper(app))

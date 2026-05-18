@@ -8,7 +8,7 @@ from sleeper_client import resolve_sleeper_canonical_league_id
 from utils import logger
 
 
-@newrelic.agent.lambda_handler()
+@newrelic.agent.background_task()
 def lambda_handler(event, context) -> dict[str, str | int]:
     """
     Main handler function for league onboarder.
