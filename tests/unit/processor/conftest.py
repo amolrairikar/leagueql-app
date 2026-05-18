@@ -24,7 +24,8 @@ def _bootstrap_processor():
     env = {"DYNAMODB_TABLE_NAME": "test-table"}
 
     _nr_mock = MagicMock()
-    _nr_mock.agent.lambda_handler.return_value = lambda f: f
+    _nr_mock.agent.ASGIApplicationWrapper.side_effect = lambda app: app
+    _nr_mock.agent.background_task.return_value = lambda f: f
     sys.modules.setdefault("newrelic", _nr_mock)
     sys.modules.setdefault("newrelic.agent", _nr_mock.agent)
 
