@@ -6,6 +6,7 @@ from typing import Any
 import boto3
 import botocore.config
 import botocore.exceptions
+from opentelemetry.propagate import inject
 
 from utils import logger
 
@@ -67,11 +68,16 @@ def upload_results_to_s3(
         new_seasons = set(seasons_data.keys())
         full_manifest[platform] = sorted(existing_seasons.union(new_seasons))
 
+        carrier: dict[str, str] = {}
+        inject(carrier)
+        metadata = {k: v for k, v in carrier.items() if v}
+
         _s3.put_object(
             Bucket=bucket_name,
             Key=f"{prefix}/manifest.json",
             Body=json.dumps(full_manifest),
             ContentType="application/json",
+            Metadata=metadata,
         )
         logger.info("Wrote manifest to S3")
     except botocore.exceptions.ClientError as e:

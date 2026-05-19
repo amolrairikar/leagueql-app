@@ -8,6 +8,7 @@ from typing import Annotated, Any, Optional
 
 import boto3
 from opentelemetry import trace
+from opentelemetry.propagate import inject
 import botocore.config
 import botocore.exceptions
 from boto3.dynamodb.conditions import Key
@@ -435,6 +436,8 @@ def onboard_league(
     logger.info("%s, proceeding with Lambda trigger...", log_msg)
 
     try:
+        carrier: dict[str, str] = {}
+        inject(carrier)
         lambda_client.invoke(
             FunctionName=os.environ["ONBOARDER_LAMBDA_NAME"],
             InvocationType="Event",
@@ -443,6 +446,8 @@ def onboard_league(
                     "body": payload.model_dump(),
                     "requestType": requestType.value,
                     "canonicalLeagueId": canonical_league_id,
+                    "traceparent": carrier.get("traceparent"),
+                    "tracestate": carrier.get("tracestate"),
                 }
             ),
         )

@@ -12,7 +12,9 @@ import botocore.config
 import botocore.exceptions
 import duckdb
 import pandas as pd
+from opentelemetry import context as otel_context
 from opentelemetry import trace
+from opentelemetry.propagate import extract
 
 from logging_utils import logger
 from queries import QUERIES
@@ -938,8 +940,16 @@ def lambda_handler(event, context) -> None:
     previous_version_id = get_previous_version_id(bucket=bucket, key=key)
     logger.info("Previous version ID for %s: %s", key, previous_version_id)
 
-    manifest = read_s3_object(bucket=bucket, key=key)
+    manifest_response = s3_client.get_object(Bucket=bucket, Key=key)
+    manifest = json.loads(manifest_response["Body"].read().decode("utf-8"))
     logger.info("Successfully read manifest file")
+
+    manifest_metadata = manifest_response.get("Metadata", {})
+    carrier: dict[str, str] = {
+        k: v for k, v in manifest_metadata.items() if k in ("traceparent", "tracestate")
+    }
+    ctx_token = otel_context.attach(extract(carrier))
+
     platform = next(iter(manifest))
     all_seasons = manifest[platform]
     prefix = "/".join(key.split("/")[:2])
@@ -983,6 +993,7 @@ def lambda_handler(event, context) -> None:
                 failed_seasons.append(season)
 
     if failed_seasons:
+        otel_context.detach(ctx_token)
         raise RuntimeError("Failed to load seasons from S3: %s" % failed_seasons)
 
     player_metadata: dict = {}
@@ -1104,3 +1115,4 @@ def lambda_handler(event, context) -> None:
         refresh=previous_version_id is not None,
         league_name=league_name,
     )
+    otel_context.detach(ctx_token)
