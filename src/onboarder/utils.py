@@ -2,12 +2,15 @@ import asyncio
 import json
 import logging
 import time
+from contextvars import ContextVar
 from typing import Any, Sequence
 
 import aiohttp
 
 V2_CUTOFF = 2018
 EXTENDED_SEASON_CUTOFF = 2021
+
+correlation_id_var: ContextVar[str] = ContextVar("correlation_id", default="")
 
 
 class JsonFormatter(logging.Formatter):
@@ -28,6 +31,7 @@ class JsonFormatter(logging.Formatter):
             "level": record.levelname,
             "message": record.getMessage(),
             "function": record.funcName,
+            "correlation_id": correlation_id_var.get(),
         }
         return json.dumps(log_object)
 

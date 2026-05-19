@@ -84,6 +84,7 @@ export default function LeagueConnect() {
   const [pollStatus, setPollStatus] = useState<'idle' | 'success' | 'failed'>(
     'idle',
   );
+  const [operationId, setOperationId] = useState<string | null>(null);
   const [loadingMessage, setLoadingMessage] = useState('');
   const loadingStartRef = useRef<number | null>(null);
   const loadingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -134,6 +135,7 @@ export default function LeagueConnect() {
 
   const onSubmit = async (data: LeagueConnectFormValues) => {
     setPollStatus('idle');
+    setOperationId(null);
     const apiPlatform = API_PLATFORM[data.platform];
 
     let requestType: 'ONBOARD' | 'REFRESH';
@@ -161,9 +163,11 @@ export default function LeagueConnect() {
     };
 
     let onboardSucceeded = false;
+    let capturedOperationId: string | null = null;
     for (let attempt = 1; attempt <= MAX_ONBOARD_ATTEMPTS; attempt++) {
       try {
-        await onboardLeague(requestType, body);
+        const onboardResult = await onboardLeague(requestType, body);
+        capturedOperationId = onboardResult.data.correlation_id;
         onboardSucceeded = true;
         clearEspnCookies();
         break;
@@ -180,6 +184,7 @@ export default function LeagueConnect() {
 
     await sleep(POLL_INITIAL_DELAY_MS);
     const result = await pollForCompletion(data.leagueId, apiPlatform, requestType);
+    if (result === 'failed') setOperationId(capturedOperationId);
     setPollStatus(result);
     if (result === 'success') {
       const leagueData = await getLeague(data.leagueId, apiPlatform);
@@ -332,7 +337,9 @@ export default function LeagueConnect() {
               <Alert variant="destructive" className="mt-4">
                 <AlertTitle>Failed</AlertTitle>
                 <AlertDescription>
-                  League onboarding failed or timed out. Please try again.
+                  There was an error with your request. Please try again or
+                  contact support
+                  {operationId ? ` with operation ID ${operationId}` : ''}.
                 </AlertDescription>
               </Alert>
             )}

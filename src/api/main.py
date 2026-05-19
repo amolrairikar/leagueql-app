@@ -2,6 +2,8 @@ import json
 import logging
 import os
 import time
+import uuid
+from contextvars import ContextVar
 from decimal import Decimal
 from enum import Enum
 from typing import Annotated, Any, Optional
@@ -19,6 +21,8 @@ ORIGINS = [
     "http://localhost:5173",  # LOCAL/DEV
     "https://leagueql.com",  # PROD
 ]
+
+correlation_id_var: ContextVar[str] = ContextVar("correlation_id", default="")
 
 
 class APIResponse(BaseModel):
@@ -109,6 +113,7 @@ class JsonFormatter(logging.Formatter):
             "level": record.levelname,
             "message": record.getMessage(),
             "function": record.funcName,
+            "correlation_id": correlation_id_var.get(),
         }
         return json.dumps(log_object)
 
@@ -383,6 +388,8 @@ def onboard_league(
     ] = RequestType.ONBOARD,
 ) -> APIResponse:
     """Onboard a league to the application."""
+    correlation_id = str(uuid.uuid4())
+    correlation_id_var.set(correlation_id)
     platform = Platform(payload.platform)
     canonical_league_id = None
 
@@ -431,6 +438,7 @@ def onboard_league(
                     "body": payload.model_dump(),
                     "requestType": requestType.value,
                     "canonicalLeagueId": canonical_league_id,
+                    "correlation_id": correlation_id,
                 }
             ),
         )
@@ -440,7 +448,7 @@ def onboard_league(
             if canonical_league_id
             else "Successfully triggered onboarding"
         )
-        return APIResponse(detail=detail_msg)
+        return APIResponse(detail=detail_msg, data={"correlation_id": correlation_id})
 
     except botocore.exceptions.ClientError as e:
         logger.error("Failed to trigger onboarding/refresh: %s", e)

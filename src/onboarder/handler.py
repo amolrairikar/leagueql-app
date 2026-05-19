@@ -1,10 +1,11 @@
 import json
+import uuid
 
 import requests
 
 from onboarding_service import OnboardingService
 from sleeper_client import resolve_sleeper_canonical_league_id
-from utils import logger
+from utils import correlation_id_var, logger
 
 
 def lambda_handler(event, context) -> dict[str, str | int]:
@@ -18,6 +19,9 @@ def lambda_handler(event, context) -> dict[str, str | int]:
     Returns:
         dict: A response indicating the success of the operation.
     """
+    correlation_id = event.get("correlation_id") or str(uuid.uuid4())
+    correlation_id_var.set(correlation_id)
+
     try:
         body = event["body"]
         request_type = event["requestType"]
@@ -26,7 +30,10 @@ def lambda_handler(event, context) -> dict[str, str | int]:
         return {
             "statusCode": 400,
             "body": json.dumps(
-                {"status": "failed", "error_msg": f"Missing required event field: {e}"}
+                {
+                    "status": "failed",
+                    "error_msg": f"Missing required event field: {e}",
+                }
             ),
         }
     # NOTE: We cannot log the event due to the potential for sensitive ESPN cookies
@@ -123,7 +130,10 @@ def lambda_handler(event, context) -> dict[str, str | int]:
         return {
             "statusCode": 502,
             "body": json.dumps(
-                {"status": "failed", "error_msg": "An upstream service error occurred."}
+                {
+                    "status": "failed",
+                    "error_msg": "An upstream service error occurred.",
+                }
             ),
         }
     except RuntimeError as e:
@@ -133,7 +143,10 @@ def lambda_handler(event, context) -> dict[str, str | int]:
         return {
             "statusCode": 502,
             "body": json.dumps(
-                {"status": "failed", "error_msg": "An upstream service error occurred."}
+                {
+                    "status": "failed",
+                    "error_msg": "An upstream service error occurred.",
+                }
             ),
         }
 
@@ -144,7 +157,10 @@ def lambda_handler(event, context) -> dict[str, str | int]:
         return {
             "statusCode": 500,
             "body": json.dumps(
-                {"status": "failed", "error_msg": "An internal server error occurred."}
+                {
+                    "status": "failed",
+                    "error_msg": "An internal server error occurred.",
+                }
             ),
         }
     except RuntimeError as e:
@@ -152,7 +168,10 @@ def lambda_handler(event, context) -> dict[str, str | int]:
         return {
             "statusCode": 502,
             "body": json.dumps(
-                {"status": "failed", "error_msg": "An upstream service error occurred."}
+                {
+                    "status": "failed",
+                    "error_msg": "An upstream service error occurred.",
+                }
             ),
         }
     except Exception as e:
@@ -162,7 +181,10 @@ def lambda_handler(event, context) -> dict[str, str | int]:
         return {
             "statusCode": 500,
             "body": json.dumps(
-                {"status": "failed", "error_msg": "An internal server error occurred."}
+                {
+                    "status": "failed",
+                    "error_msg": "An internal server error occurred.",
+                }
             ),
         }
 

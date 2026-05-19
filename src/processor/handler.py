@@ -12,8 +12,7 @@ import botocore.config
 import botocore.exceptions
 import duckdb
 import pandas as pd
-
-from logging_utils import logger
+from logging_utils import correlation_id_var, logger
 from queries import QUERIES
 
 _retry_config = botocore.config.Config(retries={"mode": "standard"})
@@ -930,8 +929,13 @@ def lambda_handler(event, context) -> None:
     previous_version_id = get_previous_version_id(bucket=bucket, key=key)
     logger.info("Previous version ID for %s: %s", key, previous_version_id)
 
-    manifest = read_s3_object(bucket=bucket, key=key)
+    manifest_response = s3_client.get_object(Bucket=bucket, Key=key)
+    manifest = json.loads(manifest_response["Body"].read().decode("utf-8"))
     logger.info("Successfully read manifest file")
+
+    manifest_metadata = manifest_response.get("Metadata", {})
+    correlation_id_var.set(manifest_metadata.get("correlation_id", ""))
+
     platform = next(iter(manifest))
     all_seasons = manifest[platform]
     prefix = "/".join(key.split("/")[:2])

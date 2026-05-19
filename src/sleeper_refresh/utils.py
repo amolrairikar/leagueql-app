@@ -3,11 +3,14 @@ import logging
 import os
 import time
 from collections import defaultdict
+from contextvars import ContextVar
 
 import boto3
 import requests
 
 SLEEPER_BASE_URL = "https://api.sleeper.app/v1"
+
+correlation_id_var: ContextVar[str] = ContextVar("correlation_id", default="")
 
 
 class JsonFormatter(logging.Formatter):
@@ -19,6 +22,7 @@ class JsonFormatter(logging.Formatter):
             "level": record.levelname,
             "message": record.getMessage(),
             "function": record.funcName,
+            "correlation_id": correlation_id_var.get(),
         }
         return json.dumps(log_object)
 
@@ -109,12 +113,13 @@ def get_sleeper_leagues() -> list[str]:
     return result
 
 
-def invoke_onboarder_lambda(league_id: str) -> None:
+def invoke_onboarder_lambda(league_id: str, correlation_id: str) -> None:
     """
     Invokes the onboarder lambda to refresh a specific Sleeper league asynchronously.
 
     Args:
         league_id: The Sleeper league ID to refresh.
+        correlation_id: Correlation ID to propagate for request tracing.
 
     Raises:
         Exception: If lambda invocation fails.
@@ -122,6 +127,7 @@ def invoke_onboarder_lambda(league_id: str) -> None:
     payload = {
         "requestType": "REFRESH",
         "body": {"leagueId": league_id, "platform": "SLEEPER"},
+        "correlation_id": correlation_id,
     }
 
     response = _lambda_client.invoke(

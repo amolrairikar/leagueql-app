@@ -30,6 +30,7 @@ export interface OnboardRequest {
 
 export interface OnboardResponse {
   detail: string;
+  data: { correlation_id: string };
 }
 
 export function onboardLeague(

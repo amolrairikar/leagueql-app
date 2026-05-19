@@ -7,7 +7,7 @@ import boto3
 import botocore.config
 import botocore.exceptions
 
-from utils import logger
+from utils import correlation_id_var, logger
 
 _retry_config = botocore.config.Config(retries={"mode": "standard"})
 _s3 = boto3.client("s3", config=_retry_config)
@@ -67,11 +67,14 @@ def upload_results_to_s3(
         new_seasons = set(seasons_data.keys())
         full_manifest[platform] = sorted(existing_seasons.union(new_seasons))
 
+        metadata = {"correlation_id": correlation_id_var.get()}
+
         _s3.put_object(
             Bucket=bucket_name,
             Key=f"{prefix}/manifest.json",
             Body=json.dumps(full_manifest),
             ContentType="application/json",
+            Metadata=metadata,
         )
         logger.info("Wrote manifest to S3")
     except botocore.exceptions.ClientError as e:

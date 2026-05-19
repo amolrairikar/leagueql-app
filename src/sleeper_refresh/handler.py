@@ -1,4 +1,5 @@
 import json
+import uuid
 
 from utils import logger, get_nfl_state, get_sleeper_leagues, invoke_onboarder_lambda
 
@@ -85,7 +86,7 @@ def lambda_handler(event, context) -> dict[str, str | int]:
 
     for league_id in sleeper_leagues:
         try:
-            invoke_onboarder_lambda(league_id)
+            invoke_onboarder_lambda(league_id, correlation_id=str(uuid.uuid4()))
             success_count += 1
             logger.info("Successfully triggered refresh for league %s", league_id)
         except Exception as e:

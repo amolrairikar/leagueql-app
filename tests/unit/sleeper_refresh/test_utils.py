@@ -117,15 +117,20 @@ class TestInvokeOnboarderLambda:
         mock_lambda = MagicMock()
         mock_lambda.invoke.return_value = {"StatusCode": 202}
         with patch.object(sleeper_refresh_utils, "_lambda_client", mock_lambda):
-            sleeper_refresh_utils.invoke_onboarder_lambda("league-123")
+            sleeper_refresh_utils.invoke_onboarder_lambda(
+                "league-123", correlation_id="test-corr-id"
+            )
         mock_lambda.invoke.assert_called_once()
         payload = json.loads(mock_lambda.invoke.call_args[1]["Payload"])
         assert payload["body"]["leagueId"] == "league-123"
         assert payload["requestType"] == "REFRESH"
+        assert payload["correlation_id"] == "test-corr-id"
 
     def test_raises_when_status_not_202(self, sleeper_refresh_utils):
         mock_lambda = MagicMock()
         mock_lambda.invoke.return_value = {"StatusCode": 500}
         with patch.object(sleeper_refresh_utils, "_lambda_client", mock_lambda):
             with pytest.raises(Exception, match="status code 500"):
-                sleeper_refresh_utils.invoke_onboarder_lambda("league-123")
+                sleeper_refresh_utils.invoke_onboarder_lambda(
+                    "league-123", correlation_id="test-corr-id"
+                )

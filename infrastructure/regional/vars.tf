@@ -19,3 +19,4 @@ variable "clerk_jwt_audience" {
   type        = string
 }
 
+
