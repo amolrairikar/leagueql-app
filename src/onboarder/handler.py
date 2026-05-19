@@ -37,7 +37,12 @@ def lambda_handler(event, context) -> dict[str, str | int]:
             ),
         }
     # NOTE: We cannot log the event due to the potential for sensitive ESPN cookies
-    logger.info("Starting league onboarding process execution.")
+    logger.info(
+        "Starting league onboarding: request_type=%s platform=%s league_id=%s",
+        event.get("requestType"),
+        event.get("body", {}).get("platform"),
+        event.get("body", {}).get("leagueId"),
+    )
     logger.info("Context data: %s", context)
 
     canonical_league_id = event.get("canonicalLeagueId")
@@ -96,6 +101,10 @@ def lambda_handler(event, context) -> dict[str, str | int]:
                 ),
             }
         is_new_season_refresh = True
+        logger.info(
+            "Resolved canonical_league_id=%s for new Sleeper season; is_new_season_refresh=True",
+            canonical_league_id,
+        )
 
     try:
         onboarding_service = OnboardingService(
@@ -150,6 +159,10 @@ def lambda_handler(event, context) -> dict[str, str | int]:
             ),
         }
 
+    logger.info(
+        "OnboardingService initialized: canonical_league_id=%s",
+        onboarding_service.canonical_league_id,
+    )
     try:
         onboarding_service.run()
     except KeyError as e:

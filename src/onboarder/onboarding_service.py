@@ -62,11 +62,16 @@ class OnboardingService:
 
     def run(self) -> None:
         """Runs the onboarding logic."""
-        logger.info("Beginning raw data fetch")
-        raw_data = asyncio.run(self.client.fetch_all())
-        logger.info("Completed data fetch")
-        logger.info("Updating job onboarding status in DynamoDB")
         seasons = self.client.get_seasons()
+        logger.info(
+            "Beginning raw data fetch: platform=%s seasons=%s season_count=%d",
+            self.platform,
+            seasons,
+            len(seasons),
+        )
+        raw_data = asyncio.run(self.client.fetch_all())
+        logger.info("Completed raw data fetch: records_fetched=%d", len(raw_data))
+        logger.info("Updating job onboarding status in DynamoDB")
         write_onboarding_status_to_dynamodb(
             league_id=self.league_id,
             platform=self.platform,
@@ -76,7 +81,11 @@ class OnboardingService:
             is_new_season_refresh=self.is_new_season_refresh,
         )
         logger.info("Wrote job onboarding status to DynamoDB")
-        logger.info("Writing raw data to S3")
+        logger.info(
+            "Writing raw data to S3: canonical_league_id=%s season_count=%d",
+            self.canonical_league_id,
+            len(seasons),
+        )
         upload_results_to_s3(
             results=raw_data,
             bucket_name=os.environ["S3_BUCKET_NAME"],

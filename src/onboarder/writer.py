@@ -38,10 +38,20 @@ def upload_results_to_s3(
             season = str(item["season"])
             seasons_data.setdefault(season, []).append(item)
 
+        logger.info(
+            "Uploading season files to S3: prefix=%s season_count=%d seasons=%s",
+            prefix,
+            len(seasons_data),
+            sorted(seasons_data.keys()),
+        )
         for season, season_results in seasons_data.items():
+            s3_key = f"{prefix}/{season}.json"
+            logger.info(
+                "Writing S3 object: key=%s record_count=%d", s3_key, len(season_results)
+            )
             _s3.put_object(
                 Bucket=bucket_name,
-                Key=f"{prefix}/{season}.json",
+                Key=s3_key,
                 Body=json.dumps(season_results),
                 ContentType="application/json",
             )
@@ -184,6 +194,12 @@ def write_onboarding_status_to_dynamodb(
                 },
             ]
 
+        logger.info(
+            "Writing onboarding status to DynamoDB: canonical_league_id=%s request_type=%s is_new_season_refresh=%s",
+            canonical_league_id,
+            request_type,
+            is_new_season_refresh,
+        )
         _dynamodb.transact_write_items(TransactItems=transact_items)
     except KeyError:
         logger.error("Environment variable 'DYNAMODB_TABLE_NAME' not set!")

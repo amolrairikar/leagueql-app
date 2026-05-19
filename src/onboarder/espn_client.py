@@ -160,7 +160,14 @@ class ESPNClient:
 
         previous_seasons = response.json().get("status", {}).get("previousSeasons", [])
         previous_seasons = [str(season) for season in previous_seasons]
-        return previous_seasons + [latest_season]
+        all_seasons = previous_seasons + [latest_season]
+        logger.info(
+            "Resolved ESPN league seasons: league_id=%s season_count=%d seasons=%s",
+            self.league_id,
+            len(all_seasons),
+            all_seasons,
+        )
+        return all_seasons
 
     def _construct_request_url(
         self, base_url: str, data_type: str, week: int | None = None
@@ -222,6 +229,11 @@ class ESPNClient:
                         base_url=api_base_url, data_type=data_type
                     )
                     urls.append((season, data_type, full_url))
+        logger.info(
+            "Built ESPN request URLs: league_id=%s total_requests=%d",
+            self.league_id,
+            len(urls),
+        )
         return urls
 
     def _make_cookies_dict(self) -> dict[str, str]:

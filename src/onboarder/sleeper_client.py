@@ -167,6 +167,12 @@ class SleeperClient:
 
             current_id = previous_league_id
 
+        logger.info(
+            "Resolved Sleeper league seasons: league_id=%s season_count=%d seasons=%s",
+            self.league_id,
+            len(result),
+            list(result.keys()),
+        )
         return result
 
     def get_seasons(self) -> list[str]:
@@ -233,6 +239,11 @@ class SleeperClient:
                         league_id=league_id, data_type=data_type
                     )
                     urls.append((season, data_type, full_url))
+        logger.info(
+            "Built Sleeper request URLs: league_id=%s total_requests=%d",
+            self.league_id,
+            len(urls),
+        )
         return urls
 
     async def fetch_all(self) -> list[dict[str, Any]]:
@@ -287,6 +298,11 @@ class SleeperClient:
                         if draft_id:
                             url = f"{SLEEPER_BASE_URL}/draft/{draft_id}/picks"
                             urls.append((season, "draft_picks", url))
+        logger.info(
+            "Built Sleeper draft pick URLs: league_id=%s draft_count=%d",
+            self.league_id,
+            len(urls),
+        )
         return urls
 
     async def _fetch(
