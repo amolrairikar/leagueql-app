@@ -448,7 +448,7 @@ def onboard_league(
             if canonical_league_id
             else "Successfully triggered onboarding"
         )
-        return APIResponse(detail=detail_msg)
+        return APIResponse(detail=detail_msg, data={"correlation_id": correlation_id})
 
     except botocore.exceptions.ClientError as e:
         logger.error("Failed to trigger onboarding/refresh: %s", e)
