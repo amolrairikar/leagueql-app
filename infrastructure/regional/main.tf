@@ -272,6 +272,214 @@ module "sleeper_player_stats_refresher_lambda" {
   }
 }
 
+resource "aws_sns_topic" "lambda_alerts" {
+  count = var.environment == "prod" ? 1 : 0
+  name  = "leagueql-lambda-alerts-${var.environment}-${local.region}"
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    component   = "monitoring"
+    managed-by  = "terraform"
+  }
+}
+
+resource "aws_sns_topic_subscription" "lambda_alerts_email" {
+  count     = var.environment == "prod" ? 1 : 0
+  topic_arn = aws_sns_topic.lambda_alerts[0].arn
+  protocol  = "email"
+  endpoint  = "arairikar1@gmail.com"
+}
+
+resource "aws_cloudwatch_metric_alarm" "onboarder_errors" {
+  count               = local.region == "east" && var.environment == "prod" ? 1 : 0
+  alarm_name          = "leagueql-onboarder-${var.environment}-errors"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods  = 1
+  metric_name         = "Errors"
+  namespace           = "AWS/Lambda"
+  period              = 300
+  statistic           = "Sum"
+  threshold           = 1
+  alarm_description   = "Onboarder Lambda error detected"
+  alarm_actions       = [aws_sns_topic.lambda_alerts[0].arn]
+  ok_actions          = [aws_sns_topic.lambda_alerts[0].arn]
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    FunctionName = "leagueql-onboarder-${var.environment}"
+  }
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    component   = "monitoring"
+    managed-by  = "terraform"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "processor_errors" {
+  count               = local.region == "east" && var.environment == "prod" ? 1 : 0
+  alarm_name          = "leagueql-processor-${var.environment}-errors"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods  = 1
+  metric_name         = "Errors"
+  namespace           = "AWS/Lambda"
+  period              = 300
+  statistic           = "Sum"
+  threshold           = 1
+  alarm_description   = "Processor Lambda error detected"
+  alarm_actions       = [aws_sns_topic.lambda_alerts[0].arn]
+  ok_actions          = [aws_sns_topic.lambda_alerts[0].arn]
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    FunctionName = "leagueql-processor-${var.environment}"
+  }
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    component   = "monitoring"
+    managed-by  = "terraform"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "sleeper_refresh_errors" {
+  count               = local.region == "east" && var.environment == "prod" ? 1 : 0
+  alarm_name          = "leagueql-sleeper-refresh-${var.environment}-errors"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods  = 1
+  metric_name         = "Errors"
+  namespace           = "AWS/Lambda"
+  period              = 300
+  statistic           = "Sum"
+  threshold           = 1
+  alarm_description   = "Sleeper refresh Lambda error detected"
+  alarm_actions       = [aws_sns_topic.lambda_alerts[0].arn]
+  ok_actions          = [aws_sns_topic.lambda_alerts[0].arn]
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    FunctionName = "leagueql-sleeper-refresh-${var.environment}"
+  }
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    component   = "monitoring"
+    managed-by  = "terraform"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "player_metadata_errors" {
+  count               = local.region == "east" && var.environment == "prod" ? 1 : 0
+  alarm_name          = "leagueql-sleeper-player-metadata-${var.environment}-errors"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods  = 1
+  metric_name         = "Errors"
+  namespace           = "AWS/Lambda"
+  period              = 300
+  statistic           = "Sum"
+  threshold           = 1
+  alarm_description   = "Player metadata Lambda error detected"
+  alarm_actions       = [aws_sns_topic.lambda_alerts[0].arn]
+  ok_actions          = [aws_sns_topic.lambda_alerts[0].arn]
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    FunctionName = "leagueql-sleeper-player-metadata-${var.environment}"
+  }
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    component   = "monitoring"
+    managed-by  = "terraform"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "player_stats_refresher_errors" {
+  count               = local.region == "east" && var.environment == "prod" ? 1 : 0
+  alarm_name          = "leagueql-sleeper-player-stats-refresher-${var.environment}-errors"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods  = 1
+  metric_name         = "Errors"
+  namespace           = "AWS/Lambda"
+  period              = 300
+  statistic           = "Sum"
+  threshold           = 1
+  alarm_description   = "Player stats refresher Lambda error detected"
+  alarm_actions       = [aws_sns_topic.lambda_alerts[0].arn]
+  ok_actions          = [aws_sns_topic.lambda_alerts[0].arn]
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    FunctionName = "leagueql-sleeper-player-stats-refresher-${var.environment}"
+  }
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    component   = "monitoring"
+    managed-by  = "terraform"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "api_lambda_errors" {
+  count               = var.environment == "prod" ? 1 : 0
+  alarm_name          = "leagueql-api-${var.environment}-${local.region}-errors"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods  = 1
+  metric_name         = "Errors"
+  namespace           = "AWS/Lambda"
+  period              = 300
+  statistic           = "Sum"
+  threshold           = 1
+  alarm_description   = "API Lambda error detected"
+  alarm_actions       = [aws_sns_topic.lambda_alerts[0].arn]
+  ok_actions          = [aws_sns_topic.lambda_alerts[0].arn]
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    FunctionName = "leagueql-api-${var.environment}-${local.region}"
+  }
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    component   = "monitoring"
+    managed-by  = "terraform"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "api_gw_5xx" {
+  count               = var.environment == "prod" ? 1 : 0
+  alarm_name          = "leagueql-api-gw-${var.environment}-${local.region}-5xx"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods  = 1
+  metric_name         = "5XXError"
+  namespace           = "AWS/ApiGateway"
+  period              = 300
+  statistic           = "Sum"
+  threshold           = 3
+  alarm_description   = "API Gateway 5xx errors exceeded threshold"
+  alarm_actions       = [aws_sns_topic.lambda_alerts[0].arn]
+  ok_actions          = [aws_sns_topic.lambda_alerts[0].arn]
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    ApiId = module.backend_api.api_id
+  }
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    component   = "monitoring"
+    managed-by  = "terraform"
+  }
+}
+
 resource "aws_cloudwatch_log_resource_policy" "apigateway_log_delivery" {
   policy_name = "api-gateway-log-delivery-${var.environment}"
 
