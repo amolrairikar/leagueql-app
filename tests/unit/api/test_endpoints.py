@@ -317,12 +317,11 @@ class TestDeleteLeagueEndpoint:
             {"Items": []},
             {"Items": []},
             {"Items": []},
-            {"Items": []},
         ]
         mock_s3_client.list_objects_v2.return_value = {}
         response = client.delete("/leagues/123?platform=SLEEPER")
         assert response.status_code == 200
-        assert mock_table.query.call_count == 9
+        assert mock_table.query.call_count == 8
 
     def test_client_error_during_delete_returns_500(
         self, client, mock_table, league_lookup_item
@@ -449,7 +448,6 @@ class TestQueryLeagueEndpoint:
             ("MATCHUPS", "MATCHUPS"),
             ("SEASON_STANDINGS", "STANDINGS"),
             ("WEEKLY_STANDINGS", "WEEKLY_STANDINGS"),
-            ("AI_RECAP", "AI_RECAP"),
             ("PLAYOFF_BRACKET", "PLAYOFF_BRACKET"),
             ("DRAFT", "DRAFT"),
         ],

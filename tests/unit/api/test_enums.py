@@ -55,7 +55,6 @@ class TestQueryTypeEnum:
             ("MATCHUPS", "MATCHUPS"),
             ("SEASON_STANDINGS", "SEASON_STANDINGS"),
             ("WEEKLY_STANDINGS", "WEEKLY_STANDINGS"),
-            ("AI_RECAP", "AI_RECAP"),
             ("PLAYOFF_BRACKET", "PLAYOFF_BRACKET"),
             ("DRAFT", "DRAFT"),
         ],
