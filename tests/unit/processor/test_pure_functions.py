@@ -533,7 +533,7 @@ class TestUpdateLeagueCount:
             processor_handler.update_league_count(1)
         mock_ddb.update_item.assert_called_once_with(
             TableName=processor_handler.table.name,
-            Key={"PK": {"S": "GLOBAL_STATS"}, "SK": {"S": "LEAGUE_COUNT"}},
+            Key={"PK": {"S": "APP#STATS"}, "SK": {"S": "LEAGUE_COUNT"}},
             UpdateExpression="ADD league_count :delta",
             ExpressionAttributeValues={":delta": {"N": "1"}},
         )
@@ -544,7 +544,7 @@ class TestUpdateLeagueCount:
             processor_handler.update_league_count(-1)
         mock_ddb.update_item.assert_called_once_with(
             TableName=processor_handler.table.name,
-            Key={"PK": {"S": "GLOBAL_STATS"}, "SK": {"S": "LEAGUE_COUNT"}},
+            Key={"PK": {"S": "APP#STATS"}, "SK": {"S": "LEAGUE_COUNT"}},
             UpdateExpression="ADD league_count :delta",
             ExpressionAttributeValues={":delta": {"N": "-1"}},
         )

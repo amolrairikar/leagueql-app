@@ -313,7 +313,7 @@ def delete_prefixed_items(pk_value: str, sk_prefix: str) -> None:
 
 def update_league_count(delta: int) -> None:
     table.update_item(
-        Key={"PK": "GLOBAL_STATS", "SK": "LEAGUE_COUNT"},
+        Key={"PK": "APP#STATS", "SK": "LEAGUE_COUNT"},
         UpdateExpression="ADD league_count :delta",
         ExpressionAttributeValues={":delta": Decimal(str(delta))},
     )

@@ -901,7 +901,7 @@ def write_metadata_items(
 def update_league_count(delta: int) -> None:
     ddb_client.update_item(
         TableName=table.name,
-        Key={"PK": {"S": "GLOBAL_STATS"}, "SK": {"S": "LEAGUE_COUNT"}},
+        Key={"PK": {"S": "APP#STATS"}, "SK": {"S": "LEAGUE_COUNT"}},
         UpdateExpression="ADD league_count :delta",
         ExpressionAttributeValues={":delta": {"N": str(delta)}},
     )

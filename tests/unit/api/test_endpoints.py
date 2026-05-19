@@ -332,7 +332,7 @@ class TestDeleteLeagueEndpoint:
         response = client.delete("/leagues/123?platform=SLEEPER")
         assert response.status_code == 200
         mock_table.update_item.assert_called_once_with(
-            Key={"PK": "GLOBAL_STATS", "SK": "LEAGUE_COUNT"},
+            Key={"PK": "APP#STATS", "SK": "LEAGUE_COUNT"},
             UpdateExpression="ADD league_count :delta",
             ExpressionAttributeValues={":delta": Decimal("-1")},
         )

@@ -178,7 +178,7 @@ class TestUpdateLeagueCount:
 
         update_league_count(1)
         mock_table.update_item.assert_called_once_with(
-            Key={"PK": "GLOBAL_STATS", "SK": "LEAGUE_COUNT"},
+            Key={"PK": "APP#STATS", "SK": "LEAGUE_COUNT"},
             UpdateExpression="ADD league_count :delta",
             ExpressionAttributeValues={":delta": Decimal("1")},
         )
@@ -188,7 +188,7 @@ class TestUpdateLeagueCount:
 
         update_league_count(-1)
         mock_table.update_item.assert_called_once_with(
-            Key={"PK": "GLOBAL_STATS", "SK": "LEAGUE_COUNT"},
+            Key={"PK": "APP#STATS", "SK": "LEAGUE_COUNT"},
             UpdateExpression="ADD league_count :delta",
             ExpressionAttributeValues={":delta": Decimal("-1")},
         )
