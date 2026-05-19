@@ -12,14 +12,8 @@ import botocore.config
 import botocore.exceptions
 import duckdb
 import pandas as pd
-from opentelemetry import context as otel_context
-from opentelemetry import trace
-from opentelemetry.propagate import extract
-
-from logging_utils import logger
+from logging_utils import correlation_id_var, logger
 from queries import QUERIES
-
-tracer = trace.get_tracer(__name__)
 
 _retry_config = botocore.config.Config(retries={"mode": "standard"})
 s3_client = boto3.client("s3", config=_retry_config)
@@ -932,11 +926,6 @@ def lambda_handler(event, context) -> None:
         return
     canonical_league_id = key.split("/")[1]
 
-    span = trace.get_current_span()
-    span.set_attribute("league.id", canonical_league_id)
-    span.set_attribute("s3.bucket", bucket)
-    span.set_attribute("s3.key", key)
-
     previous_version_id = get_previous_version_id(bucket=bucket, key=key)
     logger.info("Previous version ID for %s: %s", key, previous_version_id)
 
@@ -945,10 +934,7 @@ def lambda_handler(event, context) -> None:
     logger.info("Successfully read manifest file")
 
     manifest_metadata = manifest_response.get("Metadata", {})
-    carrier: dict[str, str] = {
-        k: v for k, v in manifest_metadata.items() if k in ("traceparent", "tracestate")
-    }
-    ctx_token = otel_context.attach(extract(carrier))
+    correlation_id_var.set(manifest_metadata.get("correlation_id", ""))
 
     platform = next(iter(manifest))
     all_seasons = manifest[platform]
@@ -970,9 +956,6 @@ def lambda_handler(event, context) -> None:
         seasons_to_process,
         all_seasons,
     )
-    span.set_attribute("platform", platform)
-    span.set_attribute("seasons.count", len(seasons_to_process))
-    span.set_attribute("seasons.list", ",".join(seasons_to_process))
 
     raw_data: list[dict[str, Any]] = []
 
@@ -993,7 +976,6 @@ def lambda_handler(event, context) -> None:
                 failed_seasons.append(season)
 
     if failed_seasons:
-        otel_context.detach(ctx_token)
         raise RuntimeError("Failed to load seasons from S3: %s" % failed_seasons)
 
     player_metadata: dict = {}
@@ -1096,23 +1078,19 @@ def lambda_handler(event, context) -> None:
         DRAFT_SCHEMA,
     ]
 
-    with tracer.start_as_current_span("processor.transform_and_write") as proc_span:
-        proc_span.set_attribute("platform", platform)
-        proc_span.set_attribute("entity_types.count", len(schemas))
-        for schema in schemas:
-            logger.info("Converting %s data to DynamoDB items.", schema.entity_type)
-            if schema in platform_specific_schemas:
-                rel = con.sql(QUERIES[schema.entity_type.value][platform])
-            else:
-                rel = con.sql(QUERIES[schema.entity_type.value])
-            con.register(f"{schema.entity_type.value}_output", rel)
-            write_items(
-                items=dataframe_to_dynamo_items(rel=rel, schema=schema),
-            )
+    for schema in schemas:
+        logger.info("Converting %s data to DynamoDB items.", schema.entity_type)
+        if schema in platform_specific_schemas:
+            rel = con.sql(QUERIES[schema.entity_type.value][platform])
+        else:
+            rel = con.sql(QUERIES[schema.entity_type.value])
+        con.register(f"{schema.entity_type.value}_output", rel)
+        write_items(
+            items=dataframe_to_dynamo_items(rel=rel, schema=schema),
+        )
 
     write_metadata_items(
         league_id=canonical_league_id,
         refresh=previous_version_id is not None,
         league_name=league_name,
     )
-    otel_context.detach(ctx_token)

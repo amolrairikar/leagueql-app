@@ -14,12 +14,8 @@ fastapi = "*"
 mangum = "*"
 newrelic = "*"
 pandas = "*"
-pyyaml = "*"
 requests = "*"
 uvicorn = "*"
-opentelemetry-api = "*"
-opentelemetry-distro = "*"
-opentelemetry-exporter-otlp = "*"
 
 [dev-packages]
 behave = "*"

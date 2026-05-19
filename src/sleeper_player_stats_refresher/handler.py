@@ -3,7 +3,6 @@ import json
 import os
 import time
 import boto3
-from opentelemetry import trace
 from utils import build_retry_session, logger
 
 s3_client = boto3.client("s3")
@@ -63,17 +62,11 @@ def lambda_handler(event, context) -> None:
     ]
     logger.info("Processing %d active players for season %s", len(active_ids), season)
 
-    span = trace.get_current_span()
-    span.set_attribute("nfl.season", season)
-    span.set_attribute("players.active_count", len(active_ids))
-
     all_stats = {}
     for player_id in active_ids:
         stats = fetch_stats(player_id, season)
         if stats is not None:
             all_stats[player_id] = {season: stats}
-
-    span.set_attribute("players.stats_fetched_count", len(all_stats))
 
     s3_client.put_object(
         Bucket=bucket,

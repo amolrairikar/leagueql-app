@@ -192,10 +192,6 @@ jobs:
             echo "CLERK_ISSUER_URL=${{ secrets.CLERK_ISSUER_URL_DEV }}" >> $GITHUB_ENV
           fi
 
-      - name: Set OTEL layer ARN
-        run: |
-          echo "OTEL_LAYER_ARN=arn:aws:lambda:${{ matrix.region }}:901920570463:layer:aws-otel-python-amd64-ver-1-32-0:2" >> $GITHUB_ENV
-
       - name: Initialize & Apply Terraform
         working-directory: infrastructure/regional
         env:
@@ -210,6 +206,4 @@ jobs:
             -var="environment=${{ env.ENVIRONMENT }}" \
             -var="aws_region=${{ matrix.region }}" \
             -var="clerk_issuer_url=${{ env.CLERK_ISSUER_URL }}" \
-            -var="clerk_jwt_audience=${{ secrets.CLERK_JWT_AUDIENCE }}" \
-            -var="otel_layer_arn=${{ env.OTEL_LAYER_ARN }}" \
-            -var="honeycomb_api_key=${{ secrets.HONEYCOMB_API_KEY }}"
+            -var="clerk_jwt_audience=${{ secrets.CLERK_JWT_AUDIENCE }}"

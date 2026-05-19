@@ -6,9 +6,8 @@ from typing import Any
 import boto3
 import botocore.config
 import botocore.exceptions
-from opentelemetry.propagate import inject
 
-from utils import logger
+from utils import correlation_id_var, logger
 
 _retry_config = botocore.config.Config(retries={"mode": "standard"})
 _s3 = boto3.client("s3", config=_retry_config)
@@ -68,9 +67,7 @@ def upload_results_to_s3(
         new_seasons = set(seasons_data.keys())
         full_manifest[platform] = sorted(existing_seasons.union(new_seasons))
 
-        carrier: dict[str, str] = {}
-        inject(carrier)
-        metadata = {k: v for k, v in carrier.items() if v}
+        metadata = {"correlation_id": correlation_id_var.get()}
 
         _s3.put_object(
             Bucket=bucket_name,

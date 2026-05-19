@@ -2,13 +2,13 @@ import json
 import logging
 import os
 import time
+import uuid
+from contextvars import ContextVar
 from decimal import Decimal
 from enum import Enum
 from typing import Annotated, Any, Optional
 
 import boto3
-from opentelemetry import trace
-from opentelemetry.propagate import inject
 import botocore.config
 import botocore.exceptions
 from boto3.dynamodb.conditions import Key
@@ -21,6 +21,8 @@ ORIGINS = [
     "http://localhost:5173",  # LOCAL/DEV
     "https://leagueql.com",  # PROD
 ]
+
+correlation_id_var: ContextVar[str] = ContextVar("correlation_id", default="")
 
 
 class APIResponse(BaseModel):
@@ -111,6 +113,7 @@ class JsonFormatter(logging.Formatter):
             "level": record.levelname,
             "message": record.getMessage(),
             "function": record.funcName,
+            "correlation_id": correlation_id_var.get(),
         }
         return json.dumps(log_object)
 
@@ -325,9 +328,6 @@ def get_league(
     response: Response,
 ) -> APIResponse:
     """Gets league by league ID and platform."""
-    span = trace.get_current_span()
-    span.set_attribute("league.id", leagueId)
-    span.set_attribute("platform", platform.value)
     canonical_league_id = lookup_league(league_id=leagueId, platform=platform)
     logger.info(
         "Canonical league for league ID %s and platform %s: %s",
@@ -362,10 +362,6 @@ def get_refresh_status(
     response: Response,
 ) -> APIResponse:
     """Gets the refresh status for a given league."""
-    span = trace.get_current_span()
-    span.set_attribute("league.id", leagueId)
-    span.set_attribute("platform", platform.value)
-    span.set_attribute("refresh_operation", refreshOperation.value)
     canonical_league_id = lookup_league(league_id=leagueId, platform=platform)
     league_metadata = get_league_metadata(canonical_league_id=canonical_league_id)
     if refreshOperation == RequestType.ONBOARD:
@@ -392,10 +388,8 @@ def onboard_league(
     ] = RequestType.ONBOARD,
 ) -> APIResponse:
     """Onboard a league to the application."""
-    span = trace.get_current_span()
-    span.set_attribute("league.id", payload.leagueId)
-    span.set_attribute("platform", payload.platform)
-    span.set_attribute("request_type", requestType.value)
+    correlation_id = str(uuid.uuid4())
+    correlation_id_var.set(correlation_id)
     platform = Platform(payload.platform)
     canonical_league_id = None
 
@@ -436,8 +430,6 @@ def onboard_league(
     logger.info("%s, proceeding with Lambda trigger...", log_msg)
 
     try:
-        carrier: dict[str, str] = {}
-        inject(carrier)
         lambda_client.invoke(
             FunctionName=os.environ["ONBOARDER_LAMBDA_NAME"],
             InvocationType="Event",
@@ -446,8 +438,7 @@ def onboard_league(
                     "body": payload.model_dump(),
                     "requestType": requestType.value,
                     "canonicalLeagueId": canonical_league_id,
-                    "traceparent": carrier.get("traceparent"),
-                    "tracestate": carrier.get("tracestate"),
+                    "correlation_id": correlation_id,
                 }
             ),
         )
@@ -475,9 +466,6 @@ def delete_league(
     platform: Annotated[Platform, Query(description="The platform the league is on")],
 ) -> APIResponse:
     """Deletes an onboarded league."""
-    span = trace.get_current_span()
-    span.set_attribute("league.id", leagueId)
-    span.set_attribute("platform", platform.value)
     canonical_league_id = lookup_league(league_id=leagueId, platform=platform)
     logger.info(
         "Proceeding with delete for canonical_league_id: %s", canonical_league_id
@@ -554,10 +542,6 @@ def query_league(
     response: Response,
 ) -> QueryResponse:
     """Returns a precomputed data view for the specified league."""
-    span = trace.get_current_span()
-    span.set_attribute("league.id", leagueId)
-    span.set_attribute("platform", platform.value)
-    span.set_attribute("query_type", queryType)
     parts = queryType.split("#", 1)
     base_type_str = parts[0].upper()
     suffix = parts[1] if len(parts) > 1 else None
