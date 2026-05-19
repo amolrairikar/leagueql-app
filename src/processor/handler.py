@@ -898,6 +898,15 @@ def write_metadata_items(
     )
 
 
+def update_league_count(delta: int) -> None:
+    ddb_client.update_item(
+        TableName=table.name,
+        Key={"PK": {"S": "GLOBAL_STATS"}, "SK": {"S": "LEAGUE_COUNT"}},
+        UpdateExpression="ADD league_count :delta",
+        ExpressionAttributeValues={":delta": {"N": str(delta)}},
+    )
+
+
 def lambda_handler(event, context) -> None:
     """
     Main handler function for processing raw API data fetched by onboarder.
@@ -1094,3 +1103,5 @@ def lambda_handler(event, context) -> None:
         refresh=previous_version_id is not None,
         league_name=league_name,
     )
+    if previous_version_id is None:
+        update_league_count(delta=1)
