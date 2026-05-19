@@ -174,7 +174,7 @@ def lookup_league(league_id: str, platform: Platform) -> str:
         logger.error("Boto error occurred: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error",
+            detail="Failed to look up league",
         )
 
     item = response.get("Item")
@@ -217,7 +217,7 @@ def get_league_metadata(canonical_league_id: str) -> dict:
         logger.error("Boto error occurred: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error",
+            detail="Failed to retrieve league data",
         )
 
     item = response.get("Item")
@@ -253,7 +253,7 @@ def get_league_seasons(canonical_league_id: str) -> list[str]:
         logger.error("Boto error occurred: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error",
+            detail="Failed to retrieve league seasons",
         )
 
     items = response.get("Items", [])
@@ -306,7 +306,7 @@ def delete_prefixed_items(pk_value: str, sk_prefix: str) -> None:
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error",
+            detail="Failed to delete league data",
         )
     logger.info("Deleted %d items with prefix %s", total_deleted, sk_prefix)
 
@@ -525,7 +525,7 @@ def delete_league(
         logger.error("Error occurred while deleting league: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error",
+            detail="Failed to delete league",
         )
 
 
@@ -596,7 +596,7 @@ def query_league(
         logger.error("Boto error occurred: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error",
+            detail="Failed to retrieve league data",
         )
 
 

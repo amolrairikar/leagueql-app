@@ -84,6 +84,7 @@ export default function LeagueConnect() {
   const [pollStatus, setPollStatus] = useState<'idle' | 'success' | 'failed'>(
     'idle',
   );
+  const [lastRequestType, setLastRequestType] = useState<'ONBOARD' | 'REFRESH' | null>(null);
   const [operationId, setOperationId] = useState<string | null>(null);
   const [loadingMessage, setLoadingMessage] = useState('');
   const loadingStartRef = useRef<number | null>(null);
@@ -135,6 +136,7 @@ export default function LeagueConnect() {
 
   const onSubmit = async (data: LeagueConnectFormValues) => {
     setPollStatus('idle');
+    setLastRequestType(null);
     setOperationId(null);
     const apiPlatform = API_PLATFORM[data.platform];
 
@@ -182,6 +184,7 @@ export default function LeagueConnect() {
       return;
     }
 
+    setLastRequestType(requestType);
     await sleep(POLL_INITIAL_DELAY_MS);
     const result = await pollForCompletion(data.leagueId, apiPlatform, requestType);
     if (result === 'failed') setOperationId(capturedOperationId);
@@ -335,10 +338,13 @@ export default function LeagueConnect() {
             )}
             {pollStatus === 'failed' && (
               <Alert variant="destructive" className="mt-4">
-                <AlertTitle>Failed</AlertTitle>
+                <AlertTitle>
+                  {lastRequestType === 'REFRESH' ? 'Refresh Failed' : 'Onboarding Failed'}
+                </AlertTitle>
                 <AlertDescription>
-                  There was an error with your request. Please try again or
-                  contact support
+                  {lastRequestType === 'REFRESH'
+                    ? 'League refresh failed. Please try again or contact support'
+                    : 'League onboarding failed. Please try again or contact support'}
                   {operationId ? ` with operation ID ${operationId}` : ''}.
                 </AlertDescription>
               </Alert>
