@@ -1,6 +1,7 @@
 """Tests for pure functions in processor/handler.py."""
 
 from decimal import Decimal
+from unittest.mock import MagicMock, patch
 
 import duckdb
 import pandas as pd
@@ -523,3 +524,27 @@ class TestRegisterSleeperRawData:
         ]
         result = processor_handler._register_sleeper_raw_data(raw, {}, {})
         assert result["brackets"][0]["bracket_type"] == "LOSERS_BRACKET"
+
+
+class TestUpdateLeagueCount:
+    def test_increments_count(self, processor_handler):
+        mock_ddb = MagicMock()
+        with patch.object(processor_handler, "ddb_client", mock_ddb):
+            processor_handler.update_league_count(1)
+        mock_ddb.update_item.assert_called_once_with(
+            TableName=processor_handler.table.name,
+            Key={"PK": {"S": "APP#STATS"}, "SK": {"S": "LEAGUE_COUNT"}},
+            UpdateExpression="ADD league_count :delta",
+            ExpressionAttributeValues={":delta": {"N": "1"}},
+        )
+
+    def test_decrements_count(self, processor_handler):
+        mock_ddb = MagicMock()
+        with patch.object(processor_handler, "ddb_client", mock_ddb):
+            processor_handler.update_league_count(-1)
+        mock_ddb.update_item.assert_called_once_with(
+            TableName=processor_handler.table.name,
+            Key={"PK": {"S": "APP#STATS"}, "SK": {"S": "LEAGUE_COUNT"}},
+            UpdateExpression="ADD league_count :delta",
+            ExpressionAttributeValues={":delta": {"N": "-1"}},
+        )

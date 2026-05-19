@@ -172,6 +172,28 @@ class TestGetLeagueSeasons:
         assert exc_info.value.status_code == 500
 
 
+class TestUpdateLeagueCount:
+    def test_increments_count(self, mock_table):
+        from main import update_league_count
+
+        update_league_count(1)
+        mock_table.update_item.assert_called_once_with(
+            Key={"PK": "APP#STATS", "SK": "LEAGUE_COUNT"},
+            UpdateExpression="ADD league_count :delta",
+            ExpressionAttributeValues={":delta": Decimal("1")},
+        )
+
+    def test_decrements_count(self, mock_table):
+        from main import update_league_count
+
+        update_league_count(-1)
+        mock_table.update_item.assert_called_once_with(
+            Key={"PK": "APP#STATS", "SK": "LEAGUE_COUNT"},
+            UpdateExpression="ADD league_count :delta",
+            ExpressionAttributeValues={":delta": Decimal("-1")},
+        )
+
+
 class TestDeletePrefixedItems:
     def test_deletes_items_in_batches(self, mock_table):
         from main import delete_prefixed_items

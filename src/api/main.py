@@ -311,6 +311,14 @@ def delete_prefixed_items(pk_value: str, sk_prefix: str) -> None:
     logger.info("Deleted %d items with prefix %s", total_deleted, sk_prefix)
 
 
+def update_league_count(delta: int) -> None:
+    table.update_item(
+        Key={"PK": "APP#STATS", "SK": "LEAGUE_COUNT"},
+        UpdateExpression="ADD league_count :delta",
+        ExpressionAttributeValues={":delta": Decimal(str(delta))},
+    )
+
+
 @app.get("/", status_code=status.HTTP_200_OK)
 def root() -> APIResponse:
     """Makes health check to API root URL."""
@@ -518,6 +526,7 @@ def delete_league(
 
         logger.info("Deleted raw API data for league from S3")
 
+        update_league_count(delta=-1)
         return APIResponse(
             detail="Successfully deleted league",
         )
