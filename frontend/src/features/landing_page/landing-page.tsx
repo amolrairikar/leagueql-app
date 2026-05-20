@@ -14,6 +14,7 @@ import {
 } from '@/features/landing_page/constants';
 import type { Feature } from '@/features/landing_page/types';
 
+
 interface FeatureCardProps {
   icon: string;
   title: string;
@@ -112,6 +113,7 @@ export default function LeagueQLLanding() {
             View Demo
           </Button>
         </div>
+
       </section>
 
       <Dialog open={authOpen} onOpenChange={setAuthOpen}>

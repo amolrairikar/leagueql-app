@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react';
+
 import {
   Dialog,
   DialogContent,
@@ -11,6 +13,15 @@ interface AboutDialogProps {
 }
 
 export function AboutDialog({ open, onOpenChange }: AboutDialogProps) {
+  const [leagueCount, setLeagueCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    fetch('https://api.leagueql.com/counts')
+      .then((r) => r.json())
+      .then((d: { leagueCount: number }) => setLeagueCount(d.leagueCount))
+      .catch(() => null);
+  }, []);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
@@ -51,6 +62,11 @@ export function AboutDialog({ open, onOpenChange }: AboutDialogProps) {
             />
           </a>
         </p>
+        {leagueCount !== null && (
+          <p className="text-sm text-muted-foreground">
+            <span className="font-bold">Leagues Onboarded:</span> {leagueCount}
+          </p>
+        )}
       </DialogContent>
     </Dialog>
   );
