@@ -34,8 +34,8 @@ N_BYE_TEAMS = 2
 DRAFT_ROUNDS = 14
 
 TABLE_NAMES = {
-    "dev": "fantasy-football-recap-table-dev",
-    "prod": "fantasy-football-recap-table-prod",
+    "dev": "leagueql-table-dev",
+    "prod": "leagueql-table-prod",
 }
 
 logging.basicConfig(
@@ -770,8 +770,8 @@ def simulate_season(
     m1 = playoff_matchup(s3, s6, 15, "WINNERS_BRACKET", "Quarterfinals")
     m2 = playoff_matchup(s4, s5, 15, "WINNERS_BRACKET", "Quarterfinals")
     c1, c2, c3, c4 = consolation_teams  # seeds 7-10
-    mc1 = playoff_matchup(c1, c2, 15, "WINNERS_CONSOLATION_LADDER", None)
-    mc2 = playoff_matchup(c3, c4, 15, "WINNERS_CONSOLATION_LADDER", None)
+    mc1 = playoff_matchup(c1, c2, 15, "WINNERS_CONSOLATION_LADDER", "Losers Bracket")
+    mc2 = playoff_matchup(c3, c4, 15, "WINNERS_CONSOLATION_LADDER", "Losers Bracket")
     week15_matchups = [m1, m2, mc1, mc2]
 
     # Week 16 — Semifinals + 5th-place game + consolation round 2
@@ -779,12 +779,14 @@ def simulate_season(
     qf2_winner, qf2_loser = m2["winner"], m2["loser"]
     m3 = playoff_matchup(s1, qf2_winner, 16, "WINNERS_BRACKET", "Semifinals")
     m4 = playoff_matchup(s2, qf1_winner, 16, "WINNERS_BRACKET", "Semifinals")
-    m5 = playoff_matchup(qf1_loser, qf2_loser, 16, "WINNERS_CONSOLATION_LADDER", None)
+    m5 = playoff_matchup(
+        qf1_loser, qf2_loser, 16, "WINNERS_CONSOLATION_LADDER", "Losers Bracket"
+    )
     mc3 = playoff_matchup(
-        mc1["winner"], mc2["winner"], 16, "WINNERS_CONSOLATION_LADDER", None
+        mc1["winner"], mc2["winner"], 16, "WINNERS_CONSOLATION_LADDER", "Losers Bracket"
     )
     mc4 = playoff_matchup(
-        mc1["loser"], mc2["loser"], 16, "WINNERS_CONSOLATION_LADDER", None
+        mc1["loser"], mc2["loser"], 16, "WINNERS_CONSOLATION_LADDER", "Losers Bracket"
     )
     week16_matchups = [m3, m4, m5, mc3, mc4]
 
@@ -792,15 +794,15 @@ def simulate_season(
     sf1_winner, sf1_loser = m3["winner"], m3["loser"]
     sf2_winner, sf2_loser = m4["winner"], m4["loser"]
     m6 = playoff_matchup(sf1_winner, sf2_winner, 17, "WINNERS_BRACKET", "Finals")
-    m7 = playoff_matchup(sf1_loser, sf2_loser, 17, "WINNERS_BRACKET", None)
+    m7 = playoff_matchup(sf1_loser, sf2_loser, 17, "WINNERS_BRACKET", "Finals")
     mc5 = playoff_matchup(
-        mc3["winner"], m5["winner"], 17, "WINNERS_CONSOLATION_LADDER", None
+        mc3["winner"], m5["winner"], 17, "WINNERS_CONSOLATION_LADDER", "Losers Bracket"
     )
     mc6 = playoff_matchup(
-        mc3["loser"], m5["loser"], 17, "WINNERS_CONSOLATION_LADDER", None
+        mc3["loser"], m5["loser"], 17, "WINNERS_CONSOLATION_LADDER", "Losers Bracket"
     )
     mc7 = playoff_matchup(
-        mc4["winner"], mc4["loser"], 17, "WINNERS_CONSOLATION_LADDER", None
+        mc4["winner"], mc4["loser"], 17, "WINNERS_CONSOLATION_LADDER", "Losers Bracket"
     )
     week17_matchups = [m6, m7, mc5, mc6, mc7]
 
