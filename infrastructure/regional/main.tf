@@ -480,6 +480,60 @@ resource "aws_cloudwatch_metric_alarm" "api_gw_5xx" {
   }
 }
 
+resource "aws_cloudwatch_metric_alarm" "dynamodb_write_spike" {
+  count               = local.region == "east" && var.environment == "prod" ? 1 : 0
+  alarm_name          = "leagueql-dynamodb-${var.environment}-write-spike"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods  = 1
+  metric_name         = "ConsumedWriteCapacityUnits"
+  namespace           = "AWS/DynamoDB"
+  period              = 300
+  statistic           = "Sum"
+  threshold           = 3000
+  alarm_description   = "DynamoDB write capacity spike detected"
+  alarm_actions       = [aws_sns_topic.lambda_alerts[0].arn]
+  ok_actions          = [aws_sns_topic.lambda_alerts[0].arn]
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    TableName = "leagueql-table-${var.environment}"
+  }
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    component   = "monitoring"
+    managed-by  = "terraform"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "dynamodb_read_spike" {
+  count               = local.region == "east" && var.environment == "prod" ? 1 : 0
+  alarm_name          = "leagueql-dynamodb-${var.environment}-read-spike"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods  = 1
+  metric_name         = "ConsumedReadCapacityUnits"
+  namespace           = "AWS/DynamoDB"
+  period              = 300
+  statistic           = "Sum"
+  threshold           = 25000
+  alarm_description   = "DynamoDB read capacity spike detected"
+  alarm_actions       = [aws_sns_topic.lambda_alerts[0].arn]
+  ok_actions          = [aws_sns_topic.lambda_alerts[0].arn]
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    TableName = "leagueql-table-${var.environment}"
+  }
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    component   = "monitoring"
+    managed-by  = "terraform"
+  }
+}
+
 resource "aws_cloudwatch_log_resource_policy" "apigateway_log_delivery" {
   policy_name = "api-gateway-log-delivery-${var.environment}"
 
