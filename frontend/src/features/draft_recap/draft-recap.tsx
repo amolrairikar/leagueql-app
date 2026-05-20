@@ -1,8 +1,8 @@
 import React, { Suspense, use, useEffect, useMemo, useState } from 'react';
-import { ChevronDown, Gem, X } from 'lucide-react';
+import { ChevronDown, Gem, Info, X } from 'lucide-react';
 
 import { Skeleton } from '@/components/ui/skeleton';
-import { TooltipProvider } from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { getLeagueCookies } from '@/lib/cookie-handler';
 import { NEMESIS_COLORS, POSITION_COLORS, UI_COLORS } from '@/lib/color-constants';
 import { type DraftPickItem, getDraftData } from './api-calls';
@@ -44,6 +44,7 @@ function getAlts(pick: DraftPickItem, allPicks: DraftPickItem[]): DraftPickItem[
         a.overall_pick_number > pick.overall_pick_number &&
         a.round <= pick.round + ALT_PICK_ROUND_WINDOW &&
         a.player_name !== pick.player_name &&
+        a.team_id !== pick.team_id &&
         a.total_points > pick.total_points,
     )
     .sort((a, b) => b.total_points - a.total_points)
@@ -220,7 +221,17 @@ function DraftRecapContent({
                 Total pts
               </th>
               <th className="text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground px-3 py-2.5 text-center bg-muted border-b border-border/50" style={{ width: '72px' }}>
-                VORP
+                <span className="inline-flex items-center gap-1 justify-center">
+                  VORP
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info className="w-3 h-3 cursor-default" />
+                    </TooltipTrigger>
+                    <TooltipContent side="top">
+                      Value Over Replacement Player — how many more points this player scored compared to a league-average player at the same position
+                    </TooltipContent>
+                  </Tooltip>
+                </span>
               </th>
               <th className="text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground px-3 py-2.5 text-center bg-muted border-b border-border/50" style={{ width: '100px' }}>
                 Pos rank - draft

@@ -372,7 +372,7 @@ function BoxScoreView({
   const aWins = matchup.team_a_score > matchup.team_b_score;
   const left: BoxScoreSide = {
     teamLogo: matchup.team_a_team_logo,
-    teamName: matchup.team_a_team_name,
+    teamName: matchup.team_a_team_name || `Team ${matchup.team_a_display_name}`,
     ownerUsername: matchup.team_a_display_name,
     color: colorMap.get(matchup.team_a_id) ?? UI_COLORS.default,
     score: matchup.team_a_score,
@@ -382,7 +382,7 @@ function BoxScoreView({
   };
   const right: BoxScoreSide = {
     teamLogo: matchup.team_b_team_logo,
-    teamName: matchup.team_b_team_name,
+    teamName: matchup.team_b_team_name || `Team ${matchup.team_b_display_name}`,
     ownerUsername: matchup.team_b_display_name,
     color: colorMap.get(matchup.team_b_id) ?? UI_COLORS.default,
     score: matchup.team_b_score,

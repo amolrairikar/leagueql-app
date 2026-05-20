@@ -77,7 +77,7 @@ function TeamRow({
       </div>
       <div className="flex-1 min-w-0">
         <div className="text-[12px] font-medium text-foreground truncate">{team.display_name}</div>
-        <div className="text-[10px] text-muted-foreground truncate">{team.team_name}</div>
+        <div className="text-[10px] text-muted-foreground truncate">{team.team_name || `Team ${team.display_name}`}</div>
       </div>
       {scoreHtml}
     </div>
@@ -149,7 +149,7 @@ function ByeCard({ team }: { team: Team }) {
         </div>
         <div className="flex-1 min-w-0">
           <div className="text-[12px] font-medium text-foreground truncate">{team.display_name}</div>
-          <div className="text-[10px] text-muted-foreground truncate">{team.team_name}</div>
+          <div className="text-[10px] text-muted-foreground truncate">{team.team_name || `Team ${team.display_name}`}</div>
         </div>
         <span className="text-[9px] font-medium uppercase tracking-[0.05em] px-1 py-0.5 rounded" style={{ color: UI_COLORS.champion.text, background: UI_COLORS.champion.bg }}>
           BYE
@@ -174,7 +174,7 @@ function ChampionCard({ team }: { team: Team }) {
         {init}
       </div>
       <div className="text-[14px] font-medium text-foreground text-center">{team.display_name}</div>
-      <div className="text-[11px] text-muted-foreground text-center">{team.team_name}</div>
+      <div className="text-[11px] text-muted-foreground text-center">{team.team_name || `Team ${team.display_name}`}</div>
     </div>
   );
 }
@@ -523,7 +523,7 @@ export default function PlayoffBracket() {
               <BoxScoreCard
                 left={{
                   teamLogo: selectedMatch.team_1_team_logo,
-                  teamName: selectedMatch.team_1_team_name,
+                  teamName: selectedMatch.team_1_team_name || `Team ${selectedMatch.team_1_display_name}`,
                   ownerUsername: selectedMatch.team_1_display_name,
                   color: getTeamColor(selectedMatch.team_1_id),
                   score: selectedMatch.team_1_score ?? 0,
@@ -537,7 +537,7 @@ export default function PlayoffBracket() {
                 }}
                 right={{
                   teamLogo: selectedMatch.team_2_team_logo,
-                  teamName: selectedMatch.team_2_team_name,
+                  teamName: selectedMatch.team_2_team_name || `Team ${selectedMatch.team_2_display_name}`,
                   ownerUsername: selectedMatch.team_2_display_name,
                   color: getTeamColor(selectedMatch.team_2_id),
                   score: selectedMatch.team_2_score ?? 0,

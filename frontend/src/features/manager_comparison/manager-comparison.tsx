@@ -372,7 +372,7 @@ function ManagerBoxScoreView({
   const lWins = game.lp > game.rp;
   const leftSide: BoxScoreSide = {
     teamLogo: game.leftIsA ? m.team_a_team_logo : m.team_b_team_logo,
-    teamName: game.leftIsA ? m.team_a_team_name : m.team_b_team_name,
+    teamName: (game.leftIsA ? m.team_a_team_name : m.team_b_team_name) || `Team ${left.name}`,
     ownerUsername: left.name,
     color: left.color,
     score: game.lp,
@@ -382,7 +382,7 @@ function ManagerBoxScoreView({
   };
   const rightSide: BoxScoreSide = {
     teamLogo: game.leftIsA ? m.team_b_team_logo : m.team_a_team_logo,
-    teamName: game.leftIsA ? m.team_b_team_name : m.team_a_team_name,
+    teamName: (game.leftIsA ? m.team_b_team_name : m.team_a_team_name) || `Team ${right.name}`,
     ownerUsername: right.name,
     color: right.color,
     score: game.rp,
@@ -505,7 +505,7 @@ function ManagerComparisonInner({
               <div className="flex flex-col items-center gap-1.5 pb-4.5 pt-2.5">
                 <MgrAvatar color={LWithH2H.color} init={LWithH2H.init} />
                 <span className="text-[13px] font-medium text-foreground text-center">
-                  {LWithH2H.team}
+                  {LWithH2H.team || `Team ${LWithH2H.name}`}
                 </span>
                 <span className="text-[11px] text-muted-foreground">
                   {LWithH2H.name}
@@ -515,7 +515,7 @@ function ManagerComparisonInner({
               <div className="flex flex-col items-center gap-1.5 pb-4.5 pt-2.5">
                 <MgrAvatar color={RWithH2H.color} init={RWithH2H.init} />
                 <span className="text-[13px] font-medium text-foreground text-center">
-                  {RWithH2H.team}
+                  {RWithH2H.team || `Team ${RWithH2H.name}`}
                 </span>
                 <span className="text-[11px] text-muted-foreground">
                   {RWithH2H.name}

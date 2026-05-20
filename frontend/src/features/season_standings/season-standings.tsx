@@ -6,7 +6,6 @@ import { avatarColor, TeamAvatar } from '@/components/team-avatar';
 import {
   ChartContainer,
   ChartLegend,
-  ChartLegendContent,
   ChartTooltip,
   ChartTooltipContent,
   type ChartConfig,
@@ -44,6 +43,7 @@ function SkeletonChart() {
 
 function WinsProgressionChart({ promise }: { promise: Promise<WeeklyResult> }) {
   const result = use(promise);
+  const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
 
   if (!result.ok || result.data.length === 0) {
     return (
@@ -73,6 +73,8 @@ function WinsProgressionChart({ promise }: { promise: Promise<WeeklyResult> }) {
     return point;
   });
 
+  const colorMap = new Map(teams.map((team, i) => [team.team_id, avatarColor(i)]));
+
   const chartConfig: ChartConfig = Object.fromEntries(
     teams.map((team, i) => [
       team.team_id,
@@ -100,18 +102,44 @@ function WinsProgressionChart({ promise }: { promise: Promise<WeeklyResult> }) {
             />
           }
         />
-        <ChartLegend content={<ChartLegendContent className="flex-wrap" />} />
-        {teams.map((team) => (
-          <Line
-            key={team.team_id}
-            type="monotone"
-            dataKey={team.team_id}
-            stroke={`var(--color-${team.team_id})`}
-            strokeWidth={2}
-            dot={false}
-            activeDot={{ r: 4 }}
-          />
-        ))}
+        <ChartLegend
+          content={() => (
+            <div className="flex flex-wrap gap-4 pt-2">
+              {teams.map((team) => {
+                const isSelected = selectedTeamId === null || selectedTeamId === team.team_id;
+                return (
+                  <div
+                    key={team.team_id}
+                    className="flex items-center gap-2 cursor-pointer"
+                    onClick={() => setSelectedTeamId(selectedTeamId === team.team_id ? null : team.team_id)}
+                    style={{ opacity: isSelected ? 1 : 0.4 }}
+                  >
+                    <div
+                      className="w-3 h-3 rounded-sm"
+                      style={{ backgroundColor: colorMap.get(team.team_id) }}
+                    />
+                    <span className="text-[11px] text-foreground">{team.owner_username}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        />
+        {teams.map((team) => {
+          const isSelected = selectedTeamId === null || selectedTeamId === team.team_id;
+          return (
+            <Line
+              key={team.team_id}
+              type="monotone"
+              dataKey={team.team_id}
+              stroke={colorMap.get(team.team_id)}
+              strokeWidth={2}
+              strokeOpacity={selectedTeamId === null ? 1 : isSelected ? 1 : 0.2}
+              dot={false}
+              activeDot={{ r: 4 }}
+            />
+          );
+        })}
       </LineChart>
     </ChartContainer>
   );
@@ -161,7 +189,7 @@ function StandingsBody({ promise }: { promise: Promise<StandingsResult> }) {
                     {row.owner_username}
                   </span>
                   <span className="text-[11px] text-muted-foreground">
-                    {row.team_name}
+                    {row.team_name || `Team ${row.owner_username}`}
                   </span>
                 </div>
               </div>
@@ -245,7 +273,7 @@ function AwardsGrid({ promise }: { promise: Promise<StandingsResult> }) {
                 {champion.owner_username}
               </div>
               <div className="text-[12px] text-muted-foreground">
-                {champion.team_name}
+                {champion.team_name || `Team ${champion.owner_username}`}
               </div>
               <div
                 className="text-[11px] font-medium mt-0.5"
@@ -301,7 +329,7 @@ function AwardsGrid({ promise }: { promise: Promise<StandingsResult> }) {
             {highScorer.owner_username}
           </div>
           <div className="text-[12px] text-muted-foreground">
-            {highScorer.team_name}
+            {highScorer.team_name || `Team ${highScorer.owner_username}`}
           </div>
           <div
             className="text-[11px] font-medium mt-0.5"
@@ -333,7 +361,7 @@ function AwardsGrid({ promise }: { promise: Promise<StandingsResult> }) {
             {luckiest.owner_username}
           </div>
           <div className="text-[12px] text-muted-foreground">
-            {luckiest.team_name}
+            {luckiest.team_name || `Team ${luckiest.owner_username}`}
           </div>
           <div
             className="text-[11px] font-medium mt-0.5"
@@ -516,7 +544,8 @@ export default function SeasonStandings() {
                           if they played every team in the league each week
                           aggregated over the season (i.e., if a team was the
                           2nd highest scoring team in a 10 team league, their
-                          win % vs. league for that week would be .900)
+                          record vs. league for that week would be 8-1, resulting
+                          in a win % of .889)
                         </TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
