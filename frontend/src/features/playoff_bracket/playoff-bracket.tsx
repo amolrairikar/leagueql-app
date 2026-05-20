@@ -273,9 +273,6 @@ export default function PlayoffBracket() {
   const championship = matches.find((m) => m.position === 1);
   const semifinals = matches.filter((m) => m.round === 2 && m.position === null);
   const wildcard = matches.filter((m) => m.round === 1 && m.position === null);
-  const thirdPlace = matches.find((m) => m.position === 3);
-  const fifthPlace = matches.find((m) => m.position === 5);
-
   // Pair bye teams with their corresponding wildcard matchups
   const wildcardRoundItems = semifinals.map((semi) => {
     // Determine which team had a bye and which comes from a wildcard match
@@ -480,39 +477,6 @@ export default function PlayoffBracket() {
           {/* Champion Card */}
           <div className="flex flex-col items-center justify-center pt-11 pl-1">
             {champTeam && <ChampionCard team={champTeam} />}
-          </div>
-        </div>
-
-        {/* Consolation bracket */}
-        <div className="mt-6 pt-4.5 border-t border-border/30">
-          <div className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground text-center mb-3">
-            Winners Consolation Bracket Results
-          </div>
-          <div className="grid grid-cols-2 gap-2.5">
-            <div>
-              <div className="text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground mb-1.5 text-center">
-                3rd place
-              </div>
-              {thirdPlace && (
-                <MatchupCard
-                  match={thirdPlace}
-                  played={true}
-                  onClick={() => setSelectedMatchId(thirdPlace.match_id === selectedMatchId ? null : thirdPlace.match_id)}
-                />
-              )}
-            </div>
-            <div>
-              <div className="text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground mb-1.5 text-center">
-                5th place
-              </div>
-              {fifthPlace && (
-                <MatchupCard
-                  match={fifthPlace}
-                  played={true}
-                  onClick={() => setSelectedMatchId(fifthPlace.match_id === selectedMatchId ? null : fifthPlace.match_id)}
-                />
-              )}
-            </div>
           </div>
         </div>
 
