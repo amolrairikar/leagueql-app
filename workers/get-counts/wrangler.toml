@@ -1,0 +1,15 @@
+name = "get-counts"
+main = "index.js"
+compatibility_date = "2024-01-01"
+
+[[kv_namespaces]]
+binding = "COUNTS_KV"
+id = "15d97bbfce4842aea2e15817010aeb58"
+
+[[routes]]
+pattern = "api.leagueql.com/counts"
+zone_name = "leagueql.com"
+
+[observability.logs]
+enabled = true
+invocation_logs = true
