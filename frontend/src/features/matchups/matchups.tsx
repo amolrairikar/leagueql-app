@@ -74,7 +74,7 @@ function processData(matchups: MatchupItem[], standings: WeeklyStandingItem[]): 
     const pm: ProcessedMatchup = {
       teamA: {
         teamId: m.team_a_id,
-        teamName: m.team_a_team_name ?? '',
+        teamName: m.team_a_team_name || `Team ${m.team_a_display_name ?? ''}`,
         teamLogo: m.team_a_team_logo ?? null,
         ownerUsername: m.team_a_display_name ?? '',
         score: Number(m.team_a_score),
@@ -85,7 +85,7 @@ function processData(matchups: MatchupItem[], standings: WeeklyStandingItem[]): 
       },
       teamB: {
         teamId: m.team_b_id,
-        teamName: m.team_b_team_name ?? '',
+        teamName: m.team_b_team_name || `Team ${m.team_b_display_name ?? ''}`,
         teamLogo: m.team_b_team_logo ?? null,
         ownerUsername: m.team_b_display_name ?? '',
         score: Number(m.team_b_score),
@@ -132,10 +132,9 @@ function MatchupCard({
     <div
       className={`bg-card rounded-lg overflow-hidden cursor-pointer transition-colors ${
         isSelected
-          ? 'border-2'
+          ? 'border-2 border-primary'
           : 'border border-border/50 hover:border-border'
       }`}
-      style={isSelected ? { borderColor: MATCHUP_STATUS_COLORS.selected.border } : undefined}
       onClick={onClick}
     >
       <div className="px-3.5 pt-2.5 pb-0 flex items-center justify-between">
@@ -211,7 +210,7 @@ function MatchupCard({
         </div>
 
         <div className="mt-2.5 flex justify-end">
-          <span className="text-[11px] font-medium" style={{ color: MATCHUP_STATUS_COLORS.selected.border }}>
+          <span className="text-[11px] font-medium text-primary">
             View box score →
           </span>
         </div>
@@ -353,10 +352,9 @@ function MatchupsContent({
             key={w}
             className={`px-2.5 py-1.5 text-[12px] font-medium border rounded-md cursor-pointer transition-colors ${
               w === activeWeek
-                ? 'text-white'
+                ? 'bg-primary border-primary text-primary-foreground'
                 : 'bg-card border-border/50 text-muted-foreground hover:border-border'
             }`}
-            style={w === activeWeek ? { background: MATCHUP_STATUS_COLORS.selected.border, borderColor: MATCHUP_STATUS_COLORS.selected.border } : undefined}
             onClick={() => onWeekChange(w)}
           >
             Wk {w}

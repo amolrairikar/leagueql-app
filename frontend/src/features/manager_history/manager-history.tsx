@@ -517,7 +517,7 @@ function ManagerHistoryContent({ promise }: { promise: Promise<DataResult> }) {
             {m.owner_username}
           </div>
           <div className="text-[13px] text-muted-foreground">
-            {m.currentTeam}
+            {m.currentTeam || `Team ${m.owner_username}`}
           </div>
         </div>
         {managers.length > 1 && (
@@ -671,17 +671,17 @@ function ManagerHistoryContent({ promise }: { promise: Promise<DataResult> }) {
         {[...m.seasons].reverse().map((s) => (
           <div
             key={s.year}
-            className={`bg-card border border-border/50 rounded-lg p-3.5 grid grid-cols-[80px_1fr_auto] gap-3 items-center ${
-              s.result === 'champion' ? 'border-2' : ''
+            className={`bg-card rounded-lg p-3.5 grid grid-cols-[80px_1fr_auto] gap-3 items-center ${
+              s.result === 'champion' ? 'border-2' : 'border border-border/50'
             }`}
-            style={s.result === 'champion' ? { borderColor: UI_COLORS.champion.border } : {}}
+            style={s.result === 'champion' ? { borderColor: m.color } : {}}
           >
             <div>
               <div className="text-[13px] font-medium text-foreground">
                 {s.year}
               </div>
               <div className="text-[11px] text-muted-foreground mt-0.5">
-                {s.team || ' '}
+                {s.team || `Team ${m.owner_username}`}
               </div>
               <div className="mt-2">{resultBadge(s.result)}</div>
             </div>
@@ -745,20 +745,22 @@ function ManagerHistoryContent({ promise }: { promise: Promise<DataResult> }) {
                 </TooltipTrigger>
                 <TooltipContent
                   side="right"
-                  className="max-w-56 leading-relaxed bg-popover text-popover-foreground border border-border shadow-md [&>svg]:fill-popover [&>svg]:bg-popover"
+                  className="max-w-72 bg-popover text-popover-foreground border border-border shadow-md [&>svg]:fill-popover [&>svg]:bg-popover"
                 >
-                  <p className="text-[12px]">
-                    <span className="font-semibold">Domination</span> win
-                    {` pct ≥ ${DOMINATION_WIN_RATE.toFixed(3)}`}
-                  </p>
-                  <p className="text-[12px] mt-1">
-                    <span className="font-semibold">Nemesis</span> win
-                    {` pct < ${NEMESIS_WIN_RATE.toFixed(3)}`}
-                  </p>
-                  <p className="text-[12px] mt-1">
-                    <span className="font-semibold">Rival</span> lowest
-                    margin
-                  </p>
+                  <div className="flex flex-col gap-2.5">
+                    <p className="text-[12px] leading-relaxed">
+                      <span className="font-semibold">Domination</span>
+                      {` — opponents where your head-to-head win percentage is ${Math.round(DOMINATION_WIN_RATE * 100)}% or higher. You've consistently had their number and rarely lose this matchup.`}
+                    </p>
+                    <p className="text-[12px] leading-relaxed">
+                      <span className="font-semibold">Nemesis</span>
+                      {` — opponents where your head-to-head win percentage is below ${Math.round(NEMESIS_WIN_RATE * 100)}%. No matter how well you play, this opponent tends to come out on top.`}
+                    </p>
+                    <p className="text-[12px] leading-relaxed">
+                      <span className="font-semibold">Rival</span>
+                      {` — the opponent with the smallest average scoring margin between you. These are your most evenly matched games, often decided by just a handful of points.`}
+                    </p>
+                  </div>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -825,7 +827,7 @@ function ManagerHistoryContent({ promise }: { promise: Promise<DataResult> }) {
                         {r.oppName}
                       </div>
                       <div className="text-[11px] text-muted-foreground">
-                        {r.oppTeam}
+                        {r.oppTeam || `Team ${r.oppName}`}
                       </div>
                     </div>
                     <div className="shrink-0">{typeBadge}</div>
