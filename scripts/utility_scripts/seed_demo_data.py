@@ -5,9 +5,9 @@ Populate DynamoDB with 3 seasons of demo ESPN fantasy football data
 for the LeagueQL app.
 
 Usage:
-    pipenv run python deployment_scripts/seed_demo_data.py --env dev --dry-run
-    pipenv run python deployment_scripts/seed_demo_data.py --env prod
-    pipenv run python deployment_scripts/seed_demo_data.py --env dev --delete
+    pipenv run python scripts/utility_scripts/seed_demo_data.py --env dev --dry-run
+    pipenv run python scripts/utility_scripts/seed_demo_data.py --env prod
+    pipenv run python scripts/utility_scripts/seed_demo_data.py --env dev --delete
 """
 
 import argparse
@@ -29,8 +29,8 @@ SEASONS = ["2022", "2023", "2024"]
 ONBOARDED_AT = "2024-09-01T00:00:00"
 N_REG_WEEKS = 14
 N_TEAMS = 10
-N_PLAYOFF_TEAMS = 6
-N_BYE_TEAMS = 2
+N_PLAYOFF_TEAMS = 4
+N_BYE_TEAMS = 0
 DRAFT_ROUNDS = 14
 
 TABLE_NAMES = {
@@ -711,19 +711,18 @@ def simulate_season(
                 }
             )
 
-    # Determine playoff seeds (top 6 by wins, tiebreak: total PF)
+    # Determine playoff seeds (top 4 by wins, tiebreak: total PF)
     sorted_teams = sorted(team_ids, key=lambda t: (-wins[t], -total_pf[t]))
     playoff_seeds = sorted_teams[:N_PLAYOFF_TEAMS]  # [seed1, seed2, ...]
     consolation_teams = sorted_teams[N_PLAYOFF_TEAMS:]
 
     # ── Playoffs ──────────────────────────────────────────────────────────────
-    # Seeds 1 and 2 have byes in week 15 (Quarterfinals)
-    s1, s2 = playoff_seeds[0], playoff_seeds[1]
-    s3, s4, s5, s6 = (
+    # All 4 seeds play in week 16 (Semifinals); no wildcard round
+    s1, s2, s3, s4 = (
+        playoff_seeds[0],
+        playoff_seeds[1],
         playoff_seeds[2],
         playoff_seeds[3],
-        playoff_seeds[4],
-        playoff_seeds[5],
     )
 
     def playoff_matchup(
@@ -766,64 +765,32 @@ def simulate_season(
             "season": None,
         }
 
-    # Week 15 — Quarterfinals (seeds 3-6) + consolation (seeds 7-10)
-    m1 = playoff_matchup(s3, s6, 15, "WINNERS_BRACKET", "Quarterfinals")
-    m2 = playoff_matchup(s4, s5, 15, "WINNERS_BRACKET", "Quarterfinals")
-    c1, c2, c3, c4 = consolation_teams  # seeds 7-10
-    mc1 = playoff_matchup(c1, c2, 15, "WINNERS_CONSOLATION_LADDER", "Losers Bracket")
-    mc2 = playoff_matchup(c3, c4, 15, "WINNERS_CONSOLATION_LADDER", "Losers Bracket")
-    week15_matchups = [m1, m2, mc1, mc2]
+    # Week 15 — No playoff games (4-team format starts in week 16)
+    week15_matchups: list[dict] = []
 
-    # Week 16 — Semifinals + 5th-place game + consolation round 2
-    qf1_winner, qf1_loser = m1["winner"], m1["loser"]
-    qf2_winner, qf2_loser = m2["winner"], m2["loser"]
-    m3 = playoff_matchup(s1, qf2_winner, 16, "WINNERS_BRACKET", "Semifinals")
-    m4 = playoff_matchup(s2, qf1_winner, 16, "WINNERS_BRACKET", "Semifinals")
-    m5 = playoff_matchup(
-        qf1_loser, qf2_loser, 16, "WINNERS_CONSOLATION_LADDER", "Losers Bracket"
-    )
-    mc3 = playoff_matchup(
-        mc1["winner"], mc2["winner"], 16, "WINNERS_CONSOLATION_LADDER", "Losers Bracket"
-    )
-    mc4 = playoff_matchup(
-        mc1["loser"], mc2["loser"], 16, "WINNERS_CONSOLATION_LADDER", "Losers Bracket"
-    )
-    week16_matchups = [m3, m4, m5, mc3, mc4]
+    # Week 16 — Semifinals: 1 vs 4, 2 vs 3
+    m1 = playoff_matchup(s1, s4, 16, "WINNERS_BRACKET", "Semifinals")
+    m2 = playoff_matchup(s2, s3, 16, "WINNERS_BRACKET", "Semifinals")
+    week16_matchups = [m1, m2]
 
-    # Week 17 — Championship + 3rd place + consolation finals
-    sf1_winner, sf1_loser = m3["winner"], m3["loser"]
-    sf2_winner, sf2_loser = m4["winner"], m4["loser"]
-    m6 = playoff_matchup(sf1_winner, sf2_winner, 17, "WINNERS_BRACKET", "Finals")
-    m7 = playoff_matchup(sf1_loser, sf2_loser, 17, "WINNERS_BRACKET", "Finals")
-    mc5 = playoff_matchup(
-        mc3["winner"], m5["winner"], 17, "WINNERS_CONSOLATION_LADDER", "Losers Bracket"
-    )
-    mc6 = playoff_matchup(
-        mc3["loser"], m5["loser"], 17, "WINNERS_CONSOLATION_LADDER", "Losers Bracket"
-    )
-    mc7 = playoff_matchup(
-        mc4["winner"], mc4["loser"], 17, "WINNERS_CONSOLATION_LADDER", "Losers Bracket"
-    )
-    week17_matchups = [m6, m7, mc5, mc6, mc7]
+    # Week 17 — Championship
+    sf1_winner, sf1_loser = m1["winner"], m1["loser"]
+    sf2_winner, sf2_loser = m2["winner"], m2["loser"]
+    m3 = playoff_matchup(sf1_winner, sf2_winner, 17, "WINNERS_BRACKET", "Finals")
+    week17_matchups = [m3]
 
-    champion = m6["winner"]
+    champion = m3["winner"]
 
     # ── Final rankings ────────────────────────────────────────────────────────
-    qf_losers_by_seed = [
-        t for t in [qf1_loser, qf2_loser] if t in [qf1_loser, qf2_loser]
-    ]
-    # sort QF losers by regular season record
-    qf_losers_by_seed.sort(key=lambda t: (-wins[t], -total_pf[t]))
+    sf_losers = sorted([sf1_loser, sf2_loser], key=lambda t: (-wins[t], -total_pf[t]))
 
     final_rank: dict[str, int] = {}
-    final_rank[m6["winner"]] = 1
-    final_rank[m6["loser"]] = 2
-    final_rank[m7["winner"]] = 3
-    final_rank[m7["loser"]] = 4
-    for i, t in enumerate(qf_losers_by_seed):
-        final_rank[t] = 5 + i
+    final_rank[m3["winner"]] = 1
+    final_rank[m3["loser"]] = 2
+    for i, t in enumerate(sf_losers):
+        final_rank[t] = 3 + i
     for i, t in enumerate(consolation_teams):
-        final_rank[t] = 7 + i
+        final_rank[t] = 5 + i
 
     # ── STANDINGS data ────────────────────────────────────────────────────────
     standings_data: list[dict] = []
@@ -893,46 +860,18 @@ def simulate_season(
         }
 
     bracket_data = [
-        bracket_match(1, 1, s3, s6, m1["winner"], m1["loser"], None, None, None),
-        bracket_match(2, 1, s4, s5, m2["winner"], m2["loser"], None, None, None),
+        bracket_match(1, 1, s1, s4, m1["winner"], m1["loser"], None, None, None),
+        bracket_match(2, 1, s2, s3, m2["winner"], m2["loser"], None, None, None),
         bracket_match(
-            3, 2, s1, qf2_winner, m3["winner"], m3["loser"], None, '{"w": 1}', None
-        ),
-        bracket_match(
-            4, 2, s2, qf1_winner, m4["winner"], m4["loser"], None, '{"w": 2}', None
-        ),
-        bracket_match(
-            5,
-            2,
-            qf1_loser,
-            qf2_loser,
-            m5["winner"],
-            m5["loser"],
-            '{"l": 1}',
-            '{"l": 2}',
-            5,
-        ),
-        bracket_match(
-            6,
             3,
+            2,
             sf1_winner,
             sf2_winner,
-            m6["winner"],
-            m6["loser"],
-            '{"w": 3}',
-            '{"w": 4}',
+            m3["winner"],
+            m3["loser"],
+            '{"w": 1}',
+            '{"w": 2}',
             1,
-        ),
-        bracket_match(
-            7,
-            3,
-            sf1_loser,
-            sf2_loser,
-            m7["winner"],
-            m7["loser"],
-            '{"l": 3}',
-            '{"l": 4}',
-            3,
         ),
     ]
 

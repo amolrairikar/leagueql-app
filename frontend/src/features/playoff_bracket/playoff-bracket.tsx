@@ -219,21 +219,21 @@ export default function PlayoffBracket() {
         // Store matchups in state for later use
         setMatchups(matchupsData);
 
-        // Helper function to get week for a given round and season
-        const getWeekForRound = (round: number, season: string): number => {
-          const seasonYear = parseInt(season, 10);
-          if (seasonYear < 2021) {
-            // Pre-2021: round 1 = week 14, round 2 = week 15, round 3 = week 16
-            return round === 1 ? 14 : round === 2 ? 15 : 16;
-          } else {
-            // Post-2021: round 1 = week 15, round 2 = week 16, round 3 = week 17
-            return round === 1 ? 15 : round === 2 ? 16 : 17;
-          }
-        };
+        // Derive championship week from actual playoff matchup data (handles week-17, week-18, etc.)
+        const playoffWeeks = matchupsData
+          .filter(m => m.playoff_tier_type && m.playoff_tier_type !== 'NONE')
+          .map(m => parseInt(m.week, 10))
+          .filter(w => !isNaN(w));
+        const champWeek = playoffWeeks.length > 0
+          ? Math.max(...playoffWeeks)
+          : (parseInt(selectedSeason, 10) < 2021 ? 16 : 17);
+        const maxRound = bracketMatches.length > 0
+          ? Math.max(...bracketMatches.map(m => m.round))
+          : 0;
 
         // Match each bracket match with its corresponding matchup to get scores
         const matchesWithScores = bracketMatches.map((bracketMatch) => {
-          const week = getWeekForRound(bracketMatch.round, bracketMatch.season);
+          const week = champWeek - (maxRound - bracketMatch.round);
           const matchup = matchupsData.find(
             (m) =>
               m.season === bracketMatch.season &&
@@ -270,12 +270,12 @@ export default function PlayoffBracket() {
   }, [leagueId, platform, selectedSeason]);
 
   // Parse matches from DynamoDB format
+  const maxRound = matches.length > 0 ? Math.max(...matches.map(m => m.round)) : 0;
   const championship = matches.find((m) => m.position === 1);
-  const semifinals = matches.filter((m) => m.round === 2 && m.position === null);
-  const wildcard = matches.filter((m) => m.round === 1 && m.position === null);
-  const thirdPlace = matches.find((m) => m.position === 3);
-  const fifthPlace = matches.find((m) => m.position === 5);
-
+  const semifinals = matches.filter((m) => m.round === maxRound - 1 && m.position === null);
+  const wildcard = maxRound >= 3
+    ? matches.filter((m) => m.round === maxRound - 2 && m.position === null)
+    : [];
   // Pair bye teams with their corresponding wildcard matchups
   const wildcardRoundItems = semifinals.map((semi) => {
     // Determine which team had a bye and which comes from a wildcard match
@@ -329,18 +329,20 @@ export default function PlayoffBracket() {
 
   const seasonOptions = allSeasons;
 
+  // Derive championship week from matchup state (same logic as fetchBracketData)
+  const championshipWeek = useMemo(() => {
+    const playoffWeeks = matchups
+      .filter(m => m.playoff_tier_type && m.playoff_tier_type !== 'NONE')
+      .map(m => parseInt(m.week, 10))
+      .filter(w => !isNaN(w));
+    return playoffWeeks.length > 0
+      ? Math.max(...playoffWeeks)
+      : (parseInt(selectedSeason, 10) < 2021 ? 16 : 17);
+  }, [matchups, selectedSeason]);
+
   // Helper function to find the corresponding matchup data for a selected bracket match
   const findMatchupForBracketMatch = (bracketMatch: BracketMatch): Matchup | null => {
-    const getWeekForRound = (round: number, season: string): number => {
-      const seasonYear = parseInt(season, 10);
-      if (seasonYear < 2021) {
-        return round === 1 ? 14 : round === 2 ? 15 : 16;
-      } else {
-        return round === 1 ? 15 : round === 2 ? 16 : 17;
-      }
-    };
-
-    const week = getWeekForRound(bracketMatch.round, bracketMatch.season);
+    const week = championshipWeek - (maxRound - bracketMatch.round);
     return matchups.find(
       (m) =>
         m.season === bracketMatch.season &&
@@ -392,40 +394,44 @@ export default function PlayoffBracket() {
         </div>
 
         {/* Main bracket */}
-        <div className="grid grid-cols-[1fr_8px_1fr_8px_1fr_8px_160px] gap-0 items-stretch mb-6">
-          {/* Wild Card Round */}
-          <div className="flex flex-col">
-            <div className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground text-center pb-2.5 border-b border-border/20 mb-0">
-              Wild card
+        <div className={`grid ${maxRound >= 3 ? 'grid-cols-[1fr_8px_1fr_8px_1fr_8px_160px]' : 'grid-cols-[1fr_8px_1fr_8px_160px]'} gap-0 items-stretch mb-6`}>
+          {/* Wild Card Round (6-team+ formats only) */}
+          {maxRound >= 3 && (
+            <div className="flex flex-col">
+              <div className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground text-center pb-2.5 border-b border-border/20 mb-0">
+                Wild card
+              </div>
+              <div className="flex-1 flex flex-col justify-around">
+                {wildcardRoundItems.map((item, idx) => (
+                  <div key={idx} className="flex flex-col gap-2.5">
+                    {item.byeTeam && <ByeCard team={item.byeTeam} />}
+                    {item.wildcardMatch && (
+                      <MatchupCard
+                        match={item.wildcardMatch}
+                        played={true}
+                        onClick={() => setSelectedMatchId(item.wildcardMatch?.match_id === selectedMatchId ? null : item.wildcardMatch?.match_id ?? null)}
+                      />
+                    )}
+                    {idx === 0 && <div className="h-8" />}
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="flex-1 flex flex-col justify-around">
-              {wildcardRoundItems.map((item, idx) => (
-                <div key={idx} className="flex flex-col gap-2.5">
-                  {item.byeTeam && <ByeCard team={item.byeTeam} />}
-                  {item.wildcardMatch && (
-                    <MatchupCard
-                      match={item.wildcardMatch}
-                      played={true}
-                      onClick={() => setSelectedMatchId(item.wildcardMatch?.match_id === selectedMatchId ? null : item.wildcardMatch?.match_id ?? null)}
-                    />
-                  )}
-                  {idx === 0 && <div className="h-8" />}
-                </div>
-              ))}
-            </div>
-          </div>
+          )}
 
-          {/* Connector 1 */}
-          <div className="flex flex-col justify-around pt-11">
-            <svg width="20" height="58" viewBox="0 0 20 58" overflow="visible" className="block">
-              <path d="M0,15 H10 V43 H0" stroke="hsl(var(--border))" strokeWidth="1" fill="none" />
-              <line x1="10" y1="29" x2="20" y2="29" stroke="hsl(var(--border))" strokeWidth="1" />
-            </svg>
-            <svg width="20" height="58" viewBox="0 0 20 58" overflow="visible" className="block">
-              <path d="M0,15 H10 V43 H0" stroke="hsl(var(--border))" strokeWidth="1" fill="none" />
-              <line x1="10" y1="29" x2="20" y2="29" stroke="hsl(var(--border))" strokeWidth="1" />
-            </svg>
-          </div>
+          {/* Connector 1 (6-team+ formats only) */}
+          {maxRound >= 3 && (
+            <div className="flex flex-col justify-around pt-11">
+              <svg width="20" height="58" viewBox="0 0 20 58" overflow="visible" className="block">
+                <path d="M0,15 H10 V43 H0" stroke="hsl(var(--border))" strokeWidth="1" fill="none" />
+                <line x1="10" y1="29" x2="20" y2="29" stroke="hsl(var(--border))" strokeWidth="1" />
+              </svg>
+              <svg width="20" height="58" viewBox="0 0 20 58" overflow="visible" className="block">
+                <path d="M0,15 H10 V43 H0" stroke="hsl(var(--border))" strokeWidth="1" fill="none" />
+                <line x1="10" y1="29" x2="20" y2="29" stroke="hsl(var(--border))" strokeWidth="1" />
+              </svg>
+            </div>
+          )}
 
           {/* Semifinals */}
           <div className="flex flex-col">
@@ -480,39 +486,6 @@ export default function PlayoffBracket() {
           {/* Champion Card */}
           <div className="flex flex-col items-center justify-center pt-11 pl-1">
             {champTeam && <ChampionCard team={champTeam} />}
-          </div>
-        </div>
-
-        {/* Consolation bracket */}
-        <div className="mt-6 pt-4.5 border-t border-border/30">
-          <div className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground text-center mb-3">
-            Winners Consolation Bracket Results
-          </div>
-          <div className="grid grid-cols-2 gap-2.5">
-            <div>
-              <div className="text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground mb-1.5 text-center">
-                3rd place
-              </div>
-              {thirdPlace && (
-                <MatchupCard
-                  match={thirdPlace}
-                  played={true}
-                  onClick={() => setSelectedMatchId(thirdPlace.match_id === selectedMatchId ? null : thirdPlace.match_id)}
-                />
-              )}
-            </div>
-            <div>
-              <div className="text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground mb-1.5 text-center">
-                5th place
-              </div>
-              {fifthPlace && (
-                <MatchupCard
-                  match={fifthPlace}
-                  played={true}
-                  onClick={() => setSelectedMatchId(fifthPlace.match_id === selectedMatchId ? null : fifthPlace.match_id)}
-                />
-              )}
-            </div>
           </div>
         </div>
 
