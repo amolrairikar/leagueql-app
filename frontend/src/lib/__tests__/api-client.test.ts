@@ -38,7 +38,7 @@ function mockFetchError(status: number, body?: unknown) {
 }
 
 function fetchMock() {
-  return global.fetch as ReturnType<typeof vi.fn>;
+  return globalThis.fetch as ReturnType<typeof vi.fn>;
 }
 
 // ── ApiError ──────────────────────────────────────────────────────────────────
