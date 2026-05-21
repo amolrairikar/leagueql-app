@@ -21,3 +21,8 @@ __pycache__
 .dev.vars*
 !.dev.vars.example
 !.env.example
+
+# Playwright E2E
+frontend/playwright-report/
+frontend/test-results/
+frontend/blob-report/
