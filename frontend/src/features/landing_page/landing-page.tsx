@@ -7,7 +7,6 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { setDemoMode } from '@/lib/cookie-handler';
 import { DEMO_SEASONS } from '@/lib/demo-constants';
 import { AboutDialog } from '@/features/about/about-dialog';
-import { PrivacyDialog } from '@/features/privacy/privacy-dialog';
 import {
   FEATURES,
   FOOTER_LINKS,
@@ -36,7 +35,6 @@ export default function LeagueQLLanding() {
   const navigate = useNavigate();
   const [authOpen, setAuthOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
-  const [privacyOpen, setPrivacyOpen] = useState(false);
 
   function handleConnectLeague() {
     if (isSignedIn) {
@@ -55,7 +53,7 @@ export default function LeagueQLLanding() {
     if (link === 'About') {
       setAboutOpen(true);
     } else if (link === 'Privacy') {
-      setPrivacyOpen(true);
+      void navigate('/privacy');
     }
   }
 
@@ -131,7 +129,6 @@ export default function LeagueQLLanding() {
       </Dialog>
 
       <AboutDialog open={aboutOpen} onOpenChange={setAboutOpen} />
-      <PrivacyDialog open={privacyOpen} onOpenChange={setPrivacyOpen} />
 
       <section className="relative z-10 px-6 pb-24">
         <div
