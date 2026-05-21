@@ -526,6 +526,69 @@ class TestRegisterSleeperRawData:
         assert result["brackets"][0]["bracket_type"] == "LOSERS_BRACKET"
 
 
+class TestWriteMetadataItems:
+    def test_refresh_sets_refresh_status_completed(self, processor_handler):
+        mock_ddb = MagicMock()
+        with patch.object(processor_handler, "ddb_client", mock_ddb):
+            processor_handler.write_metadata_items(
+                league_id="canonical-abc", refresh=True
+            )
+        item = mock_ddb.transact_write_items.call_args[1]["TransactItems"][0]["Update"]
+        assert "refresh_status" in item["UpdateExpression"]
+        assert item["ExpressionAttributeValues"][":val"] == {"S": "COMPLETED"}
+
+    def test_onboard_sets_onboarding_status_completed(self, processor_handler):
+        mock_ddb = MagicMock()
+        with patch.object(processor_handler, "ddb_client", mock_ddb):
+            processor_handler.write_metadata_items(
+                league_id="canonical-abc", refresh=False
+            )
+        item = mock_ddb.transact_write_items.call_args[1]["TransactItems"][0]["Update"]
+        assert "onboarding_status" in item["UpdateExpression"]
+        assert item["ExpressionAttributeValues"][":val"] == {"S": "COMPLETED"}
+
+    def test_refresh_writes_last_refresh_at(self, processor_handler):
+        mock_ddb = MagicMock()
+        with patch.object(processor_handler, "ddb_client", mock_ddb):
+            processor_handler.write_metadata_items(
+                league_id="canonical-abc", refresh=True
+            )
+        item = mock_ddb.transact_write_items.call_args[1]["TransactItems"][0]["Update"]
+        assert "last_refresh_at" in item["UpdateExpression"]
+        assert ":lra" in item["ExpressionAttributeValues"]
+        assert item["ExpressionAttributeValues"][":lra"]["S"]  # non-empty ISO string
+
+    def test_onboard_does_not_write_last_refresh_at(self, processor_handler):
+        mock_ddb = MagicMock()
+        with patch.object(processor_handler, "ddb_client", mock_ddb):
+            processor_handler.write_metadata_items(
+                league_id="canonical-abc", refresh=False
+            )
+        item = mock_ddb.transact_write_items.call_args[1]["TransactItems"][0]["Update"]
+        assert "last_refresh_at" not in item["UpdateExpression"]
+        assert ":lra" not in item["ExpressionAttributeValues"]
+
+    def test_league_name_included_when_provided(self, processor_handler):
+        mock_ddb = MagicMock()
+        with patch.object(processor_handler, "ddb_client", mock_ddb):
+            processor_handler.write_metadata_items(
+                league_id="canonical-abc", refresh=True, league_name="Test League"
+            )
+        item = mock_ddb.transact_write_items.call_args[1]["TransactItems"][0]["Update"]
+        assert "league_name" in item["UpdateExpression"]
+        assert item["ExpressionAttributeValues"][":league_name"] == {"S": "Test League"}
+
+    def test_league_name_omitted_when_not_provided(self, processor_handler):
+        mock_ddb = MagicMock()
+        with patch.object(processor_handler, "ddb_client", mock_ddb):
+            processor_handler.write_metadata_items(
+                league_id="canonical-abc", refresh=True
+            )
+        item = mock_ddb.transact_write_items.call_args[1]["TransactItems"][0]["Update"]
+        assert "league_name" not in item["UpdateExpression"]
+        assert ":league_name" not in item["ExpressionAttributeValues"]
+
+
 class TestUpdateLeagueCount:
     def test_increments_count(self, processor_handler):
         mock_ddb = MagicMock()

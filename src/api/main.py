@@ -4,6 +4,7 @@ import os
 import time
 import uuid
 from contextvars import ContextVar
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from enum import Enum
 from typing import Annotated, Any, Optional
@@ -142,6 +143,8 @@ app.add_middleware(
     allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["Authorization", "Content-Type"],
 )
+
+REFRESH_COOLDOWN_MINUTES = 30
 
 DYNAMODB_TABLE_NAME = os.environ["DYNAMODB_TABLE_NAME"]
 
@@ -429,6 +432,27 @@ def onboard_league(
             "Sleeper league %s not found in LEAGUE_LOOKUP; onboarder will resolve via previous_league_id chain",
             payload.leagueId,
         )
+
+    if requestType == RequestType.REFRESH and canonical_league_id:
+        league_metadata = get_league_metadata(canonical_league_id)
+        if (
+            league_metadata.get("refresh_status") == "IN_PROGRESS"
+            or league_metadata.get("onboarding_status") == "IN_PROGRESS"
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="A refresh is already in progress for this league",
+            )
+        last_refresh_at = league_metadata.get("last_refresh_at")
+        if last_refresh_at:
+            last_refresh_dt = datetime.fromisoformat(last_refresh_at)
+            if datetime.now(timezone.utc) - last_refresh_dt < timedelta(
+                minutes=REFRESH_COOLDOWN_MINUTES
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail=f"League was refreshed recently. Please wait {REFRESH_COOLDOWN_MINUTES} minutes before refreshing again.",
+                )
 
     log_msg = (
         "Refreshing existing league" if canonical_league_id else "New league detected"
