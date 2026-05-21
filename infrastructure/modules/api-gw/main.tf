@@ -49,6 +49,18 @@ resource "aws_apigatewayv2_stage" "default" {
     })
   }
 
+  route_settings {
+    route_key              = "POST /leagues"
+    throttling_burst_limit = 1
+    throttling_rate_limit  = 1
+  }
+
+  route_settings {
+    route_key              = "DELETE /leagues/{leagueId}"
+    throttling_burst_limit = 1
+    throttling_rate_limit  = 1
+  }
+
   lifecycle {
     create_before_destroy = true
   }
@@ -70,24 +82,6 @@ resource "aws_apigatewayv2_authorizer" "clerk" {
   lifecycle {
     create_before_destroy = true
   }
-}
-
-resource "aws_apigatewayv2_route_settings" "onboard_throttle" {
-  api_id     = aws_apigatewayv2_api.this.id
-  stage_name = aws_apigatewayv2_stage.default.name
-  route_key  = "POST /leagues"
-
-  throttling_burst_limit = 1
-  throttling_rate_limit  = 1
-}
-
-resource "aws_apigatewayv2_route_settings" "delete_throttle" {
-  api_id     = aws_apigatewayv2_api.this.id
-  stage_name = aws_apigatewayv2_stage.default.name
-  route_key  = "DELETE /leagues/{leagueId}"
-
-  throttling_burst_limit = 1
-  throttling_rate_limit  = 1
 }
 
 resource "aws_lambda_permission" "api_gateway" {
