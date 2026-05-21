@@ -41,7 +41,7 @@ Want to explore the app before connecting your own league? Click **View Demo** o
 
 Navigate to **Connect a new league** from the league selection page. Choose your platform (ESPN or Sleeper) and fill in the required fields. The system automatically detects whether this is a new league or an existing one and either onboards or refreshes accordingly.
 
-It will typically take ~45 seconds to onboard a new league. On success you are redirected to your league's home dashboard.
+It will typically take ~45 seconds to onboard a new league (there is a lot of data being fetched and processed on the backend!). On success you are redirected to your league's home dashboard.
 
 #### ESPN Leagues
 
@@ -190,7 +190,7 @@ If refreshing for a new season, you will need to enter your new league ID as Sle
 
 ### Switching Leagues
 
-Click **Switch League** at the bottom of the sidebar. You are taken to the league selection page where you can pick a previously connected league or add a new one.
+Click the **View Another League** button in the sidebar. You are taken to the league selection page where you can pick a previously connected league or add a new one.
 
 ### Deleting a League
 
@@ -200,21 +200,21 @@ Click **Delete League** at the bottom of the sidebar. This permanently removes a
 
 ## FAQ and Troubleshooting
 
-**Why do I need ESPN cookies?**
+**Why do I need ESPN cookies?**  <br>
 ESPN private leagues require authentication. The SWID and ESPN S2 cookies prove you are a member of the league. They are used once to fetch data and are not stored.
 
-**Where do I find my ESPN cookies?**
+**Where do I find my ESPN cookies?**  <br>
 1. Open your browser and go to [fantasy.espn.com](https://fantasy.espn.com)
 2. Log in to your account
 3. Open DevTools (`F12` or `Cmd+Option+I`)
 4. Go to **Application → Cookies → fantasy.espn.com**
 5. Find `SWID` and `espn_s2` and copy their values
 
-**The connection timed out — what happened?**
+**The connection timed out — what happened?**  <br>
 If the page shows a timeout error, note the **operation ID** displayed and try again. If the issue persists, file a bug report with the operation ID so it can be investigated.
 
-**My data looks outdated — how do I refresh it?**
+**My data looks outdated — how do I refresh it?**  <br>
 Go to the league connection page and re-submit your league details. The refresh pulls the latest data from ESPN or Sleeper.
 
-**Can I connect more than one league?**
-Yes. Use the **Switch League** option in the sidebar to manage multiple leagues. Each league is stored independently.
+**Can I connect more than one league?**  <br>
+Yes. Use the **View Another League** option in the sidebar to view/onboard another league. Each league is stored independently.

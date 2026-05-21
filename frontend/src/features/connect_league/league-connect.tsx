@@ -223,7 +223,7 @@ export default function LeagueConnect() {
         <Card className="w-full max-w-md">
           <CardHeader>
             <CardTitle className="text-2xl text-center font-bold">
-              Connect League
+              Onboard/Refresh League
             </CardTitle>
           </CardHeader>
           <CardContent>

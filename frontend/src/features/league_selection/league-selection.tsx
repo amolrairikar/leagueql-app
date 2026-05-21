@@ -80,7 +80,7 @@ export default function LeagueSelection() {
         <Card className="w-full max-w-md">
           <CardHeader>
             <CardTitle className="text-2xl text-center font-bold">
-              {view === 'select' ? 'Your League' : 'View League'}
+              {view === 'select' ? 'Connect Your League' : 'View League'}
             </CardTitle>
           </CardHeader>
           <CardContent>
