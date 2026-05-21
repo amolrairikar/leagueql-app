@@ -53,9 +53,3 @@ repos:
         language: system
         files: \.(js|jsx|ts|tsx)$ 
         pass_filenames: false
-      # - id: run-unit-tests
-      #   name: Run unit tests
-      #   description: Runs unit tests using pipenv and pytest to validate unit tests pass prior to committing code.
-      #   entry: pipenv run pytest --cov=onboarder --cov=processor --cov=api --cov-branch --cov-report=term-missing --cov-fail-under=100 tests/
-      #   language: system
-      #   types: [python]
