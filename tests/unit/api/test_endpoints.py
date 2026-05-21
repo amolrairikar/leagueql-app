@@ -148,9 +148,17 @@ class TestOnboardLeagueEndpoint:
         assert "already onboarded" in response.json()["detail"].lower()
 
     def test_refresh_existing_league(
-        self, client, mock_table, mock_lambda_client, league_lookup_item
+        self,
+        client,
+        mock_table,
+        mock_lambda_client,
+        league_lookup_item,
+        league_metadata_item,
     ):
-        mock_table.get_item.return_value = {"Item": league_lookup_item}
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+        ]
         mock_lambda_client.invoke.return_value = {}
         response = client.post(
             "/leagues?requestType=REFRESH",
@@ -158,6 +166,76 @@ class TestOnboardLeagueEndpoint:
         )
         assert response.status_code == 201
         assert "refresh" in response.json()["detail"].lower()
+
+    def test_refresh_returns_409_when_refresh_in_progress(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        league_metadata_item["refresh_status"] = "IN_PROGRESS"
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+        ]
+        response = client.post(
+            "/leagues?requestType=REFRESH",
+            json={"leagueId": "123", "platform": "SLEEPER"},
+        )
+        assert response.status_code == 409
+        assert "in progress" in response.json()["detail"].lower()
+
+    def test_refresh_returns_409_when_onboarding_in_progress(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        league_metadata_item["onboarding_status"] = "IN_PROGRESS"
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+        ]
+        response = client.post(
+            "/leagues?requestType=REFRESH",
+            json={"leagueId": "123", "platform": "SLEEPER"},
+        )
+        assert response.status_code == 409
+        assert "in progress" in response.json()["detail"].lower()
+
+    def test_refresh_returns_429_when_within_cooldown(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        from datetime import datetime, timedelta, timezone
+
+        recent_time = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()
+        league_metadata_item["last_refresh_at"] = recent_time
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+        ]
+        response = client.post(
+            "/leagues?requestType=REFRESH",
+            json={"leagueId": "123", "platform": "SLEEPER"},
+        )
+        assert response.status_code == 429
+
+    def test_refresh_proceeds_when_outside_cooldown(
+        self,
+        client,
+        mock_table,
+        mock_lambda_client,
+        league_lookup_item,
+        league_metadata_item,
+    ):
+        from datetime import datetime, timedelta, timezone
+
+        old_time = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
+        league_metadata_item["last_refresh_at"] = old_time
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+        ]
+        mock_lambda_client.invoke.return_value = {}
+        response = client.post(
+            "/leagues?requestType=REFRESH",
+            json={"leagueId": "123", "platform": "SLEEPER"},
+        )
+        assert response.status_code == 201
 
     def test_refresh_nonexistent_espn_league_returns_404(self, client, mock_table):
         mock_table.get_item.return_value = {}

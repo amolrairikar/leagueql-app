@@ -1,3 +1,4 @@
+import datetime
 import json
 import os
 from collections import defaultdict
@@ -878,6 +879,10 @@ def write_metadata_items(
     status_attr = "refresh_status" if refresh else "onboarding_status"
     update_expression = f"SET {status_attr} = :val"
     expression_values = {":val": {"S": "COMPLETED"}}
+    if refresh:
+        now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        update_expression += ", last_refresh_at = :lra"
+        expression_values[":lra"] = {"S": now_iso}
     if league_name:
         update_expression += ", league_name = :league_name"
         expression_values[":league_name"] = {"S": league_name}

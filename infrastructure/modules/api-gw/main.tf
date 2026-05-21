@@ -49,6 +49,12 @@ resource "aws_apigatewayv2_stage" "default" {
     })
   }
 
+  route_settings {
+    route_key              = "POST /leagues"
+    throttling_burst_limit = 1
+    throttling_rate_limit  = 1
+  }
+
   lifecycle {
     create_before_destroy = true
   }

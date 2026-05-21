@@ -99,10 +99,11 @@ the league will not appear as onboarded and a retry will re-run the full onboard
 | `SK` | String | Yes | `METADATA` |
 | `platform` | String | Yes | Platform the league belongs to. Enum: `ESPN`, `SLEEPER` |
 | `onboarding_id` | String | Yes | UUID corresponding to the onboarding execution for this league |
-| `onboarded_at` | String | Yes | ISO 8601 timestamp of when onboarding completed |
-| `onboarding_status` | String | Yes | Current onboarding status for league. Enum: `onboarding`, `failed`, `succeeded` |
-| `last_refreshed_date` | String | No | ISO 8601 timestamp of when league data was last refreshed |
-| `refresh_status` | String | No | Current refresh status for league. Enum: `refreshing`, `failed`, `succeeded` |
+| `onboarded_at` | String | Yes | ISO 8601 timestamp of when onboarding started |
+| `onboarding_status` | String | Yes | Current onboarding status for league. Enum: `IN_PROGRESS`, `COMPLETED`, `FAILED` |
+| `last_refreshed_date` | String | No | ISO 8601 timestamp of when the most recent refresh was initiated |
+| `refresh_status` | String | No | Current refresh status for league. Enum: `IN_PROGRESS`, `COMPLETED`, `FAILED` |
+| `last_refresh_at` | String | No | ISO 8601 timestamp of when the most recent refresh completed successfully. Used to enforce the per-league refresh cooldown. |
 | `league_name` | String | No | League name from the most recent season's settings |
 
 **Example:**
