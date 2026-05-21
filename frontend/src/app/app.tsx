@@ -1,5 +1,5 @@
 import { useUser } from '@clerk/react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Link } from 'react-router-dom';
 
 import { ErrorBoundary } from '@/components/error-boundary';
 import Header from '@/components/header';
@@ -43,8 +43,14 @@ function AppLayout({ children }: { children: React.ReactNode }) {
               </span>
             </div>
           )}
-          <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
+          <header className="relative flex h-12 shrink-0 items-center gap-2 border-b px-4">
             <SidebarTrigger className="cursor-pointer" />
+            <Link
+              to="/"
+              className="absolute left-1/2 -translate-x-1/2 font-heading text-xl tracking-tight text-foreground no-underline"
+            >
+              LeagueQL
+            </Link>
             <div className="ml-auto flex items-center gap-1">
               {NAV_LINKS.map((link: NavLinkItem) => (
                 <NavLink key={link.label} {...link} />

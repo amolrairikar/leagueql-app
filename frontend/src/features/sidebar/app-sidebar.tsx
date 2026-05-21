@@ -6,6 +6,7 @@ import {
   LogOut,
   RefreshCw,
   Scroll,
+  Search,
   Star,
   Swords,
   TableProperties,
@@ -146,6 +147,18 @@ export function AppSidebar() {
                       <Link to="/connect_league">
                         <RefreshCw />
                         <span>Refresh League</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      asChild
+                      tooltip="View Another League"
+                      className="cursor-pointer"
+                    >
+                      <Link to="/league">
+                        <Search />
+                        <span>View Another League</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
