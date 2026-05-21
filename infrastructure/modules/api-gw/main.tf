@@ -55,12 +55,6 @@ resource "aws_apigatewayv2_stage" "default" {
     throttling_rate_limit  = 1
   }
 
-  route_settings {
-    route_key              = "DELETE /leagues/{leagueId}"
-    throttling_burst_limit = 1
-    throttling_rate_limit  = 1
-  }
-
   lifecycle {
     create_before_destroy = true
   }
