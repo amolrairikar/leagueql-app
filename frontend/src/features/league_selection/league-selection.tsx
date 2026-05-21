@@ -1,3 +1,4 @@
+import { HelpCircle } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -14,9 +15,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { getLeague } from '@/components/api/leagues';
 import { setLeagueCookies } from '@/lib/cookie-handler';
 import { ApiError } from '@/lib/api-client';
+
+const leagueIdHints: Record<'ESPN' | 'SLEEPER', string> = {
+  ESPN: 'Go to your ESPN fantasy league. The league ID is the number in the URL: fantasy.espn.com/football/league?leagueId=XXXXXXXX',
+  SLEEPER: 'Open your Sleeper league and go to League Settings. Your league ID is shown there, or find it in the URL: sleeper.com/leagues/XXXXXXXXXX',
+};
 
 type View = 'select' | 'view-league';
 
@@ -115,7 +127,19 @@ export default function LeagueSelection() {
                 </div>
 
                 <div className="flex flex-col gap-2">
-                  <Label htmlFor="league-id">League ID</Label>
+                  <div className="flex items-center gap-1.5">
+                    <Label htmlFor="league-id">League ID</Label>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <HelpCircle className="size-3.5 text-muted-foreground cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent side="right" className="max-w-64">
+                          {leagueIdHints[platform]}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
                   <Input
                     id="league-id"
                     type="text"

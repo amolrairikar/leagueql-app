@@ -1,4 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
+import { HelpCircle } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import {
   type FieldErrors,
@@ -14,6 +15,12 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import {
   Select,
   SelectContent,
@@ -268,7 +275,7 @@ export default function LeagueConnect() {
                     <Input
                       id="latest-season"
                       type="text"
-                      placeholder="Enter the latest season"
+                      placeholder="Enter the latest season your league was active"
                       {...register('latestSeason')}
                     />
                     {espnErrors.latestSeason && (
@@ -281,7 +288,19 @@ export default function LeagueConnect() {
                     )}
                   </div>
                   <div className="flex flex-col gap-2">
-                    <Label htmlFor="swid">SWID</Label>
+                    <div className="flex items-center gap-1.5">
+                      <Label htmlFor="swid">SWID</Label>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <HelpCircle className="size-3.5 text-muted-foreground cursor-help" />
+                          </TooltipTrigger>
+                          <TooltipContent side="right" className="max-w-64">
+                            Found in your ESPN cookies. In your browser, open DevTools → Application → Cookies → fantasy.espn.com, then copy the value of the SWID cookie (including the curly braces).
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
                     <Input
                       id="swid"
                       type="text"
@@ -295,7 +314,19 @@ export default function LeagueConnect() {
                     )}
                   </div>
                   <div className="flex flex-col gap-2">
-                    <Label htmlFor="espn-s2">ESPN S2</Label>
+                    <div className="flex items-center gap-1.5">
+                      <Label htmlFor="espn-s2">ESPN S2</Label>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <HelpCircle className="size-3.5 text-muted-foreground cursor-help" />
+                          </TooltipTrigger>
+                          <TooltipContent side="right" className="max-w-64">
+                            Found in your ESPN cookies. In your browser, open DevTools → Application → Cookies → fantasy.espn.com, then copy the value of the espn_s2 cookie.
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
                     <Input
                       id="espn-s2"
                       type="text"
