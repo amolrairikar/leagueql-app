@@ -17,6 +17,7 @@ jobs:
   set-env:
     name: Set Environment
     runs-on: ubuntu-latest
+    if: github.actor == 'amolrairikar'
     outputs:
       environment: ${{ steps.derive-env.outputs.environment }}
     steps:
