@@ -84,7 +84,10 @@ class TestLambdaHandlerSleeperRefresh:
             patch.object(
                 sleeper_refresh_handler,
                 "get_sleeper_leagues",
-                return_value=["lg1", "lg2"],
+                return_value=[
+                    {"league_id": "lg1", "canonical_league_id": "c1"},
+                    {"league_id": "lg2", "canonical_league_id": "c2"},
+                ],
             ),
             patch.object(
                 sleeper_refresh_handler, "invoke_onboarder_lambda"
@@ -108,7 +111,10 @@ class TestLambdaHandlerSleeperRefresh:
             patch.object(
                 sleeper_refresh_handler,
                 "get_sleeper_leagues",
-                return_value=["lg1", "lg2"],
+                return_value=[
+                    {"league_id": "lg1", "canonical_league_id": "c1"},
+                    {"league_id": "lg2", "canonical_league_id": "c2"},
+                ],
             ),
             patch.object(
                 sleeper_refresh_handler,

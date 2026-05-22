@@ -43,7 +43,9 @@ class TestGetSleeperLeagues:
         }
         with patch.object(sleeper_refresh_utils, "_dynamodb_client", mock_ddb):
             result = sleeper_refresh_utils.get_sleeper_leagues()
-        assert result == ["lg-2024"]
+        assert result == [
+            {"league_id": "lg-2024", "canonical_league_id": "canonical-abc"}
+        ]
 
     def test_handles_pagination(self, sleeper_refresh_utils):
         mock_ddb = MagicMock()
@@ -71,6 +73,7 @@ class TestGetSleeperLeagues:
         with patch.object(sleeper_refresh_utils, "_dynamodb_client", mock_ddb):
             result = sleeper_refresh_utils.get_sleeper_leagues()
         assert len(result) == 2
+        assert all("league_id" in r and "canonical_league_id" in r for r in result)
         assert mock_ddb.query.call_count == 2
 
     def test_returns_empty_list_when_no_items(self, sleeper_refresh_utils):
@@ -118,11 +121,14 @@ class TestInvokeOnboarderLambda:
         mock_lambda.invoke.return_value = {"StatusCode": 202}
         with patch.object(sleeper_refresh_utils, "_lambda_client", mock_lambda):
             sleeper_refresh_utils.invoke_onboarder_lambda(
-                "league-123", correlation_id="test-corr-id"
+                "league-123",
+                canonical_league_id="canonical-abc",
+                correlation_id="test-corr-id",
             )
         mock_lambda.invoke.assert_called_once()
         payload = json.loads(mock_lambda.invoke.call_args[1]["Payload"])
         assert payload["body"]["leagueId"] == "league-123"
+        assert payload["canonicalLeagueId"] == "canonical-abc"
         assert payload["requestType"] == "REFRESH"
         assert payload["correlation_id"] == "test-corr-id"
 
@@ -132,5 +138,7 @@ class TestInvokeOnboarderLambda:
         with patch.object(sleeper_refresh_utils, "_lambda_client", mock_lambda):
             with pytest.raises(Exception, match="status code 500"):
                 sleeper_refresh_utils.invoke_onboarder_lambda(
-                    "league-123", correlation_id="test-corr-id"
+                    "league-123",
+                    canonical_league_id="canonical-abc",
+                    correlation_id="test-corr-id",
                 )
