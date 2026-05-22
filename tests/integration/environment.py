@@ -5,10 +5,12 @@ import types
 from pathlib import Path
 
 import boto3
-import requests
 
 _ONBOARDER_SRC = Path(__file__).parents[2] / "src" / "onboarder"
 _SLEEPER_REFRESH_SRC = Path(__file__).parents[2] / "src" / "sleeper_refresh"
+_API_SRC = Path(__file__).parents[2] / "src" / "api"
+
+_REQUIRED_ENV_VARS = ["TEST_SLEEPER_LEAGUE_ID", "AWS_ACCOUNT_ID"]
 
 
 def _load_module(unique_name, path):
@@ -19,48 +21,36 @@ def _load_module(unique_name, path):
     return mod
 
 
-def _get_clerk_jwt(fapi_url: str, email: str, password: str) -> str:
-    resp = requests.post(
-        f"{fapi_url}/v1/client/sign_ins",
-        data={"identifier": email, "strategy": "password", "password": password},
-    )
-    resp.raise_for_status()
-    sessions = resp.json()["client"]["sessions"]
-    return sessions[0]["last_active_token"]["jwt"]
+def _cleanup_test_league(test_league_id: str) -> None:
+    from fastapi import HTTPException
+    from main import Platform, delete_league
 
-
-def _cleanup_test_league(
-    dev_api_base_url: str, test_league_id: str, token: str
-) -> None:
-    resp = requests.delete(
-        f"{dev_api_base_url}/leagues/{test_league_id}",
-        params={"platform": "SLEEPER"},
-        headers={"Authorization": f"Bearer {token}"},
-    )
-    if resp.status_code == 404:
-        return
-    resp.raise_for_status()
+    try:
+        delete_league(leagueId=test_league_id, platform=Platform.SLEEPER)
+    except HTTPException as e:
+        if e.status_code != 404:
+            raise
 
 
 def before_all(context):
+    missing = [v for v in _REQUIRED_ENV_VARS if not os.environ.get(v)]
+    if missing:
+        raise EnvironmentError(
+            f"Missing required environment variables: {', '.join(missing)}"
+        )
+
     os.environ.setdefault("DYNAMODB_TABLE_NAME", "leagueql-table-dev")
     os.environ.setdefault("ONBOARDER_LAMBDA_NAME", "leagueql-onboarder-dev")
-
-    account_id = os.environ["AWS_ACCOUNT_ID"]
-    os.environ.setdefault(
-        "S3_BUCKET_NAME", f"leagueql-dev-bucket-us-east-1-{account_id}"
+    os.environ["S3_BUCKET_NAME"] = (
+        f"leagueql-dev-bucket-east-{os.environ['AWS_ACCOUNT_ID']}"
     )
 
     test_league_id = os.environ["TEST_SLEEPER_LEAGUE_ID"]
-    dev_api_base_url = os.environ["DEV_API_BASE_URL"]
-    clerk_fapi_url = os.environ["CLERK_FAPI_URL"]
-    clerk_test_user_email = os.environ["CLERK_TEST_USER_EMAIL"]
-    clerk_test_user_password = os.environ["CLERK_TEST_USER_PASSWORD"]
 
-    token = _get_clerk_jwt(
-        clerk_fapi_url, clerk_test_user_email, clerk_test_user_password
-    )
-    _cleanup_test_league(dev_api_base_url, test_league_id, token)
+    if str(_API_SRC) not in sys.path:
+        sys.path.insert(0, str(_API_SRC))
+
+    _cleanup_test_league(test_league_id)
 
     # Load onboarder modules first so bare-name imports resolve to onboarder's utils/writer/etc.
     onboarder_pkg = types.ModuleType("onboarder")

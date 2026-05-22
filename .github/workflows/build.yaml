@@ -245,10 +245,6 @@ jobs:
       - name: Run integration tests
         env:
           TEST_SLEEPER_LEAGUE_ID: ${{ secrets.TEST_SLEEPER_LEAGUE_ID }}
-          CLERK_FAPI_URL: ${{ secrets.CLERK_FAPI_URL }}
-          CLERK_TEST_USER_EMAIL: ${{ secrets.CLERK_TEST_USER_EMAIL }}
-          CLERK_TEST_USER_PASSWORD: ${{ secrets.CLERK_TEST_USER_PASSWORD }}
-          DEV_API_BASE_URL: ${{ secrets.VITE_DEV_API_URL }}
           AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
         run: pipenv run behave tests/integration
 
