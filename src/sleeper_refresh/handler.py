@@ -84,14 +84,22 @@ def lambda_handler(event, context) -> dict[str, str | int]:
     success_count = 0
     failure_count = 0
 
-    for league_id in sleeper_leagues:
+    for league in sleeper_leagues:
         try:
-            invoke_onboarder_lambda(league_id, correlation_id=str(uuid.uuid4()))
+            invoke_onboarder_lambda(
+                league["league_id"],
+                canonical_league_id=league["canonical_league_id"],
+                correlation_id=str(uuid.uuid4()),
+            )
             success_count += 1
-            logger.info("Successfully triggered refresh for league %s", league_id)
+            logger.info(
+                "Successfully triggered refresh for league %s", league["league_id"]
+            )
         except Exception as e:
             failure_count += 1
-            logger.error("Failed to trigger refresh for league %s: %s", league_id, e)
+            logger.error(
+                "Failed to trigger refresh for league %s: %s", league["league_id"], e
+            )
 
     logger.info(
         "Refresh complete: %d succeeded, %d failed",

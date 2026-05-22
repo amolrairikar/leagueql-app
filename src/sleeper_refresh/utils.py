@@ -62,12 +62,12 @@ def get_nfl_state() -> dict:
     return response.json()
 
 
-def get_sleeper_leagues() -> list[str]:
+def get_sleeper_leagues() -> list[dict]:
     """
     Queries DynamoDB for all Sleeper league IDs using GSI2.
 
     Returns:
-        list[str]: List of league IDs for the most recent season of each Sleeper league.
+        list[dict]: List of dicts with league_id and canonical_league_id for the most recent season of each Sleeper league.
 
     Raises:
         Exception: If DynamoDB query fails.
@@ -106,19 +106,24 @@ def get_sleeper_leagues() -> list[str]:
     # For each canonical league, select the league_id with the most recent season
     result = []
     for canonical_id, league_data in leagues_by_canonical.items():
-        # Sort by season descending and take the first one
         league_data.sort(key=lambda x: int(x["season"]), reverse=True)
-        result.append(league_data[0]["league_id"])
+        best = league_data[0]
+        result.append(
+            {"league_id": best["league_id"], "canonical_league_id": canonical_id}
+        )
 
     return result
 
 
-def invoke_onboarder_lambda(league_id: str, correlation_id: str) -> None:
+def invoke_onboarder_lambda(
+    league_id: str, canonical_league_id: str, correlation_id: str
+) -> None:
     """
     Invokes the onboarder lambda to refresh a specific Sleeper league asynchronously.
 
     Args:
         league_id: The Sleeper league ID to refresh.
+        canonical_league_id: The canonical league ID, passed through to skip chain resolution.
         correlation_id: Correlation ID to propagate for request tracing.
 
     Raises:
@@ -126,6 +131,7 @@ def invoke_onboarder_lambda(league_id: str, correlation_id: str) -> None:
     """
     payload = {
         "requestType": "REFRESH",
+        "canonicalLeagueId": canonical_league_id,
         "body": {"leagueId": league_id, "platform": "SLEEPER"},
         "correlation_id": correlation_id,
     }
