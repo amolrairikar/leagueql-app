@@ -37,8 +37,8 @@ function AppLayout({ children }: { children: React.ReactNode }) {
         <AppSidebar />
         <SidebarInset>
           {isDemoMode() && (
-            <div className="flex h-8 shrink-0 items-center justify-center bg-primary/20 border-b border-primary/20 px-4">
-              <span className="font-mono text-[0.72rem] text-primary tracking-wide">
+            <div className="flex h-8 shrink-0 items-center justify-center bg-primary/40 border-b border-primary/50 px-4">
+              <span className="font-mono text-[0.72rem] font-medium text-white tracking-wide">
                 Demo Mode — connect your own league to see your data
               </span>
             </div>
@@ -68,8 +68,8 @@ function AppLayout({ children }: { children: React.ReactNode }) {
 }
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  if (isDemoMode()) return <>{children}</>;
   const { isSignedIn, isLoaded } = useUser();
+  if (isDemoMode()) return <>{children}</>;
   if (!isLoaded) return <div className="flex min-h-screen items-center justify-center"><Spinner className="size-6 text-muted-foreground" /></div>;
   if (!isSignedIn) return <Navigate to="/" replace />;
   return <>{children}</>;

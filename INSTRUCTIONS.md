@@ -28,6 +28,7 @@
 ---
 
 ## Getting Started
+Note that this app is designed for a web browser, not a mobile browser. Your experience may vary on mobile devices.
 
 ### Authentication
 
