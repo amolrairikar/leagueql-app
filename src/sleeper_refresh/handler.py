@@ -93,7 +93,9 @@ def lambda_handler(event, context) -> dict[str, str | int]:
             )
             success_count += 1
             logger.info(
-                "Successfully triggered refresh for league %s", league["league_id"]
+                "Successfully triggered refresh for league %s with correlation_id %s",
+                league["league_id"],
+                str(uuid.uuid4()),
             )
         except Exception as e:
             failure_count += 1
