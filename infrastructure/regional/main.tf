@@ -223,7 +223,7 @@ module "backend_api" {
 
   api_name             = "leagueql-api-${var.environment}-${local.region}"
   api_description      = "API for fantasy football recap app"
-  cors_allow_origins   = ["http://localhost:5173", "https://leagueql.com"]
+  cors_allow_origins   = var.environment == "dev" ? ["http://localhost:5173", "https://leagueql.com"] : ["https://leagueql.com"]
   openapi_spec_path    = "${path.module}/../../docs/api/openapi_spec.yaml"
   stage_name           = "${var.environment}-${local.region}"
   lambda_function_name = split(":", module.api_lambda.lambda_arn)[6]
@@ -551,8 +551,8 @@ resource "aws_cloudwatch_log_resource_policy" "apigateway_log_delivery" {
           "logs:PutLogEvents"
         ]
         Resource = [
-          "arn:aws:logs:us-east-1:${local.account_id}:log-group:/aws/apigateway/*",
-          "arn:aws:logs:us-west-2:${local.account_id}:log-group:/aws/apigateway/*"
+          "arn:aws:logs:us-east-1:${local.account_id}:log-group:/aws/apigateway/leagueql-api-${var.environment}-east:*",
+          "arn:aws:logs:us-west-2:${local.account_id}:log-group:/aws/apigateway/leagueql-api-${var.environment}-west:*"
         ]
       }
     ]
