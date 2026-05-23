@@ -44,6 +44,7 @@
     "utf-8-validate": "^6.0.0"
   },
   "devDependencies": {
+    "@clerk/backend": "3.4.9",
     "@eslint/js": "^9.39.4",
     "@playwright/test": "1.60.0",
     "@types/node": "^25.5.0",

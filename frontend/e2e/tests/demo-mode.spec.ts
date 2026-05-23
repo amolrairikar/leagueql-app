@@ -60,3 +60,73 @@ testWithDemo.describe('Demo mode — protected pages', () => {
     }
   });
 });
+
+testWithDemo.describe('Demo mode — page content', () => {
+  testWithDemo('/home renders section headings and stat labels', async ({ page }) => {
+    await page.goto('/home');
+    await page.waitForLoadState('networkidle');
+    await expect(page.getByText('Champions', { exact: true })).toBeVisible();
+    await expect(page.getByText('Final Standings Position by Season')).toBeVisible();
+    await expect(page.getByText('Seasons played')).toBeVisible();
+    await expect(page.getByText('Total matchups')).toBeVisible();
+    await expect(page.getByText('Record score')).toBeVisible();
+    await expect(page.getByText('Total members')).toBeVisible();
+    await expect(page.getByText('Unique champions')).toBeVisible();
+  });
+
+  testWithDemo('/standings renders award cards, table headers, and chart', async ({ page }) => {
+    await page.goto('/standings');
+    await page.waitForLoadState('networkidle');
+    await expect(page.getByText('Season awards')).toBeVisible();
+    await expect(page.getByText('Season Champion')).toBeVisible();
+    await expect(page.getByText('High Scorer')).toBeVisible();
+    await expect(page.getByText('Luckiest Team')).toBeVisible();
+    await expect(page.getByText('Season standings')).toBeVisible();
+    await expect(page.getByText('Owner')).toBeVisible();
+    await expect(page.getByText('Record', { exact: true })).toBeVisible();
+    await expect(page.getByText('PF/Game', { exact: true })).toBeVisible();
+    await expect(page.getByText('PA/Game', { exact: true })).toBeVisible();
+    await expect(page.getByText('Win %', { exact: true })).toBeVisible();
+    await expect(page.getByText('Wins progression')).toBeVisible();
+  });
+
+  testWithDemo('/matchups renders week navigation tabs', async ({ page }) => {
+    await page.goto('/matchups');
+    await page.waitForLoadState('networkidle');
+    await expect(page.getByText('Wk 1', { exact: true })).toBeVisible();
+  });
+
+  testWithDemo('/playoff_bracket renders bracket round headers', async ({ page }) => {
+    await page.goto('/playoff_bracket');
+    await page.waitForLoadState('networkidle');
+    await expect(page.getByText('Semifinals')).toBeVisible();
+    await expect(page.getByText('Championship')).toBeVisible();
+  });
+
+  testWithDemo('/player_records renders filter controls', async ({ page }) => {
+    await page.goto('/player_records');
+    await page.waitForLoadState('networkidle');
+    await expect(page.getByText('Season', { exact: true })).toBeVisible();
+    await expect(page.getByText('Manager', { exact: true })).toBeVisible();
+    await expect(page.getByText('All seasons')).toBeVisible();
+    await expect(page.getByText('All managers')).toBeVisible();
+  });
+
+  testWithDemo('/matchup_records renders all record type cards', async ({ page }) => {
+    await page.goto('/matchup_records');
+    await page.waitForLoadState('networkidle');
+    await expect(page.getByText('Highest Team Score')).toBeVisible();
+    await expect(page.getByText('Lowest Team Score')).toBeVisible();
+    await expect(page.getByText('Highest Matchup Score')).toBeVisible();
+    await expect(page.getByText('Lowest Matchup Score')).toBeVisible();
+    await expect(page.getByText('Biggest Blowout')).toBeVisible();
+    await expect(page.getByText('Closest Game')).toBeVisible();
+  });
+
+  testWithDemo('sidebar renders settings section with demo mode controls', async ({ page }) => {
+    await page.goto('/home');
+    await expect(page.getByText('Settings')).toBeVisible();
+    await expect(page.getByText('Connect Your League')).toBeVisible();
+    await expect(page.getByText('Exit Demo')).toBeVisible();
+  });
+});
