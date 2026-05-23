@@ -329,7 +329,10 @@ function PlayerRecordsContent({
     [allRecords],
   );
   const managers = useMemo(
-    () => [...new Set(allRecords.map((r) => r.manager))].sort(),
+    () =>
+      [...new Set(allRecords.map((r) => r.manager))].sort((a, b) =>
+        a.localeCompare(b),
+      ),
     [allRecords],
   );
 

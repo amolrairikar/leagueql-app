@@ -41,6 +41,8 @@ ESPN_FANTASY_POSITION_ID_MAPPING = {
     23: "FLEX",
 }
 
+SLEEPER_BENCH_SLOTS = frozenset({"BN", "IL", "IR", "TAXI"})
+
 
 class EntityType(str, Enum):
     TEAMS = "TEAMS"
@@ -134,24 +136,41 @@ def compile_espn_starter_stats(
 
 
 def compile_sleeper_starter_stats(
-    starters: list[str], starters_points: list[float], player_metadata: dict
+    starters: list[str],
+    starters_points: list[float],
+    player_metadata: dict,
+    roster_positions: list[str] | None = None,
 ) -> tuple[list[dict], list[str]]:
     """
     Build a list of stat dicts for every starter in a Sleeper roster.
 
     Args:
-        starters: Ordered list of starter player IDs.
+        starters: Ordered list of starter player IDs (same order as non-bench
+            slots in roster_positions).
         starters_points: Points scored by each starter, in the same order as starters.
         player_metadata: Mapping of player ID to metadata dict (full_name, position, etc.).
+        roster_positions: League roster slot list (e.g. ["QB","RB","FLEX","BN"]).
+            When provided, each starter is assigned the fantasy_position matching
+            their slot so FLEX players display as "FLEX" rather than their actual
+            position.
 
     Returns:
         Tuple of (stats, ids) where stats is a list of dicts with player_id and
         points_scored, and ids is the list of starter player IDs.
     """
+    starter_slots: list[str] = []
+    if roster_positions:
+        starter_slots = [p for p in roster_positions if p not in SLEEPER_BENCH_SLOTS]
+
     stats = []
-    for player_id, points in zip(starters, starters_points):
+    for i, (player_id, points) in enumerate(zip(starters, starters_points)):
         meta = player_metadata.get(player_id, {})
         position_raw = meta.get("position")
+        slot = starter_slots[i] if i < len(starter_slots) else None
+        # Normalise the DEF slot label to match the display convention used for
+        # bench players ("D/ST"), so starters and bench are labelled consistently.
+        if slot == "DEF":
+            slot = "D/ST"
         stats.append(
             {
                 "player_id": player_id,
@@ -160,7 +179,7 @@ def compile_sleeper_starter_stats(
                 ).strip(),
                 "points_scored": points,
                 "position": "D/ST" if position_raw == "DEF" else position_raw,
-                "fantasy_position": None,
+                "fantasy_position": slot,
             }
         )
     return stats, starters
@@ -652,6 +671,15 @@ def _register_sleeper_raw_data(
                     }
                 )
 
+    # Pre-pass: collect roster_positions per season so matchup processing can
+    # assign the correct slot label (e.g. "FLEX") to each starter.
+    roster_positions_by_season: dict[str, list[str]] = {}
+    for item in raw_data:
+        if item["data_type"] == "league_settings":
+            rp = item["data"].get("roster_positions")
+            if rp:
+                roster_positions_by_season[item["season"]] = rp
+
     all_users, all_rosters, all_matchups, all_draft_picks = [], [], [], []
     league_name_by_season: dict[str, str] = {}
     scoring_settings_by_season: dict[str, dict] = {}
@@ -703,6 +731,7 @@ def _register_sleeper_raw_data(
                         starters=team_a.get("starters", []),
                         starters_points=team_a.get("starters_points", []),
                         player_metadata=player_metadata,
+                        roster_positions=roster_positions_by_season.get(season),
                     )
                 )
                 team_b_starters_stats, team_b_starter_ids = (
@@ -710,6 +739,7 @@ def _register_sleeper_raw_data(
                         starters=team_b.get("starters", []),
                         starters_points=team_b.get("starters_points", []),
                         player_metadata=player_metadata,
+                        roster_positions=roster_positions_by_season.get(season),
                     )
                 )
                 team_a_bench_stats = compile_sleeper_bench_stats(

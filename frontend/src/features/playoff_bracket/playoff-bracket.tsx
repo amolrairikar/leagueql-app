@@ -7,7 +7,7 @@ import SeasonSelect from '@/features/season_select/season-select';
 import { getLeagueCookies } from '@/lib/cookie-handler';
 import { AVATAR_COLORS, UI_COLORS, POSITION_COLORS } from '@/lib/color-constants';
 import { logger } from '@/lib/logger';
-import { getPlayoffBracket, getMatchups, type BracketMatch, type Matchup } from './api-calls';
+import { getPlayoffBracket, getMatchups, getWeeklyStandings, type BracketMatch, type Matchup } from './api-calls';
 
 interface Team {
   team_id: string;
@@ -32,12 +32,14 @@ function TeamRow({
   isWinner,
   played,
   isBye,
+  record,
 }: {
   team: Team | null;
   score: number | null;
   isWinner: boolean;
   played: boolean;
   isBye: boolean;
+  record?: string | null;
 }) {
   if (!team) {
     return (
@@ -77,7 +79,9 @@ function TeamRow({
       </div>
       <div className="flex-1 min-w-0">
         <div className="text-[12px] font-medium text-foreground truncate">{team.display_name}</div>
-        <div className="text-[10px] text-muted-foreground truncate">{team.team_name || `Team ${team.display_name}`}</div>
+        <div className="text-[10px] text-muted-foreground truncate">
+          {team.team_name || `Team ${team.display_name}`}{record ? ` (${record})` : ''}
+        </div>
       </div>
       {scoreHtml}
     </div>
@@ -90,12 +94,16 @@ function MatchupCard({
   extraStyle,
   played,
   onClick,
+  record1,
+  record2,
 }: {
   match: BracketMatch | null;
   extraClass?: string;
   extraStyle?: React.CSSProperties;
   played: boolean;
   onClick?: () => void;
+  record1?: string | null;
+  record2?: string | null;
 }) {
   if (!match) {
     return (
@@ -128,8 +136,8 @@ function MatchupCard({
       style={extraStyle}
       onClick={onClick}
     >
-      <TeamRow team={team1} score={score1} isWinner={played && aWins} played={played} isBye={false} />
-      <TeamRow team={team2} score={score2} isWinner={played && !aWins} played={played} isBye={false} />
+      <TeamRow team={team1} score={score1} isWinner={played && aWins} played={played} isBye={false} record={record1} />
+      <TeamRow team={team2} score={score2} isWinner={played && !aWins} played={played} isBye={false} record={record2} />
     </div>
   );
 }
@@ -185,6 +193,7 @@ export default function PlayoffBracket() {
   const [selectedSeason, setSelectedSeason] = useState(() => allSeasons.length > 0 ? allSeasons[allSeasons.length - 1] : '2025');
   const [matches, setMatches] = useState<BracketMatch[]>([]);
   const [matchups, setMatchups] = useState<Matchup[]>([]);
+  const [recordMap, setRecordMap] = useState<Record<string, string>>({});
   const [selectedMatchId, setSelectedMatchId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -208,13 +217,25 @@ export default function PlayoffBracket() {
       setLoading(true);
       setError(null);
       try {
-        const [bracketResponse, matchupsResponse] = await Promise.all([
+        const [bracketResponse, matchupsResponse, standingsResponse] = await Promise.all([
           getPlayoffBracket(leagueId!, platform, selectedSeason),
           getMatchups(leagueId!, platform, selectedSeason),
+          getWeeklyStandings(leagueId!, platform, selectedSeason),
         ]);
 
         const bracketMatches = bracketResponse.data;
         const matchupsData: Matchup[] = matchupsResponse.data;
+
+        // Derive end-of-regular-season record per team from the last standings snapshot week
+        const standingsData = standingsResponse.data;
+        const recordsByWeek: Record<number, Record<string, string>> = {};
+        for (const s of standingsData) {
+          const week = parseInt(s.snapshot_week, 10);
+          if (!isNaN(week)) (recordsByWeek[week] ??= {})[s.team_id] = s.record;
+        }
+        const snapshotWeeks = Object.keys(recordsByWeek).map(Number);
+        const lastWeekRecords = snapshotWeeks.length > 0 ? recordsByWeek[Math.max(...snapshotWeeks)] : {};
+        setRecordMap(lastWeekRecords);
 
         // Store matchups in state for later use
         setMatchups(matchupsData);
@@ -410,6 +431,8 @@ export default function PlayoffBracket() {
                         match={item.wildcardMatch}
                         played={true}
                         onClick={() => setSelectedMatchId(item.wildcardMatch?.match_id === selectedMatchId ? null : item.wildcardMatch?.match_id ?? null)}
+                        record1={recordMap[item.wildcardMatch.team_1_id] ?? null}
+                        record2={recordMap[item.wildcardMatch.team_2_id] ?? null}
                       />
                     )}
                     {idx === 0 && <div className="h-8" />}
@@ -445,6 +468,8 @@ export default function PlayoffBracket() {
                   match={match}
                   played={true}
                   onClick={() => setSelectedMatchId(match.match_id === selectedMatchId ? null : match.match_id)}
+                  record1={recordMap[match.team_1_id] ?? null}
+                  record2={recordMap[match.team_2_id] ?? null}
                 />
               ))}
             </div>
@@ -471,6 +496,8 @@ export default function PlayoffBracket() {
                   extraStyle={{ borderColor: UI_COLORS.gold }}
                   played={true}
                   onClick={() => setSelectedMatchId(championship.match_id === selectedMatchId ? null : championship.match_id)}
+                  record1={recordMap[championship.team_1_id] ?? null}
+                  record2={recordMap[championship.team_2_id] ?? null}
                 />
               )}
             </div>

@@ -32,6 +32,17 @@ export interface GetMatchupsResponse {
   data: MatchupItem[];
 }
 
+export interface WeeklyStandingItem {
+  season: string;
+  snapshot_week: string;
+  team_id: string;
+  record: string;
+}
+
+export interface GetWeeklyStandingsResponse {
+  data: WeeklyStandingItem[];
+}
+
 export function getPlayoffBracket(
   leagueId: string,
   platform: Platform,
@@ -56,6 +67,20 @@ export function getMatchups(
     queryType: `MATCHUPS#${season}#`,
   });
   return apiClient.get<GetMatchupsResponse>(
+    `/leagues/${leagueId}/query?${params}`,
+  );
+}
+
+export function getWeeklyStandings(
+  leagueId: string,
+  platform: Platform,
+  season: string,
+): Promise<GetWeeklyStandingsResponse> {
+  const params = new URLSearchParams({
+    platform,
+    queryType: `WEEKLY_STANDINGS#${season}`,
+  });
+  return apiClient.get<GetWeeklyStandingsResponse>(
     `/leagues/${leagueId}/query?${params}`,
   );
 }
