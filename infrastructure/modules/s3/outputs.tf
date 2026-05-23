@@ -10,10 +10,10 @@ output "primary_bucket_arn" {
 
 output "secondary_bucket_id" {
   description = "The name of the secondary bucket."
-  value       = aws_s3_bucket.primary.id
+  value       = aws_s3_bucket.secondary.id
 }
 
 output "secondary_bucket_arn" {
   description = "The ARN of the secondary bucket. Will be of format arn:aws:s3:::bucketname."
-  value       = aws_s3_bucket.primary.arn
+  value       = aws_s3_bucket.secondary.arn
 }

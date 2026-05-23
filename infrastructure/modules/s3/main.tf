@@ -28,6 +28,41 @@ resource "aws_s3_bucket" "primary" {
   tags     = var.tags
 }
 
+resource "aws_s3_bucket_public_access_block" "primary" {
+  provider                = aws.primary
+  bucket                  = aws_s3_bucket.primary.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_policy" "primary" {
+  provider = aws.primary
+  bucket   = aws_s3_bucket.primary.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "DenyNonTLS"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "s3:*"
+        Resource = [
+          aws_s3_bucket.primary.arn,
+          "${aws_s3_bucket.primary.arn}/*"
+        ]
+        Condition = {
+          Bool = {
+            "aws:SecureTransport" = "false"
+          }
+        }
+      }
+    ]
+  })
+  depends_on = [aws_s3_bucket_public_access_block.primary]
+}
+
 resource "aws_s3_bucket_versioning" "primary" {
   provider = aws.primary
   bucket   = aws_s3_bucket.primary.id
@@ -94,6 +129,41 @@ resource "aws_s3_bucket" "secondary" {
   provider = aws.replica
   bucket   = "${var.bucket_prefix}-${local.secondary_region}-${var.account_id}"
   tags     = var.tags
+}
+
+resource "aws_s3_bucket_public_access_block" "secondary" {
+  provider                = aws.replica
+  bucket                  = aws_s3_bucket.secondary.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_policy" "secondary" {
+  provider = aws.replica
+  bucket   = aws_s3_bucket.secondary.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "DenyNonTLS"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "s3:*"
+        Resource = [
+          aws_s3_bucket.secondary.arn,
+          "${aws_s3_bucket.secondary.arn}/*"
+        ]
+        Condition = {
+          Bool = {
+            "aws:SecureTransport" = "false"
+          }
+        }
+      }
+    ]
+  })
+  depends_on = [aws_s3_bucket_public_access_block.secondary]
 }
 
 resource "aws_s3_bucket_versioning" "secondary" {

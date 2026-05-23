@@ -178,7 +178,7 @@ module "onboarding-lambda-role" {
           "logs:CreateLogGroup"
         ]
         Resource = [
-          "arn:aws:logs:us-east-1:${var.account_id}:*"
+          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/lambda/leagueql-onboarder-${var.environment}"
         ]
       },
       {
@@ -273,7 +273,7 @@ module "processing-lambda-role" {
           "logs:CreateLogGroup"
         ]
         Resource = [
-          "arn:aws:logs:us-east-1:${var.account_id}:*"
+          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/lambda/leagueql-processor-${var.environment}"
         ]
       },
       {
@@ -379,7 +379,7 @@ module "player-metadata-lambda-role" {
           "logs:CreateLogGroup"
         ]
         Resource = [
-          "arn:aws:logs:us-east-1:${var.account_id}:*"
+          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/lambda/leagueql-sleeper-player-metadata-${var.environment}"
         ]
       },
       {
@@ -441,8 +441,8 @@ module "api-lambda-role" {
           "logs:CreateLogGroup"
         ]
         Resource = [
-          "arn:aws:logs:us-east-1:${var.account_id}:*",
-          "arn:aws:logs:us-west-2:${var.account_id}:*"
+          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/lambda/leagueql-api-${var.environment}-east",
+          "arn:aws:logs:us-west-2:${var.account_id}:log-group:/aws/lambda/leagueql-api-${var.environment}-west"
         ]
       },
       {
@@ -467,7 +467,6 @@ module "api-lambda-role" {
           "dynamodb:GetItem",
           "dynamodb:BatchGetItem",
           "dynamodb:Query",
-          "dynamodb:Scan",
           "dynamodb:DeleteItem",
           "dynamodb:ConditionCheckItem"
         ]
@@ -544,8 +543,8 @@ module "api-gateway-role" {
           "logs:DescribeLogGroups",
         ]
         Resource = [
-          "arn:aws:logs:us-east-1:${var.account_id}:*",
-          "arn:aws:logs:us-west-2:${var.account_id}:*"
+          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/apigateway/leagueql-api-${var.environment}-east",
+          "arn:aws:logs:us-west-2:${var.account_id}:log-group:/aws/apigateway/leagueql-api-${var.environment}-west"
         ]
       },
       {
@@ -600,7 +599,7 @@ module "sleeper-player-stats-refresher-lambda-role" {
           "logs:CreateLogGroup"
         ]
         Resource = [
-          "arn:aws:logs:us-east-1:${var.account_id}:*"
+          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/lambda/leagueql-sleeper-player-stats-refresher-${var.environment}"
         ]
       },
       {
@@ -671,7 +670,7 @@ module "sleeper-refresh-lambda-role" {
           "logs:CreateLogGroup"
         ]
         Resource = [
-          "arn:aws:logs:us-east-1:${var.account_id}:*"
+          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/lambda/leagueql-sleeper-refresh-${var.environment}"
         ]
       },
       {
