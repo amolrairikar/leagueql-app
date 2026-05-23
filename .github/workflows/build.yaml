@@ -294,8 +294,6 @@ jobs:
     needs:
       - set-env
       - deploy-regional
-      - run-integration-tests
-      - run-player-metadata-integration-tests
     if: github.event_name == 'pull_request'
 
     defaults:
