@@ -589,3 +589,42 @@ resource "aws_apigatewayv2_api_mapping" "api_subdomain_mapping" {
   domain_name = aws_apigatewayv2_domain_name.api_subdomain[0].id
   stage       = "$default"
 }
+
+resource "aws_cloudwatch_dashboard" "correlation_id_lookup" {
+  count          = local.region == "east" && var.environment == "prod" ? 1 : 0
+  dashboard_name = "leagueql-${var.environment}-correlation-id-lookup"
+  dashboard_body = jsonencode({
+    variables = [
+      {
+        type         = "pattern"
+        pattern      = "CORRELATION_ID"
+        inputType    = "input"
+        id           = "correlationId"
+        label        = "Correlation ID"
+        defaultValue = ""
+        visible      = true
+      }
+    ]
+    widgets = [
+      {
+        type   = "log"
+        x      = 0
+        y      = 0
+        width  = 24
+        height = 20
+        properties = {
+          query = "fields @timestamp, @log, level, message, function, correlation_id\n| filter correlation_id = \"CORRELATION_ID\"\n| sort @timestamp asc"
+          logGroupNames = [
+            "/aws/lambda/leagueql-onboarder-${var.environment}",
+            "/aws/lambda/leagueql-processor-${var.environment}",
+            "/aws/lambda/leagueql-api-${var.environment}-${local.region}",
+            "/aws/lambda/leagueql-sleeper-refresh-${var.environment}",
+          ]
+          region = var.aws_region
+          title  = "Logs by Correlation ID"
+          view   = "table"
+        }
+      }
+    ]
+  })
+}
