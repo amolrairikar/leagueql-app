@@ -188,6 +188,62 @@ class TestCompileSleeperStarterStats:
         assert stats[0]["full_name"] == ""
         assert stats[0]["position"] is None
 
+    def test_roster_positions_assigns_slot_as_fantasy_position(self, processor_handler):
+        metadata = {
+            "1": {"first_name": "Joe", "last_name": "Burrow", "position": "QB"},
+            "2": {"first_name": "Stefon", "last_name": "Diggs", "position": "WR"},
+            "3": {
+                "first_name": "Christian",
+                "last_name": "McCaffrey",
+                "position": "RB",
+            },
+        }
+        roster_positions = ["QB", "WR", "FLEX", "BN", "BN"]
+        stats, _ = processor_handler.compile_sleeper_starter_stats(
+            starters=["1", "2", "3"],
+            starters_points=[28.0, 22.5, 35.1],
+            player_metadata=metadata,
+            roster_positions=roster_positions,
+        )
+        assert stats[0]["fantasy_position"] == "QB"
+        assert stats[1]["fantasy_position"] == "WR"
+        # RB playing in the FLEX slot should be labelled FLEX
+        assert stats[2]["fantasy_position"] == "FLEX"
+
+    def test_def_slot_normalised_to_dst(self, processor_handler):
+        metadata = {"99": {"first_name": "Cowboys", "last_name": "", "position": "DEF"}}
+        stats, _ = processor_handler.compile_sleeper_starter_stats(
+            starters=["99"],
+            starters_points=[10.0],
+            player_metadata=metadata,
+            roster_positions=["DEF", "BN"],
+        )
+        # DEF slot label normalised to D/ST so starters and bench display consistently
+        assert stats[0]["fantasy_position"] == "D/ST"
+
+    def test_no_roster_positions_leaves_fantasy_position_none(self, processor_handler):
+        metadata = {"1": {"first_name": "Joe", "last_name": "Burrow", "position": "QB"}}
+        stats, _ = processor_handler.compile_sleeper_starter_stats(
+            starters=["1"], starters_points=[25.5], player_metadata=metadata
+        )
+        assert stats[0]["fantasy_position"] is None
+
+    def test_bench_slots_excluded_from_starter_slots(self, processor_handler):
+        metadata = {
+            "1": {"first_name": "A", "last_name": "B", "position": "QB"},
+            "2": {"first_name": "C", "last_name": "D", "position": "WR"},
+        }
+        # BN, IL, IR, TAXI should all be filtered out
+        roster_positions = ["QB", "BN", "IL", "IR", "TAXI", "WR", "BN"]
+        stats, _ = processor_handler.compile_sleeper_starter_stats(
+            starters=["1", "2"],
+            starters_points=[20.0, 18.0],
+            player_metadata=metadata,
+            roster_positions=roster_positions,
+        )
+        assert stats[0]["fantasy_position"] == "QB"
+        assert stats[1]["fantasy_position"] == "WR"
+
 
 class TestCompileSleeperBenchStats:
     def test_excludes_starters_from_bench(self, processor_handler):
