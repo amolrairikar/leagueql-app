@@ -321,6 +321,8 @@ jobs:
         env:
           CI: true
           VITE_DEV_API_URL: ${{ secrets.VITE_DEV_API_URL }}
+          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY_DEV }}
+          CLERK_TEST_USER_ID: ${{ secrets.CLERK_TEST_USER_ID }}
         run: npm run test:e2e
 
       - name: Upload Playwright report
