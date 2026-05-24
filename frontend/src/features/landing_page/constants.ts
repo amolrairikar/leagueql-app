@@ -99,9 +99,9 @@ export const FEATURES: Feature[] = [
     desc: 'Single-week high scores, biggest blowouts, most unlucky losses — every record tracked and ranked automatically.',
   },
   {
-    icon: '🔗',
-    title: 'Instant Sync',
-    desc: 'Connect your ESPN or Sleeper league instantly. Full history imports — no manual entry needed.',
+    icon: '🔀',
+    title: 'Platform Migration',
+    desc: 'Switched from ESPN to Sleeper (or vice versa)? Migrate your league and preserve your full all-time history across platforms.',
   },
 ];
 

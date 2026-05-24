@@ -29,6 +29,7 @@ import HomePage from '@/features/home_page/home-page';
 import PrivacyPage from '@/features/privacy/privacy-page';
 import { AppSidebar } from '@/features/sidebar/app-sidebar';
 import MatchupRecords from '@/features/matchup_records/matchup-records';
+import MigrateLeague from '@/features/migrate_league/migrate-league';
 
 function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -108,6 +109,15 @@ function App() {
             <ProtectedRoute>
               <Header />
               <div className="pt-1"><LeagueConnect /></div>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/migrate_league"
+          element={
+            <ProtectedRoute>
+              <Header />
+              <div className="pt-1"><MigrateLeague /></div>
             </ProtectedRoute>
           }
         />

@@ -557,3 +557,187 @@ class TestQueryLeagueEndpoint:
         rendered = ConditionExpressionBuilder().build_expression(condition)
         sk_values = list(rendered.attribute_value_placeholders.values())
         assert any(str(v).startswith(sk_base) for v in sk_values)
+
+
+class TestMigrateLeagueEndpoint:
+    # Successful migration: get_item calls are (1) current league lookup,
+    # (2) metadata fetch, (3) new platform league lookup (returns {} → 404).
+    _PAYLOAD = {
+        "newPlatformLeagueId": "456",
+        "newPlatform": "SLEEPER",
+        "season": "2025",
+        "managerMapping": [],
+    }
+
+    def _setup_success_mocks(
+        self, mock_table, mock_lambda_client, league_lookup_item, league_metadata_item
+    ):
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+            {},
+        ]
+        mock_table.put_item.return_value = {}
+        mock_table.update_item.return_value = {}
+        mock_lambda_client.invoke.return_value = {}
+
+    def test_successful_migration_returns_202(
+        self,
+        client,
+        mock_table,
+        mock_lambda_client,
+        league_lookup_item,
+        league_metadata_item,
+    ):
+        self._setup_success_mocks(
+            mock_table, mock_lambda_client, league_lookup_item, league_metadata_item
+        )
+        response = client.post(
+            "/leagues/123/migrate?platform=SLEEPER", json=self._PAYLOAD
+        )
+        assert response.status_code == 202
+        assert "migration started" in response.json()["detail"].lower()
+        assert "correlation_id" in response.json()["data"]
+
+    def test_successful_migration_invokes_lambda(
+        self,
+        client,
+        mock_table,
+        mock_lambda_client,
+        league_lookup_item,
+        league_metadata_item,
+    ):
+        self._setup_success_mocks(
+            mock_table, mock_lambda_client, league_lookup_item, league_metadata_item
+        )
+        client.post("/leagues/123/migrate?platform=SLEEPER", json=self._PAYLOAD)
+        mock_lambda_client.invoke.assert_called_once()
+        call_payload = mock_lambda_client.invoke.call_args[1]["Payload"]
+        import json
+
+        parsed = json.loads(call_payload)
+        assert parsed["requestType"] == "MIGRATE"
+        assert parsed["body"]["leagueId"] == "456"
+        assert parsed["body"]["platform"] == "SLEEPER"
+
+    def test_returns_409_when_onboarding_in_progress(
+        self,
+        client,
+        mock_table,
+        league_lookup_item,
+        league_metadata_item,
+    ):
+        league_metadata_item["onboarding_status"] = "IN_PROGRESS"
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+        ]
+        response = client.post(
+            "/leagues/123/migrate?platform=SLEEPER", json=self._PAYLOAD
+        )
+        assert response.status_code == 409
+        assert "in progress" in response.json()["detail"].lower()
+
+    def test_returns_409_when_refresh_in_progress(
+        self,
+        client,
+        mock_table,
+        league_lookup_item,
+        league_metadata_item,
+    ):
+        league_metadata_item["refresh_status"] = "IN_PROGRESS"
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+        ]
+        response = client.post(
+            "/leagues/123/migrate?platform=SLEEPER", json=self._PAYLOAD
+        )
+        assert response.status_code == 409
+        assert "in progress" in response.json()["detail"].lower()
+
+    def test_returns_409_when_new_platform_league_already_onboarded(
+        self,
+        client,
+        mock_table,
+        league_lookup_item,
+        league_metadata_item,
+    ):
+        new_platform_lookup = {
+            "PK": "LEAGUE#456#PLATFORM#SLEEPER",
+            "SK": "LEAGUE_LOOKUP",
+            "canonical_league_id": "canonical-xyz",
+        }
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+            {"Item": new_platform_lookup},
+        ]
+        response = client.post(
+            "/leagues/123/migrate?platform=SLEEPER", json=self._PAYLOAD
+        )
+        assert response.status_code == 409
+        assert "already onboarded" in response.json()["detail"].lower()
+
+    def test_returns_404_when_current_league_not_found(self, client, mock_table):
+        mock_table.get_item.return_value = {}
+        response = client.post(
+            "/leagues/999/migrate?platform=SLEEPER", json=self._PAYLOAD
+        )
+        assert response.status_code == 404
+
+    def test_returns_422_for_invalid_league_id_format(self, client):
+        response = client.post(
+            "/leagues/abc/migrate?platform=SLEEPER", json=self._PAYLOAD
+        )
+        assert response.status_code == 422
+
+    def test_returns_422_for_new_platform_league_id_too_long(self, client):
+        payload = {**self._PAYLOAD, "newPlatformLeagueId": "x" * 101}
+        response = client.post("/leagues/123/migrate?platform=SLEEPER", json=payload)
+        assert response.status_code == 422
+
+    def test_returns_500_on_dynamodb_error_during_setup(
+        self,
+        client,
+        mock_table,
+        league_lookup_item,
+        league_metadata_item,
+    ):
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+            {},
+        ]
+        mock_table.put_item.side_effect = botocore.exceptions.ClientError(
+            {"Error": {"Code": "InternalError", "Message": "fail"}}, "PutItem"
+        )
+        response = client.post(
+            "/leagues/123/migrate?platform=SLEEPER", json=self._PAYLOAD
+        )
+        assert response.status_code == 500
+        assert "migration" in response.json()["detail"].lower()
+
+    def test_returns_500_on_lambda_invocation_error(
+        self,
+        client,
+        mock_table,
+        mock_lambda_client,
+        league_lookup_item,
+        league_metadata_item,
+    ):
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+            {},
+        ]
+        mock_table.put_item.return_value = {}
+        mock_table.update_item.return_value = {}
+        mock_lambda_client.invoke.side_effect = botocore.exceptions.ClientError(
+            {"Error": {"Code": "ServiceError", "Message": "fail"}}, "Invoke"
+        )
+        response = client.post(
+            "/leagues/123/migrate?platform=SLEEPER", json=self._PAYLOAD
+        )
+        assert response.status_code == 500
+        assert "trigger" in response.json()["detail"].lower()

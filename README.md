@@ -17,13 +17,12 @@
 - Recap of draft picks and grades
 - All-time fantasy player performance records
 - All-time fantasy team performance records
+- League migration: track all-time metrics even if your fantasy league migrates platforms
 
 # Roadmap
 - Add support for additional platforms (e.g. Yahoo, NFL.com)
-- Track league history for leagues that started on one platform and migrated to another
 - Create a Chrome extension to auto-fill ESPN cookies
 - Support leagues with auction drafts (the current draft page is designed for snake drafts)
-- Support Google as a login option
 
 
 # Contributing

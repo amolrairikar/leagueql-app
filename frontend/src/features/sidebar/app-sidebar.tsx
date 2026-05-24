@@ -1,5 +1,6 @@
 import { UserButton } from '@clerk/react';
 import {
+  ArrowLeftRight,
   History,
   Home,
   LogIn,
@@ -147,6 +148,18 @@ export function AppSidebar() {
                       <Link to="/connect_league">
                         <RefreshCw />
                         <span>Refresh League</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      asChild
+                      tooltip="Migrate League"
+                      className="cursor-pointer"
+                    >
+                      <Link to="/migrate_league">
+                        <ArrowLeftRight />
+                        <span>Migrate League</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>

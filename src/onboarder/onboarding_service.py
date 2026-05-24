@@ -56,7 +56,7 @@ class OnboardingService:
             latest_season=latest_season,
             espn_s2_cookie=espn_s2_cookie,
             swid_cookie=swid_cookie,
-            is_refresh=(request_type == "REFRESH"),
+            is_refresh=(request_type in ("REFRESH", "MIGRATE")),
         )
         self.canonical_league_id = canonical_league_id or str(uuid.uuid4())
 

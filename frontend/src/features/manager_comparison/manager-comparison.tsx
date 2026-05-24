@@ -121,7 +121,7 @@ function longestWinStreak(games: GameLog[], side: 'left' | 'right'): number {
   return best;
 }
 
-function buildManagers(matchups: MatchupItem[]): Manager[] {
+function buildManagers(matchups: MatchupItem[], migrationMapping: Map<string, string>): Manager[] {
   const ownerMap = new Map<
     string,
     {
@@ -136,7 +136,8 @@ function buildManagers(matchups: MatchupItem[]): Manager[] {
 
   for (const m of matchups) {
     for (const side of ['a', 'b'] as const) {
-      const ownerId = m[`team_${side}_primary_owner_id`];
+      const rawOwnerId = m[`team_${side}_primary_owner_id`];
+      const ownerId = migrationMapping.get(rawOwnerId) ?? rawOwnerId;
       const displayName = m[`team_${side}_display_name`];
       const teamName = m[`team_${side}_team_name`];
       const score = Number(m[`team_${side}_score`]);
@@ -201,11 +202,12 @@ function buildGameLogs(
   matchups: MatchupItem[],
   leftOwnerId: string,
   rightOwnerId: string,
+  migrationMapping: Map<string, string>,
 ): GameLog[] {
   const logs: GameLog[] = [];
   for (const m of matchups) {
-    const aOwner = m.team_a_primary_owner_id;
-    const bOwner = m.team_b_primary_owner_id;
+    const aOwner = migrationMapping.get(m.team_a_primary_owner_id) ?? m.team_a_primary_owner_id;
+    const bOwner = migrationMapping.get(m.team_b_primary_owner_id) ?? m.team_b_primary_owner_id;
 
     if (
       (aOwner === leftOwnerId && bOwner === rightOwnerId) ||
@@ -408,11 +410,11 @@ function ManagerComparisonInner({
   matchupsPromise,
   platform,
 }: {
-  matchupsPromise: Promise<MatchupItem[]>;
+  matchupsPromise: Promise<{ matchups: MatchupItem[]; migrationMapping: Map<string, string> }>;
   platform: 'ESPN' | 'SLEEPER';
 }) {
-  const matchups = use(matchupsPromise);
-  const managers = useMemo(() => buildManagers(matchups), [matchups]);
+  const { matchups, migrationMapping } = use(matchupsPromise);
+  const managers = useMemo(() => buildManagers(matchups, migrationMapping), [matchups, migrationMapping]);
 
   const [li, setLi] = useState(0);
   const [ri, setRi] = useState(Math.min(1, managers.length - 1));
@@ -440,8 +442,8 @@ function ManagerComparisonInner({
   const L = managers[li];
   const R = managers[ri];
   const games = useMemo(
-    () => (L && R ? buildGameLogs(matchups, L.ownerId, R.ownerId) : []),
-    [matchups, L, R],
+    () => (L && R ? buildGameLogs(matchups, L.ownerId, R.ownerId, migrationMapping) : []),
+    [matchups, L, R, migrationMapping],
   );
 
   if (managers.length < 2 || !L || !R) {
@@ -644,7 +646,9 @@ export default function ManagerComparison() {
   const { leagueId, platform } = getLeagueCookies();
   const matchupsPromise = useMemo(
     () =>
-      leagueId ? getAllSeasonsMatchups(leagueId, platform) : Promise.resolve([] as MatchupItem[]),
+      leagueId
+        ? getAllSeasonsMatchups(leagueId, platform)
+        : Promise.resolve({ matchups: [] as MatchupItem[], migrationMapping: new Map<string, string>() }),
     [leagueId, platform],
   );
 
