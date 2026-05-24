@@ -39,7 +39,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
         <SidebarInset>
           {isDemoMode() && (
             <div className="flex h-8 shrink-0 items-center justify-center bg-primary/40 border-b border-primary/50 px-4">
-              <span className="font-mono text-[0.72rem] font-medium text-white tracking-wide">
+              <span className="text-[0.72rem] font-medium text-white tracking-wide">
                 Demo Mode — connect your own league to see your data
               </span>
             </div>

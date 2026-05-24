@@ -50,7 +50,6 @@ export function getTeams(
 
 export function getEspnMembers(
   leagueId: string,
-  platform: Platform,
   espnLeagueId: string,
   season: string,
   swid: string,

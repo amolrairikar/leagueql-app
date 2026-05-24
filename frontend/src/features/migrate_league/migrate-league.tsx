@@ -150,7 +150,7 @@ function Step1({
             <span className="text-[12px] text-muted-foreground uppercase tracking-wide">
               League ID
             </span>
-            <span className="text-[13px] font-mono">{leagueId}</span>
+            <span className="text-[13px]">{leagueId}</span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-[12px] text-muted-foreground uppercase tracking-wide">
@@ -230,7 +230,6 @@ function Step2({
       } else {
         const result = await getEspnMembers(
           currentLeagueId,
-          currentPlatformForApi,
           newPlatformLeagueId.trim(),
           season.trim(),
           swid.trim(),
@@ -591,7 +590,7 @@ function Step4({
           <span className="text-[12px] text-muted-foreground uppercase tracking-wide">
             New league ID
           </span>
-          <span className="text-[13px] font-mono">{newPlatformLeagueId}</span>
+          <span className="text-[13px]">{newPlatformLeagueId}</span>
         </div>
         {newSeason && (
           <div className="flex items-center justify-between">

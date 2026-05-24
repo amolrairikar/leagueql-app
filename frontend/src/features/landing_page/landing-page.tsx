@@ -96,7 +96,7 @@ export default function LeagueQLLanding() {
         <div className="flex gap-3 mt-9 animate-[fadeUp_0.6s_0.55s_both]">
           <Button
             size="lg"
-            className="font-mono text-[0.82rem] px-6 cursor-pointer"
+            className="text-[0.82rem] px-6 cursor-pointer"
             onClick={handleConnectLeague}
           >
             Connect Your League
@@ -105,7 +105,7 @@ export default function LeagueQLLanding() {
           <Button
             variant="outline"
             size="lg"
-            className="font-mono text-[0.82rem] px-6 cursor-pointer"
+            className="text-[0.82rem] px-6 cursor-pointer"
             onClick={handleViewDemo}
           >
             View Demo
@@ -165,7 +165,7 @@ export default function LeagueQLLanding() {
               type="button"
               onClick={() => handleFooterLinkClick(l)}
               className="
-                font-mono text-[0.72rem] tracking-wide text-muted-foreground
+                text-[0.72rem] tracking-wide text-muted-foreground
                 hover:text-foreground no-underline transition-colors duration-200
                 bg-transparent border-none cursor-pointer p-0
               "
@@ -175,7 +175,7 @@ export default function LeagueQLLanding() {
           ))}
         </div>
 
-        <span className="font-mono text-[0.68rem] text-muted-foreground/50">
+        <span className="text-[0.68rem] text-muted-foreground/50">
           © 2026 Amol Rairikar
         </span>
       </footer>

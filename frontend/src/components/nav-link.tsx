@@ -11,7 +11,7 @@ export const NavLink = memo(function NavLink({ href, icon: Icon, label }: NavLin
       className="
         flex items-center gap-1.5 px-3 py-1.5 rounded-md
         text-muted-foreground hover:text-foreground hover:bg-accent
-        font-mono text-xs tracking-wide
+        text-xs tracking-wide
         transition-colors duration-200
       "
     >
