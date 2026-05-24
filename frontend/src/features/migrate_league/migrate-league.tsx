@@ -230,7 +230,6 @@ function Step2({
       } else {
         const result = await getEspnMembers(
           currentLeagueId,
-          currentPlatformForApi,
           newPlatformLeagueId.trim(),
           season.trim(),
           swid.trim(),
