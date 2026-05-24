@@ -12,7 +12,7 @@ export interface GetRefreshStatusResponse {
 export function getRefreshStatus(
   leagueId: string,
   platform: Platform,
-  refreshOperation: 'ONBOARD' | 'REFRESH',
+  refreshOperation: 'ONBOARD' | 'REFRESH' | 'MIGRATE',
 ): Promise<GetRefreshStatusResponse> {
   const params = new URLSearchParams({ platform, refreshOperation });
   return apiClient.get<GetRefreshStatusResponse>(

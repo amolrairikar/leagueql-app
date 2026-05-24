@@ -21,6 +21,7 @@
    - [Matchup Records](#matchup-records)
 4. [Managing Your League](#managing-your-league)
    - [Refreshing League Data](#refreshing-league-data)
+   - [Migrating Your League](#migrating-your-league)
    - [Switching Leagues](#switching-leagues)
    - [Deleting a League](#deleting-a-league)
 5. [FAQ and Troubleshooting](#faq-and-troubleshooting)
@@ -188,6 +189,25 @@ To refresh your ESPN league, click the "Refresh League" button in the sidebar. T
 If refreshing during the current season, simply click the "Refresh League" button in the sidebar. This will navigate you to the league connection page where you can submit your league ID again. The system detects the league already exists and runs a refresh instead of a full re-onboard, which is faster.
 
 If refreshing for a new season, you will need to enter your new league ID as Sleeper league IDs change each season. The system will automatically associate the new league ID with previous league IDs from the same league.
+
+### Migrating Your League
+
+> **Experimental feature** — League migration cannot be undone. All-time metrics will be recalculated to reflect the merged history across both platforms.
+
+Use this when your league moves from one platform to another in the offseason (ESPN → Sleeper or Sleeper → ESPN).
+
+**How to start:** Click **Migrate League** in the sidebar settings.
+
+**The wizard walks you through four steps:**
+
+1. **Confirm current league** — Review your existing league name, platform, and season history.
+2. **Enter new league details** — Provide the league ID on the new platform. For ESPN, you will also need to enter the latest season, SWID, and ESPN S2 cookies (same as initial onboarding).
+3. **Map managers** — Match each current-platform manager to their account on the new platform. Managers who left the league can be marked as "Not returning" and their historical stats will still be visible under their original identity.
+4. **Preview & confirm** — Review the migration summary and confirm. The migration runs in the background (typically under a minute).
+
+On completion you are redirected to your dashboard, which will now show all-time stats unified across both platforms.
+
+---
 
 ### Switching Leagues
 

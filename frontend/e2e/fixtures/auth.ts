@@ -34,11 +34,11 @@ export const testWithDemo = base.extend<{ demoPage: void }>({
       await page.waitForURL('**/home');
       await context.addCookies([
         { name: 'demo_mode', value: 'true', domain: 'localhost', path: '/', sameSite: 'Strict' },
-        { name: 'leagueId', value: '999999999', domain: 'localhost', path: '/', sameSite: 'Strict' },
-        { name: 'leaguePlatform', value: 'ESPN', domain: 'localhost', path: '/', sameSite: 'Strict' },
+        { name: 'leagueId', value: '888888888', domain: 'localhost', path: '/', sameSite: 'Strict' },
+        { name: 'leaguePlatform', value: 'SLEEPER', domain: 'localhost', path: '/', sameSite: 'Strict' },
         {
           name: 'leagueSeasons',
-          value: encodeURIComponent(JSON.stringify(['2022', '2023', '2024'])),
+          value: encodeURIComponent(JSON.stringify(['2022', '2023', '2024', '2025'])),
           domain: 'localhost',
           path: '/',
           sameSite: 'Strict',

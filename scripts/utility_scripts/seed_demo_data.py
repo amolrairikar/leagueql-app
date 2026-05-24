@@ -22,11 +22,15 @@ import boto3
 
 SEED = 42
 DEMO_LEAGUE_ID = "999999999"
+DEMO_SLEEPER_LEAGUE_ID = "888888888"
 DEMO_CANONICAL_ID = "demo-league-canonical"
 DEMO_LEAGUE_NAME = "Demo Fantasy League"
 PLATFORM = "ESPN"
+SLEEPER_PLATFORM = "SLEEPER"
 SEASONS = ["2022", "2023", "2024"]
+SLEEPER_SEASONS = ["2025"]
 ONBOARDED_AT = "2024-09-01T00:00:00"
+MIGRATED_AT = "2025-09-01T00:00:00"
 N_REG_WEEKS = 14
 N_TEAMS = 10
 N_PLAYOFF_TEAMS = 4
@@ -143,6 +147,23 @@ def get_owners(season: str) -> list[dict]:
             owner.update(overrides[o["id"]])
         owners.append(owner)
     return owners
+
+
+def get_sleeper_owners() -> list[dict]:
+    """2025 Sleeper owners: mirror the 2024 ESPN roster with sl_ prefixed owner IDs."""
+    return [{**o, "owner_id": f"sl_{o['owner_id']}"} for o in get_owners("2024")]
+
+
+def get_migration_mapping() -> list[dict]:
+    """Map each 2024 ESPN owner_id to its 2025 Sleeper counterpart."""
+    return [
+        {
+            "current_platform_owner_id": o["owner_id"],
+            "new_platform_owner_id": f"sl_{o['owner_id']}",
+            "display_name": o["username"],
+        }
+        for o in get_owners("2024")
+    ]
 
 
 # ── Player pool ───────────────────────────────────────────────────────────────
@@ -1069,7 +1090,7 @@ def build_season_items(
 def build_all_items() -> list[dict]:
     items: list[dict] = []
 
-    # LEAGUE_LOOKUP
+    # ESPN LEAGUE_LOOKUP (2022–2024)
     items.append(
         {
             "PK": f"LEAGUE#{DEMO_LEAGUE_ID}#PLATFORM#{PLATFORM}",
@@ -1079,20 +1100,43 @@ def build_all_items() -> list[dict]:
         }
     )
 
-    # METADATA
+    # Sleeper LEAGUE_LOOKUP (2025)
+    items.append(
+        {
+            "PK": f"LEAGUE#{DEMO_SLEEPER_LEAGUE_ID}#PLATFORM#{SLEEPER_PLATFORM}",
+            "SK": "LEAGUE_LOOKUP",
+            "canonical_league_id": DEMO_CANONICAL_ID,
+            "seasons": set(SLEEPER_SEASONS),
+        }
+    )
+
+    # METADATA — updated post-migration fields
     items.append(
         {
             "PK": f"LEAGUE#{DEMO_CANONICAL_ID}",
             "SK": "METADATA",
-            "platform": PLATFORM,
+            "platform": SLEEPER_PLATFORM,
+            "active_platform": SLEEPER_PLATFORM,
+            "migrated_from": PLATFORM,
+            "migrated_at": MIGRATED_AT,
             "league_name": DEMO_LEAGUE_NAME,
             "onboarding_status": "COMPLETED",
             "onboarded_at": ONBOARDED_AT,
         }
     )
 
+    # PLATFORM_MIGRATION item — ESPN owner_id → Sleeper owner_id mapping
+    items.append(
+        {
+            "PK": f"LEAGUE#{DEMO_CANONICAL_ID}",
+            "SK": f"PLATFORM_MIGRATION#{PLATFORM}#{SLEEPER_PLATFORM}",
+            "data": get_migration_mapping(),
+        }
+    )
+
     prev_standings: list[dict] | None = None
 
+    # ESPN seasons 2022–2024
     for season_idx, season in enumerate(SEASONS):
         rng = random.Random(SEED + season_idx)
         owners = get_owners(season)
@@ -1111,6 +1155,25 @@ def build_all_items() -> list[dict]:
         items.extend(season_items)
 
         prev_standings = sim["standings_data"]
+
+    # Sleeper season 2025
+    sleeper_owners = get_sleeper_owners()
+    rng_2025 = random.Random(SEED + len(SEASONS))
+    logger.info("Season 2025 (Sleeper): drafting and simulating...")
+    draft_picks_2025, rosters_2025 = build_draft(
+        sleeper_owners, rng_2025, prev_standings
+    )
+    all_scores_2025 = gen_weekly_scores(rosters_2025, N_REG_WEEKS + 3, rng_2025)
+    sim_2025 = simulate_season(sleeper_owners, rosters_2025, all_scores_2025, rng_2025)
+    season_items_2025 = build_season_items(
+        "2025",
+        sleeper_owners,
+        draft_picks_2025,
+        rosters_2025,
+        all_scores_2025,
+        sim_2025,
+    )
+    items.extend(season_items_2025)
 
     return items
 
@@ -1137,11 +1200,18 @@ def write_items(table: Any, items: list[dict], dry_run: bool) -> None:
 def delete_demo_data(table: Any, dry_run: bool) -> None:
     """Delete all demo data from DynamoDB."""
     pk = f"LEAGUE#{DEMO_CANONICAL_ID}"
-    lookup_pk = f"LEAGUE#{DEMO_LEAGUE_ID}#PLATFORM#{PLATFORM}"
+    lookup_espn_pk = f"LEAGUE#{DEMO_LEAGUE_ID}#PLATFORM#{PLATFORM}"
+    lookup_sleeper_pk = f"LEAGUE#{DEMO_SLEEPER_LEAGUE_ID}#PLATFORM#{SLEEPER_PLATFORM}"
 
     if dry_run:
         logger.info("DRY RUN — Would delete all items with PK: %s", pk)
-        logger.info("DRY RUN — Would delete LEAGUE_LOOKUP item with PK: %s", lookup_pk)
+        logger.info(
+            "DRY RUN — Would delete ESPN LEAGUE_LOOKUP with PK: %s", lookup_espn_pk
+        )
+        logger.info(
+            "DRY RUN — Would delete Sleeper LEAGUE_LOOKUP with PK: %s",
+            lookup_sleeper_pk,
+        )
         return
 
     logger.info("Deleting demo data with PK: %s", pk)
@@ -1167,9 +1237,11 @@ def delete_demo_data(table: Any, dry_run: bool) -> None:
         for item in items:
             batch.delete_item(Key={"PK": item["PK"], "SK": item["SK"]})
 
-    # Delete the LEAGUE_LOOKUP item
-    logger.info("Deleting LEAGUE_LOOKUP item...")
-    table.delete_item(Key={"PK": lookup_pk, "SK": "LEAGUE_LOOKUP"})
+    # Delete both LEAGUE_LOOKUP items
+    logger.info("Deleting ESPN LEAGUE_LOOKUP item...")
+    table.delete_item(Key={"PK": lookup_espn_pk, "SK": "LEAGUE_LOOKUP"})
+    logger.info("Deleting Sleeper LEAGUE_LOOKUP item...")
+    table.delete_item(Key={"PK": lookup_sleeper_pk, "SK": "LEAGUE_LOOKUP"})
 
     logger.info("Deleted %d demo data items.", len(items))
 

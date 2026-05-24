@@ -116,7 +116,34 @@ def write_onboarding_status_to_dynamodb(
         table_name = os.environ["DYNAMODB_TABLE_NAME"]
         now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
-        if request_type == "REFRESH":
+        if request_type == "MIGRATE":
+            transact_items = [
+                {
+                    "Update": {
+                        "TableName": table_name,
+                        "Key": {
+                            "PK": {"S": f"LEAGUE#{canonical_league_id}"},
+                            "SK": {"S": "METADATA"},
+                        },
+                        "UpdateExpression": "SET onboarding_status = :os",
+                        "ExpressionAttributeValues": {":os": {"S": "IN_PROGRESS"}},
+                    }
+                },
+                {
+                    "Put": {
+                        "TableName": table_name,
+                        "Item": {
+                            "PK": {"S": f"LEAGUE#{league_id}#PLATFORM#{platform}"},
+                            "SK": {"S": "LEAGUE_LOOKUP"},
+                            "canonical_league_id": {"S": canonical_league_id},
+                            "seasons": {"SS": seasons},
+                            "platform": {"S": platform},
+                            "league_id": {"S": league_id},
+                        },
+                    }
+                },
+            ]
+        elif request_type == "REFRESH":
             if is_new_season_refresh:
                 league_lookup_operation = {
                     "Put": {

@@ -139,8 +139,8 @@ describe('setDemoMode', () => {
   it('sets league cookies to demo values', () => {
     setDemoMode(['2022', '2023', '2024']);
     const cookies = getLeagueCookies();
-    expect(cookies.leagueId).toBe('999999999');
-    expect(cookies.platform).toBe('ESPN');
+    expect(cookies.leagueId).toBe('888888888');
+    expect(cookies.platform).toBe('SLEEPER');
     expect(cookies.seasons).toEqual(['2022', '2023', '2024']);
   });
 });

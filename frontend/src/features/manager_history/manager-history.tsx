@@ -154,13 +154,18 @@ function pct(a: number, b: number) {
 function processData(
   standings: ManagerStandingsItem[],
   matchups: MatchupItem[],
+  migrationMapping: Map<string, string>,
 ): ManagerData[] {
   const ownerStandingsMap = new Map<string, ManagerStandingsItem[]>();
   for (const row of standings) {
-    if (!ownerStandingsMap.has(row.owner_id))
-      ownerStandingsMap.set(row.owner_id, []);
-    ownerStandingsMap.get(row.owner_id)!.push(row);
+    const mappedId = migrationMapping.get(row.owner_id) ?? row.owner_id;
+    if (!ownerStandingsMap.has(mappedId))
+      ownerStandingsMap.set(mappedId, []);
+    ownerStandingsMap.get(mappedId)!.push(row);
   }
+
+  const remapOwner = (ownerId: string) =>
+    migrationMapping.get(ownerId) ?? ownerId;
 
   const highScoreMap = new Map<string, Map<string, number>>();
   const playoffMap = new Map<string, Set<string>>();
@@ -169,8 +174,8 @@ function processData(
   const rivalryMap = new Map<string, Map<string, RivalryAcc>>();
 
   for (const m of matchups) {
-    const aOwner = m.team_a_primary_owner_id;
-    const bOwner = m.team_b_primary_owner_id;
+    const aOwner = remapOwner(m.team_a_primary_owner_id);
+    const bOwner = remapOwner(m.team_b_primary_owner_id);
     const { season } = m;
     const week = parseInt(m.week, 10);
     const aScore = Number(m.team_a_score);
@@ -924,9 +929,9 @@ export default function ManagerHistory() {
     (): Promise<DataResult> =>
       leagueId && seasons.length > 0
         ? getManagerHistoryData(leagueId, platform, seasons)
-            .then(({ standings, matchups }) => ({
+            .then(({ standings, matchups, migrationMapping }) => ({
               ok: true as const,
-              data: processData(standings, matchups),
+              data: processData(standings, matchups, migrationMapping),
             }))
             .catch((err: unknown) => ({
               ok: false as const,

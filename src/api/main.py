@@ -12,6 +12,7 @@ from typing import Annotated, Any, Optional
 import boto3
 import botocore.config
 import botocore.exceptions
+import requests as http_requests
 from boto3.dynamodb.conditions import Key
 from fastapi import FastAPI, HTTPException, Path, Response, status, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -73,6 +74,7 @@ class Platform(CaseInsensitiveEnum):
 class RequestType(CaseInsensitiveEnum):
     ONBOARD = "ONBOARD"
     REFRESH = "REFRESH"
+    MIGRATE = "MIGRATE"
 
 
 class QueryType(CaseInsensitiveEnum):
@@ -82,6 +84,7 @@ class QueryType(CaseInsensitiveEnum):
     WEEKLY_STANDINGS = "WEEKLY_STANDINGS"
     PLAYOFF_BRACKET = "PLAYOFF_BRACKET"
     DRAFT = "DRAFT"
+    PLATFORM_MIGRATION = "PLATFORM_MIGRATION"
 
 
 QUERY_TYPE_TO_SK_BASE = {
@@ -91,7 +94,22 @@ QUERY_TYPE_TO_SK_BASE = {
     QueryType.WEEKLY_STANDINGS: "WEEKLY_STANDINGS",
     QueryType.PLAYOFF_BRACKET: "PLAYOFF_BRACKET",
     QueryType.DRAFT: "DRAFT",
+    QueryType.PLATFORM_MIGRATION: "PLATFORM_MIGRATION",
 }
+
+
+class EspnMembersPayload(BaseModel):
+    swid: str
+    s2: str
+
+
+class MigratePayload(BaseModel):
+    newPlatformLeagueId: str = Field(max_length=100)
+    newPlatform: Platform
+    season: Optional[str] = Field(default=None, max_length=10)
+    s2: Optional[str] = Field(default=None)
+    swid: Optional[str] = Field(default=None, max_length=100)
+    managerMapping: list[dict] = Field(default_factory=list)
 
 
 class JsonFormatter(logging.Formatter):
@@ -373,7 +391,7 @@ def get_refresh_status(
     """Gets the refresh status for a given league."""
     canonical_league_id = lookup_league(league_id=leagueId, platform=platform)
     league_metadata = get_league_metadata(canonical_league_id=canonical_league_id)
-    if refreshOperation == RequestType.ONBOARD:
+    if refreshOperation in (RequestType.ONBOARD, RequestType.MIGRATE):
         refresh_status = league_metadata.get("onboarding_status", "FAILED")
     else:
         refresh_status = league_metadata.get("refresh_status", "FAILED")
@@ -486,6 +504,178 @@ def onboard_league(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to trigger processing",
         )
+
+
+@app.post("/leagues/{leagueId}/espn_members", status_code=status.HTTP_200_OK)
+def get_espn_members(
+    leagueId: Annotated[
+        str, Path(description="The ID of the current league", pattern=r"^\d+$")
+    ],
+    platform: Annotated[Platform, Query(description="The current platform")],
+    espnLeagueId: Annotated[
+        str, Query(description="The ESPN league ID to fetch members from")
+    ],
+    season: Annotated[str, Query(description="The ESPN season year")],
+    payload: EspnMembersPayload,
+) -> APIResponse:
+    """Proxy ESPN Fantasy API to fetch league members server-side (avoids browser CORS)."""
+    lookup_league(league_id=leagueId, platform=platform)
+
+    espn_url = (
+        f"https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl"
+        f"/seasons/{season}/segments/0/leagues/{espnLeagueId}?view=mTeam"
+    )
+    try:
+        espn_response = http_requests.get(
+            espn_url,
+            cookies={"SWID": payload.swid, "espn_s2": payload.s2},
+            timeout=10,
+        )
+        espn_response.raise_for_status()
+    except http_requests.exceptions.HTTPError as e:
+        logger.error("ESPN API error fetching members: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Failed to fetch ESPN league members",
+        )
+    except http_requests.exceptions.RequestException as e:
+        logger.error("Request error fetching ESPN members: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Failed to reach ESPN API",
+        )
+
+    try:
+        espn_data = espn_response.json()
+        members = [
+            {"owner_id": m["id"], "display_name": m.get("displayName", m["id"])}
+            for m in espn_data.get("members", [])
+        ]
+    except (KeyError, ValueError) as e:
+        logger.error("Failed to parse ESPN members response: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Failed to parse ESPN API response",
+        )
+
+    return APIResponse(detail="Found ESPN members", data=members)
+
+
+@app.post("/leagues/{leagueId}/migrate", status_code=status.HTTP_202_ACCEPTED)
+def migrate_league(
+    leagueId: Annotated[
+        str, Path(description="The ID of the current platform league", pattern=r"^\d+$")
+    ],
+    platform: Annotated[Platform, Query(description="The current platform")],
+    payload: MigratePayload,
+    response: Response,
+) -> APIResponse:
+    """Migrate a league from one platform to another."""
+    correlation_id = str(uuid.uuid4())
+    correlation_id_var.set(correlation_id)
+
+    canonical_league_id = lookup_league(league_id=leagueId, platform=platform)
+    logger.info(
+        "Migration requested: canonical_league_id=%s from=%s to=%s",
+        canonical_league_id,
+        platform.value,
+        payload.newPlatform.value,
+    )
+
+    league_metadata = get_league_metadata(canonical_league_id)
+    if (
+        league_metadata.get("onboarding_status") == "IN_PROGRESS"
+        or league_metadata.get("refresh_status") == "IN_PROGRESS"
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An operation is already in progress for this league",
+        )
+
+    try:
+        lookup_league(
+            league_id=payload.newPlatformLeagueId, platform=payload.newPlatform
+        )
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="New platform league is already onboarded",
+        )
+    except HTTPException as e:
+        if e.status_code != status.HTTP_404_NOT_FOUND:
+            raise
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    try:
+        table.put_item(
+            Item={
+                "PK": f"LEAGUE#{payload.newPlatformLeagueId}#PLATFORM#{payload.newPlatform.value}",
+                "SK": "LEAGUE_LOOKUP",
+                "canonical_league_id": canonical_league_id,
+                "platform": payload.newPlatform.value,
+                "league_id": payload.newPlatformLeagueId,
+            }
+        )
+
+        table.put_item(
+            Item={
+                "PK": f"LEAGUE#{canonical_league_id}",
+                "SK": f"PLATFORM_MIGRATION#{platform.value}#{payload.newPlatform.value}",
+                "data": payload.managerMapping,
+            }
+        )
+
+        table.update_item(
+            Key={"PK": f"LEAGUE#{canonical_league_id}", "SK": "METADATA"},
+            UpdateExpression=(
+                "SET active_platform = :ap, migrated_from = :mf, "
+                "migrated_at = :ma, onboarding_status = :os, #p = :ap"
+            ),
+            ExpressionAttributeNames={"#p": "platform"},
+            ExpressionAttributeValues={
+                ":ap": payload.newPlatform.value,
+                ":mf": platform.value,
+                ":ma": now_iso,
+                ":os": "IN_PROGRESS",
+            },
+        )
+    except botocore.exceptions.ClientError as e:
+        logger.error("DynamoDB error during migration setup: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to set up migration",
+        )
+
+    try:
+        lambda_client.invoke(
+            FunctionName=os.environ["ONBOARDER_LAMBDA_NAME"],
+            InvocationType="Event",
+            Payload=json.dumps(
+                {
+                    "body": {
+                        "leagueId": payload.newPlatformLeagueId,
+                        "platform": payload.newPlatform.value,
+                        "season": payload.season,
+                        "s2": payload.s2,
+                        "swid": payload.swid,
+                    },
+                    "requestType": "MIGRATE",
+                    "canonicalLeagueId": canonical_league_id,
+                    "correlation_id": correlation_id,
+                }
+            ),
+        )
+    except botocore.exceptions.ClientError as e:
+        logger.error("Failed to invoke onboarder Lambda for migration: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to trigger migration",
+        )
+
+    response.status_code = status.HTTP_202_ACCEPTED
+    return APIResponse(
+        detail="Migration started", data={"correlation_id": correlation_id}
+    )
 
 
 @app.delete("/leagues/{leagueId}", status_code=status.HTTP_200_OK)
