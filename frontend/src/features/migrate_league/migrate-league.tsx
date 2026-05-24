@@ -177,13 +177,11 @@ function Step1({
 function Step2({
   currentPlatform,
   currentLeagueId,
-  currentPlatformForApi,
   onNext,
   onBack,
 }: {
   currentPlatform: Platform;
   currentLeagueId: string;
-  currentPlatformForApi: Platform;
   onNext: (info: NewPlatformInfo, users: NewPlatformUser[]) => void;
   onBack: () => void;
 }) {
@@ -852,7 +850,6 @@ export default function MigrateLeague() {
               <Step2
                 currentPlatform={platform}
                 currentLeagueId={leagueId}
-                currentPlatformForApi={platform}
                 onNext={(info, users) => {
                   setNewPlatformInfo(info);
                   setNewPlatformUsers(users);

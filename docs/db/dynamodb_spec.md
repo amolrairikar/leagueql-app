@@ -527,3 +527,43 @@ Represents all draft picks across all seasons in the fantasy league. One item pe
 }
 ```
 </details>
+
+<details>
+<summary><b>PLATFORM_MIGRATION</b></summary>
+
+Stores the manager identity mapping created when a league migrates from one platform to another (e.g. ESPN → Sleeper). Written by the API at migration initiation and read by the onboarder Lambda to resolve cross-platform owner IDs during data processing.
+
+| Attribute | Type | Required | Description |
+|---|---|---|---|
+| `PK` | String | Yes | `LEAGUE#{canonical_league_id}` |
+| `SK` | String | Yes | `PLATFORM_MIGRATION#{fromPlatform}#{toPlatform}` (e.g. `PLATFORM_MIGRATION#ESPN#SLEEPER`) |
+| `data` | List\<Object\> | Yes | One entry per manager mapping |
+
+**`data[n]` object:**
+
+| Attribute | Type | Description |
+|---|---|---|
+| `currentPlatformOwnerId` | String | Owner ID on the source platform |
+| `newPlatformOwnerId` | String | Owner ID on the destination platform; `__not_returning__` for managers who left the league |
+| `displayName` | String | Human-readable name used for display (typically the source-platform username) |
+
+**Example:**
+```json
+{
+  "PK": "LEAGUE#uuid-string",
+  "SK": "PLATFORM_MIGRATION#ESPN#SLEEPER",
+  "data": [
+    {
+      "currentPlatformOwnerId": "espn-owner-id-1",
+      "newPlatformOwnerId": "sleeper-owner-id-1",
+      "displayName": "myusername123"
+    },
+    {
+      "currentPlatformOwnerId": "espn-owner-id-2",
+      "newPlatformOwnerId": "__not_returning__",
+      "displayName": "formeruser456"
+    }
+  ]
+}
+```
+</details>
