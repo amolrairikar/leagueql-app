@@ -188,7 +188,7 @@ To refresh your ESPN league, click the "Refresh League" button in the sidebar. T
 #### Sleeper
 If refreshing during the current season, simply click the "Refresh League" button in the sidebar. This will navigate you to the league connection page where you can submit your league ID again. The system detects the league already exists and runs a refresh instead of a full re-onboard, which is faster.
 
-If refreshing for a new season, you will need to enter your new league ID as Sleeper league IDs change each season. The system will automatically associate the new league ID with previous league IDs from the same league.
+If refreshing for a new season, you will need to enter your new league ID as Sleeper league IDs change each season (unlike ESPN, where the league ID stays the same year to year). The system automatically associates the new league ID with your existing history by walking Sleeper's `previous_league_id` chain: starting from your new league ID, it follows each season's link to the prior season until it finds a league ID already stored in LeagueQL, then ties them together under the same league record.
 
 ### Migrating Your League
 
