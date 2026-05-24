@@ -642,7 +642,7 @@ function ManagerHistoryContent({ promise }: { promise: Promise<DataResult> }) {
                           style={{ backgroundColor: m.color }}
                         />
                         <span className="text-muted-foreground">Finish</span>
-                        <span className="font-mono font-medium text-foreground tabular-nums ml-auto">
+                        <span className="font-medium text-foreground tabular-nums ml-auto">
                           {finish != null ? ordinal(Number(finish)) : '—'}
                         </span>
                       </div>
