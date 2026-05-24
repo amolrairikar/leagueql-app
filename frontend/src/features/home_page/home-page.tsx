@@ -81,11 +81,12 @@ type ChartDataResult = {
   maxRank: number;
 };
 
-function buildChartData(standings: ManagerStandingsItem[]): ChartDataResult {
+function buildChartData(standings: ManagerStandingsItem[], migrationMapping: Map<string, string>): ChartDataResult {
   const ownerStandingsMap = new Map<string, ManagerStandingsItem[]>();
   for (const row of standings) {
-    if (!ownerStandingsMap.has(row.owner_id)) ownerStandingsMap.set(row.owner_id, []);
-    ownerStandingsMap.get(row.owner_id)!.push(row);
+    const mappedId = migrationMapping.get(row.owner_id) ?? row.owner_id;
+    if (!ownerStandingsMap.has(mappedId)) ownerStandingsMap.set(mappedId, []);
+    ownerStandingsMap.get(mappedId)!.push(row);
   }
 
   const owners = [...ownerStandingsMap.entries()]
@@ -123,13 +124,13 @@ function buildChartData(standings: ManagerStandingsItem[]): ChartDataResult {
   return { owners, colorMap, chartData, chartConfig, maxRank };
 }
 
-function StandingsChart({ promise }: { promise: Promise<ManagerStandingsItem[]> }) {
-  const standings = use(promise);
+function StandingsChart({ promise }: { promise: Promise<{ standings: ManagerStandingsItem[]; migrationMapping: Map<string, string> }> }) {
+  const { standings, migrationMapping } = use(promise);
   const [selectedOwnerId, setSelectedOwnerId] = useState<string | null>(null);
 
   const { owners, colorMap, chartData, chartConfig, maxRank } = useMemo(
-    () => buildChartData(standings),
-    [standings],
+    () => buildChartData(standings, migrationMapping),
+    [standings, migrationMapping],
   );
 
   if (standings.length === 0) {
@@ -347,12 +348,12 @@ export default function HomePage() {
 
   // Single API call for all data (getManagerHistoryData already uses optimized single queries)
   const allDataPromise = useMemo(
-    (): Promise<{ standings: ManagerStandingsItem[]; matchups: MatchupItem[] }> =>
+    (): Promise<{ standings: ManagerStandingsItem[]; matchups: MatchupItem[]; migrationMapping: Map<string, string> }> =>
       leagueId && seasons.length > 0
         ? getManagerHistoryData(leagueId, platform, seasons)
             // Intentional empty-state fallback — apiClient surfaces the error to the global store before throwing
-            .catch(() => ({ standings: [], matchups: [] }))
-        : Promise.resolve({ standings: [], matchups: [] }),
+            .catch(() => ({ standings: [], matchups: [], migrationMapping: new Map() }))
+        : Promise.resolve({ standings: [], matchups: [], migrationMapping: new Map() }),
     [leagueId, platform, seasons],
   );
 
@@ -435,8 +436,8 @@ export default function HomePage() {
 
   // Use standings from the single data call for chart
   const standingsPromise = useMemo(
-    (): Promise<ManagerStandingsItem[]> =>
-      allDataPromise.then(({ standings }) => standings),
+    (): Promise<{ standings: ManagerStandingsItem[]; migrationMapping: Map<string, string> }> =>
+      allDataPromise.then(({ standings, migrationMapping }) => ({ standings, migrationMapping })),
     [allDataPromise],
   );
 
