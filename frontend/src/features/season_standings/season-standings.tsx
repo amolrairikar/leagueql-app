@@ -97,7 +97,7 @@ function WinsProgressionChart({ promise }: { promise: Promise<WeeklyResult> }) {
         <ChartTooltip
           content={
             <ChartTooltipContent
-              labelFormatter={(label) => `Week ${String(label)}`}
+              labelFormatter={(_val, payload) => `Week ${payload?.[0]?.payload?.week ?? ''}`}
               indicator="line"
             />
           }
