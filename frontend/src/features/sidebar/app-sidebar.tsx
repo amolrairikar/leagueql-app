@@ -74,7 +74,7 @@ export function AppSidebar() {
 
   function handleExitDemo() {
     clearAllLeagueCookies();
-    void navigate('/connect_league');
+    void navigate('/');
   }
 
   async function handleDeleteLeague() {
@@ -86,7 +86,7 @@ export function AppSidebar() {
       await deleteLeague(leagueId, platform);
       clearLeagueCookies();
       setDialogOpen(false);
-      void navigate('/league');
+      void navigate('/');
     } catch (err) {
       setDeleteError(
         err instanceof Error ? err.message : 'Failed to delete league.',
@@ -169,7 +169,7 @@ export function AppSidebar() {
                       tooltip="View Another League"
                       className="cursor-pointer"
                     >
-                      <Link to="/league">
+                      <Link to="/">
                         <Search />
                         <span>View Another League</span>
                       </Link>

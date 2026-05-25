@@ -33,7 +33,7 @@ Note that this app is designed for a web browser, not a mobile browser. Your exp
 
 ### Authentication
 
-LeagueQL uses Clerk for authentication. From the landing page, click **Connect Your League** and sign in when prompted. After signing in you are redirected to the league selection page.
+LeagueQL uses Clerk for authentication. From the landing page, click **Connect Your League** and sign in when prompted. After signing in you are returned to the landing page with the league connection form open.
 
 ### Demo Mode
 
@@ -41,9 +41,10 @@ Want to explore the app before connecting your own league? Click **View Demo** o
 
 ### Connecting a League
 
-Navigate to **Onboard/Refresh League** from the league selection page. Choose your platform (ESPN or Sleeper) and fill in the required fields. The system automatically detects whether this is a new league or an existing one and either onboards or refreshes accordingly.
+Click **Connect Your League** on the landing page. A small form will appear below the buttons — select your platform (ESPN or Sleeper) and enter your league ID, then click **Connect**.
 
-It will typically take ~45 seconds to onboard a new league (there is a lot of data being fetched and processed on the backend!). On success you are redirected to your league's home dashboard.
+- **Sleeper leagues:** The app fetches or onboards your league automatically (no credentials required). It will typically take ~45 seconds to onboard a new league. On success you are redirected to your league's home dashboard.
+- **ESPN leagues:** If your league has already been onboarded, you are taken straight to your dashboard. If it is a new league, you are taken to a full form to enter your ESPN credentials (league ID, latest season, SWID, and ESPN S2 cookies).
 
 #### ESPN Leagues
 
@@ -190,7 +191,7 @@ To refresh your ESPN league, click the "Refresh League" button in the sidebar. T
 #### Sleeper
 You do not need to refresh your Sleeper league during the active season. An automated process runs weekly every Tuesday morning to update your league data.
 
-If refreshing for a new season, you will need to enter your new league ID as Sleeper league IDs change each season (unlike ESPN, where the league ID stays the same year to year). The system automatically associates the new league ID with your existing history by walking Sleeper's `previous_league_id` chain: starting from your new league ID, it follows each season's link to the prior season until it finds a league ID already stored in LeagueQL, then ties them together under the same league record.
+If refreshing for a new season, you will need to enter your new league ID using the **Connect Your League** form on the landing page (accessible via **View Another League** in the sidebar). Sleeper league IDs change each season, unlike ESPN where the league ID stays the same year to year. The system automatically associates the new league ID with your existing history by walking Sleeper's `previous_league_id` chain: starting from your new league ID, it follows each season's link to the prior season until it finds a league ID already stored in LeagueQL, then ties them together under the same league record.
 
 ### Migrating Your League
 
@@ -213,7 +214,7 @@ On completion you are redirected to your dashboard, which will now show all-time
 
 ### Switching Leagues
 
-Click the **View Another League** button in the sidebar. You are taken to the league selection page where you can pick a previously connected league or add a new one.
+Click the **View Another League** button in the sidebar. You are taken back to the landing page where you can enter a different league ID using the inline connect form.
 
 ### Deleting a League
 
@@ -239,7 +240,7 @@ NOTE: I am actively working on developing a Chrome extension that will auto-popu
 If the page shows a timeout error, note the **operation ID** displayed and try again. If the issue persists, file a bug report with the operation ID so it can be investigated.
 
 **My data looks outdated — how do I refresh it?**  <br>
-Go to the league connection page and re-submit your league details. The refresh pulls the latest data from ESPN or Sleeper.
+For ESPN leagues, click **Refresh League** in the sidebar and re-submit your league credentials. For Sleeper leagues, data is refreshed automatically each week; if you need an immediate refresh for a new season, use **View Another League** in the sidebar and enter your new league ID.
 
 **Can I connect more than one league?**  <br>
 Yes. Use the **View Another League** option in the sidebar to view/onboard another league. Each league is stored independently.

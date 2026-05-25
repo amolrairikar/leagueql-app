@@ -54,7 +54,7 @@ const POLL_INTERVAL_MS = 1000;
 const POLL_TIMEOUT_MS = 45000;
 const POLL_ERROR_RESET_DELAY_MS = 10000;
 
-async function pollForCompletion(
+export async function pollForCompletion(
   leagueId: string,
   platform: 'ESPN' | 'SLEEPER',
   requestType: 'ONBOARD' | 'REFRESH',
@@ -97,6 +97,10 @@ export default function LeagueConnect() {
   const loadingStartRef = useRef<number | null>(null);
   const loadingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const urlParams = new URLSearchParams(window.location.search);
+  const urlLeagueId = urlParams.get('leagueId') ?? '';
+  const urlPlatform = urlParams.get('platform') === 'sleeper' ? 'sleeper' : 'espn';
+
   const {
     control,
     register,
@@ -105,7 +109,8 @@ export default function LeagueConnect() {
   } = useForm<LeagueConnectFormValues>({
     resolver: zodResolver(leagueConnectSchema),
     defaultValues: {
-      platform: 'espn',
+      platform: urlPlatform,
+      leagueId: urlLeagueId,
     },
   });
 
@@ -350,7 +355,7 @@ export default function LeagueConnect() {
                   variant="outline"
                   className="flex-1 cursor-pointer"
                   disabled={isSubmitting}
-                  onClick={() => void navigate('/league')}
+                  onClick={() => void navigate('/')}
                 >
                   Back
                 </Button>
