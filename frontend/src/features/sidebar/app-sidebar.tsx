@@ -48,6 +48,7 @@ import {
   getLeagueCookies,
   isDemoMode,
 } from '@/lib/cookie-handler';
+import { clearApiCache } from '@/lib/api-client';
 import { deleteLeague } from '@/features/sidebar/api-calls';
 
 const navItems = [
@@ -77,6 +78,11 @@ export function AppSidebar() {
     void navigate('/');
   }
 
+  function handleConnectFromDemo() {
+    clearAllLeagueCookies();
+    void navigate('/?connect=true');
+  }
+
   async function handleDeleteLeague() {
     const { leagueId, platform } = getLeagueCookies();
 
@@ -84,6 +90,7 @@ export function AppSidebar() {
     setDeleteError(null);
     try {
       await deleteLeague(leagueId, platform);
+      clearApiCache();
       clearLeagueCookies();
       setDialogOpen(false);
       void navigate('/');
@@ -131,7 +138,7 @@ export function AppSidebar() {
                   <SidebarMenuButton
                     tooltip="Connect Your League"
                     className="cursor-pointer"
-                    onClick={handleExitDemo}
+                    onClick={handleConnectFromDemo}
                   >
                     <LogIn />
                     <span>Connect Your League</span>

@@ -8,6 +8,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Progress } from '@/components/ui/progress';
 import {
   Select,
   SelectContent,
@@ -24,11 +25,38 @@ import { ApiError, clearApiError } from '@/lib/api-client';
 import { setDemoMode, setLeagueCookies } from '@/lib/cookie-handler';
 import { DEMO_SEASONS } from '@/lib/demo-constants';
 
-const LOADING_MESSAGES = [
-  { upToSeconds: 10, message: "Fetching your league's data" },
-  { upToSeconds: 25, message: 'Calculating' },
-  { upToSeconds: Infinity, message: 'Creating your league dashboard' },
+const LOADING_PHASES = [
+  { upToSeconds: 10, toProgress: 33, message: "Fetching your league's data" },
+  { upToSeconds: 25, toProgress: 66, message: 'Calculating' },
+  {
+    upToSeconds: 45,
+    toProgress: 90,
+    message: 'Creating your league dashboard',
+  },
 ];
+
+function computeLoadingState(elapsedSeconds: number): {
+  message: string;
+  progress: number;
+} {
+  let from = 0;
+  let fromSeconds = 0;
+  for (const phase of LOADING_PHASES) {
+    if (elapsedSeconds < phase.upToSeconds) {
+      const phaseDuration = phase.upToSeconds - fromSeconds;
+      const phaseElapsed = elapsedSeconds - fromSeconds;
+      const progress =
+        from + (phaseElapsed / phaseDuration) * (phase.toProgress - from);
+      return { message: phase.message, progress };
+    }
+    from = phase.toProgress;
+    fromSeconds = phase.upToSeconds;
+  }
+  return {
+    message: LOADING_PHASES[LOADING_PHASES.length - 1].message,
+    progress: 90,
+  };
+}
 
 interface FeatureCardProps {
   icon: string;
@@ -56,6 +84,7 @@ export default function LeagueQLLanding() {
   const [leagueId, setLeagueId] = useState('');
   const [loading, setLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
+  const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const loadingStartRef = useRef<number | null>(null);
   const loadingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
@@ -72,15 +101,15 @@ export default function LeagueQLLanding() {
   useEffect(() => {
     if (loading) {
       loadingStartRef.current = Date.now();
-      setLoadingMessage(LOADING_MESSAGES[0].message);
+      const initial = computeLoadingState(0);
+      setLoadingMessage(initial.message);
+      setProgress(initial.progress);
       loadingIntervalRef.current = setInterval(() => {
         const elapsed = (Date.now() - loadingStartRef.current!) / 1000;
-        const entry = LOADING_MESSAGES.find((m) => elapsed < m.upToSeconds);
-        setLoadingMessage(
-          entry?.message ??
-            LOADING_MESSAGES[LOADING_MESSAGES.length - 1].message,
-        );
-      }, 500);
+        const { message, progress: p } = computeLoadingState(elapsed);
+        setLoadingMessage(message);
+        setProgress(p);
+      }, 200);
     } else {
       if (loadingIntervalRef.current) {
         clearInterval(loadingIntervalRef.current);
@@ -88,6 +117,7 @@ export default function LeagueQLLanding() {
       }
       loadingStartRef.current = null;
       setLoadingMessage('');
+      setProgress(0);
     }
     return () => {
       if (loadingIntervalRef.current) clearInterval(loadingIntervalRef.current);
@@ -271,10 +301,13 @@ export default function LeagueQLLanding() {
                 )}
               </Button>
             </form>
-            {loading && loadingMessage && (
-              <p className="mt-3 text-sm text-muted-foreground">
-                {loadingMessage}
-              </p>
+            {loading && (
+              <div className="mt-4 flex flex-col gap-1.5">
+                <Progress value={progress} className="w-full" />
+                <p className="text-xs text-muted-foreground">
+                  {loadingMessage}
+                </p>
+              </div>
             )}
             {error && (
               <Alert variant="destructive" className="mt-3 text-left">
