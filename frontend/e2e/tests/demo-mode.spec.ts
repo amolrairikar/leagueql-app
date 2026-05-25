@@ -44,14 +44,6 @@ testWithDemo.describe('Demo mode — protected pages', () => {
     await expect(page).toHaveURL('/standings');
   });
 
-  testWithDemo('/league renders league selection page', async ({ page }) => {
-    await page.goto('/league');
-    await expect(page).toHaveURL('/league');
-    // /league uses Header + LeagueSelection, not AppLayout, so no demo banner.
-    // CardTitle renders as a div, not a semantic heading element.
-    await expect(page.getByText('Your League')).toBeVisible();
-  });
-
   testWithDemo('no protected page redirects to landing page', async ({ page }) => {
     // URL check is sufficient — if we stayed on the route, ProtectedRoute allowed access
     for (const item of NAV_ITEMS) {

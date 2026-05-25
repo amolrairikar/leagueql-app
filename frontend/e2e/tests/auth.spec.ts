@@ -1,7 +1,6 @@
 import { test, expect } from '@playwright/test';
 
 const PROTECTED_ROUTES = [
-  '/league',
   '/connect_league',
   '/home',
   '/standings',

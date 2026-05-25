@@ -132,6 +132,11 @@ function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   return promise;
 }
 
+export function clearApiCache(): void {
+  _cache.clear();
+  _inflight.clear();
+}
+
 // ── Public client ─────────────────────────────────────────────────────────────
 
 export const apiClient = {
