@@ -135,8 +135,8 @@ function WinsProgressionChart({ promise }: { promise: Promise<WeeklyResult> }) {
               stroke={colorMap.get(team.team_id)}
               strokeWidth={2}
               strokeOpacity={selectedTeamId === null ? 1 : isSelected ? 1 : 0.2}
-              dot={false}
-              activeDot={{ r: 4 }}
+              dot={{ fill: colorMap.get(team.team_id), r: 4 }}
+              activeDot={{ r: 6 }}
             />
           );
         })}
