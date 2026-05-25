@@ -74,7 +74,7 @@ export function AppSidebar() {
 
   function handleExitDemo() {
     clearAllLeagueCookies();
-    void navigate('/');
+    void navigate('/connect_league');
   }
 
   async function handleDeleteLeague() {

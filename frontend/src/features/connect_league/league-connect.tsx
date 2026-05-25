@@ -344,20 +344,31 @@ export default function LeagueConnect() {
                   </div>
                 </>
               )}
-              <Button
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 cursor-pointer"
-              >
-                {isSubmitting ? (
-                  <span className="flex items-center gap-2">
-                    <Spinner className="text-primary-foreground" />
-                    {loadingMessage}
-                  </span>
-                ) : (
-                  'Connect'
-                )}
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="flex-1 cursor-pointer"
+                  disabled={isSubmitting}
+                  onClick={() => void navigate('/league')}
+                >
+                  Back
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 cursor-pointer"
+                >
+                  {isSubmitting ? (
+                    <span className="flex items-center gap-2">
+                      <Spinner className="text-primary-foreground" />
+                      {loadingMessage}
+                    </span>
+                  ) : (
+                    'Connect'
+                  )}
+                </Button>
+              </div>
             </form>
             {pollStatus === 'success' && (
               <Alert className="mt-4 border-primary bg-primary/10 text-primary">

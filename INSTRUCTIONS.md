@@ -37,11 +37,11 @@ LeagueQL uses Clerk for authentication. From the landing page, click **Connect Y
 
 ### Demo Mode
 
-Want to explore the app before connecting your own league? Click **View Demo** on the landing page. A sample league is pre-loaded so you can navigate every page. A blue banner at the top of the screen indicates you are in demo mode. Click **Exit Demo** in the sidebar to return to the landing page and connect your own league.
+Want to explore the app before connecting your own league? Click **View Demo** on the landing page. A sample league is pre-loaded so you can navigate every page. Click **Exit Demo** in the sidebar to return to the landing page and connect your own league.
 
 ### Connecting a League
 
-Navigate to **Connect a new league** from the league selection page. Choose your platform (ESPN or Sleeper) and fill in the required fields. The system automatically detects whether this is a new league or an existing one and either onboards or refreshes accordingly.
+Navigate to **Onboard/Refresh League** from the league selection page. Choose your platform (ESPN or Sleeper) and fill in the required fields. The system automatically detects whether this is a new league or an existing one and either onboards or refreshes accordingly.
 
 It will typically take ~45 seconds to onboard a new league (there is a lot of data being fetched and processed on the backend!). On success you are redirected to your league's home dashboard.
 
@@ -60,7 +60,7 @@ It will typically take ~45 seconds to onboard a new league (there is a lot of da
 
 | Field | Description |
 |---|---|
-| League ID | The numeric ID found in your Sleeper league URL |
+| League ID | The numeric ID found in your Sleeper league URL (e.g. `https://sleeper.com/leagues/12345`) |
 
 Sleeper leagues are public, so no credentials are required.
 
@@ -68,14 +68,14 @@ Sleeper leagues are public, so no credentials are required.
 
 ## Navigation
 
-All analysis pages are accessible from the **sidebar** on the left side of the screen. The sidebar can be collapsed to icon-only mode using the toggle button in the top header.
+All pages are accessible from the sidebar on the left side of the screen. The sidebar can be collapsed to icon-only mode using the toggle button in the top header.
 
 The top header also contains:
-- **LeagueQL logo** — returns you to the home dashboard
-- **GitHub, Changelog, Docs** links
-- **Dark/light mode toggle**
+- **LeagueQL logo** -- returns you to the landing page
+- **GitHub, Changelog, Docs** -- links to the source code, changelog, and user docs
+- **Dark/light mode toggle** -- toggle between dark mode and light mode, defaults to your system preferences
 
-At the bottom of the sidebar you will find league management options: refresh your league, switch to view another league, and delete the current league.
+At the bottom of the sidebar you will find league management options: refresh your league, migrate to another platform,switch to view another league, and delete the current league.
 
 ---
 
@@ -88,15 +88,17 @@ A high-level overview of your entire league history.
 - Total seasons played, total matchups, and total members
 - Record-setting single-game scores
 - **Championship timeline gallery** — every season's champion at a glance
-- **All-time standings chart** — a line chart tracking each manager's final standings position across every season, showing trends and consistency over time
+- **All-time standings chart** — a line chart tracking each manager's final standings position across every season
 
 ---
 
 ### Standings
 
-Tracks how the regular season unfolded week by week.
+Displays standings from a given season.
 
 - Select a season from the dropdown at the top of the page
+- **Season awards** - View awards for league champion, high scorer, and luckiest team
+- View the standings table showing each team's record and points for/against
 - A chart shows each team's cumulative win progression over the course of the regular season, revealing which teams surged late or faded down the stretch
 
 ---
@@ -117,6 +119,7 @@ A visual representation of the playoff field for any season.
 
 - Select a season to view its bracket
 - Scores and results are displayed for each matchup, from the first round through the championship
+- Click on a matchup to view the full box score
 
 ---
 
@@ -149,7 +152,7 @@ A season-by-season breakdown of how each draft played out.
 - Every pick is evaluated against actual in-season performance
 - **Steals** — players who significantly outperformed their draft position
 - **Busts** — players who significantly underperformed
-- Suggested alternatives show who was available nearby in the draft and would have been a better pick
+- For busts, suggested alternatives show who was available nearby in the draft and would have been a better pick
 
 ---
 
@@ -158,8 +161,7 @@ A season-by-season breakdown of how each draft played out.
 The best individual player performances in league history.
 
 - **Single-game records** — highest score posted by any player in a single week
-- **Season records** — top cumulative scoring seasons
-- Results are broken down by position
+- Records are broken down by position
 
 ---
 
@@ -186,7 +188,7 @@ All-time team-level records across every game ever played.
 To refresh your ESPN league, click the "Refresh League" button in the sidebar. This will navigate you to the league connection page where you can submit your league credentials again. The system detects the league already exists and runs a refresh instead of a full re-onboard, which is faster.
 
 #### Sleeper
-If refreshing during the current season, simply click the "Refresh League" button in the sidebar. This will navigate you to the league connection page where you can submit your league ID again. The system detects the league already exists and runs a refresh instead of a full re-onboard, which is faster.
+You do not need to refresh your Sleeper league during the active season. An automated process runs weekly every Tuesday morning to update your league data.
 
 If refreshing for a new season, you will need to enter your new league ID as Sleeper league IDs change each season (unlike ESPN, where the league ID stays the same year to year). The system automatically associates the new league ID with your existing history by walking Sleeper's `previous_league_id` chain: starting from your new league ID, it follows each season's link to the prior season until it finds a league ID already stored in LeagueQL, then ties them together under the same league record.
 
@@ -230,6 +232,8 @@ ESPN private leagues require authentication. The SWID and ESPN S2 cookies prove 
 3. Open DevTools (`F12` or `Cmd+Option+I`)
 4. Go to **Application → Cookies → fantasy.espn.com**
 5. Find `SWID` and `espn_s2` and copy their values
+
+NOTE: I am actively working on developing a Chrome extension that will auto-populate these values with the click of a button.
 
 **The connection timed out — what happened?**  <br>
 If the page shows a timeout error, note the **operation ID** displayed and try again. If the issue persists, file a bug report with the operation ID so it can be investigated.
