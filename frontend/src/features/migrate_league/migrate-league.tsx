@@ -228,6 +228,7 @@ function Step2({
       } else {
         const result = await getEspnMembers(
           currentLeagueId,
+          currentPlatform,
           newPlatformLeagueId.trim(),
           season.trim(),
           swid.trim(),
@@ -288,7 +289,9 @@ function Step2({
         </Label>
         <Input
           id="new-league-id"
+          name="migrate-new-league-id"
           type="text"
+          autoComplete="on"
           placeholder={`Enter your ${destinationPlatform === 'ESPN' ? 'ESPN' : 'Sleeper'} league ID`}
           value={newPlatformLeagueId}
           onChange={(e) => setNewPlatformLeagueId(e.target.value)}
@@ -301,7 +304,9 @@ function Step2({
             <Label htmlFor="espn-season">Latest Season</Label>
             <Input
               id="espn-season"
+              name="migrate-espn-season"
               type="text"
+              autoComplete="on"
               placeholder="e.g. 2025"
               value={season}
               onChange={(e) => setSeason(e.target.value)}
@@ -324,7 +329,9 @@ function Step2({
             </div>
             <Input
               id="espn-swid"
+              name="migrate-espn-swid"
               type="text"
+              autoComplete="on"
               placeholder="Enter your SWID"
               value={swid}
               onChange={(e) => setSwid(e.target.value)}
@@ -347,7 +354,9 @@ function Step2({
             </div>
             <Input
               id="espn-s2"
+              name="migrate-espn-s2"
               type="text"
+              autoComplete="on"
               placeholder="Enter your ESPN S2"
               value={s2}
               onChange={(e) => setS2(e.target.value)}
