@@ -16,9 +16,9 @@ import type {
 } from '@/features/landing_page/types';
 
 export const NAV_LINKS: NavLinkItem[] = [
-  { label: 'GitHub', href: 'https://github.com/amolrairikar/leagueql-app', icon: GitHubIcon },
-  { label: 'Changelog', href: 'https://github.com/amolrairikar/leagueql-app/blob/main/CHANGELOG.md', icon: FileText },
-  { label: 'Docs', href: 'https://github.com/amolrairikar/leagueql-app/blob/main/INSTRUCTIONS.md', icon: Info },
+  { label: 'GitHub', href: 'https://github.com/amolrairikar/leagueql-app', icon: GitHubIcon, external: true },
+  { label: 'Changelog', href: '/changelog', icon: FileText, external: false },
+  { label: 'Docs', href: 'https://github.com/amolrairikar/leagueql-app/blob/main/INSTRUCTIONS.md', icon: Info, external: true },
 ];
 
 export const SLIDES: Slide[] = [

@@ -4,6 +4,7 @@ export interface NavLinkItem {
   label: string;
   href: string;
   icon: React.FC<LucideProps>;
+  external?: boolean;
 }
 
 export interface Slide {

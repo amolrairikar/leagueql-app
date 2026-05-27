@@ -26,6 +26,7 @@ import SeasonStandings from '@/features/season_standings/season-standings';
 import DraftRecap from '@/features/draft_recap/draft-recap';
 import HomePage from '@/features/home_page/home-page';
 import PrivacyPage from '@/features/privacy/privacy-page';
+import ChangelogPage from '@/features/changelog/changelog-page';
 import { AppSidebar } from '@/features/sidebar/app-sidebar';
 import MatchupRecords from '@/features/matchup_records/matchup-records';
 import MigrateLeague from '@/features/migrate_league/migrate-league';
@@ -123,6 +124,7 @@ function App() {
           />
         ))}
         <Route path="/privacy" element={<><Header /><PrivacyPage /></>} />
+        <Route path="/changelog" element={<><Header /><ChangelogPage /></>} />
       </Routes>
     </BrowserRouter>
     </ErrorBoundary>
