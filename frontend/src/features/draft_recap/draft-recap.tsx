@@ -1,4 +1,4 @@
-import React, { Suspense, use, useEffect, useMemo, useState } from 'react';
+import { Fragment, Suspense, use, useEffect, useMemo, useState } from 'react';
 import { ChevronDown, Gem, Info, X } from 'lucide-react';
 
 import { Skeleton } from '@/components/ui/skeleton';
@@ -138,6 +138,26 @@ function DraftRecapContent({
   const toggleBust = (key: string) => {
     setOpenBusts((prev) => ({ ...prev, [key]: !prev[key] }));
   };
+
+  const bustsWithAlts = useMemo(
+    () =>
+      picks.flatMap((pick, i) => {
+        const isBust =
+          pick.draft_rank_delta <= BUST_DELTA_MAX &&
+          pick.round <= maxRound - BUST_ROUND_BUFFER &&
+          pick.round <= BUST_ROUND_MAX;
+        if (!isBust) return [];
+        const alts = getAlts(pick, allPicks);
+        if (alts.length === 0) return [];
+        return [{ pick, alts, bustKey: `${selectedManager}-${selectedSeason}-${i}` }];
+      }),
+    [picks, allPicks, maxRound, selectedManager, selectedSeason],
+  );
+
+  const bustsWithAltsMap = useMemo(
+    () => new Map(bustsWithAlts.map((item) => [item.bustKey, item])),
+    [bustsWithAlts],
+  );
 
   if (!result.ok) {
     return (
@@ -292,13 +312,13 @@ function DraftRecapContent({
               const deltaStr = (delta >= 0 ? '+' : '') + delta;
               const dpillCls = delta >= DELTA_PILL_POS ? 'delta-pos' : delta <= DELTA_PILL_NEG ? 'delta-neg' : 'delta-neu';
               const isBust = delta <= BUST_DELTA_MAX && pick.round <= maxRound - BUST_ROUND_BUFFER && pick.round <= BUST_ROUND_MAX;
-              const alts = isBust ? getAlts(pick, allPicks) : [];
               const bustKey = `${selectedManager}-${selectedSeason}-${i}`;
+              const bustData = bustsWithAltsMap.get(bustKey);
               const isOpen = !!openBusts[bustKey];
 
               return (
-                <React.Fragment key={pick.pick_id}>
-                  <tr>
+                <Fragment key={pick.pick_id}>
+                <tr>
                     <td className="border-b border-border/50 sticky left-0 z-10 bg-card">
                       <div className="px-3 py-2.5 text-muted-foreground text-[11px]">{i + 1}</div>
                     </td>
@@ -363,67 +383,133 @@ function DraftRecapContent({
                         </span>
                       </div>
                     </td>
-                  </tr>
-                  {alts.length > 0 && (
-                    <tr>
-                      <td colSpan={8} className="p-0">
-                        <div className="bg-muted/50 border-t border-border/50 p-2.5 flex flex-col gap-1.5">
-                          <div className="flex items-center justify-between mb-1">
-                            <div className="text-[10px] font-medium uppercase tracking-[0.06em]" style={{ color: RED }}>
-                              Could have picked instead
-                            </div>
-                            <button
-                              className="bg-transparent border-none cursor-pointer text-[11px] text-muted-foreground p-0 flex items-center gap-1"
-                              onClick={() => toggleBust(bustKey)}
-                            >
-                              {isOpen ? 'Hide' : 'Show'} alternatives
-                              <ChevronDown
-                                className="w-2.5 h-2.5 transition-transform"
-                                style={{ transform: isOpen ? 'rotate(180deg)' : 'none' }}
-                              />
-                            </button>
-                          </div>
-                          {isOpen && (
-                            <div className="flex flex-col gap-1">
-                              {alts.map((alt) => {
-                                const altPm = posMeta[alt.position] ?? { bg: POSITION_COLORS.K.bg, tc: POSITION_COLORS.K.tc };
-                                const diff = (alt.total_points - pick.total_points).toFixed(2);
-                                const spotsLater = alt.overall_pick_number - pick.overall_pick_number;
-                                return (
-                                  <div
-                                    key={alt.pick_id}
-                                    className="flex items-center gap-2 px-2 py-1.5 bg-card border border-border/50 rounded-md"
-                                  >
-                                    <span
-                                      className="inline-flex px-1.5 py-0.5 rounded-full text-[10px] font-medium"
-                                      style={{ background: altPm.bg, color: altPm.tc }}
-                                    >
-                                      {alt.position}
-                                    </span>
-                                    <span className="text-[12px] font-medium text-foreground flex-1">{alt.player_name}</span>
-                                    <span className="text-[11px] text-muted-foreground">Picked {spotsLater} spots later</span>
-                                    <span className="text-[12px] font-medium text-foreground ml-auto">{alt.total_points.toFixed(2)} pts</span>
-                                    <span
-                                      className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium whitespace-nowrap"
-                                      style={{ background: GREEN_BG, color: GREEN }}
-                                    >
-                                      +{diff} more points
-                                    </span>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
+                </tr>
+                {bustData && (
+                  <tr className="hidden sm:table-row">
+                    <td colSpan={8} className="border-b border-border/50 p-0">
+                      <div className="bg-muted/50 border-b border-border/50 px-3 py-2 flex items-center justify-between">
+                        <span className="text-[10px] font-medium uppercase tracking-[0.06em]" style={{ color: RED }}>
+                          Could have picked instead
+                        </span>
+                        <button
+                          className="bg-transparent border-none cursor-pointer text-[11px] text-muted-foreground p-0 flex items-center gap-1"
+                          onClick={() => toggleBust(bustKey)}
+                        >
+                          {isOpen ? 'Hide' : 'Show'} alternatives
+                          <ChevronDown
+                            className="w-2.5 h-2.5 transition-transform"
+                            style={{ transform: isOpen ? 'rotate(180deg)' : 'none' }}
+                          />
+                        </button>
+                      </div>
+                      {isOpen && (
+                        <div className="flex flex-col divide-y divide-border/50">
+                          {bustData.alts.map((alt) => {
+                            const altPm = posMeta[alt.position] ?? { bg: POSITION_COLORS.K.bg, tc: POSITION_COLORS.K.tc };
+                            const diff = (alt.total_points - pick.total_points).toFixed(2);
+                            const spotsLater = alt.overall_pick_number - pick.overall_pick_number;
+                            return (
+                              <div
+                                key={alt.pick_id}
+                                className="flex items-center gap-3 px-3 py-2.5 bg-muted/30"
+                              >
+                                <span
+                                  className="inline-flex px-1.5 py-0.5 rounded-full text-[10px] font-medium"
+                                  style={{ background: altPm.bg, color: altPm.tc }}
+                                >
+                                  {alt.position}
+                                </span>
+                                <span className="text-[12px] font-medium text-foreground flex-1">{alt.player_name}</span>
+                                <span className="text-[11px] text-muted-foreground">Picked {spotsLater} spots later</span>
+                                <span className="text-[13px] font-medium text-foreground">{alt.total_points.toFixed(2)} pts</span>
+                                <span
+                                  className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium whitespace-nowrap"
+                                  style={{ background: GREEN_BG, color: GREEN }}
+                                >
+                                  +{diff} more points
+                                </span>
+                              </div>
+                            );
+                          })}
                         </div>
-                      </td>
-                    </tr>
-                  )}
-                </React.Fragment>
+                      )}
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               );
             })}
           </tbody>
         </table>
       </div>
+
+      {/* Bust Alternatives */}
+      {bustsWithAlts.length > 0 && (
+        <div className="flex flex-col gap-2.5 sm:hidden">
+          {bustsWithAlts.map(({ pick, alts, bustKey }) => {
+            const isOpen = !!openBusts[bustKey];
+            return (
+              <div key={bustKey} className="bg-card border border-border/50 rounded-lg overflow-hidden">
+                <div className="bg-muted/50 border-b border-border/50 p-2.5 flex items-center justify-between">
+                  <div>
+                    <div className="text-[10px] font-medium uppercase tracking-[0.06em] mb-0.5" style={{ color: RED }}>
+                      Could have picked instead
+                    </div>
+                    <div className="text-[12px] font-medium text-foreground flex items-center gap-1">
+                      <X className="w-3 h-3 shrink-0" style={{ color: RED }} />
+                      {pick.player_name}
+                      <span className="text-[11px] text-muted-foreground font-normal ml-1">
+                        Rd {pick.round} · Pick {pick.overall_pick_number}
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    className="bg-transparent border-none cursor-pointer text-[11px] text-muted-foreground p-0 flex items-center gap-1 shrink-0 ml-4"
+                    onClick={() => toggleBust(bustKey)}
+                  >
+                    {isOpen ? 'Hide' : 'Show'} alternatives
+                    <ChevronDown
+                      className="w-2.5 h-2.5 transition-transform"
+                      style={{ transform: isOpen ? 'rotate(180deg)' : 'none' }}
+                    />
+                  </button>
+                </div>
+                {isOpen && (
+                  <div className="p-2.5 flex flex-col gap-1.5">
+                    {alts.map((alt) => {
+                      const altPm = posMeta[alt.position] ?? { bg: POSITION_COLORS.K.bg, tc: POSITION_COLORS.K.tc };
+                      const diff = (alt.total_points - pick.total_points).toFixed(2);
+                      const spotsLater = alt.overall_pick_number - pick.overall_pick_number;
+                      return (
+                        <div
+                          key={alt.pick_id}
+                          className="flex items-center gap-2 px-2 py-1.5 bg-muted/50 border border-border/50 rounded-md"
+                        >
+                          <span
+                            className="inline-flex px-1.5 py-0.5 rounded-full text-[10px] font-medium"
+                            style={{ background: altPm.bg, color: altPm.tc }}
+                          >
+                            {alt.position}
+                          </span>
+                          <span className="text-[12px] font-medium text-foreground flex-1">{alt.player_name}</span>
+                          <span className="text-[11px] text-muted-foreground">Picked {spotsLater} spots later</span>
+                          <span className="text-[12px] font-medium text-foreground ml-auto">{alt.total_points.toFixed(2)} pts</span>
+                          <span
+                            className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium whitespace-nowrap"
+                            style={{ background: GREEN_BG, color: GREEN }}
+                          >
+                            +{diff} more points
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </TooltipProvider>
   );
 }
