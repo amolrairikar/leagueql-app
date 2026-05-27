@@ -415,7 +415,8 @@ export default function PlayoffBracket() {
         </div>
 
         {/* Main bracket */}
-        <div className={`grid ${maxRound >= 3 ? 'grid-cols-[1fr_8px_1fr_8px_1fr_8px_160px]' : 'grid-cols-[1fr_8px_1fr_8px_160px]'} gap-0 items-stretch mb-6`}>
+        <div className="overflow-x-auto -mx-6 px-6 mb-6">
+        <div className={`grid ${maxRound >= 3 ? 'grid-cols-[1fr_8px_1fr_8px_1fr_8px_160px]' : 'grid-cols-[1fr_8px_1fr_8px_160px]'} gap-0 items-stretch ${maxRound >= 3 ? 'min-w-[560px]' : 'min-w-[380px]'}`}>
           {/* Wild Card Round (6-team+ formats only) */}
           {maxRound >= 3 && (
             <div className="flex flex-col">
@@ -514,6 +515,7 @@ export default function PlayoffBracket() {
           <div className="flex flex-col items-center justify-center pt-11 pl-1">
             {champTeam && <ChampionCard team={champTeam} />}
           </div>
+        </div>
         </div>
 
         {selectedMatchupData && selectedMatch && (

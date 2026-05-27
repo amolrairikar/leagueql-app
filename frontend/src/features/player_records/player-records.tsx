@@ -390,52 +390,56 @@ function PlayerRecordsContent({
 
   return (
     <>
-      <div className="flex items-center gap-2.5 mb-5 flex-wrap">
-        <span className="text-[12px] font-medium text-muted-foreground">
-          Season
-        </span>
-        <Select
-          value={season}
-          onValueChange={(v) => {
-            setSeason(v);
-            setSelectedKey(null);
-          }}
-        >
-          <SelectTrigger size="sm" className="w-32">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All seasons</SelectItem>
-            {seasons.map((s) => (
-              <SelectItem key={s} value={s}>
-                {s}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 mb-5">
+        <div className="flex items-center gap-2.5">
+          <span className="text-[12px] font-medium text-muted-foreground w-16 sm:w-auto">
+            Season
+          </span>
+          <Select
+            value={season}
+            onValueChange={(v) => {
+              setSeason(v);
+              setSelectedKey(null);
+            }}
+          >
+            <SelectTrigger size="sm" className="w-32">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All seasons</SelectItem>
+              {seasons.map((s) => (
+                <SelectItem key={s} value={s}>
+                  {s}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
-        <span className="text-[12px] font-medium text-muted-foreground ml-2">
-          Manager
-        </span>
-        <Select
-          value={manager}
-          onValueChange={(v) => {
-            setManager(v);
-            setSelectedKey(null);
-          }}
-        >
-          <SelectTrigger size="sm" className="w-36">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All managers</SelectItem>
-            {managers.map((m) => (
-              <SelectItem key={m} value={m}>
-                {m}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2.5">
+          <span className="text-[12px] font-medium text-muted-foreground w-16 sm:w-auto sm:ml-2">
+            Manager
+          </span>
+          <Select
+            value={manager}
+            onValueChange={(v) => {
+              setManager(v);
+              setSelectedKey(null);
+            }}
+          >
+            <SelectTrigger size="sm" className="w-36">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All managers</SelectItem>
+              {managers.map((m) => (
+                <SelectItem key={m} value={m}>
+                  {m}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {positionCards.length === 0 ? (

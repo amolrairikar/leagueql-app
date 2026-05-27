@@ -365,7 +365,7 @@ function SkeletonManagerHistory() {
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-5 gap-2.5 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 mb-6">
         {Array.from({ length: 5 }).map((_, i) => (
           <div
             key={i}
@@ -415,7 +415,7 @@ function SkeletonManagerHistory() {
 
       {/* Rivalry cards */}
       <Skeleton className="h-3 w-16 mb-2.5" />
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {Array.from({ length: 3 }).map((_, i) => (
           <div
             key={i}
@@ -541,7 +541,7 @@ function ManagerHistoryContent({ promise }: { promise: Promise<DataResult> }) {
       </div>
 
       {/* All-time stat cards */}
-      <div className="grid grid-cols-5 gap-2.5 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 mb-6">
         <div className="bg-card border border-border/50 rounded-lg p-3">
           <div className="text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground mb-1">
             All-time record
@@ -676,7 +676,7 @@ function ManagerHistoryContent({ promise }: { promise: Promise<DataResult> }) {
         {[...m.seasons].reverse().map((s) => (
           <div
             key={s.year}
-            className={`bg-card rounded-lg p-3.5 grid grid-cols-[80px_1fr_auto] gap-3 items-center ${
+            className={`bg-card rounded-lg p-3.5 grid grid-cols-1 sm:grid-cols-[80px_1fr_auto] gap-3 items-start sm:items-center ${
               s.result === 'champion' ? 'border-2' : 'border border-border/50'
             }`}
             style={s.result === 'champion' ? { borderColor: m.color } : {}}
@@ -726,7 +726,7 @@ function ManagerHistoryContent({ promise }: { promise: Promise<DataResult> }) {
                 </div>
               </div>
             </div>
-            <div className="flex flex-col items-end gap-1.5">
+            <div className="flex sm:flex-col items-center sm:items-end gap-1.5 sm:gap-1.5">
               <div className="text-[20px] font-medium text-foreground">
                 {s.finish != null ? ordinal(s.finish) : '—'}
               </div>
@@ -770,7 +770,7 @@ function ManagerHistoryContent({ promise }: { promise: Promise<DataResult> }) {
               </Tooltip>
             </TooltipProvider>
           </div>
-          <div className="grid grid-cols-3 gap-3 mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
             {[
               ...best.map((r) => ({ r, type: 'best' as const })),
               ...worst.map((r) => ({ r, type: 'worst' as const })),

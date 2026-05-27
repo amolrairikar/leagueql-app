@@ -63,14 +63,14 @@ function getAlts(pick: DraftPickItem, allPicks: DraftPickItem[]): DraftPickItem[
 
 function DraftRecapSkeleton() {
   return (
-    <div className="p-6 max-w-250 mx-auto">
+    <div className="w-full max-w-250">
       <div className="flex items-center gap-2.5 mb-6">
         <Skeleton className="h-8 w-20" />
         <Skeleton className="h-8 w-24" />
         <Skeleton className="h-8 w-24 ml-2" />
         <Skeleton className="h-8 w-36" />
       </div>
-      <div className="grid grid-cols-4 gap-2.5 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-6">
         {Array.from({ length: 4 }).map((_, i) => (
           <Skeleton key={i} className="h-20 rounded-lg" />
         ))}
@@ -148,31 +148,35 @@ function DraftRecapContent({
   return (
     <TooltipProvider>
       {/* Filter Bar */}
-      <div className="flex items-center gap-2.5 mb-6 flex-wrap">
-        <span className="text-[12px] font-medium text-muted-foreground">Season</span>
-        <select
-          className="px-3 py-1.5 text-[13px] font-medium bg-card border border-border rounded-md text-foreground cursor-pointer"
-          value={selectedSeason}
-          onChange={(e) => onSeasonChange(e.target.value)}
-        >
-          {[...seasons].sort((a, b) => Number(b) - Number(a)).map((s) => (
-            <option key={s} value={s}>{s}</option>
-          ))}
-        </select>
-        <span className="text-[12px] font-medium text-muted-foreground ml-2">Manager</span>
-        <select
-          className="px-3 py-1.5 text-[13px] font-medium bg-card border border-border rounded-md text-foreground cursor-pointer"
-          value={selectedManager}
-          onChange={(e) => setSelectedManager(e.target.value)}
-        >
-          {managers.map((mgr) => (
-            <option key={mgr.id} value={mgr.id}>{mgr.username}</option>
-          ))}
-        </select>
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 mb-6">
+        <div className="flex items-center gap-2.5">
+          <span className="text-[12px] font-medium text-muted-foreground w-16 sm:w-auto">Season</span>
+          <select
+            className="px-3 py-1.5 text-[13px] font-medium bg-card border border-border rounded-md text-foreground cursor-pointer"
+            value={selectedSeason}
+            onChange={(e) => onSeasonChange(e.target.value)}
+          >
+            {[...seasons].sort((a, b) => Number(b) - Number(a)).map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+        </div>
+        <div className="flex items-center gap-2.5">
+          <span className="text-[12px] font-medium text-muted-foreground w-16 sm:w-auto sm:ml-2">Manager</span>
+          <select
+            className="px-3 py-1.5 text-[13px] font-medium bg-card border border-border rounded-md text-foreground cursor-pointer"
+            value={selectedManager}
+            onChange={(e) => setSelectedManager(e.target.value)}
+          >
+            {managers.map((mgr) => (
+              <option key={mgr.id} value={mgr.id}>{mgr.username}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* Stat Strip */}
-      <div className="grid grid-cols-4 gap-2.5 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-6">
         <div className="bg-card border border-border/50 rounded-lg p-3">
           <div className="text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground mb-1">
             <span className="inline-flex items-center gap-1">
@@ -251,15 +255,14 @@ function DraftRecapContent({
       </div>
 
       {/* Picks Table */}
-      <div className="bg-card border border-border/50 rounded-lg mb-6">
-        <div className="overflow-y-auto max-h-[calc(100vh-300px)]">
+      <div className="bg-card border border-border/50 rounded-lg mb-6 overflow-x-auto">
         <table className="w-full border-separate border-spacing-0 table-fixed text-[12px]">
           <thead className="sticky top-0 z-10">
             <tr>
-              <th className="text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground px-3 py-2.5 text-left bg-muted border-b border-border/50" style={{ width: '28px' }}>
+              <th className="text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground px-3 py-2.5 text-left bg-muted border-b border-border/50 sticky left-0 z-20" style={{ width: '28px' }}>
                 #
               </th>
-              <th className="text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground px-3 py-2.5 text-left bg-muted border-b border-border/50" style={{ width: '180px' }}>
+              <th className="text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground px-3 py-2.5 text-left bg-muted border-b border-border/50 sticky left-[28px] z-20" style={{ width: '180px' }}>
                 Player
               </th>
               <th className="text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground px-3 py-2.5 text-center bg-muted border-b border-border/50" style={{ width: '56px' }}>
@@ -296,10 +299,10 @@ function DraftRecapContent({
               return (
                 <React.Fragment key={pick.pick_id}>
                   <tr>
-                    <td className="border-b border-border/50">
+                    <td className="border-b border-border/50 sticky left-0 z-10 bg-card">
                       <div className="px-3 py-2.5 text-muted-foreground text-[11px]">{i + 1}</div>
                     </td>
-                    <td className="border-b border-border/50">
+                    <td className="border-b border-border/50 sticky left-[28px] z-10 bg-card">
                       <div className="px-3 py-2.5">
                         <div className="text-[13px] font-medium text-foreground flex items-center gap-1">
                           {pick.player_name}
@@ -420,7 +423,6 @@ function DraftRecapContent({
             })}
           </tbody>
         </table>
-        </div>
       </div>
     </TooltipProvider>
   );
@@ -448,15 +450,17 @@ export default function DraftRecap() {
   );
 
   return (
-    <div className="p-6 max-w-250 mx-auto">
-      <Suspense fallback={<DraftRecapSkeleton />}>
-        <DraftRecapContent
-          promise={draftPromise}
-          seasons={seasons}
-          selectedSeason={selectedSeason}
-          onSeasonChange={setSelectedSeason}
-        />
-      </Suspense>
+    <div className="flex flex-1 flex-col p-6 overflow-auto">
+      <div className="max-w-250 mx-auto w-full">
+        <Suspense fallback={<DraftRecapSkeleton />}>
+          <DraftRecapContent
+            promise={draftPromise}
+            seasons={seasons}
+            selectedSeason={selectedSeason}
+            onSeasonChange={setSelectedSeason}
+          />
+        </Suspense>
+      </div>
     </div>
   );
 }
