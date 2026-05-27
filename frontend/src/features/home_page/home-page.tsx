@@ -4,7 +4,6 @@ import { Suspense, use, useMemo, useState } from 'react';
 import { avatarColor } from '@/components/team-avatar';
 import {
   ChartContainer,
-  ChartLegend,
   ChartTooltip,
   ChartTooltipContent,
   type ChartConfig,
@@ -173,30 +172,6 @@ function StandingsChart({ promise }: { promise: Promise<{ standings: ManagerStan
                 />
               }
             />
-            <ChartLegend
-              content={() => (
-                <div className="flex flex-wrap gap-4">
-                  {owners.map((owner) => {
-                    const isSelected = selectedOwnerId === null || selectedOwnerId === owner.ownerId;
-                    const opacity = selectedOwnerId === null ? 1 : isSelected ? 1 : 0.4;
-                    return (
-                      <div
-                        key={owner.ownerId}
-                        className="flex items-center gap-2 cursor-pointer"
-                        onClick={() => setSelectedOwnerId(selectedOwnerId === owner.ownerId ? null : owner.ownerId)}
-                        style={{ opacity }}
-                      >
-                        <div
-                          className="w-3 h-3 rounded-sm"
-                          style={{ backgroundColor: colorMap.get(owner.ownerId) }}
-                        />
-                        <span className="text-[11px] text-foreground">{owner.username}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            />
             {owners.map((owner) => {
               const isSelected = selectedOwnerId === null || selectedOwnerId === owner.ownerId;
               const opacity = selectedOwnerId === null ? 1 : isSelected ? 1 : 0.2;
@@ -207,15 +182,35 @@ function StandingsChart({ promise }: { promise: Promise<{ standings: ManagerStan
                   stroke={colorMap.get(owner.ownerId)}
                   strokeWidth={2}
                   strokeOpacity={opacity}
-                  dot={{ fill: colorMap.get(owner.ownerId), r: 4 }}
-                  activeDot={{ r: 6 }}
-                  type="monotone"
+                  dot={false}
+                  activeDot={{ r: 4 }}
+                  type="linear"
                   connectNulls={false}
                 />
               );
             })}
           </LineChart>
         </ChartContainer>
+      </div>
+      <div className="flex flex-wrap gap-4 mt-3">
+        {owners.map((owner) => {
+          const isSelected = selectedOwnerId === null || selectedOwnerId === owner.ownerId;
+          const opacity = selectedOwnerId === null ? 1 : isSelected ? 1 : 0.4;
+          return (
+            <div
+              key={owner.ownerId}
+              className="flex items-center gap-2 cursor-pointer"
+              onClick={() => setSelectedOwnerId(selectedOwnerId === owner.ownerId ? null : owner.ownerId)}
+              style={{ opacity }}
+            >
+              <div
+                className="w-3 h-3 rounded-sm"
+                style={{ backgroundColor: colorMap.get(owner.ownerId) }}
+              />
+              <span className="text-[11px] text-foreground">{owner.username}</span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

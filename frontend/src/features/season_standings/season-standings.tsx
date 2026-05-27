@@ -5,7 +5,6 @@ import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
 import { avatarColor, TeamAvatar } from '@/components/team-avatar';
 import {
   ChartContainer,
-  ChartLegend,
   ChartTooltip,
   ChartTooltipContent,
   type ChartConfig,
@@ -83,65 +82,63 @@ function WinsProgressionChart({ promise }: { promise: Promise<WeeklyResult> }) {
   );
 
   return (
-    <ChartContainer config={chartConfig} className="h-80 w-full aspect-auto">
-      <LineChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 4 }}>
-        <CartesianGrid vertical={false} />
-        <XAxis
-          dataKey="week"
-          tickFormatter={(v: number) => `Wk ${v}`}
-          tickLine={false}
-          axisLine={false}
-          tickMargin={8}
-        />
-        <YAxis allowDecimals={false} tickLine={false} axisLine={false} width={28} />
-        <ChartTooltip
-          content={
-            <ChartTooltipContent
-              labelFormatter={(_val, payload) => `Week ${payload?.[0]?.payload?.week ?? ''}`}
-              indicator="line"
-            />
-          }
-        />
-        <ChartLegend
-          content={() => (
-            <div className="flex flex-wrap gap-4 pt-2">
-              {teams.map((team) => {
-                const isSelected = selectedTeamId === null || selectedTeamId === team.team_id;
-                return (
-                  <div
-                    key={team.team_id}
-                    className="flex items-center gap-2 cursor-pointer"
-                    onClick={() => setSelectedTeamId(selectedTeamId === team.team_id ? null : team.team_id)}
-                    style={{ opacity: isSelected ? 1 : 0.4 }}
-                  >
-                    <div
-                      className="w-3 h-3 rounded-sm"
-                      style={{ backgroundColor: colorMap.get(team.team_id) }}
-                    />
-                    <span className="text-[11px] text-foreground">{team.owner_username}</span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        />
+    <>
+      <ChartContainer config={chartConfig} className="h-80 w-full aspect-auto">
+        <LineChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 4 }}>
+          <CartesianGrid vertical={false} />
+          <XAxis
+            dataKey="week"
+            tickFormatter={(v: number) => `Wk ${v}`}
+            tickLine={false}
+            axisLine={false}
+            tickMargin={8}
+          />
+          <YAxis allowDecimals={false} tickLine={false} axisLine={false} width={28} />
+          <ChartTooltip
+            content={
+              <ChartTooltipContent
+                labelFormatter={(_val, payload) => `Week ${payload?.[0]?.payload?.week ?? ''}`}
+                indicator="line"
+              />
+            }
+          />
+          {teams.map((team) => {
+            const isSelected = selectedTeamId === null || selectedTeamId === team.team_id;
+            return (
+              <Line
+                key={team.team_id}
+                type="linear"
+                dataKey={team.team_id}
+                stroke={colorMap.get(team.team_id)}
+                strokeWidth={2}
+                strokeOpacity={selectedTeamId === null ? 1 : isSelected ? 1 : 0.2}
+                dot={false}
+                activeDot={{ r: 4 }}
+              />
+            );
+          })}
+        </LineChart>
+      </ChartContainer>
+      <div className="flex flex-wrap gap-4 mt-3">
         {teams.map((team) => {
           const isSelected = selectedTeamId === null || selectedTeamId === team.team_id;
           return (
-            <Line
+            <div
               key={team.team_id}
-              type="monotone"
-              dataKey={team.team_id}
-              stroke={colorMap.get(team.team_id)}
-              strokeWidth={2}
-              strokeOpacity={selectedTeamId === null ? 1 : isSelected ? 1 : 0.2}
-              dot={{ fill: colorMap.get(team.team_id), r: 4 }}
-              activeDot={{ r: 6 }}
-            />
+              className="flex items-center gap-2 cursor-pointer"
+              onClick={() => setSelectedTeamId(selectedTeamId === team.team_id ? null : team.team_id)}
+              style={{ opacity: isSelected ? 1 : 0.4 }}
+            >
+              <div
+                className="w-3 h-3 rounded-sm"
+                style={{ backgroundColor: colorMap.get(team.team_id) }}
+              />
+              <span className="text-[11px] text-foreground">{team.owner_username}</span>
+            </div>
           );
         })}
-      </LineChart>
-    </ChartContainer>
+      </div>
+    </>
   );
 }
 

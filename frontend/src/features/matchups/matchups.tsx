@@ -278,7 +278,7 @@ function SkeletonMatchupsContent() {
           <Skeleton key={i} className="h-7 w-13 rounded-md" />
         ))}
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {Array.from({ length: 4 }).map((_, i) => (
           <div
             key={i}
@@ -368,7 +368,7 @@ function MatchupsContent({
           No matchups found for week {activeWeek}.
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {currentMatchups.map((m, i) => (
             <MatchupCard
               key={i}
