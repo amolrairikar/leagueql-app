@@ -25,6 +25,11 @@ test.describe('Unauthenticated behavior', () => {
     await expect(page).not.toHaveURL('/');
   });
 
+  test('changelog page is accessible without authentication', async ({ page }) => {
+    await page.goto('/changelog');
+    await expect(page).not.toHaveURL('/');
+  });
+
   test('all protected routes redirect to landing page when unauthenticated', async ({ page }) => {
     for (const route of PROTECTED_ROUTES) {
       await page.goto(route);
