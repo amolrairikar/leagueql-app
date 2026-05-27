@@ -1,4 +1,4 @@
-import { Suspense, use, useEffect, useMemo, useState } from 'react';
+import { Fragment, Suspense, use, useEffect, useMemo, useState } from 'react';
 import { ChevronDown, Gem, Info, X } from 'lucide-react';
 
 import { Skeleton } from '@/components/ui/skeleton';
@@ -154,6 +154,11 @@ function DraftRecapContent({
     [picks, allPicks, maxRound, selectedManager, selectedSeason],
   );
 
+  const bustsWithAltsMap = useMemo(
+    () => new Map(bustsWithAlts.map((item) => [item.bustKey, item])),
+    [bustsWithAlts],
+  );
+
   if (!result.ok) {
     return (
       <p className="text-[13px] text-destructive text-center py-8">{result.error}</p>
@@ -307,9 +312,13 @@ function DraftRecapContent({
               const deltaStr = (delta >= 0 ? '+' : '') + delta;
               const dpillCls = delta >= DELTA_PILL_POS ? 'delta-pos' : delta <= DELTA_PILL_NEG ? 'delta-neg' : 'delta-neu';
               const isBust = delta <= BUST_DELTA_MAX && pick.round <= maxRound - BUST_ROUND_BUFFER && pick.round <= BUST_ROUND_MAX;
+              const bustKey = `${selectedManager}-${selectedSeason}-${i}`;
+              const bustData = bustsWithAltsMap.get(bustKey);
+              const isOpen = !!openBusts[bustKey];
 
               return (
-                <tr key={pick.pick_id}>
+                <Fragment key={pick.pick_id}>
+                <tr>
                     <td className="border-b border-border/50 sticky left-0 z-10 bg-card">
                       <div className="px-3 py-2.5 text-muted-foreground text-[11px]">{i + 1}</div>
                     </td>
@@ -375,6 +384,59 @@ function DraftRecapContent({
                       </div>
                     </td>
                 </tr>
+                {bustData && (
+                  <tr className="hidden sm:table-row">
+                    <td colSpan={8} className="border-b border-border/50 p-0">
+                      <div className="bg-muted/50 border-b border-border/50 px-3 py-2 flex items-center justify-between">
+                        <span className="text-[10px] font-medium uppercase tracking-[0.06em]" style={{ color: RED }}>
+                          Could have picked instead
+                        </span>
+                        <button
+                          className="bg-transparent border-none cursor-pointer text-[11px] text-muted-foreground p-0 flex items-center gap-1"
+                          onClick={() => toggleBust(bustKey)}
+                        >
+                          {isOpen ? 'Hide' : 'Show'} alternatives
+                          <ChevronDown
+                            className="w-2.5 h-2.5 transition-transform"
+                            style={{ transform: isOpen ? 'rotate(180deg)' : 'none' }}
+                          />
+                        </button>
+                      </div>
+                      {isOpen && (
+                        <div className="flex flex-col divide-y divide-border/50">
+                          {bustData.alts.map((alt) => {
+                            const altPm = posMeta[alt.position] ?? { bg: POSITION_COLORS.K.bg, tc: POSITION_COLORS.K.tc };
+                            const diff = (alt.total_points - pick.total_points).toFixed(2);
+                            const spotsLater = alt.overall_pick_number - pick.overall_pick_number;
+                            return (
+                              <div
+                                key={alt.pick_id}
+                                className="flex items-center gap-3 px-3 py-2.5 bg-muted/30"
+                              >
+                                <span
+                                  className="inline-flex px-1.5 py-0.5 rounded-full text-[10px] font-medium"
+                                  style={{ background: altPm.bg, color: altPm.tc }}
+                                >
+                                  {alt.position}
+                                </span>
+                                <span className="text-[12px] font-medium text-foreground flex-1">{alt.player_name}</span>
+                                <span className="text-[11px] text-muted-foreground">Picked {spotsLater} spots later</span>
+                                <span className="text-[13px] font-medium text-foreground">{alt.total_points.toFixed(2)} pts</span>
+                                <span
+                                  className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium whitespace-nowrap"
+                                  style={{ background: GREEN_BG, color: GREEN }}
+                                >
+                                  +{diff} more points
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               );
             })}
           </tbody>
@@ -383,7 +445,7 @@ function DraftRecapContent({
 
       {/* Bust Alternatives */}
       {bustsWithAlts.length > 0 && (
-        <div className="flex flex-col gap-2.5">
+        <div className="flex flex-col gap-2.5 sm:hidden">
           {bustsWithAlts.map(({ pick, alts, bustKey }) => {
             const isOpen = !!openBusts[bustKey];
             return (
