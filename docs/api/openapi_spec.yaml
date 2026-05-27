@@ -205,6 +205,116 @@ paths:
         uri: "arn:aws:apigateway:${aws_region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations"
         payloadFormatVersion: "2.0"   # use 2.0 for HTTP API (v2)
 
+  /leagues/{leagueId}/espn_members:
+    post:
+      summary: Fetch ESPN league members
+      description: >
+        Server-side proxy to the ESPN Fantasy API that returns the list of members
+        for a given ESPN league. Avoids browser CORS restrictions by making the
+        request from the Lambda function.
+      operationId: getEspnMembers
+      parameters:
+        - name: leagueId
+          in: path
+          required: true
+          description: The ID of the current (source) league
+          schema:
+            type: string
+            pattern: '^\d+$'
+            example: "12345678"
+        - name: platform
+          in: query
+          required: true
+          description: The current platform the league is on
+          schema:
+            type: string
+            enum: [ESPN, SLEEPER]
+            example: "SLEEPER"
+        - name: espnLeagueId
+          in: query
+          required: true
+          description: The ESPN league ID to fetch members from
+          schema:
+            type: string
+            example: "87654321"
+        - name: season
+          in: query
+          required: true
+          description: The ESPN season year
+          schema:
+            type: string
+            example: "2025"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EspnMembersRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/EspnMembersResponse"
+        "404":
+          $ref: "#/components/responses/LeagueNotFoundError"
+        "502":
+          $ref: "#/components/responses/BadGatewayError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      security:
+        - ClerkJWT: []
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        httpMethod: POST
+        uri: "arn:aws:apigateway:${aws_region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations"
+        payloadFormatVersion: "2.0"
+
+  /leagues/{leagueId}/migrate:
+    post:
+      summary: Migrate a league to a new platform
+      description: >
+        Migrates an onboarded league from its current platform to a new platform.
+        Writes the new platform lookup entry, records the manager mapping, and
+        updates the league metadata to reflect the new active platform.
+      operationId: migrateLeague
+      parameters:
+        - name: leagueId
+          in: path
+          required: true
+          description: The ID of the current (source) league
+          schema:
+            type: string
+            pattern: '^\d+$'
+            example: "12345678"
+        - name: platform
+          in: query
+          required: true
+          description: The current platform the league is on
+          schema:
+            type: string
+            enum: [ESPN, SLEEPER]
+            example: "SLEEPER"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MigrateRequest"
+      responses:
+        "202":
+          $ref: "#/components/responses/MigrateSuccessResponse"
+        "404":
+          $ref: "#/components/responses/LeagueNotFoundError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      security:
+        - ClerkJWT: []
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        httpMethod: POST
+        uri: "arn:aws:apigateway:${aws_region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations"
+        payloadFormatVersion: "2.0"
+
   /leagues/{leagueId}/refresh_status:
     get:
       summary: Check onboarding/refresh status for a league
@@ -330,6 +440,61 @@ components:
             never logged or stored in our database.
           example: "{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}"
 
+    EspnMembersRequest:
+      type: object
+      required: [swid, s2]
+      properties:
+        swid:
+          type: string
+          description: ESPN SWID cookie value
+          example: "{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}"
+        s2:
+          type: string
+          description: ESPN espn_s2 cookie value
+          example: "AEBxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+    ManagerMappingEntry:
+      type: object
+      required: [currentPlatformOwnerId, newPlatformOwnerId, displayName]
+      properties:
+        currentPlatformOwnerId:
+          type: string
+          example: "{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}"
+        newPlatformOwnerId:
+          type: string
+          example: "987654321"
+        displayName:
+          type: string
+          example: "John Doe"
+
+    MigrateRequest:
+      type: object
+      required: [newPlatformLeagueId, newPlatform, managerMapping]
+      properties:
+        newPlatformLeagueId:
+          type: string
+          description: The league ID on the destination platform
+          example: "87654321"
+        newPlatform:
+          type: string
+          enum: [ESPN, SLEEPER]
+          description: The destination platform
+          example: "ESPN"
+        season:
+          type: string
+          description: Latest season (required for ESPN destination)
+          example: "2025"
+        s2:
+          type: string
+          description: ESPN espn_s2 cookie value (required for ESPN destination)
+        swid:
+          type: string
+          description: ESPN SWID cookie value (required for ESPN destination)
+        managerMapping:
+          type: array
+          items:
+            $ref: "#/components/schemas/ManagerMappingEntry"
+
     QueryResponse:
       type: object
       required: [data]
@@ -432,6 +597,51 @@ components:
               refresh_operation: "ONBOARD"
               refresh_status: "IN_PROGRESS"
 
+    EspnMembersResponse:
+      description: ESPN league members returned successfully
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: "#/components/schemas/APIResponse"
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      required: [owner_id, display_name]
+                      properties:
+                        owner_id:
+                          type: string
+                        display_name:
+                          type: string
+          example:
+            detail: "Found ESPN members"
+            data:
+              - owner_id: "{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}"
+                display_name: "John Doe"
+
+    MigrateSuccessResponse:
+      description: Migration successfully initiated
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: "#/components/schemas/APIResponse"
+              - type: object
+                properties:
+                  data:
+                    type: object
+                    required: [correlation_id]
+                    properties:
+                      correlation_id:
+                        type: string
+          example:
+            detail: "Migration initiated"
+            data:
+              correlation_id: "550e8400-e29b-41d4-a716-446655440000"
+
     # ── Error responses ────────────────────────────────────
 
     BadRequestError:
@@ -463,6 +673,26 @@ components:
           example:
             error: "Unprocessable entity"
             message: "platform must be one of: ESPN, SLEEPER"
+
+    ConflictError:
+      description: Conflict — operation already in progress or league already onboarded
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error: "Conflict"
+            message: "An operation is already in progress for this league"
+
+    BadGatewayError:
+      description: Upstream ESPN API request failed
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error: "Bad gateway"
+            message: "Failed to fetch ESPN league members"
 
     InternalError:
       description: Unexpected server error

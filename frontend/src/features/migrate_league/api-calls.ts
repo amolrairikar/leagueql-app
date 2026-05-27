@@ -50,12 +50,13 @@ export function getTeams(
 
 export function getEspnMembers(
   leagueId: string,
+  platform: Platform,
   espnLeagueId: string,
   season: string,
   swid: string,
   s2: string,
 ): Promise<{ data: EspnMemberEntry[] }> {
-  const params = new URLSearchParams({ espnLeagueId, season });
+  const params = new URLSearchParams({ platform, espnLeagueId, season });
   return apiClient.post<{ data: EspnMemberEntry[] }>(
     `/leagues/${leagueId}/espn_members?${params}`,
     { swid, s2 },
