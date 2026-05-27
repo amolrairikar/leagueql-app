@@ -11,6 +11,7 @@ repos:
     rev: v6.0.0
     hooks:
       - id: check-added-large-files
+        args: [--maxkb=2000]
       - id: check-toml
       - id: check-yaml
       - id: detect-aws-credentials

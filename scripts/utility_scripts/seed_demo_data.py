@@ -1,22 +1,25 @@
 """
 seed_demo_data.py
 
-Populate DynamoDB with 3 seasons of demo ESPN fantasy football data
-for the LeagueQL app.
+Generates frontend/src/lib/demo-data.json — the static demo dataset
+served by the LeagueQL frontend when running in demo mode.
+
+The data is produced deterministically (seed=42), so re-running this
+script always yields the same output.
 
 Usage:
-    pipenv run python scripts/utility_scripts/seed_demo_data.py --env dev --dry-run
-    pipenv run python scripts/utility_scripts/seed_demo_data.py --env prod
-    pipenv run python scripts/utility_scripts/seed_demo_data.py --env dev --delete
+    pipenv run python scripts/utility_scripts/seed_demo_data.py
+    pipenv run python scripts/utility_scripts/seed_demo_data.py --dry-run
+    pipenv run python scripts/utility_scripts/seed_demo_data.py --out path/to/output.json
 """
 
 import argparse
+import json
 import logging
+import pathlib
 import random
 from decimal import Decimal
 from typing import Any
-
-import boto3
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -37,10 +40,8 @@ N_PLAYOFF_TEAMS = 4
 N_BYE_TEAMS = 0
 DRAFT_ROUNDS = 14
 
-TABLE_NAMES = {
-    "dev": "leagueql-table-dev",
-    "prod": "leagueql-table-prod",
-}
+_REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent.parent
+DEFAULT_OUT = _REPO_ROOT / "frontend" / "src" / "lib" / "demo-data.json"
 
 logging.basicConfig(
     level=logging.INFO,
@@ -1178,109 +1179,62 @@ def build_all_items() -> list[dict]:
     return items
 
 
-def write_items(table: Any, items: list[dict], dry_run: bool) -> None:
-    if dry_run:
-        logger.info("DRY RUN — %d items would be written:", len(items))
-        for item in items:
-            sk = item.get("SK", "?")
-            data_len = len(item.get("data", []))
-            if data_len:
-                logger.info("  %s  (data rows: %d)", sk, data_len)
-            else:
-                logger.info("  %s", sk)
-        return
+class _JsonEncoder(json.JSONEncoder):
+    """Converts Decimal → float and set → sorted list for JSON serialisation."""
 
-    logger.info("Writing %d items to DynamoDB...", len(items))
-    with table.batch_writer() as batch:
-        for item in items:
-            batch.put_item(Item=item)
-    logger.info("Done.")
+    def default(self, obj: Any) -> Any:
+        if isinstance(obj, Decimal):
+            return float(obj)
+        if isinstance(obj, set):
+            return sorted(obj)
+        return super().default(obj)
 
 
-def delete_demo_data(table: Any, dry_run: bool) -> None:
-    """Delete all demo data from DynamoDB."""
-    pk = f"LEAGUE#{DEMO_CANONICAL_ID}"
-    lookup_espn_pk = f"LEAGUE#{DEMO_LEAGUE_ID}#PLATFORM#{PLATFORM}"
-    lookup_sleeper_pk = f"LEAGUE#{DEMO_SLEEPER_LEAGUE_ID}#PLATFORM#{SLEEPER_PLATFORM}"
-
-    if dry_run:
-        logger.info("DRY RUN — Would delete all items with PK: %s", pk)
-        logger.info(
-            "DRY RUN — Would delete ESPN LEAGUE_LOOKUP with PK: %s", lookup_espn_pk
-        )
-        logger.info(
-            "DRY RUN — Would delete Sleeper LEAGUE_LOOKUP with PK: %s",
-            lookup_sleeper_pk,
-        )
-        return
-
-    logger.info("Deleting demo data with PK: %s", pk)
-
-    # Query all items with the demo league PK
-    response = table.query(
-        KeyConditionExpression=boto3.dynamodb.conditions.Key("PK").eq(pk)
-    )
-    items = response.get("Items", [])
-
-    # Handle pagination if there are more items
-    while "LastEvaluatedKey" in response:
-        response = table.query(
-            KeyConditionExpression=boto3.dynamodb.conditions.Key("PK").eq(pk),
-            ExclusiveStartKey=response["LastEvaluatedKey"],
-        )
-        items.extend(response.get("Items", []))
-
-    logger.info("Found %d items to delete", len(items))
-
-    # Delete all items with batch writer
-    with table.batch_writer() as batch:
-        for item in items:
-            batch.delete_item(Key={"PK": item["PK"], "SK": item["SK"]})
-
-    # Delete both LEAGUE_LOOKUP items
-    logger.info("Deleting ESPN LEAGUE_LOOKUP item...")
-    table.delete_item(Key={"PK": lookup_espn_pk, "SK": "LEAGUE_LOOKUP"})
-    logger.info("Deleting Sleeper LEAGUE_LOOKUP item...")
-    table.delete_item(Key={"PK": lookup_sleeper_pk, "SK": "LEAGUE_LOOKUP"})
-
-    logger.info("Deleted %d demo data items.", len(items))
+def build_demo_json() -> dict:
+    """Return the full demo dataset as a JSON-serialisable dict."""
+    items = build_all_items()
+    by_sk = {
+        item["SK"]: json.loads(json.dumps(item.get("data", []), cls=_JsonEncoder))
+        for item in items
+        if item.get("data")
+    }
+    return {"league_name": DEMO_LEAGUE_NAME, "data": by_sk}
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Seed or delete LeagueQL demo data in DynamoDB."
+        description="Generate frontend/src/lib/demo-data.json from the demo seed data."
     )
     parser.add_argument(
-        "--env", choices=["dev", "prod"], required=True, help="Target environment"
+        "--out",
+        type=pathlib.Path,
+        default=DEFAULT_OUT,
+        help=f"Output path (default: {DEFAULT_OUT})",
     )
-    parser.add_argument("--region", default="us-east-1")
     parser.add_argument(
-        "--dry-run", action="store_true", help="Print items without writing to DynamoDB"
-    )
-    parser.add_argument(
-        "--delete", action="store_true", help="Delete demo data instead of seeding"
+        "--dry-run",
+        action="store_true",
+        help="Print a summary without writing the file.",
     )
     args = parser.parse_args()
 
-    table_name = TABLE_NAMES[args.env]
-    logger.info("Target table: %s", table_name)
-
-    if args.delete:
-        dynamodb = boto3.resource("dynamodb", region_name=args.region)
-        table = dynamodb.Table(table_name)
-        delete_demo_data(table, dry_run=args.dry_run)
-        return
-
-    items = build_all_items()
-    logger.info("Generated %d total DynamoDB items.", len(items))
+    payload = build_demo_json()
+    total_rows = sum(len(v) for v in payload["data"].values())
+    logger.info(
+        "Generated %d SK buckets, %d total rows.", len(payload["data"]), total_rows
+    )
 
     if args.dry_run:
-        write_items(None, items, dry_run=True)
+        for sk, rows in sorted(payload["data"].items()):
+            logger.info("  %-45s  %d rows", sk, len(rows))
+        logger.info("DRY RUN — file not written.")
         return
 
-    dynamodb = boto3.resource("dynamodb", region_name=args.region)
-    table = dynamodb.Table(table_name)
-    write_items(table, items, dry_run=False)
+    out: pathlib.Path = args.out
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with out.open("w", encoding="utf-8") as f:
+        json.dump(payload, f, separators=(",", ":"))
+    logger.info("Written to %s (%d bytes).", out, out.stat().st_size)
 
 
 if __name__ == "__main__":

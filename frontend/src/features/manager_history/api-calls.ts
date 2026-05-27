@@ -1,4 +1,6 @@
 import { apiClient } from '@/lib/api-client';
+import { isDemoMode } from '@/lib/cookie-handler';
+import { queryDemoLeague } from '@/lib/demo-api';
 import type { Platform, MatchupItem } from '@/components/api/types';
 
 export type { MatchupItem };
@@ -36,6 +38,20 @@ export async function getManagerHistoryData(
   matchups: MatchupItem[];
   migrationMapping: Map<string, string>;
 }> {
+  if (isDemoMode()) {
+    const [standingsRes, matchupRes, migrationRes] = await Promise.all([
+      queryDemoLeague<ManagerStandingsItem>('SEASON_STANDINGS#'),
+      queryDemoLeague<MatchupItem>('MATCHUPS#'),
+      queryDemoLeague<PlatformMigrationEntry>('PLATFORM_MIGRATION'),
+    ]);
+    const migrationMapping = new Map<string, string>(
+      migrationRes.data.map((e) => [e.current_platform_owner_id, e.new_platform_owner_id]),
+    );
+    const standings = standingsRes.data.filter((s) => seasons.includes(s.season));
+    const matchups = matchupRes.data.filter((m) => seasons.includes(m.season));
+    return { standings, matchups, migrationMapping };
+  }
+
   const [standingsResult, matchupResult, migrationResult] = await Promise.all([
     apiClient
       .get<{ data: ManagerStandingsItem[] }>(
