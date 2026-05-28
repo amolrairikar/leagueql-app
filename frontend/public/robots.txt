@@ -1,0 +1,15 @@
+User-agent: *
+Allow: /
+Disallow: /home
+Disallow: /standings
+Disallow: /matchups
+Disallow: /manager_comparison
+Disallow: /playoff_bracket
+Disallow: /manager_history
+Disallow: /player_records
+Disallow: /matchup_records
+Disallow: /draft_recap
+Disallow: /connect_league
+Disallow: /migrate_league
+
+Sitemap: https://leagueql.com/sitemap.xml
