@@ -2,6 +2,7 @@ import { useUser } from '@clerk/react';
 import { BrowserRouter, Routes, Route, Navigate, Link } from 'react-router-dom';
 
 import { ErrorBoundary } from '@/components/error-boundary';
+import Footer from '@/components/footer';
 import Header from '@/components/header';
 import { NavLink } from '@/components/nav-link';
 import { Spinner } from '@/components/spinner';
@@ -62,6 +63,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
             </div>
           </header>
           <ErrorBoundary>{children}</ErrorBoundary>
+          <Footer />
         </SidebarInset>
       </SidebarProvider>
     </TooltipProvider>
@@ -100,6 +102,7 @@ function App() {
             <ProtectedRoute>
               <Header />
               <div className="pt-1"><LeagueConnect /></div>
+              <Footer />
             </ProtectedRoute>
           }
         />
@@ -109,6 +112,7 @@ function App() {
             <ProtectedRoute>
               <Header />
               <div className="pt-1"><MigrateLeague /></div>
+              <Footer />
             </ProtectedRoute>
           }
         />
@@ -123,8 +127,8 @@ function App() {
             }
           />
         ))}
-        <Route path="/privacy" element={<><Header /><PrivacyPage /></>} />
-        <Route path="/changelog" element={<><Header /><ChangelogPage /></>} />
+        <Route path="/privacy" element={<><Header /><PrivacyPage /><Footer /></>} />
+        <Route path="/changelog" element={<><Header /><ChangelogPage /><Footer /></>} />
       </Routes>
     </BrowserRouter>
     </ErrorBoundary>

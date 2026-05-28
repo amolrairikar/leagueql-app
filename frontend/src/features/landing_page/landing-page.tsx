@@ -16,10 +16,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { AboutDialog } from '@/features/about/about-dialog';
+import Footer from '@/components/footer';
 import { onboardLeague } from '@/features/connect_league/api-calls';
 import { pollForCompletion } from '@/features/connect_league/league-connect';
-import { FEATURES, FOOTER_LINKS } from '@/features/landing_page/constants';
+import { FEATURES } from '@/features/landing_page/constants';
 import type { Feature } from '@/features/landing_page/types';
 import { ApiError, clearApiError } from '@/lib/api-client';
 import { setDemoMode, setLeagueCookies } from '@/lib/cookie-handler';
@@ -78,7 +78,6 @@ export default function LeagueQLLanding() {
   const { isSignedIn } = useUser();
   const navigate = useNavigate();
   const [authOpen, setAuthOpen] = useState(false);
-  const [aboutOpen, setAboutOpen] = useState(false);
   const [showConnectForm, setShowConnectForm] = useState(false);
   const [platform, setPlatform] = useState<'ESPN' | 'SLEEPER'>('ESPN');
   const [leagueId, setLeagueId] = useState('');
@@ -135,16 +134,6 @@ export default function LeagueQLLanding() {
   function handleViewDemo() {
     setDemoMode(DEMO_SEASONS);
     void navigate('/home');
-  }
-
-  function handleFooterLinkClick(link: string) {
-    if (link === 'About') {
-      setAboutOpen(true);
-    } else if (link === 'Privacy') {
-      void navigate('/privacy');
-    } else if (link === 'GitHub') {
-      window.open('https://github.com/amolrairikar/leagueql-app', '_blank');
-    }
   }
 
   async function handleConnectSubmit(e: React.FormEvent) {
@@ -334,8 +323,6 @@ export default function LeagueQLLanding() {
         </DialogContent>
       </Dialog>
 
-      <AboutDialog open={aboutOpen} onOpenChange={setAboutOpen} />
-
       <section className="relative z-10 px-6 pb-24">
         <div
           className="
@@ -351,30 +338,7 @@ export default function LeagueQLLanding() {
         </div>
       </section>
 
-      <footer
-        className="
-        relative z-10 border-t border-border
-        px-8 py-8 flex items-center justify-center
-        "
-      >
-        <div className="flex gap-6">
-          {FOOTER_LINKS.map((l: string) => (
-            <button
-              key={l}
-              type="button"
-              onClick={() => handleFooterLinkClick(l)}
-              className="
-                text-[0.72rem] tracking-wide text-muted-foreground
-                hover:text-foreground no-underline transition-colors duration-200
-                bg-transparent border-none cursor-pointer p-0
-              "
-            >
-              {l}
-            </button>
-          ))}
-        </div>
-
-      </footer>
+      <Footer />
 
       <style>{`
         @keyframes fadeUp {
