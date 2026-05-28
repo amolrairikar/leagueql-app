@@ -397,7 +397,6 @@ function ManagerBoxScoreView({
       <BoxScoreCard
         left={leftSide}
         right={rightSide}
-        subtitle={`${game.season} — ${game.week} · Final`}
         platform={platform}
         season={game.season}
         onClose={onClose}

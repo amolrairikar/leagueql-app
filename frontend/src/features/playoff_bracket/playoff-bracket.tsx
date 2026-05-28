@@ -551,7 +551,6 @@ export default function PlayoffBracket() {
                     : selectedMatchupData.team_b_bench,
                   isWinner: selectedMatch.winner === selectedMatch.team_2_id,
                 }}
-                subtitle={`${selectedMatch.season} · Final`}
                 platform={platform}
                 season={selectedMatch.season}
                 onClose={() => setSelectedMatchId(null)}

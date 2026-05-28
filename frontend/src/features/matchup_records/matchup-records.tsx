@@ -396,7 +396,6 @@ function BoxScoreView({
       <BoxScoreCard
         left={left}
         right={right}
-        subtitle={`Week ${matchup.week} · Final`}
         platform={platform}
         season={matchup.season}
         onClose={onClose}
