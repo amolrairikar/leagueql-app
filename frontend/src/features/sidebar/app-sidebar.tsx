@@ -3,6 +3,7 @@ import {
   ArrowLeftRight,
   History,
   Home,
+  Lightbulb,
   LogIn,
   LogOut,
   RefreshCw,
@@ -184,6 +185,18 @@ export function AppSidebar() {
                         <Search />
                         <span>View Another League</span>
                       </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      asChild
+                      tooltip="Request a Feature"
+                      className="cursor-pointer"
+                    >
+                      <a href="https://leagueql.supahub.com/en/b/feature-requests" target="_blank" rel="noopener noreferrer">
+                        <Lightbulb />
+                        <span>Request a Feature</span>
+                      </a>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                   <SidebarMenuItem>

@@ -171,7 +171,7 @@ export default function LeagueQLLanding() {
               void navigate('/home');
             } else {
               setError(
-                'League onboarding failed. Please try again or contact support.',
+                'League onboarding failed. Please try again or contact support if the error persists.',
               );
             }
           } catch {
