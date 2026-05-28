@@ -5,7 +5,7 @@ import requests
 
 from onboarding_service import OnboardingService
 from sleeper_client import resolve_sleeper_canonical_league_id
-from utils import correlation_id_var, logger
+from utils import correlation_id_var, logger, publish_failure
 
 
 def lambda_handler(event, context) -> dict[str, str | int]:
@@ -63,6 +63,7 @@ def lambda_handler(event, context) -> dict[str, str | int]:
             )
         except requests.exceptions.HTTPError as e:
             logger.error("HTTP error resolving Sleeper canonical league ID: %s", e)
+            publish_failure(str(e))
             return {
                 "statusCode": 502,
                 "body": json.dumps(
@@ -76,6 +77,7 @@ def lambda_handler(event, context) -> dict[str, str | int]:
             logger.error(
                 "Unexpected error resolving Sleeper canonical league ID: %s", e
             )
+            publish_failure(str(e))
             return {
                 "statusCode": 500,
                 "body": json.dumps(
@@ -136,6 +138,7 @@ def lambda_handler(event, context) -> dict[str, str | int]:
             "Request error occurred fetching data while initializing onboarding service: %s",
             e,
         )
+        publish_failure(str(e))
         return {
             "statusCode": 502,
             "body": json.dumps(
@@ -149,6 +152,7 @@ def lambda_handler(event, context) -> dict[str, str | int]:
         logger.error(
             "Runtime error occurred while initializing onboarding service: %s", e
         )
+        publish_failure(str(e))
         return {
             "statusCode": 502,
             "body": json.dumps(
@@ -167,6 +171,7 @@ def lambda_handler(event, context) -> dict[str, str | int]:
         onboarding_service.run()
     except KeyError as e:
         logger.error("Missing required environment variable: %s", e)
+        publish_failure(str(e))
         return {
             "statusCode": 500,
             "body": json.dumps(
@@ -178,6 +183,7 @@ def lambda_handler(event, context) -> dict[str, str | int]:
         }
     except RuntimeError as e:
         logger.error("Runtime error occurred while running onboarding service: %s", e)
+        publish_failure(str(e))
         return {
             "statusCode": 502,
             "body": json.dumps(
@@ -191,6 +197,7 @@ def lambda_handler(event, context) -> dict[str, str | int]:
         logger.error(
             "Unexpected error occurred while running onboarding service: %s", e
         )
+        publish_failure(str(e))
         return {
             "statusCode": 500,
             "body": json.dumps(

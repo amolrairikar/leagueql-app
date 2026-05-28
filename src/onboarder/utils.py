@@ -1,11 +1,13 @@
 import asyncio
 import json
 import logging
+import os
 import time
 from contextvars import ContextVar
 from typing import Any, Sequence
 
 import aiohttp
+import boto3
 
 V2_CUTOFF = 2018
 EXTENDED_SEASON_CUTOFF = 2021
@@ -53,6 +55,22 @@ def setup_logger() -> logging.Logger:
 
 
 logger = setup_logger()
+
+_sns_topic_arn = os.environ.get("SNS_TOPIC_ARN")
+_sns_client = boto3.client("sns") if _sns_topic_arn else None
+
+
+def publish_failure(error_message: str) -> None:
+    if not _sns_client:
+        return
+    try:
+        _sns_client.publish(
+            TopicArn=_sns_topic_arn,
+            Subject="LeagueQL Onboarder Failure",
+            Message=f"Correlation ID: {correlation_id_var.get()}\nError: {error_message}",
+        )
+    except Exception:
+        logger.warning("Failed to publish SNS failure notification", exc_info=True)
 
 
 async def fetch_with_retry(

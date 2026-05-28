@@ -20,7 +20,7 @@ def _load_module(unique_name: str, path: Path) -> object:
 @pytest.fixture(scope="session", autouse=True)
 def _bootstrap_processor():
     """Load processor modules into sys.modules with unique names."""
-    saved = {n: sys.modules.get(n) for n in ["logging_utils", "queries", "handler"]}
+    saved = {n: sys.modules.get(n) for n in ["utils", "queries", "handler"]}
     env = {"DYNAMODB_TABLE_NAME": "test-table"}
 
     _nr_mock = MagicMock()
@@ -37,10 +37,8 @@ def _bootstrap_processor():
             mock_client.return_value = MagicMock()
             mock_resource.return_value.Table.return_value = MagicMock()
 
-            logging_utils_mod = _load_module(
-                "processor.logging_utils", _SRC / "logging_utils.py"
-            )
-            sys.modules["logging_utils"] = logging_utils_mod
+            utils_mod = _load_module("processor.utils", _SRC / "utils.py")
+            sys.modules["utils"] = utils_mod
 
             queries_mod = _load_module("processor.queries", _SRC / "queries.py")
             sys.modules["queries"] = queries_mod
