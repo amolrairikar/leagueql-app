@@ -34,7 +34,7 @@ type DraftResult =
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const STEAL_DELTA_MIN       = 5;   // draft_rank_delta >= this → steal
-const BUST_DELTA_MAX        = -10; // draft_rank_delta <= this → potential bust
+const BUST_DELTA_MAX        = -5;  // draft_rank_delta <= this → potential bust
 const BUST_ROUND_BUFFER     = 4;   // bust only when picked more than this many rounds before the last
 const BUST_ROUND_MAX        = 10;  // only flag busts / show alternatives for rounds 1–10
 const ALT_PICK_ROUND_WINDOW = 2;   // suggest alternatives within this many rounds of the pick
@@ -123,17 +123,19 @@ function DraftRecapContent({
     [allPicks, selectedManager],
   );
 
-  const bestPick = picks.length
-    ? picks.reduce((best, p) =>
-        p.draft_rank_delta > best.draft_rank_delta ? p : best,
-      )
+  const scorablePicks = picks.filter((p) => p.position !== 'K' && p.position !== 'D/ST');
+
+  const bestPick = scorablePicks.length
+    ? scorablePicks.reduce((best, p) => p.draft_rank_delta > best.draft_rank_delta ? p : best)
+    : null;
+
+  const worstPick = scorablePicks.length
+    ? scorablePicks.reduce((worst, p) => p.draft_rank_delta < worst.draft_rank_delta ? p : worst)
     : null;
 
   const maxRound = allPicks.length ? Math.max(...allPicks.map((p) => p.round)) : 0;
   const busts = picks.filter((p) => p.draft_rank_delta <= BUST_DELTA_MAX && p.round <= maxRound - BUST_ROUND_BUFFER && p.round <= BUST_ROUND_MAX).length;
   const steals = picks.filter((p) => p.draft_rank_delta >= STEAL_DELTA_MIN).length;
-
-  const totalVorp = picks.reduce((sum, p) => sum + (p.vorp ?? 0), 0);
 
   const toggleBust = (key: string) => {
     setOpenBusts((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -206,7 +208,7 @@ function DraftRecapContent({
                   <Info className="w-3 h-3 cursor-default" />
                 </TooltipTrigger>
                 <TooltipContent side="top">
-                  The player who most outperformed their drafted position rank — the pick with the highest rank delta.
+                  The player who most outperformed their drafted position rank — the pick with the highest rank delta. K and D/ST are excluded.
                 </TooltipContent>
               </Tooltip>
             </span>
@@ -221,19 +223,22 @@ function DraftRecapContent({
         <div className="bg-card border border-border/50 rounded-lg p-3">
           <div className="text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground mb-1">
             <span className="inline-flex items-center gap-1">
-              Total VORP
+              Worst pick
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Info className="w-3 h-3 cursor-default" />
                 </TooltipTrigger>
                 <TooltipContent side="top">
-                  Value Over Replacement Player — how many more points this player scored compared to a league-average player at the same position. Not calculated for K and D/ST, as these positions are typically streamed.
+                  The player who most underperformed their drafted position rank — the pick with the lowest rank delta. K and D/ST are excluded.
                 </TooltipContent>
               </Tooltip>
             </span>
           </div>
           <div className="text-[22px] font-medium text-foreground">
-            {picks.length ? totalVorp.toFixed(1) : '—'}
+            {worstPick ? worstPick.player_name : '—'}
+          </div>
+          <div className="text-[11px] text-muted-foreground mt-0.5">
+            {worstPick ? `Rd ${worstPick.round}, Pick ${worstPick.overall_pick_number}` : ''}
           </div>
         </div>
         <div className="bg-card border border-border/50 rounded-lg p-3">
@@ -263,7 +268,7 @@ function DraftRecapContent({
                   <Info className="w-3 h-3 cursor-default" />
                 </TooltipTrigger>
                 <TooltipContent side="top">
-                  A bust is a player whose actual finish at their position was 10 or more spots worse than where they were drafted. Only picks from rounds 1–10 are considered.
+                  A bust is a player whose actual finish at their position was 5 or more spots worse than where they were drafted. Only picks from rounds 1–10 are considered.
                 </TooltipContent>
               </Tooltip>
             </span>
