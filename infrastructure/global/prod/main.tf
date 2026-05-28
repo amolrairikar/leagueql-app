@@ -235,6 +235,16 @@ module "onboarding-lambda-role" {
         Resource = [
           module.dynamodb.primary_table_arn
         ]
+      },
+      {
+        Sid    = "PublishSNSFailureAlerts"
+        Effect = "Allow"
+        Action = [
+          "sns:Publish"
+        ]
+        Resource = [
+          "arn:aws:sns:us-east-1:${var.account_id}:leagueql-lambda-alerts-${var.environment}-east"
+        ]
       }
     ]
   })
@@ -340,6 +350,16 @@ module "processing-lambda-role" {
         ]
         Resource = [
           "${local.primary_bucket_arn}/player-stats/*"
+        ]
+      },
+      {
+        Sid    = "PublishSNSFailureAlerts"
+        Effect = "Allow"
+        Action = [
+          "sns:Publish"
+        ]
+        Resource = [
+          "arn:aws:sns:us-east-1:${var.account_id}:leagueql-lambda-alerts-${var.environment}-east"
         ]
       }
     ]

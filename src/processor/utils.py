@@ -1,7 +1,10 @@
 import json
 import logging
+import os
 import time
 from contextvars import ContextVar
+
+import boto3
 
 correlation_id_var: ContextVar[str] = ContextVar("correlation_id", default="")
 
@@ -45,3 +48,19 @@ def setup_logger() -> logging.Logger:
 
 
 logger = setup_logger()
+
+_sns_topic_arn = os.environ.get("SNS_TOPIC_ARN")
+_sns_client = boto3.client("sns") if _sns_topic_arn else None
+
+
+def publish_failure(error_message: str) -> None:
+    if not _sns_client:
+        return
+    try:
+        _sns_client.publish(
+            TopicArn=_sns_topic_arn,
+            Subject="LeagueQL Processor Failure",
+            Message=f"Correlation ID: {correlation_id_var.get()}\nError: {error_message}",
+        )
+    except Exception:
+        logger.warning("Failed to publish SNS failure notification", exc_info=True)

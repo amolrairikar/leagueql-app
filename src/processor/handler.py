@@ -13,7 +13,7 @@ import botocore.config
 import botocore.exceptions
 import duckdb
 import pandas as pd
-from logging_utils import correlation_id_var, logger
+from utils import correlation_id_var, logger, publish_failure
 from queries import QUERIES
 
 _retry_config = botocore.config.Config(retries={"mode": "standard"})
@@ -954,6 +954,14 @@ def lambda_handler(event, context) -> None:
     logger.info("Event data: %s", event)
     logger.info("Context data: %s", context)
 
+    try:
+        _lambda_handler_impl(event, context)
+    except Exception as e:
+        publish_failure(str(e))
+        raise
+
+
+def _lambda_handler_impl(event, context) -> None:
     try:
         record = event["Records"][0]
         put_request_principal = record["userIdentity"]["principalId"].split(":")[-1]
