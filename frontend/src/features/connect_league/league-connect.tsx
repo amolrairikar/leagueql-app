@@ -52,7 +52,6 @@ const ONBOARD_RETRY_DELAY_MS = 2000;
 const POLL_INITIAL_DELAY_MS = 5000;
 const POLL_INTERVAL_MS = 1000;
 const POLL_TIMEOUT_MS = 45000;
-const POLL_ERROR_RESET_DELAY_MS = 10000;
 
 export async function pollForCompletion(
   leagueId: string,
@@ -205,8 +204,6 @@ export default function LeagueConnect() {
       const leagueData = await getLeague(data.leagueId, apiPlatform);
       setLeagueCookies(data.leagueId, apiPlatform, leagueData.data.seasons);
       void navigate('/home');
-    } else {
-      setTimeout(() => setPollStatus('idle'), POLL_ERROR_RESET_DELAY_MS);
     }
   };
 
