@@ -142,6 +142,8 @@ export default function LeagueQLLanding() {
       setAboutOpen(true);
     } else if (link === 'Privacy') {
       void navigate('/privacy');
+    } else if (link === 'GitHub') {
+      window.open('https://github.com/amolrairikar/leagueql-app', '_blank');
     }
   }
 
@@ -352,16 +354,9 @@ export default function LeagueQLLanding() {
       <footer
         className="
         relative z-10 border-t border-border
-        px-8 py-8 flex flex-wrap items-center justify-between gap-4
+        px-8 py-8 flex items-center justify-center
         "
       >
-        <a
-          href="#"
-          className="text-muted-foreground no-underline font-heading text-lg"
-        >
-          LeagueQL
-        </a>
-
         <div className="flex gap-6">
           {FOOTER_LINKS.map((l: string) => (
             <button
@@ -379,9 +374,6 @@ export default function LeagueQLLanding() {
           ))}
         </div>
 
-        <span className="text-[0.68rem] text-muted-foreground/50">
-          © 2026 Amol Rairikar
-        </span>
       </footer>
 
       <style>{`
