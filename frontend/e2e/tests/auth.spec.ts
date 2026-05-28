@@ -30,6 +30,12 @@ test.describe('Unauthenticated behavior', () => {
     await expect(page).not.toHaveURL('/');
   });
 
+  test('docs page is accessible without authentication', async ({ page }) => {
+    await page.goto('/docs');
+    await expect(page).not.toHaveURL('/');
+    await expect(page.getByRole('heading', { name: 'User Guide' })).toBeVisible();
+  });
+
   test('all protected routes redirect to landing page when unauthenticated', async ({ page }) => {
     for (const route of PROTECTED_ROUTES) {
       await page.goto(route);
