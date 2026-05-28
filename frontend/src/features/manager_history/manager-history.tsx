@@ -355,13 +355,15 @@ function SkeletonManagerHistory() {
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center gap-4 mb-6">
-        <Skeleton className="w-14 h-14 rounded-full shrink-0" />
-        <div className="flex-1 flex flex-col gap-1.5">
-          <Skeleton className="h-4 w-32" />
-          <Skeleton className="h-3 w-24" />
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-6">
+        <div className="flex items-center gap-4 sm:flex-1 order-2 sm:order-1">
+          <Skeleton className="w-14 h-14 rounded-full shrink-0" />
+          <div className="flex-1 flex flex-col gap-1.5">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-3 w-24" />
+          </div>
         </div>
-        <Skeleton className="h-9 w-36 rounded-md" />
+        <Skeleton className="h-9 w-full sm:w-36 rounded-md order-1 sm:order-2" />
       </div>
 
       {/* Stat cards */}
@@ -510,24 +512,26 @@ function ManagerHistoryContent({ promise }: { promise: Promise<DataResult> }) {
   return (
     <div>
       {/* Manager header */}
-      <div className="flex items-center gap-4 mb-6">
-        <div
-          className="w-14 h-14 rounded-full flex items-center justify-center text-[18px] font-medium text-white shrink-0"
-          style={{ background: m.color }}
-        >
-          {m.init}
-        </div>
-        <div className="flex-1">
-          <div className="text-[18px] font-medium text-foreground mb-0.5">
-            {m.owner_username}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-6">
+        <div className="flex items-center gap-4 sm:flex-1 order-2 sm:order-1">
+          <div
+            className="w-14 h-14 rounded-full flex items-center justify-center text-[18px] font-medium text-white shrink-0"
+            style={{ background: m.color }}
+          >
+            {m.init}
           </div>
-          <div className="text-[13px] text-muted-foreground">
-            {m.currentTeam || `Team ${m.owner_username}`}
+          <div className="flex-1">
+            <div className="text-[18px] font-medium text-foreground mb-0.5">
+              {m.owner_username}
+            </div>
+            <div className="text-[13px] text-muted-foreground">
+              {m.currentTeam || `Team ${m.owner_username}`}
+            </div>
           </div>
         </div>
         {managers.length > 1 && (
           <select
-            className="px-3 py-2 text-[13px] font-medium bg-card border border-border rounded-md text-foreground cursor-pointer"
+            className="px-3 py-2 text-[13px] font-medium bg-card border border-border rounded-md text-foreground cursor-pointer w-full sm:w-auto order-1 sm:order-2"
             value={idx}
             onChange={(e) => setSelectedManagerIndex(Number(e.target.value))}
           >
