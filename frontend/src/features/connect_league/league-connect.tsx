@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { HelpCircle } from 'lucide-react';
+import { Check, Copy, HelpCircle } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import {
   type FieldErrors,
@@ -83,6 +83,39 @@ export async function pollForCompletion(
     }
   }
   return 'failed';
+}
+
+function CopyOperationId({ operationId }: { operationId: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    void navigator.clipboard.writeText(operationId).then(() => {
+      setCopied(true);
+      setTimeout(() => { setCopied(false); }, 2000);
+    });
+  };
+
+  return (
+    <span className="mt-1 flex items-center gap-1.5">
+      <span className="font-mono text-xs">{operationId}</span>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-5 w-5 shrink-0"
+              onClick={handleCopy}
+            >
+              {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{copied ? 'Copied!' : 'Copy operation ID'}</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    </span>
+  );
 }
 
 export default function LeagueConnect() {
@@ -387,9 +420,11 @@ export default function LeagueConnect() {
                 </AlertTitle>
                 <AlertDescription>
                   {lastRequestType === 'REFRESH'
-                    ? 'League refresh failed. Please try again or contact support'
-                    : 'League onboarding failed. Please try again or contact support'}
-                  {operationId ? ` with operation ID ${operationId}` : ''}.
+                    ? 'League refresh failed. Please try again or contact support if the error persists.'
+                    : 'League onboarding failed. Please try again or contact support if the error persists.'}
+                  {operationId ? (
+                    <> Provide the below operation ID when contacting support: <CopyOperationId operationId={operationId} /></>
+                  ) : ''}
                 </AlertDescription>
               </Alert>
             )}
