@@ -66,7 +66,11 @@ const navItems = [
 export function AppSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { state } = useSidebar();
+  const { state, isMobile, setOpenMobile } = useSidebar();
+
+  function closeMobileSidebar() {
+    if (isMobile) setOpenMobile(false);
+  }
   const [dialogOpen, setDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -116,7 +120,7 @@ export function AppSidebar() {
                     isActive={location.pathname === item.url}
                     tooltip={item.title}
                   >
-                    <Link to={item.url}>
+                    <Link to={item.url} onClick={closeMobileSidebar}>
                       <item.icon />
                       <span>{item.title}</span>
                     </Link>
@@ -138,7 +142,7 @@ export function AppSidebar() {
                   <SidebarMenuButton
                     tooltip="Connect Your League"
                     className="cursor-pointer"
-                    onClick={handleConnectFromDemo}
+                    onClick={() => { closeMobileSidebar(); handleConnectFromDemo(); }}
                   >
                     <LogIn />
                     <span>Connect Your League</span>
@@ -152,7 +156,7 @@ export function AppSidebar() {
                       tooltip="Refresh League"
                       className="cursor-pointer"
                     >
-                      <Link to="/connect_league">
+                      <Link to="/connect_league" onClick={closeMobileSidebar}>
                         <RefreshCw />
                         <span>Refresh League</span>
                       </Link>
@@ -164,7 +168,7 @@ export function AppSidebar() {
                       tooltip="Migrate League"
                       className="cursor-pointer"
                     >
-                      <Link to="/migrate_league">
+                      <Link to="/migrate_league" onClick={closeMobileSidebar}>
                         <ArrowLeftRight />
                         <span>Migrate League</span>
                       </Link>
@@ -176,7 +180,7 @@ export function AppSidebar() {
                       tooltip="View Another League"
                       className="cursor-pointer"
                     >
-                      <Link to="/">
+                      <Link to="/" onClick={closeMobileSidebar}>
                         <Search />
                         <span>View Another League</span>
                       </Link>
@@ -242,7 +246,7 @@ export function AppSidebar() {
           <SidebarMenuButton
             tooltip="Exit Demo"
             className="cursor-pointer text-muted-foreground hover:text-foreground"
-            onClick={handleExitDemo}
+            onClick={() => { closeMobileSidebar(); handleExitDemo(); }}
           >
             <LogOut />
             {state === 'expanded' && <span>Exit Demo</span>}

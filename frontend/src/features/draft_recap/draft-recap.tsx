@@ -200,24 +200,6 @@ function DraftRecapContent({
         <div className="bg-card border border-border/50 rounded-lg p-3">
           <div className="text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground mb-1">
             <span className="inline-flex items-center gap-1">
-              Total VORP
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Info className="w-3 h-3 cursor-default" />
-                </TooltipTrigger>
-                <TooltipContent side="top">
-                  Value Over Replacement Player — how many more points this player scored compared to a league-average player at the same position. Not calculated for K and D/ST, as these positions are typically streamed.
-                </TooltipContent>
-              </Tooltip>
-            </span>
-          </div>
-          <div className="text-[22px] font-medium text-foreground">
-            {picks.length ? totalVorp.toFixed(1) : '—'}
-          </div>
-        </div>
-        <div className="bg-card border border-border/50 rounded-lg p-3">
-          <div className="text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground mb-1">
-            <span className="inline-flex items-center gap-1">
               Best pick
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -234,6 +216,24 @@ function DraftRecapContent({
           </div>
           <div className="text-[11px] text-muted-foreground mt-0.5">
             {bestPick ? `Rd ${bestPick.round}, Pick ${bestPick.overall_pick_number}` : ''}
+          </div>
+        </div>
+        <div className="bg-card border border-border/50 rounded-lg p-3">
+          <div className="text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground mb-1">
+            <span className="inline-flex items-center gap-1">
+              Total VORP
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Info className="w-3 h-3 cursor-default" />
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  Value Over Replacement Player — how many more points this player scored compared to a league-average player at the same position. Not calculated for K and D/ST, as these positions are typically streamed.
+                </TooltipContent>
+              </Tooltip>
+            </span>
+          </div>
+          <div className="text-[22px] font-medium text-foreground">
+            {picks.length ? totalVorp.toFixed(1) : '—'}
           </div>
         </div>
         <div className="bg-card border border-border/50 rounded-lg p-3">

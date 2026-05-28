@@ -302,11 +302,9 @@ function StatsWithTotalGames({
           <div className="text-[22px] font-medium text-foreground leading-none">
             {stat.value}
           </div>
-          {'sub' in stat && (
-            <div className="text-[11px] text-muted-foreground mt-0.5">
-              {stat.sub}
-            </div>
-          )}
+          <div className="text-[11px] text-muted-foreground mt-0.5">
+            {'sub' in stat ? stat.sub : ' '}
+          </div>
         </div>
       ))}
     </div>

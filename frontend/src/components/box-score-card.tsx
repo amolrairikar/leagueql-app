@@ -21,14 +21,12 @@ export interface BoxScoreSide {
 export function BoxScoreCard({
   left,
   right,
-  subtitle,
   platform,
   season,
   onClose,
 }: {
   left: BoxScoreSide;
   right: BoxScoreSide;
-  subtitle: string;
   platform: 'ESPN' | 'SLEEPER';
   season: string;
   onClose?: () => void;
@@ -44,24 +42,6 @@ export function BoxScoreCard({
         </button>
       )}
       <div className="bg-card border border-border/50 rounded-lg overflow-hidden">
-
-        {/* Mobile header */}
-        <div className="sm:hidden border-b border-border/50 bg-muted px-4 py-3.5">
-          <div className="text-center">
-            <div className="flex items-center justify-center gap-3">
-              <span className={`text-[28px] font-medium tabular-nums ${left.isWinner ? 'text-foreground' : 'text-muted-foreground'}`}>
-                {Number(left.score).toFixed(2)}
-              </span>
-              <span className="text-[18px] text-muted-foreground">–</span>
-              <span className={`text-[28px] font-medium tabular-nums ${right.isWinner ? 'text-foreground' : 'text-muted-foreground'}`}>
-                {Number(right.score).toFixed(2)}
-              </span>
-            </div>
-            <div className="text-[10px] font-medium uppercase tracking-[0.07em] text-muted-foreground mt-0.5">
-              {subtitle}
-            </div>
-          </div>
-        </div>
 
         {/* Desktop header */}
         <div className="hidden sm:grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-4 py-3.5 border-b border-border/50 bg-muted">
@@ -88,9 +68,6 @@ export function BoxScoreCard({
                 {Number(right.score).toFixed(2)}
               </span>
             </div>
-            <div className="text-[10px] font-medium uppercase tracking-[0.07em] text-muted-foreground mt-0.5">
-              {subtitle}
-            </div>
           </div>
           <div className="flex items-center gap-2 flex-row-reverse">
             <TeamAvatar
@@ -112,7 +89,7 @@ export function BoxScoreCard({
           {([left, right] as BoxScoreSide[]).map((side, ti) => (
             <div key={ti}>
               {ti === 1 && <div className="sm:hidden h-0.5 bg-border" />}
-              <div className="flex items-center gap-2 px-3.5 py-2.5 border-b border-border/50">
+              <div className="sm:hidden flex items-center gap-2 px-3.5 py-2.5 border-b border-border/50">
                 <TeamAvatar
                   teamLogo={side.teamLogo ?? null}
                   teamName={side.teamName}

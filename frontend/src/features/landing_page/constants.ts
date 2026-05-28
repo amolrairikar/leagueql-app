@@ -8,7 +8,6 @@ import matchupsScreenshot from '@/assets/matchups-screenshot.png';
 import playoffBracketScreenshot from '@/assets/playoff-bracket-screenshot.png';
 import playerRecordsScreenshot from '@/assets/player-records-screenshot.png';
 import standingsScreenshot from '@/assets/standings-screenshot.png';
-import { GitHubIcon } from '@/features/landing_page/github-icon';
 import type {
   NavLinkItem,
   Slide,
@@ -16,7 +15,6 @@ import type {
 } from '@/features/landing_page/types';
 
 export const NAV_LINKS: NavLinkItem[] = [
-  { label: 'GitHub', href: 'https://github.com/amolrairikar/leagueql-app', icon: GitHubIcon, external: true },
   { label: 'Changelog', href: '/changelog', icon: FileText, external: false },
   { label: 'Docs', href: 'https://github.com/amolrairikar/leagueql-app/blob/main/INSTRUCTIONS.md', icon: Info, external: true },
 ];
@@ -108,4 +106,5 @@ export const FEATURES: Feature[] = [
 export const FOOTER_LINKS: string[] = [
   'About',
   'Privacy',
+  'GitHub',
 ];
