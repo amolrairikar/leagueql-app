@@ -44,7 +44,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
               </span>
             </div>
           )}
-          <header className="relative flex h-12 shrink-0 items-center gap-2 border-b px-4">
+          <header className="sticky top-0 z-10 flex h-12 shrink-0 items-center gap-2 border-b px-4 bg-background/80 backdrop-blur-md">
             <SidebarTrigger className="cursor-pointer" />
             <Link
               to="/"
