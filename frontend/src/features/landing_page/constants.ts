@@ -16,7 +16,7 @@ import type {
 
 export const NAV_LINKS: NavLinkItem[] = [
   { label: 'Changelog', href: '/changelog', icon: FileText, external: false },
-  { label: 'Docs', href: 'https://github.com/amolrairikar/leagueql-app/blob/main/INSTRUCTIONS.md', icon: Info, external: true },
+  { label: 'Docs', href: '/docs', icon: Info, external: false },
 ];
 
 export const SLIDES: Slide[] = [
