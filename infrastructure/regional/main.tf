@@ -491,7 +491,7 @@ resource "aws_cloudwatch_metric_alarm" "dynamodb_write_spike" {
   namespace           = "AWS/DynamoDB"
   period              = 300
   statistic           = "Sum"
-  threshold           = 3000
+  threshold           = 30000
   alarm_description   = "DynamoDB write capacity spike detected"
   alarm_actions       = [aws_sns_topic.lambda_alerts[0].arn]
   ok_actions          = [aws_sns_topic.lambda_alerts[0].arn]
