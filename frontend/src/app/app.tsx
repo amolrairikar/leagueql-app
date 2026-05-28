@@ -50,7 +50,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
               to="/"
               className="absolute left-1/2 -translate-x-1/2 font-heading text-xl tracking-tight text-foreground no-underline"
             >
-              LeagueQL
+              League<span className="text-primary font-bold">QL</span>
             </Link>
             <div className="ml-auto flex items-center gap-1">
               {NAV_LINKS.map((link: NavLinkItem) => (

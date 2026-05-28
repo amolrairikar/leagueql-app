@@ -20,7 +20,7 @@ export default function Header() {
         to="/"
         className="flex items-center gap-2 no-underline font-heading"
       >
-        <span className="text-foreground text-xl tracking-tight">LeagueQL</span>
+        <span className="text-foreground text-xl tracking-tight">League<span className="text-primary font-bold">QL</span></span>
       </Link>
 
       <div className="flex items-center gap-1">
