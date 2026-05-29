@@ -61,7 +61,7 @@ export default function PrivacyPage() {
           <div>
             <h1 className="text-4xl font-bold">Privacy Policy</h1>
             <p className="text-sm text-muted-foreground mt-2">
-              Last updated: April 25, 2026
+              Last updated: May 29, 2026
             </p>
           </div>
 
@@ -127,6 +127,20 @@ export default function PrivacyPage() {
               <li>
                 ESPN cookies are only used temporarily to fetch private league
                 data and are not stored on our servers
+              </li>
+              <li>
+                We offer an optional Chrome extension, the "LeagueQL ESPN Cookie
+                Helper," that auto-fills your ESPN cookies into our onboarding
+                and refresh forms. The extension does not store or transmit your
+                cookies to us; it only fills them into the form on your device.
+                See the{' '}
+                <a
+                  href="/extension-privacy"
+                  className="text-foreground underline underline-offset-4"
+                >
+                  Chrome Extension Privacy Policy
+                </a>{' '}
+                for details.
               </li>
             </ul>
           </section>

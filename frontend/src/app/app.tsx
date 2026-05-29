@@ -30,6 +30,7 @@ import MigrateLeague from '@/features/migrate_league/migrate-league';
 import PlayerRecords from '@/features/player_records/player-records';
 import PlayoffBracket from '@/features/playoff_bracket/playoff-bracket';
 import PrivacyPage from '@/features/privacy/privacy-page';
+import ExtensionPrivacyPage from '@/features/privacy/extension-privacy-page';
 import SeasonStandings from '@/features/season_standings/season-standings';
 import { AppSidebar } from '@/features/sidebar/app-sidebar';
 import { isDemoMode } from '@/lib/cookie-handler';
@@ -153,6 +154,16 @@ function App() {
               <>
                 <Header />
                 <PrivacyPage />
+                <Footer />
+              </>
+            }
+          />
+          <Route
+            path="/extension-privacy"
+            element={
+              <>
+                <Header />
+                <ExtensionPrivacyPage />
                 <Footer />
               </>
             }
