@@ -33,6 +33,33 @@ class TestGetLeagueEndpoint:
         assert "2023" in data["seasons"]
         assert "2024" in data["seasons"]
 
+    def test_subscription_status_defaults_to_active_when_absent(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+        ]
+        mock_table.query.return_value = {
+            "Items": [{"seasons": {"2024"}, "canonical_league_id": "canonical-abc"}]
+        }
+        response = client.get("/leagues/123?platform=SLEEPER")
+        assert response.json()["data"]["subscription_status"] == "ACTIVE"
+
+    def test_returns_subscription_status_when_present(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        league_metadata_item["subscription_status"] = "PAST_DUE"
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+        ]
+        mock_table.query.return_value = {
+            "Items": [{"seasons": {"2024"}, "canonical_league_id": "canonical-abc"}]
+        }
+        response = client.get("/leagues/123?platform=SLEEPER")
+        assert response.json()["data"]["subscription_status"] == "PAST_DUE"
+
     def test_returns_404_for_unknown_league(self, client, mock_table):
         mock_table.get_item.return_value = {}
         response = client.get("/leagues/999?platform=SLEEPER")

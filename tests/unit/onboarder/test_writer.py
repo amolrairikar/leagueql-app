@@ -102,6 +102,58 @@ class TestWriteOnboardingStatusToDynamoDB:
         items = mock_ddb.transact_write_items.call_args[1]["TransactItems"]
         assert len(items) == 2
 
+    def test_onboard_sets_active_subscription_status(
+        self, onboarder_writer, monkeypatch
+    ):
+        monkeypatch.setenv("DYNAMODB_TABLE_NAME", "test-table")
+        mock_ddb = MagicMock()
+        with patch.object(onboarder_writer, "_dynamodb", mock_ddb):
+            onboarder_writer.write_onboarding_status_to_dynamodb(
+                league_id="123",
+                platform="SLEEPER",
+                canonical_league_id="canonical-abc",
+                seasons=["2024"],
+                request_type="ONBOARD",
+            )
+        items = mock_ddb.transact_write_items.call_args[1]["TransactItems"]
+        metadata_item = items[0]["Put"]["Item"]
+        assert metadata_item["subscription_status"] == {"S": "ACTIVE"}
+
+    def test_refresh_does_not_touch_subscription_status(
+        self, onboarder_writer, monkeypatch
+    ):
+        monkeypatch.setenv("DYNAMODB_TABLE_NAME", "test-table")
+        mock_ddb = MagicMock()
+        with patch.object(onboarder_writer, "_dynamodb", mock_ddb):
+            onboarder_writer.write_onboarding_status_to_dynamodb(
+                league_id="123",
+                platform="SLEEPER",
+                canonical_league_id="canonical-abc",
+                seasons=["2024"],
+                request_type="REFRESH",
+                is_new_season_refresh=False,
+            )
+        items = mock_ddb.transact_write_items.call_args[1]["TransactItems"]
+        metadata_update = items[0]["Update"]
+        assert "subscription_status" not in metadata_update["UpdateExpression"]
+
+    def test_migrate_does_not_touch_subscription_status(
+        self, onboarder_writer, monkeypatch
+    ):
+        monkeypatch.setenv("DYNAMODB_TABLE_NAME", "test-table")
+        mock_ddb = MagicMock()
+        with patch.object(onboarder_writer, "_dynamodb", mock_ddb):
+            onboarder_writer.write_onboarding_status_to_dynamodb(
+                league_id="123",
+                platform="SLEEPER",
+                canonical_league_id="canonical-abc",
+                seasons=["2024"],
+                request_type="MIGRATE",
+            )
+        items = mock_ddb.transact_write_items.call_args[1]["TransactItems"]
+        metadata_update = items[0]["Update"]
+        assert "subscription_status" not in metadata_update["UpdateExpression"]
+
     def test_refresh_existing_season_uses_update(self, onboarder_writer, monkeypatch):
         monkeypatch.setenv("DYNAMODB_TABLE_NAME", "test-table")
         mock_ddb = MagicMock()

@@ -13,6 +13,9 @@ _retry_config = botocore.config.Config(retries={"mode": "standard"})
 _s3 = boto3.client("s3", config=_retry_config)
 _dynamodb = boto3.client("dynamodb", config=_retry_config)
 
+# Default subscription state assigned to a league's METADATA item at onboarding.
+DEFAULT_SUBSCRIPTION_STATUS = "ACTIVE"
+
 
 def upload_results_to_s3(
     results: list[dict[str, Any]],
@@ -203,6 +206,7 @@ def write_onboarding_status_to_dynamodb(
                             "platform": {"S": platform},
                             "onboarded_at": {"S": now_iso},
                             "onboarding_status": {"S": "IN_PROGRESS"},
+                            "subscription_status": {"S": DEFAULT_SUBSCRIPTION_STATUS},
                         },
                     }
                 },

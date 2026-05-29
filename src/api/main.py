@@ -77,6 +77,16 @@ class RequestType(CaseInsensitiveEnum):
     MIGRATE = "MIGRATE"
 
 
+class SubscriptionStatus(CaseInsensitiveEnum):
+    FREE = "FREE"
+    ACTIVE = "ACTIVE"
+    PAST_DUE = "PAST_DUE"
+    CANCELED = "CANCELED"
+
+
+DEFAULT_SUBSCRIPTION_STATUS = SubscriptionStatus.ACTIVE
+
+
 class QueryType(CaseInsensitiveEnum):
     TEAMS = "TEAMS"
     MATCHUPS = "MATCHUPS"
@@ -340,6 +350,28 @@ def update_league_count(delta: int) -> None:
     )
 
 
+def update_subscription_status(
+    canonical_league_id: str, new_status: SubscriptionStatus
+) -> None:
+    """
+    Sets the subscription state on a league's METADATA item.
+
+    Args:
+        canonical_league_id: The canonical league ID.
+        new_status: The subscription state to set.
+    """
+    # TODO(billing): no public/authenticated route exposes this yet. For now
+    # subscription state is changed manually (script/console). A guarded endpoint
+    # or payment-provider webhook backed by this helper is the enforcement-phase
+    # follow-up.
+    table.update_item(
+        Key={"PK": f"LEAGUE#{canonical_league_id}", "SK": "METADATA"},
+        UpdateExpression="SET subscription_status = :s",
+        ConditionExpression="attribute_exists(PK)",
+        ExpressionAttributeValues={":s": new_status.value},
+    )
+
+
 @app.get("/", status_code=status.HTTP_200_OK)
 def root() -> APIResponse:
     """Makes health check to API root URL."""
@@ -370,6 +402,9 @@ def get_league(
         data={
             "seasons": seasons,
             "league_name": metadata.get("league_name"),
+            "subscription_status": metadata.get(
+                "subscription_status", DEFAULT_SUBSCRIPTION_STATUS.value
+            ),
         },
     )
 

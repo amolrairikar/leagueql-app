@@ -194,6 +194,19 @@ class TestUpdateLeagueCount:
         )
 
 
+class TestUpdateSubscriptionStatus:
+    def test_sets_status_on_metadata_item(self, mock_table):
+        from main import SubscriptionStatus, update_subscription_status
+
+        update_subscription_status("canonical-abc", SubscriptionStatus.PAST_DUE)
+        mock_table.update_item.assert_called_once_with(
+            Key={"PK": "LEAGUE#canonical-abc", "SK": "METADATA"},
+            UpdateExpression="SET subscription_status = :s",
+            ConditionExpression="attribute_exists(PK)",
+            ExpressionAttributeValues={":s": "PAST_DUE"},
+        )
+
+
 class TestDeletePrefixedItems:
     def test_deletes_items_in_batches(self, mock_table):
         from main import delete_prefixed_items
