@@ -156,6 +156,9 @@ export default function LeagueConnect() {
   const urlLeagueId = urlParams.get('leagueId') ?? '';
   const urlPlatform =
     urlParams.get('platform') === 'sleeper' ? 'sleeper' : 'espn';
+  // When the user arrives with a pre-filled league ID, they've already entered
+  // the platform and league ID upstream, so lock those fields against edits.
+  const fieldsLocked = urlLeagueId !== '';
 
   const {
     control,
@@ -332,7 +335,11 @@ export default function LeagueConnect() {
                   name="platform"
                   control={control}
                   render={({ field }) => (
-                    <Select onValueChange={field.onChange} value={field.value}>
+                    <Select
+                      onValueChange={field.onChange}
+                      value={field.value}
+                      disabled={fieldsLocked}
+                    >
                       <SelectTrigger id="platform" className="w-full">
                         <SelectValue placeholder="Select a platform" />
                       </SelectTrigger>
@@ -355,6 +362,10 @@ export default function LeagueConnect() {
                   id="league-id"
                   type="text"
                   placeholder="Enter your league ID"
+                  readOnly={fieldsLocked}
+                  className={
+                    fieldsLocked ? 'cursor-not-allowed opacity-60' : undefined
+                  }
                   {...register('leagueId')}
                 />
                 {errors.leagueId && (
