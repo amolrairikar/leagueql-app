@@ -60,13 +60,18 @@ export default function PrivacyPage() {
         <div className="flex-1 space-y-8">
           <div>
             <h1 className="text-4xl font-bold">Privacy Policy</h1>
-            <p className="text-sm text-muted-foreground mt-2">Last updated: April 25, 2026</p>
+            <p className="text-sm text-muted-foreground mt-2">
+              Last updated: April 25, 2026
+            </p>
           </div>
 
           <section id="overview" className="space-y-3">
             <h2 className="text-2xl font-semibold">1. Overview</h2>
             <p className="text-muted-foreground leading-relaxed">
-              LeagueQL ("we", "our", "us") is a tool that helps you analyze your fantasy football league history from ESPN and Sleeper platforms. We collect and process league data to provide you with different insights.
+              LeagueQL ("we", "our", "us") is a tool that helps you analyze your
+              fantasy football league history from ESPN and Sleeper platforms.
+              We collect and process league data to provide you with different
+              insights.
             </p>
           </section>
 
@@ -74,7 +79,9 @@ export default function PrivacyPage() {
             <h2 className="text-2xl font-semibold">2. Data We Collect</h2>
             <div className="space-y-4 text-muted-foreground leading-relaxed">
               <div>
-                <h3 className="font-semibold text-foreground mb-2">League Data (from ESPN/Sleeper APIs):</h3>
+                <h3 className="font-semibold text-foreground mb-2">
+                  League Data (from ESPN/Sleeper APIs):
+                </h3>
                 <ul className="list-disc pl-6 space-y-1">
                   <li>Team names, logos, and owner display names</li>
                   <li>Matchup results, scores, and lineups</li>
@@ -84,9 +91,14 @@ export default function PrivacyPage() {
                 </ul>
               </div>
               <div>
-                <h3 className="font-semibold text-foreground mb-2">User Authentication Data (via Clerk):</h3>
+                <h3 className="font-semibold text-foreground mb-2">
+                  User Authentication Data (via Clerk):
+                </h3>
                 <ul className="list-disc pl-6 space-y-1">
-                  <li>Email address and authentication credentials (managed by Clerk)</li>
+                  <li>
+                    Email address and authentication credentials (managed by
+                    Clerk)
+                  </li>
                   <li>User profile information you choose to provide</li>
                 </ul>
               </div>
@@ -96,7 +108,9 @@ export default function PrivacyPage() {
           <section id="how-we-use" className="space-y-3">
             <h2 className="text-2xl font-semibold">3. How We Use Your Data</h2>
             <ul className="list-disc pl-6 space-y-2 text-muted-foreground leading-relaxed">
-              <li>Display league history, standings, draft recaps, and matchups</li>
+              <li>
+                Display league history, standings, draft recaps, and matchups
+              </li>
               <li>Enable comparisons and statistical analysis</li>
               <li>Refresh league data to keep information current</li>
             </ul>
@@ -106,25 +120,41 @@ export default function PrivacyPage() {
             <h2 className="text-2xl font-semibold">4. Data Storage</h2>
             <ul className="list-disc pl-6 space-y-2 text-muted-foreground leading-relaxed">
               <li>All league data is stored in AWS</li>
-              <li>Authentication is managed by Clerk (see their privacy policy). Clerk uses cookies for session management.</li>
-              <li>ESPN cookies are only used temporarily to fetch private league data and are not stored on our servers</li>
+              <li>
+                Authentication is managed by Clerk (see their privacy policy).
+                Clerk uses cookies for session management.
+              </li>
+              <li>
+                ESPN cookies are only used temporarily to fetch private league
+                data and are not stored on our servers
+              </li>
             </ul>
           </section>
 
           <section id="third-party" className="space-y-3">
             <h2 className="text-2xl font-semibold">5. Third-Party Services</h2>
             <ul className="list-disc pl-6 space-y-2 text-muted-foreground leading-relaxed">
-              <li><strong>Clerk:</strong> Handles user authentication</li>
-              <li><strong>ESPN API:</strong> Source of ESPN fantasy football data</li>
-              <li><strong>Sleeper API:</strong> Source of Sleeper fantasy football data</li>
-              <li><strong>AWS:</strong> Application hosting</li>
+              <li>
+                <strong>Clerk:</strong> Handles user authentication
+              </li>
+              <li>
+                <strong>ESPN API:</strong> Source of ESPN fantasy football data
+              </li>
+              <li>
+                <strong>Sleeper API:</strong> Source of Sleeper fantasy football
+                data
+              </li>
+              <li>
+                <strong>AWS:</strong> Application hosting
+              </li>
             </ul>
           </section>
 
           <section id="data-sharing" className="space-y-3">
             <h2 className="text-2xl font-semibold">6. Data Sharing</h2>
             <p className="text-muted-foreground leading-relaxed">
-              We do not sell your data. League data is only used to provide the app's features.
+              We do not sell your data. League data is only used to provide the
+              app's features.
             </p>
           </section>
 
@@ -147,14 +177,16 @@ export default function PrivacyPage() {
           <section id="security" className="space-y-3">
             <h2 className="text-2xl font-semibold">9. Security</h2>
             <p className="text-muted-foreground leading-relaxed">
-              We have implemented security measures to protect your data, including encryption in transit and at rest for stored data.
+              We have implemented security measures to protect your data,
+              including encryption in transit and at rest for stored data.
             </p>
           </section>
 
           <section id="contact" className="space-y-3">
             <h2 className="text-2xl font-semibold">10. Contact</h2>
             <p className="text-muted-foreground leading-relaxed">
-              For privacy inquiries or data deletion requests, contact us at arairikar1@gmail.com.
+              For privacy inquiries or data deletion requests, contact us at
+              arairikar1@gmail.com.
             </p>
           </section>
         </div>

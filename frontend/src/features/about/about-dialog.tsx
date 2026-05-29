@@ -29,7 +29,8 @@ export function AboutDialog({ open, onOpenChange }: AboutDialogProps) {
           <DialogTitle className="text-2xl font-bold">About</DialogTitle>
         </DialogHeader>
         <p>
-          Welcome to LeagueQL! This app is designed to provide insightful analytics for your fantasy football league.
+          Welcome to LeagueQL! This app is designed to provide insightful
+          analytics for your fantasy football league.
           <br />
           <br />
           The source code can be found on{' '}
@@ -41,12 +42,14 @@ export function AboutDialog({ open, onOpenChange }: AboutDialogProps) {
           >
             GitHub
           </a>
-          . You can report any bugs or request new features there using the corresponding forms.
+          . You can report any bugs or request new features there using the
+          corresponding forms.
           <br />
           <br />
-          My goal is to always keep this app free and ad-free. However, there are costs associated with hosting and
-          maintaining the app. If you find this app useful and would like to support its development, you can donate
-          using the link below.
+          My goal is to always keep this app free and ad-free. However, there
+          are costs associated with hosting and maintaining the app. If you find
+          this app useful and would like to support its development, you can
+          donate using the link below.
           <br />
           <br />
           <a

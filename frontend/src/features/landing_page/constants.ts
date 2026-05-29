@@ -103,8 +103,4 @@ export const FEATURES: Feature[] = [
   },
 ];
 
-export const FOOTER_LINKS: string[] = [
-  'About',
-  'Privacy',
-  'GitHub',
-];
+export const FOOTER_LINKS: string[] = ['About', 'Privacy', 'GitHub'];

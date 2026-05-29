@@ -45,21 +45,30 @@ export async function getManagerHistoryData(
       queryDemoLeague<PlatformMigrationEntry>('PLATFORM_MIGRATION'),
     ]);
     const migrationMapping = new Map<string, string>(
-      migrationRes.data.map((e) => [e.current_platform_owner_id, e.new_platform_owner_id]),
+      migrationRes.data.map((e) => [
+        e.current_platform_owner_id,
+        e.new_platform_owner_id,
+      ]),
     );
-    const standings = standingsRes.data.filter((s) => seasons.includes(s.season));
+    const standings = standingsRes.data.filter((s) =>
+      seasons.includes(s.season),
+    );
     const matchups = matchupRes.data.filter((m) => seasons.includes(m.season));
     return { standings, matchups, migrationMapping };
   }
 
   const [standingsResult, matchupResult, migrationResult] = await Promise.all([
     apiClient
-      .get<{ data: ManagerStandingsItem[] }>(
+      .get<{
+        data: ManagerStandingsItem[];
+      }>(
         `/leagues/${leagueId}/query?${new URLSearchParams({ platform, queryType: 'SEASON_STANDINGS#' })}`,
       )
       .then((r) => r.data),
     apiClient
-      .get<{ data: MatchupItem[] }>(
+      .get<{
+        data: MatchupItem[];
+      }>(
         `/leagues/${leagueId}/query?${new URLSearchParams({ platform, queryType: 'MATCHUPS#' })}`,
       )
       .then((r) => r.data),
@@ -72,7 +81,10 @@ export async function getManagerHistoryData(
   ]);
 
   const migrationMapping = new Map<string, string>(
-    migrationResult.map((e) => [e.current_platform_owner_id, e.new_platform_owner_id]),
+    migrationResult.map((e) => [
+      e.current_platform_owner_id,
+      e.new_platform_owner_id,
+    ]),
   );
 
   const standings = standingsResult.filter((s) => seasons.includes(s.season));

@@ -61,7 +61,11 @@ function ChampionsSkeleton() {
   );
 }
 
-function LeagueNameHeader({ promise }: { promise: Promise<string | undefined> }) {
+function LeagueNameHeader({
+  promise,
+}: {
+  promise: Promise<string | undefined>;
+}) {
   const leagueName = use(promise);
   return (
     <div className="mb-6">
@@ -80,7 +84,10 @@ type ChartDataResult = {
   maxRank: number;
 };
 
-function buildChartData(standings: ManagerStandingsItem[], migrationMapping: Map<string, string>): ChartDataResult {
+function buildChartData(
+  standings: ManagerStandingsItem[],
+  migrationMapping: Map<string, string>,
+): ChartDataResult {
   const ownerStandingsMap = new Map<string, ManagerStandingsItem[]>();
   for (const row of standings) {
     const mappedId = migrationMapping.get(row.owner_id) ?? row.owner_id;
@@ -90,7 +97,9 @@ function buildChartData(standings: ManagerStandingsItem[], migrationMapping: Map
 
   const owners = [...ownerStandingsMap.entries()]
     .map(([ownerId, rows]) => {
-      const mostRecent = [...rows].sort((a, b) => b.season.localeCompare(a.season))[0];
+      const mostRecent = [...rows].sort((a, b) =>
+        b.season.localeCompare(a.season),
+      )[0];
       return { ownerId, username: mostRecent.owner_username };
     })
     .sort((a, b) => a.username.localeCompare(b.username));
@@ -102,19 +111,25 @@ function buildChartData(standings: ManagerStandingsItem[], migrationMapping: Map
     const point: Record<string, string | number | null> = { season };
     for (const { ownerId } of owners) {
       const ownerRows = ownerStandingsMap.get(ownerId) ?? [];
-      point[ownerId] = ownerRows.find((r) => r.season === season)?.final_rank ?? null;
+      point[ownerId] =
+        ownerRows.find((r) => r.season === season)?.final_rank ?? null;
     }
     return point;
   });
 
   const chartConfig: ChartConfig = Object.fromEntries(
-    owners.map((o, i) => [o.ownerId, { label: o.username, color: colorMap.get(o.ownerId) ?? avatarColor(i) }]),
+    owners.map((o, i) => [
+      o.ownerId,
+      { label: o.username, color: colorMap.get(o.ownerId) ?? avatarColor(i) },
+    ]),
   );
 
   const validRanks = chartData
     .flatMap((d) =>
       Object.entries(d)
-        .filter((entry): entry is [string, number | null] => entry[0] !== 'season')
+        .filter(
+          (entry): entry is [string, number | null] => entry[0] !== 'season',
+        )
         .map(([, value]) => value),
     )
     .filter((r): r is number => r !== null);
@@ -123,7 +138,14 @@ function buildChartData(standings: ManagerStandingsItem[], migrationMapping: Map
   return { owners, colorMap, chartData, chartConfig, maxRank };
 }
 
-function StandingsChart({ promise }: { promise: Promise<{ standings: ManagerStandingsItem[]; migrationMapping: Map<string, string> }> }) {
+function StandingsChart({
+  promise,
+}: {
+  promise: Promise<{
+    standings: ManagerStandingsItem[];
+    migrationMapping: Map<string, string>;
+  }>;
+}) {
   const { standings, migrationMapping } = use(promise);
   const [selectedOwnerId, setSelectedOwnerId] = useState<string | null>(null);
 
@@ -145,8 +167,14 @@ function StandingsChart({ promise }: { promise: Promise<{ standings: ManagerStan
   return (
     <div className="bg-card border border-border/50 rounded-lg p-5">
       <div className="h-56 w-full">
-        <ChartContainer config={chartConfig} className="h-full w-full aspect-auto">
-          <LineChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 4 }}>
+        <ChartContainer
+          config={chartConfig}
+          className="h-full w-full aspect-auto"
+        >
+          <LineChart
+            data={chartData}
+            margin={{ top: 4, right: 4, left: 0, bottom: 4 }}
+          >
             <CartesianGrid vertical={false} />
             <XAxis
               dataKey="season"
@@ -173,8 +201,10 @@ function StandingsChart({ promise }: { promise: Promise<{ standings: ManagerStan
               }
             />
             {owners.map((owner) => {
-              const isSelected = selectedOwnerId === null || selectedOwnerId === owner.ownerId;
-              const opacity = selectedOwnerId === null ? 1 : isSelected ? 1 : 0.2;
+              const isSelected =
+                selectedOwnerId === null || selectedOwnerId === owner.ownerId;
+              const opacity =
+                selectedOwnerId === null ? 1 : isSelected ? 1 : 0.2;
               return (
                 <Line
                   key={owner.ownerId}
@@ -194,20 +224,27 @@ function StandingsChart({ promise }: { promise: Promise<{ standings: ManagerStan
       </div>
       <div className="flex flex-wrap gap-4 mt-3">
         {owners.map((owner) => {
-          const isSelected = selectedOwnerId === null || selectedOwnerId === owner.ownerId;
+          const isSelected =
+            selectedOwnerId === null || selectedOwnerId === owner.ownerId;
           const opacity = selectedOwnerId === null ? 1 : isSelected ? 1 : 0.4;
           return (
             <div
               key={owner.ownerId}
               className="flex items-center gap-2 cursor-pointer"
-              onClick={() => setSelectedOwnerId(selectedOwnerId === owner.ownerId ? null : owner.ownerId)}
+              onClick={() =>
+                setSelectedOwnerId(
+                  selectedOwnerId === owner.ownerId ? null : owner.ownerId,
+                )
+              }
               style={{ opacity }}
             >
               <div
                 className="w-3 h-3 rounded-sm"
                 style={{ backgroundColor: colorMap.get(owner.ownerId) }}
               />
-              <span className="text-[11px] text-foreground">{owner.username}</span>
+              <span className="text-[11px] text-foreground">
+                {owner.username}
+              </span>
             </div>
           );
         })}
@@ -224,9 +261,7 @@ function ChampionsGrid({ promise }: { promise: Promise<ChampionItem[]> }) {
         <div
           key={champ.season}
           className={`bg-card border border-border/50 rounded-lg p-2.5 flex flex-col gap-0.5 ${
-            champ.highlight
-              ? 'border-primary bg-primary/5'
-              : ''
+            champ.highlight ? 'border-primary bg-primary/5' : ''
           }`}
         >
           <div className="text-[10px] uppercase tracking-[0.06em] text-muted-foreground">
@@ -235,9 +270,7 @@ function ChampionsGrid({ promise }: { promise: Promise<ChampionItem[]> }) {
           <div className="text-[13px] font-medium text-foreground leading-tight">
             {champ.name}
           </div>
-          <div className="text-[11px] text-muted-foreground">
-            {champ.owner}
-          </div>
+          <div className="text-[11px] text-muted-foreground">{champ.owner}</div>
           <div className="text-[11px] text-muted-foreground">
             {champ.record} · {champ.pfGame} PF/G
           </div>
@@ -258,7 +291,11 @@ function StatsWithTotalGames({
   totalGamesPromise: Promise<number>;
   championsPromise: Promise<ChampionItem[]>;
   totalMembersPromise: Promise<number>;
-  recordScorePromise: Promise<{ score: number; week: string; season: string } | null>;
+  recordScorePromise: Promise<{
+    score: number;
+    week: string;
+    season: string;
+  } | null>;
 }) {
   const totalGames = use(totalGamesPromise);
   const champions = use(championsPromise);
@@ -266,9 +303,7 @@ function StatsWithTotalGames({
   const recordScore = use(recordScorePromise);
 
   const uniqueChampions = new Set(
-    champions
-      .filter((c) => c.owner !== '—')
-      .map((c) => c.owner),
+    champions.filter((c) => c.owner !== '—').map((c) => c.owner),
   ).size;
 
   const displayStats = [
@@ -278,7 +313,11 @@ function StatsWithTotalGames({
       value: totalGames.toLocaleString(),
     },
     recordScore
-      ? { label: 'Record score', value: recordScore.score.toFixed(2), sub: `Week ${recordScore.week}, ${recordScore.season}` }
+      ? {
+          label: 'Record score',
+          value: recordScore.score.toFixed(2),
+          sub: `Week ${recordScore.week}, ${recordScore.season}`,
+        }
       : { label: 'Record score', value: '—' },
     {
       label: 'Total members',
@@ -341,12 +380,24 @@ export default function HomePage() {
 
   // Single API call for all data (getManagerHistoryData already uses optimized single queries)
   const allDataPromise = useMemo(
-    (): Promise<{ standings: ManagerStandingsItem[]; matchups: MatchupItem[]; migrationMapping: Map<string, string> }> =>
+    (): Promise<{
+      standings: ManagerStandingsItem[];
+      matchups: MatchupItem[];
+      migrationMapping: Map<string, string>;
+    }> =>
       leagueId && seasons.length > 0
         ? getManagerHistoryData(leagueId, platform, seasons)
             // Intentional empty-state fallback — apiClient surfaces the error to the global store before throwing
-            .catch(() => ({ standings: [], matchups: [], migrationMapping: new Map() }))
-        : Promise.resolve({ standings: [], matchups: [], migrationMapping: new Map() }),
+            .catch(() => ({
+              standings: [],
+              matchups: [],
+              migrationMapping: new Map(),
+            }))
+        : Promise.resolve({
+            standings: [],
+            matchups: [],
+            migrationMapping: new Map(),
+          }),
     [leagueId, platform, seasons],
   );
 
@@ -361,7 +412,9 @@ export default function HomePage() {
           bySeasonMap.get(row.season)!.push(row);
         }
         return seasons.map((season) => {
-          const champion = bySeasonMap.get(season)?.find((s) => s.champion === 'Yes');
+          const champion = bySeasonMap
+            .get(season)
+            ?.find((s) => s.champion === 'Yes');
           if (champion) {
             return {
               season,
@@ -371,7 +424,14 @@ export default function HomePage() {
               pfGame: champion.avg_pf.toFixed(1),
             };
           }
-          return { season, name: 'TBD', owner: '—', record: '—', pfGame: '—', highlight: true };
+          return {
+            season,
+            name: 'TBD',
+            owner: '—',
+            record: '—',
+            pfGame: '—',
+            highlight: true,
+          };
         });
       }),
     [allDataPromise, seasons],
@@ -385,7 +445,10 @@ export default function HomePage() {
         for (const m of matchups) {
           countBySeason.set(m.season, (countBySeason.get(m.season) ?? 0) + 1);
         }
-        return seasons.reduce((sum, season) => sum + (countBySeason.get(season) ?? 0), 0);
+        return seasons.reduce(
+          (sum, season) => sum + (countBySeason.get(season) ?? 0),
+          0,
+        );
       }),
     [allDataPromise, seasons],
   );
@@ -429,8 +492,14 @@ export default function HomePage() {
 
   // Use standings from the single data call for chart
   const standingsPromise = useMemo(
-    (): Promise<{ standings: ManagerStandingsItem[]; migrationMapping: Map<string, string> }> =>
-      allDataPromise.then(({ standings, migrationMapping }) => ({ standings, migrationMapping })),
+    (): Promise<{
+      standings: ManagerStandingsItem[];
+      migrationMapping: Map<string, string>;
+    }> =>
+      allDataPromise.then(({ standings, migrationMapping }) => ({
+        standings,
+        migrationMapping,
+      })),
     [allDataPromise],
   );
 
@@ -438,13 +507,27 @@ export default function HomePage() {
     <div className="flex flex-1 flex-col p-6 overflow-auto">
       <div className="max-w-225 mx-auto w-full">
         {/* Header */}
-        <Suspense fallback={<div className="mb-6"><h1 className="text-2xl font-bold text-foreground">League Name</h1></div>}>
+        <Suspense
+          fallback={
+            <div className="mb-6">
+              <h1 className="text-2xl font-bold text-foreground">
+                League Name
+              </h1>
+            </div>
+          }
+        >
           <LeagueNameHeader promise={leagueNamePromise} />
         </Suspense>
 
         {/* Stats Grid */}
         <Suspense fallback={<StatsSkeleton />}>
-          <StatsWithTotalGames stats={stats} totalGamesPromise={totalGamesPromise} championsPromise={championsPromise} totalMembersPromise={totalMembersPromise} recordScorePromise={recordScorePromise} />
+          <StatsWithTotalGames
+            stats={stats}
+            totalGamesPromise={totalGamesPromise}
+            championsPromise={championsPromise}
+            totalMembersPromise={totalMembersPromise}
+            recordScorePromise={recordScorePromise}
+          />
         </Suspense>
 
         {/* Champions */}

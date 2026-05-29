@@ -14,7 +14,8 @@ export function getSeasonStandings(
   platform: Platform,
   season: string,
 ): Promise<GetSeasonStandingsResponse> {
-  if (isDemoMode()) return queryDemoLeague<SeasonStandingsItem>(`SEASON_STANDINGS#${season}`);
+  if (isDemoMode())
+    return queryDemoLeague<SeasonStandingsItem>(`SEASON_STANDINGS#${season}`);
   const params = new URLSearchParams({
     platform,
     queryType: `SEASON_STANDINGS#${season}`,

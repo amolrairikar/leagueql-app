@@ -71,7 +71,9 @@ function getUserId(user: NewPlatformUser): string {
 }
 
 function getUserDisplayName(user: NewPlatformUser): string {
-  return user.display_name || ('username' in user ? user.username : user.owner_id);
+  return (
+    user.display_name || ('username' in user ? user.username : user.owner_id)
+  );
 }
 
 // ── Polling ───────────────────────────────────────────────────────────────────
@@ -195,9 +197,9 @@ function Step2({
     (p) => p !== currentPlatform,
   );
 
-  const [destinationPlatform, setDestinationPlatform] = useState<'ESPN' | 'SLEEPER'>(
-    availablePlatforms[0],
-  );
+  const [destinationPlatform, setDestinationPlatform] = useState<
+    'ESPN' | 'SLEEPER'
+  >(availablePlatforms[0]);
   const [newPlatformLeagueId, setNewPlatformLeagueId] = useState('');
   const [season, setSeason] = useState('');
   const [swid, setSwid] = useState('');
@@ -205,13 +207,17 @@ function Step2({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [extensionReady, setExtensionReady] = useState(isEspnExtensionAvailable);
+  const [extensionReady, setExtensionReady] = useState(
+    isEspnExtensionAvailable,
+  );
   const [autofilling, setAutofilling] = useState(false);
   const [autofillError, setAutofillError] = useState<string | null>(null);
 
   useEffect(() => {
     if (extensionReady) return;
-    return onEspnExtensionReady(() => { setExtensionReady(true); });
+    return onEspnExtensionReady(() => {
+      setExtensionReady(true);
+    });
   }, [extensionReady]);
 
   function handlePlatformChange(value: 'ESPN' | 'SLEEPER') {
@@ -248,9 +254,18 @@ function Step2({
       return;
     }
     if (destinationPlatform === 'ESPN') {
-      if (!season.trim()) { setError('Season is required for ESPN'); return; }
-      if (!swid.trim()) { setError('SWID is required for ESPN'); return; }
-      if (!s2.trim()) { setError('ESPN S2 is required for ESPN'); return; }
+      if (!season.trim()) {
+        setError('Season is required for ESPN');
+        return;
+      }
+      if (!swid.trim()) {
+        setError('SWID is required for ESPN');
+        return;
+      }
+      if (!s2.trim()) {
+        setError('ESPN S2 is required for ESPN');
+        return;
+      }
     }
 
     setLoading(true);
@@ -272,7 +287,9 @@ function Step2({
       }
 
       if (users.length === 0) {
-        setError('No users found for that league. Check the league ID and try again.');
+        setError(
+          'No users found for that league. Check the league ID and try again.',
+        );
         return;
       }
 
@@ -287,7 +304,9 @@ function Step2({
         users,
       );
     } catch {
-      setError('Failed to fetch users for that league. Check the ID and credentials.');
+      setError(
+        'Failed to fetch users for that league. Check the ID and credentials.',
+      );
     } finally {
       setLoading(false);
     }
@@ -313,7 +332,8 @@ function Step2({
           </SelectContent>
         </Select>
         <p className="text-[12px] text-muted-foreground">
-          Enter your new {destinationPlatform === 'ESPN' ? 'ESPN' : 'Sleeper'} league details.
+          Enter your new {destinationPlatform === 'ESPN' ? 'ESPN' : 'Sleeper'}{' '}
+          league details.
         </p>
       </div>
 
@@ -355,8 +375,8 @@ function Step2({
                     <HelpCircle className="size-3.5 text-muted-foreground cursor-help" />
                   </TooltipTrigger>
                   <TooltipContent side="right" className="max-w-64">
-                    Found in ESPN cookies under DevTools → Application →
-                    Cookies → fantasy.espn.com (include the curly braces).
+                    Found in ESPN cookies under DevTools → Application → Cookies
+                    → fantasy.espn.com (include the curly braces).
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
@@ -380,8 +400,8 @@ function Step2({
                     <HelpCircle className="size-3.5 text-muted-foreground cursor-help" />
                   </TooltipTrigger>
                   <TooltipContent side="right" className="max-w-64">
-                    Found in ESPN cookies under DevTools → Application →
-                    Cookies → fantasy.espn.com (espn_s2 value).
+                    Found in ESPN cookies under DevTools → Application → Cookies
+                    → fantasy.espn.com (espn_s2 value).
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
@@ -474,8 +494,7 @@ function Step3({
   const selectedValues = Object.values(selections).filter(
     (v) => v && v !== NOT_RETURNING,
   );
-  const hasDuplicates =
-    new Set(selectedValues).size !== selectedValues.length;
+  const hasDuplicates = new Set(selectedValues).size !== selectedValues.length;
 
   function handleChange(ownerId: string, newUserId: string) {
     setSelections((prev) => ({ ...prev, [ownerId]: newUserId }));
@@ -497,16 +516,16 @@ function Step3({
 
     const mapping: ManagerMappingEntry[] = mapped.map(
       ([currentOwnerId, newOwnerId]) => {
-        const user = newPlatformUsers.find(
-          (u) => getUserId(u) === newOwnerId,
-        );
+        const user = newPlatformUsers.find((u) => getUserId(u) === newOwnerId);
         const mgr = currentManagers.find(
           (m) => m.primary_owner_id === currentOwnerId,
         );
         return {
           currentPlatformOwnerId: currentOwnerId,
           newPlatformOwnerId: newOwnerId,
-          displayName: user ? getUserDisplayName(user) : mgr?.display_name ?? currentOwnerId,
+          displayName: user
+            ? getUserDisplayName(user)
+            : (mgr?.display_name ?? currentOwnerId),
         };
       },
     );
@@ -518,8 +537,9 @@ function Step3({
       <div>
         <p className="text-[13px] font-medium mb-1">Map managers</p>
         <p className="text-[12px] text-muted-foreground">
-          Match each current manager to their {newPlatform === 'ESPN' ? 'ESPN' : 'Sleeper'} account. Leave
-          managers who left the league as "Not returning".
+          Match each current manager to their{' '}
+          {newPlatform === 'ESPN' ? 'ESPN' : 'Sleeper'} account. Leave managers
+          who left the league as "Not returning".
         </p>
       </div>
 
@@ -556,9 +576,7 @@ function Step3({
                   <SelectValue placeholder="Select…" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={NOT_RETURNING}>
-                    Not returning
-                  </SelectItem>
+                  <SelectItem value={NOT_RETURNING}>Not returning</SelectItem>
                   {newPlatformUsers.map((user) => (
                     <SelectItem key={getUserId(user)} value={getUserId(user)}>
                       {getUserDisplayName(user)}
@@ -571,7 +589,9 @@ function Step3({
         })}
       </div>
 
-      {(validationError ?? (hasDuplicates && 'Each new platform user can only be mapped once.')) && (
+      {(validationError ??
+        (hasDuplicates &&
+          'Each new platform user can only be mapped once.')) && (
         <p className="text-sm text-destructive">
           {validationError ?? 'Each new platform user can only be mapped once.'}
         </p>
@@ -676,14 +696,12 @@ function Step4({
       <Alert variant="destructive">
         <AlertTriangle className="h-4 w-4" />
         <AlertDescription className="text-[12px]">
-          This action cannot be undone. All-time metrics will be recalculated
-          to reflect the merged history.
+          This action cannot be undone. All-time metrics will be recalculated to
+          reflect the merged history.
         </AlertDescription>
       </Alert>
 
-      {submitError && (
-        <p className="text-sm text-destructive">{submitError}</p>
-      )}
+      {submitError && <p className="text-sm text-destructive">{submitError}</p>}
 
       <div className="flex gap-2">
         <Button
@@ -765,12 +783,19 @@ export default function MigrateLeague() {
   const [step, setStep] = useState<WizardStep>(1);
   const [leagueName, setLeagueName] = useState('');
   const [currentManagers, setCurrentManagers] = useState<TeamEntry[]>([]);
-  const [newPlatformInfo, setNewPlatformInfo] = useState<NewPlatformInfo | null>(null);
-  const [newPlatformUsers, setNewPlatformUsers] = useState<NewPlatformUser[]>([]);
-  const [managerMapping, setManagerMapping] = useState<ManagerMappingEntry[]>([]);
+  const [newPlatformInfo, setNewPlatformInfo] =
+    useState<NewPlatformInfo | null>(null);
+  const [newPlatformUsers, setNewPlatformUsers] = useState<NewPlatformUser[]>(
+    [],
+  );
+  const [managerMapping, setManagerMapping] = useState<ManagerMappingEntry[]>(
+    [],
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [pollOutcome, setPollOutcome] = useState<'polling' | 'success' | 'failed'>('polling');
+  const [pollOutcome, setPollOutcome] = useState<
+    'polling' | 'success' | 'failed'
+  >('polling');
   const [operationId, setOperationId] = useState<string | null>(null);
   const initRef = useRef(false);
 
@@ -832,10 +857,7 @@ export default function MigrateLeague() {
     setOperationId(correlationId);
 
     await sleep(POLL_INITIAL_DELAY_MS);
-    const outcome = await pollForCompletion(
-      leagueId,
-      platform,
-    );
+    const outcome = await pollForCompletion(leagueId, platform);
     setPollOutcome(outcome);
 
     if (outcome === 'success') {
@@ -950,10 +972,7 @@ export default function MigrateLeague() {
               />
             )}
             {step === 5 && (
-              <Step5
-                pollOutcome={pollOutcome}
-                operationId={operationId}
-              />
+              <Step5 pollOutcome={pollOutcome} operationId={operationId} />
             )}
           </CardContent>
         </Card>

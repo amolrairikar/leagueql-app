@@ -50,7 +50,8 @@ export function getPlayoffBracket(
   platform: Platform,
   season: string,
 ): Promise<GetPlayoffBracketResponse> {
-  if (isDemoMode()) return queryDemoLeague<BracketMatch>(`PLAYOFF_BRACKET#${season}`);
+  if (isDemoMode())
+    return queryDemoLeague<BracketMatch>(`PLAYOFF_BRACKET#${season}`);
   const params = new URLSearchParams({
     platform,
     queryType: `PLAYOFF_BRACKET#${season}`,
@@ -80,7 +81,8 @@ export function getWeeklyStandings(
   platform: Platform,
   season: string,
 ): Promise<GetWeeklyStandingsResponse> {
-  if (isDemoMode()) return queryDemoLeague<WeeklyStandingItem>(`WEEKLY_STANDINGS#${season}`);
+  if (isDemoMode())
+    return queryDemoLeague<WeeklyStandingItem>(`WEEKLY_STANDINGS#${season}`);
   const params = new URLSearchParams({
     platform,
     queryType: `WEEKLY_STANDINGS#${season}`,

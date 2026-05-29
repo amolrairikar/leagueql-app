@@ -12,11 +12,10 @@ import react from 'eslint-plugin-react';
 import eslintPluginPrettierRecommended from 'eslint-plugin-prettier/recommended';
 
 export default defineConfig([
-
   globalIgnores([
-    'dist', 
-    'coverage', 
-    'eslint.config.js', 
+    'dist',
+    'coverage',
+    'eslint.config.js',
     'src/lib/utils.ts',
     'src/components/ui/**',
   ]),
@@ -26,7 +25,7 @@ export default defineConfig([
   ...tseslint.configs.stylisticTypeChecked,
   react.configs.flat.recommended,
   react.configs.flat['jsx-runtime'],
-  
+
   {
     files: ['**/*.{ts,tsx}'],
     plugins: {
@@ -50,11 +49,22 @@ export default defineConfig([
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
-      'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
+      'react-refresh/only-export-components': [
+        'warn',
+        { allowConstantExport: true },
+      ],
       'import/order': [
         'error',
         {
-          groups: ['builtin', 'external', 'internal', 'parent', 'sibling', 'index', 'object'],
+          groups: [
+            'builtin',
+            'external',
+            'internal',
+            'parent',
+            'sibling',
+            'index',
+            'object',
+          ],
           'newlines-between': 'always',
           alphabetize: { order: 'asc', caseInsensitive: true },
         },

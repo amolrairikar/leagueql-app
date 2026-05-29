@@ -42,7 +42,6 @@ export function BoxScoreCard({
         </button>
       )}
       <div className="bg-card border border-border/50 rounded-lg overflow-hidden">
-
         {/* Desktop header */}
         <div className="hidden sm:grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-4 py-3.5 border-b border-border/50 bg-muted">
           <div className="flex items-center gap-2">
@@ -54,17 +53,25 @@ export function BoxScoreCard({
               size="lg"
             />
             <div>
-              <div className="text-[14px] font-medium text-foreground">{left.ownerUsername}</div>
-              <div className="text-[11px] text-muted-foreground">{left.teamName}</div>
+              <div className="text-[14px] font-medium text-foreground">
+                {left.ownerUsername}
+              </div>
+              <div className="text-[11px] text-muted-foreground">
+                {left.teamName}
+              </div>
             </div>
           </div>
           <div className="text-center">
             <div className="flex items-center justify-center gap-3">
-              <span className={`text-[28px] font-medium tabular-nums ${left.isWinner ? 'text-foreground' : 'text-muted-foreground'}`}>
+              <span
+                className={`text-[28px] font-medium tabular-nums ${left.isWinner ? 'text-foreground' : 'text-muted-foreground'}`}
+              >
                 {Number(left.score).toFixed(2)}
               </span>
               <span className="text-[18px] text-muted-foreground">–</span>
-              <span className={`text-[28px] font-medium tabular-nums ${right.isWinner ? 'text-foreground' : 'text-muted-foreground'}`}>
+              <span
+                className={`text-[28px] font-medium tabular-nums ${right.isWinner ? 'text-foreground' : 'text-muted-foreground'}`}
+              >
                 {Number(right.score).toFixed(2)}
               </span>
             </div>
@@ -78,8 +85,12 @@ export function BoxScoreCard({
               size="lg"
             />
             <div className="text-right">
-              <div className="text-[14px] font-medium text-foreground">{right.ownerUsername}</div>
-              <div className="text-[11px] text-muted-foreground">{right.teamName}</div>
+              <div className="text-[14px] font-medium text-foreground">
+                {right.ownerUsername}
+              </div>
+              <div className="text-[11px] text-muted-foreground">
+                {right.teamName}
+              </div>
             </div>
           </div>
         </div>
@@ -97,19 +108,29 @@ export function BoxScoreCard({
                   color={side.color}
                 />
                 <div>
-                  <div className="text-[13px] font-medium text-foreground">{side.ownerUsername}</div>
-                  <div className="text-[11px] text-muted-foreground">{side.teamName}</div>
+                  <div className="text-[13px] font-medium text-foreground">
+                    {side.ownerUsername}
+                  </div>
+                  <div className="text-[11px] text-muted-foreground">
+                    {side.teamName}
+                  </div>
                 </div>
                 {side.isWinner && (
                   <span
                     className="ml-auto text-[10px] font-medium px-2 py-0.5 rounded-full"
-                    style={{ background: UI_COLORS.winner.bg, color: UI_COLORS.winner.text }}
+                    style={{
+                      background: UI_COLORS.winner.bg,
+                      color: UI_COLORS.winner.text,
+                    }}
                   >
                     Winner
                   </span>
                 )}
               </div>
-              <table className="w-full text-[12px]" style={{ tableLayout: 'fixed' }}>
+              <table
+                className="w-full text-[12px]"
+                style={{ tableLayout: 'fixed' }}
+              >
                 <thead>
                   <tr>
                     <th
@@ -133,11 +154,16 @@ export function BoxScoreCard({
                   {[...side.starters]
                     .sort(
                       (a, b) =>
-                        (FANTASY_POSITION_ORDER[a.fantasy_position ?? ''] ?? 99) -
-                        (FANTASY_POSITION_ORDER[b.fantasy_position ?? ''] ?? 99),
+                        (FANTASY_POSITION_ORDER[a.fantasy_position ?? ''] ??
+                          99) -
+                        (FANTASY_POSITION_ORDER[b.fantasy_position ?? ''] ??
+                          99),
                     )
                     .map((p) => (
-                      <tr key={p.player_id} className="border-b border-border/50 last:border-0">
+                      <tr
+                        key={p.player_id}
+                        className="border-b border-border/50 last:border-0"
+                      >
                         <td className="px-3.5 py-2.5 text-[11px] font-medium text-muted-foreground">
                           {p.fantasy_position ?? p.position}
                         </td>
@@ -150,20 +176,28 @@ export function BoxScoreCard({
                       </tr>
                     ))}
                   <tr className="bg-muted">
-                    <td colSpan={2} className="px-3.5 py-2.5 text-[12px] font-medium text-muted-foreground">
+                    <td
+                      colSpan={2}
+                      className="px-3.5 py-2.5 text-[12px] font-medium text-muted-foreground"
+                    >
                       Total
                     </td>
                     <td className="px-3.5 py-2.5 text-right font-medium text-foreground tabular-nums">
                       {Number(side.score).toFixed(2)}
                     </td>
                   </tr>
-                  {side.bench.length === 0 && platform === 'ESPN' && Number(season) < 2018 && (
-                    <tr>
-                      <td colSpan={3} className="px-3.5 py-2.5 text-[11px] text-muted-foreground italic">
-                        Bench data unavailable for ESPN seasons prior to 2018.
-                      </td>
-                    </tr>
-                  )}
+                  {side.bench.length === 0 &&
+                    platform === 'ESPN' &&
+                    Number(season) < 2018 && (
+                      <tr>
+                        <td
+                          colSpan={3}
+                          className="px-3.5 py-2.5 text-[11px] text-muted-foreground italic"
+                        >
+                          Bench data unavailable for ESPN seasons prior to 2018.
+                        </td>
+                      </tr>
+                    )}
                   {side.bench.length > 0 && (
                     <>
                       <tr className="bg-muted">
@@ -175,7 +209,10 @@ export function BoxScoreCard({
                         </td>
                       </tr>
                       {side.bench.map((p) => (
-                        <tr key={p.player_id} className="border-b border-border/50 last:border-0">
+                        <tr
+                          key={p.player_id}
+                          className="border-b border-border/50 last:border-0"
+                        >
                           <td className="px-3.5 py-2.5 text-[11px] font-medium text-muted-foreground">
                             {p.position}
                           </td>

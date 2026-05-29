@@ -16,16 +16,22 @@ const PROTECTED_ROUTES = [
 test.describe('Unauthenticated behavior', () => {
   test('landing page loads without authentication', async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByRole('button', { name: 'Connect Your League' })).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Connect Your League' }),
+    ).toBeVisible();
     await expect(page.getByRole('button', { name: 'View Demo' })).toBeVisible();
   });
 
-  test('privacy page is accessible without authentication', async ({ page }) => {
+  test('privacy page is accessible without authentication', async ({
+    page,
+  }) => {
     await page.goto('/privacy');
     await expect(page).not.toHaveURL('/');
   });
 
-  test('changelog page is accessible without authentication', async ({ page }) => {
+  test('changelog page is accessible without authentication', async ({
+    page,
+  }) => {
     await page.goto('/changelog');
     await expect(page).not.toHaveURL('/');
   });
@@ -33,10 +39,14 @@ test.describe('Unauthenticated behavior', () => {
   test('docs page is accessible without authentication', async ({ page }) => {
     await page.goto('/docs');
     await expect(page).not.toHaveURL('/');
-    await expect(page.getByRole('heading', { name: 'User Guide' })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'User Guide' }),
+    ).toBeVisible();
   });
 
-  test('all protected routes redirect to landing page when unauthenticated', async ({ page }) => {
+  test('all protected routes redirect to landing page when unauthenticated', async ({
+    page,
+  }) => {
     for (const route of PROTECTED_ROUTES) {
       await page.goto(route);
       await expect(page).toHaveURL('/');

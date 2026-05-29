@@ -169,7 +169,9 @@ function PositionCard({
                 <td
                   className="px-3 py-2"
                   style={
-                    isGold ? { borderLeft: `2px solid ${UI_COLORS.gold}` } : undefined
+                    isGold
+                      ? { borderLeft: `2px solid ${UI_COLORS.gold}` }
+                      : undefined
                   }
                 >
                   <span className="text-[11px] text-muted-foreground">

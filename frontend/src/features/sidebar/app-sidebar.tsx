@@ -143,7 +143,10 @@ export function AppSidebar() {
                   <SidebarMenuButton
                     tooltip="Connect Your League"
                     className="cursor-pointer"
-                    onClick={() => { closeMobileSidebar(); handleConnectFromDemo(); }}
+                    onClick={() => {
+                      closeMobileSidebar();
+                      handleConnectFromDemo();
+                    }}
                   >
                     <LogIn />
                     <span>Connect Your League</span>
@@ -193,7 +196,11 @@ export function AppSidebar() {
                       tooltip="Request a Feature"
                       className="cursor-pointer"
                     >
-                      <a href="https://leagueql.supahub.com/en/b/feature-requests" target="_blank" rel="noopener noreferrer">
+                      <a
+                        href="https://leagueql.supahub.com/en/b/feature-requests"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
                         <Lightbulb />
                         <span>Request a Feature</span>
                       </a>
@@ -220,12 +227,14 @@ export function AppSidebar() {
                         <DialogHeader>
                           <DialogTitle>Delete League</DialogTitle>
                           <DialogDescription>
-                            This will permanently delete all data for this league.
-                            This action cannot be undone.
+                            This will permanently delete all data for this
+                            league. This action cannot be undone.
                           </DialogDescription>
                         </DialogHeader>
                         {deleteError && (
-                          <p className="text-sm text-destructive">{deleteError}</p>
+                          <p className="text-sm text-destructive">
+                            {deleteError}
+                          </p>
                         )}
                         <DialogFooter>
                           <Button
@@ -259,7 +268,10 @@ export function AppSidebar() {
           <SidebarMenuButton
             tooltip="Exit Demo"
             className="cursor-pointer text-muted-foreground hover:text-foreground"
-            onClick={() => { closeMobileSidebar(); handleExitDemo(); }}
+            onClick={() => {
+              closeMobileSidebar();
+              handleExitDemo();
+            }}
           >
             <LogOut />
             {state === 'expanded' && <span>Exit Demo</span>}

@@ -16,22 +16,34 @@ export async function getAllSeasonsMatchups(
       queryDemoLeague<PlatformMigrationEntry>('PLATFORM_MIGRATION'),
     ]);
     const migrationMapping = new Map<string, string>(
-      migrationRes.data.map((e) => [e.current_platform_owner_id, e.new_platform_owner_id]),
+      migrationRes.data.map((e) => [
+        e.current_platform_owner_id,
+        e.new_platform_owner_id,
+      ]),
     );
     return { matchups: matchupsRes.data, migrationMapping };
   }
 
   const [matchups, migrationResult] = await Promise.all([
     apiClient
-      .get<{ data: MatchupItem[] }>(`/leagues/${leagueId}/query?${new URLSearchParams({ platform, queryType: 'MATCHUPS#' })}`)
+      .get<{
+        data: MatchupItem[];
+      }>(
+        `/leagues/${leagueId}/query?${new URLSearchParams({ platform, queryType: 'MATCHUPS#' })}`,
+      )
       .then((res) => res.data),
     apiClient
-      .get<{ data: PlatformMigrationEntry[] }>(`/leagues/${leagueId}/query?${new URLSearchParams({ platform, queryType: 'PLATFORM_MIGRATION' })}`)
+      .get<{ data: PlatformMigrationEntry[] }>(
+        `/leagues/${leagueId}/query?${new URLSearchParams({ platform, queryType: 'PLATFORM_MIGRATION' })}`,
+      )
       .then((r) => r.data)
       .catch(() => [] as PlatformMigrationEntry[]),
   ]);
   const migrationMapping = new Map<string, string>(
-    migrationResult.map((e) => [e.current_platform_owner_id, e.new_platform_owner_id]),
+    migrationResult.map((e) => [
+      e.current_platform_owner_id,
+      e.new_platform_owner_id,
+    ]),
   );
   return { matchups, migrationMapping };
 }

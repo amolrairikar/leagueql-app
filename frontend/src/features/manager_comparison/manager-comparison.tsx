@@ -1,4 +1,12 @@
-import { Fragment, Suspense, use, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Fragment,
+  Suspense,
+  use,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import { BoxScoreCard, type BoxScoreSide } from '@/components/box-score-card';
 import { avatarColor } from '@/components/team-avatar';
@@ -121,7 +129,10 @@ function longestWinStreak(games: GameLog[], side: 'left' | 'right'): number {
   return best;
 }
 
-function buildManagers(matchups: MatchupItem[], migrationMapping: Map<string, string>): Manager[] {
+function buildManagers(
+  matchups: MatchupItem[],
+  migrationMapping: Map<string, string>,
+): Manager[] {
   const ownerMap = new Map<
     string,
     {
@@ -206,8 +217,12 @@ function buildGameLogs(
 ): GameLog[] {
   const logs: GameLog[] = [];
   for (const m of matchups) {
-    const aOwner = migrationMapping.get(m.team_a_primary_owner_id) ?? m.team_a_primary_owner_id;
-    const bOwner = migrationMapping.get(m.team_b_primary_owner_id) ?? m.team_b_primary_owner_id;
+    const aOwner =
+      migrationMapping.get(m.team_a_primary_owner_id) ??
+      m.team_a_primary_owner_id;
+    const bOwner =
+      migrationMapping.get(m.team_b_primary_owner_id) ??
+      m.team_b_primary_owner_id;
 
     if (
       (aOwner === leftOwnerId && bOwner === rightOwnerId) ||
@@ -374,7 +389,9 @@ function ManagerBoxScoreView({
   const lWins = game.lp > game.rp;
   const leftSide: BoxScoreSide = {
     teamLogo: game.leftIsA ? m.team_a_team_logo : m.team_b_team_logo,
-    teamName: (game.leftIsA ? m.team_a_team_name : m.team_b_team_name) || `Team ${left.name}`,
+    teamName:
+      (game.leftIsA ? m.team_a_team_name : m.team_b_team_name) ||
+      `Team ${left.name}`,
     ownerUsername: left.name,
     color: left.color,
     score: game.lp,
@@ -384,7 +401,9 @@ function ManagerBoxScoreView({
   };
   const rightSide: BoxScoreSide = {
     teamLogo: game.leftIsA ? m.team_b_team_logo : m.team_a_team_logo,
-    teamName: (game.leftIsA ? m.team_b_team_name : m.team_a_team_name) || `Team ${right.name}`,
+    teamName:
+      (game.leftIsA ? m.team_b_team_name : m.team_a_team_name) ||
+      `Team ${right.name}`,
     ownerUsername: right.name,
     color: right.color,
     score: game.rp,
@@ -409,11 +428,17 @@ function ManagerComparisonInner({
   matchupsPromise,
   platform,
 }: {
-  matchupsPromise: Promise<{ matchups: MatchupItem[]; migrationMapping: Map<string, string> }>;
+  matchupsPromise: Promise<{
+    matchups: MatchupItem[];
+    migrationMapping: Map<string, string>;
+  }>;
   platform: 'ESPN' | 'SLEEPER';
 }) {
   const { matchups, migrationMapping } = use(matchupsPromise);
-  const managers = useMemo(() => buildManagers(matchups, migrationMapping), [matchups, migrationMapping]);
+  const managers = useMemo(
+    () => buildManagers(matchups, migrationMapping),
+    [matchups, migrationMapping],
+  );
 
   const [li, setLi] = useState(0);
   const [ri, setRi] = useState(Math.min(1, managers.length - 1));
@@ -422,7 +447,10 @@ function ManagerComparisonInner({
 
   useEffect(() => {
     if (selectedGameIdx !== null) {
-      boxScoreRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      boxScoreRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
     }
   }, [selectedGameIdx]);
 
@@ -441,7 +469,10 @@ function ManagerComparisonInner({
   const L = managers[li];
   const R = managers[ri];
   const games = useMemo(
-    () => (L && R ? buildGameLogs(matchups, L.ownerId, R.ownerId, migrationMapping) : []),
+    () =>
+      L && R
+        ? buildGameLogs(matchups, L.ownerId, R.ownerId, migrationMapping)
+        : [],
     [matchups, L, R, migrationMapping],
   );
 
@@ -668,7 +699,10 @@ export default function ManagerComparison() {
     () =>
       leagueId
         ? getAllSeasonsMatchups(leagueId, platform)
-        : Promise.resolve({ matchups: [] as MatchupItem[], migrationMapping: new Map<string, string>() }),
+        : Promise.resolve({
+            matchups: [] as MatchupItem[],
+            migrationMapping: new Map<string, string>(),
+          }),
     [leagueId, platform],
   );
 

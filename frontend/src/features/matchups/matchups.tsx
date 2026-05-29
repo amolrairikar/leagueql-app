@@ -42,7 +42,10 @@ type MatchupsResult =
   | { ok: true; data: MatchupsData }
   | { ok: false; error: string };
 
-function processData(matchups: MatchupItem[], standings: WeeklyStandingItem[]): MatchupsData {
+function processData(
+  matchups: MatchupItem[],
+  standings: WeeklyStandingItem[],
+): MatchupsData {
   const recordsByWeek: Record<number, Record<string, string>> = {};
   for (const s of standings) {
     const week = parseInt(s.snapshot_week, 10);
@@ -50,9 +53,10 @@ function processData(matchups: MatchupItem[], standings: WeeklyStandingItem[]): 
     (recordsByWeek[week] ??= {})[s.team_id] = s.record;
   }
   const regularSeasonWeeks = Object.keys(recordsByWeek).map(Number);
-  const lastRegularSeasonRecords = regularSeasonWeeks.length > 0
-    ? recordsByWeek[Math.max(...regularSeasonWeeks)]
-    : {};
+  const lastRegularSeasonRecords =
+    regularSeasonWeeks.length > 0
+      ? recordsByWeek[Math.max(...regularSeasonWeeks)]
+      : {};
 
   const uniqueTeams = new Map<string, string>();
   for (const m of matchups) {
@@ -116,7 +120,6 @@ function processData(matchups: MatchupItem[], standings: WeeklyStandingItem[]): 
   return { weeks, matchupsByWeek: byWeek };
 }
 
-
 function MatchupCard({
   matchup,
   isSelected,
@@ -146,8 +149,14 @@ function MatchupCard({
             className="text-[10px] font-medium px-2 py-0.5 rounded-full"
             style={
               matchup.playoffRound === 'Losers Bracket'
-                ? { background: MATCHUP_STATUS_COLORS.pending.bg, color: MATCHUP_STATUS_COLORS.pending.text }
-                : { background: MATCHUP_STATUS_COLORS.completed.bg, color: MATCHUP_STATUS_COLORS.completed.text }
+                ? {
+                    background: MATCHUP_STATUS_COLORS.pending.bg,
+                    color: MATCHUP_STATUS_COLORS.pending.text,
+                  }
+                : {
+                    background: MATCHUP_STATUS_COLORS.completed.bg,
+                    color: MATCHUP_STATUS_COLORS.completed.text,
+                  }
             }
           >
             {matchup.playoffRound}
@@ -168,7 +177,8 @@ function MatchupCard({
                 {matchup.teamA.ownerUsername}
               </div>
               <div className="text-[11px] text-muted-foreground">
-                {matchup.teamA.teamName}{matchup.teamA.record ? ` (${matchup.teamA.record})` : ''}
+                {matchup.teamA.teamName}
+                {matchup.teamA.record ? ` (${matchup.teamA.record})` : ''}
               </div>
             </div>
           </div>
@@ -196,7 +206,8 @@ function MatchupCard({
                 {matchup.teamB.ownerUsername}
               </div>
               <div className="text-[11px] text-muted-foreground">
-                {matchup.teamB.teamName}{matchup.teamB.record ? ` (${matchup.teamB.record})` : ''}
+                {matchup.teamB.teamName}
+                {matchup.teamB.record ? ` (${matchup.teamB.record})` : ''}
               </div>
             </div>
           </div>

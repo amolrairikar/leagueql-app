@@ -33,7 +33,10 @@ let _leagueName = 'Demo Fantasy League';
 async function loadDemoData(): Promise<Record<string, unknown[]>> {
   if (_data) return _data;
   const json = await import('./demo-data.json');
-  const payload = json.default as { league_name: string; data: Record<string, unknown[]> };
+  const payload = json.default as {
+    league_name: string;
+    data: Record<string, unknown[]>;
+  };
   _leagueName = payload.league_name;
   _data = payload.data;
   return _data;
@@ -41,7 +44,10 @@ async function loadDemoData(): Promise<Record<string, unknown[]>> {
 
 // ── SK resolution (mirrors query_league in main.py) ───────────────────────────
 
-function resolveQuery(data: Record<string, unknown[]>, queryType: string): unknown[] {
+function resolveQuery(
+  data: Record<string, unknown[]>,
+  queryType: string,
+): unknown[] {
   const firstHash = queryType.indexOf('#');
   const baseType = firstHash >= 0 ? queryType.slice(0, firstHash) : queryType;
   const suffix = firstHash >= 0 ? queryType.slice(firstHash + 1) : null;

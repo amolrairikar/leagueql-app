@@ -23,7 +23,8 @@ export function getSeasonWeeklyStandings(
   platform: Platform,
   season: string,
 ): Promise<{ data: WeeklyStandingItem[] }> {
-  if (isDemoMode()) return queryDemoLeague<WeeklyStandingItem>(`WEEKLY_STANDINGS#${season}`);
+  if (isDemoMode())
+    return queryDemoLeague<WeeklyStandingItem>(`WEEKLY_STANDINGS#${season}`);
   const params = new URLSearchParams({
     platform,
     queryType: `WEEKLY_STANDINGS#${season}`,

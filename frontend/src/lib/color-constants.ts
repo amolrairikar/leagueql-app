@@ -14,8 +14,18 @@ export interface PositionColorMeta {
 
 export const POSITION_COLORS: Record<string, PositionColorMeta> = {
   QB: { color: '#4338ca', bg: '#EEEDFE', tc: '#3C3489', label: 'Quarterbacks' },
-  WR: { color: '#993c1d', bg: '#FAECE7', tc: '#712B13', label: 'Wide receivers' },
-  RB: { color: '#0f6e56', bg: '#E1F5EE', tc: '#085041', label: 'Running backs' },
+  WR: {
+    color: '#993c1d',
+    bg: '#FAECE7',
+    tc: '#712B13',
+    label: 'Wide receivers',
+  },
+  RB: {
+    color: '#0f6e56',
+    bg: '#E1F5EE',
+    tc: '#085041',
+    label: 'Running backs',
+  },
   TE: { color: '#BA7517', bg: '#FAEEDA', tc: '#633806', label: 'Tight ends' },
   DEF: { color: '#185FA5', bg: '#E6F1FB', tc: '#0C447C', label: 'Defenses' },
   K: { color: '#5F5E5A', bg: '#F1EFE8', tc: '#444441', label: 'Kickers' },

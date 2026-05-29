@@ -50,7 +50,8 @@ import { ApiError, clearApiError } from '@/lib/api-client';
 
 const API_PLATFORM = { espn: 'ESPN', sleeper: 'SLEEPER' } as const;
 
-const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+const sleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
 
 const MAX_ONBOARD_ATTEMPTS = 3;
 const MAX_CONSECUTIVE_ERRORS = 3;
@@ -72,7 +73,11 @@ export async function pollForCompletion(
     pollCount += 1;
     await sleep(POLL_INTERVAL_MS);
     try {
-      const statusData = await getRefreshStatus(leagueId, platform, requestType);
+      const statusData = await getRefreshStatus(
+        leagueId,
+        platform,
+        requestType,
+      );
       const { refresh_status } = statusData.data;
       consecutiveErrors = 0;
       if (refresh_status === 'COMPLETED') {
@@ -97,7 +102,9 @@ function CopyOperationId({ operationId }: { operationId: string }) {
   const handleCopy = () => {
     void navigator.clipboard.writeText(operationId).then(() => {
       setCopied(true);
-      setTimeout(() => { setCopied(false); }, 2000);
+      setTimeout(() => {
+        setCopied(false);
+      }, 2000);
     });
   };
 
@@ -114,10 +121,16 @@ function CopyOperationId({ operationId }: { operationId: string }) {
               className="h-5 w-5 shrink-0"
               onClick={handleCopy}
             >
-              {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+              {copied ? (
+                <Check className="h-3 w-3" />
+              ) : (
+                <Copy className="h-3 w-3" />
+              )}
             </Button>
           </TooltipTrigger>
-          <TooltipContent>{copied ? 'Copied!' : 'Copy operation ID'}</TooltipContent>
+          <TooltipContent>
+            {copied ? 'Copied!' : 'Copy operation ID'}
+          </TooltipContent>
         </Tooltip>
       </TooltipProvider>
     </span>
@@ -129,15 +142,20 @@ export default function LeagueConnect() {
   const [pollStatus, setPollStatus] = useState<'idle' | 'success' | 'failed'>(
     'idle',
   );
-  const [lastRequestType, setLastRequestType] = useState<'ONBOARD' | 'REFRESH' | null>(null);
+  const [lastRequestType, setLastRequestType] = useState<
+    'ONBOARD' | 'REFRESH' | null
+  >(null);
   const [operationId, setOperationId] = useState<string | null>(null);
   const [loadingMessage, setLoadingMessage] = useState('');
   const loadingStartRef = useRef<number | null>(null);
-  const loadingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const loadingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
+    null,
+  );
 
   const urlParams = new URLSearchParams(window.location.search);
   const urlLeagueId = urlParams.get('leagueId') ?? '';
-  const urlPlatform = urlParams.get('platform') === 'sleeper' ? 'sleeper' : 'espn';
+  const urlPlatform =
+    urlParams.get('platform') === 'sleeper' ? 'sleeper' : 'espn';
 
   const {
     control,
@@ -156,13 +174,17 @@ export default function LeagueConnect() {
   const platform = useWatch({ control, name: 'platform' });
   const espnErrors = errors as FieldErrors<EspnFormValues>;
 
-  const [extensionReady, setExtensionReady] = useState(isEspnExtensionAvailable);
+  const [extensionReady, setExtensionReady] = useState(
+    isEspnExtensionAvailable,
+  );
   const [autofilling, setAutofilling] = useState(false);
   const [autofillError, setAutofillError] = useState<string | null>(null);
 
   useEffect(() => {
     if (extensionReady) return;
-    return onEspnExtensionReady(() => { setExtensionReady(true); });
+    return onEspnExtensionReady(() => {
+      setExtensionReady(true);
+    });
   }, [extensionReady]);
 
   const handleAutofill = async () => {
@@ -264,7 +286,11 @@ export default function LeagueConnect() {
 
     setLastRequestType(requestType);
     await sleep(POLL_INITIAL_DELAY_MS);
-    const result = await pollForCompletion(data.leagueId, apiPlatform, requestType);
+    const result = await pollForCompletion(
+      data.leagueId,
+      apiPlatform,
+      requestType,
+    );
     if (result === 'failed') setOperationId(capturedOperationId);
     setPollStatus(result);
     if (result === 'success') {
@@ -349,10 +375,7 @@ export default function LeagueConnect() {
                     />
                     {espnErrors.latestSeason && (
                       <p className="text-sm text-destructive">
-                        {
-                          espnErrors.latestSeason
-                            ?.message
-                        }
+                        {espnErrors.latestSeason?.message}
                       </p>
                     )}
                   </div>
@@ -365,7 +388,10 @@ export default function LeagueConnect() {
                             <HelpCircle className="size-3.5 text-muted-foreground cursor-help" />
                           </TooltipTrigger>
                           <TooltipContent side="right" className="max-w-64">
-                            Found in your ESPN cookies. In your browser, open DevTools → Application → Cookies → fantasy.espn.com, then copy the value of the SWID cookie (including the curly braces).
+                            Found in your ESPN cookies. In your browser, open
+                            DevTools → Application → Cookies → fantasy.espn.com,
+                            then copy the value of the SWID cookie (including
+                            the curly braces).
                           </TooltipContent>
                         </Tooltip>
                       </TooltipProvider>
@@ -391,7 +417,9 @@ export default function LeagueConnect() {
                             <HelpCircle className="size-3.5 text-muted-foreground cursor-help" />
                           </TooltipTrigger>
                           <TooltipContent side="right" className="max-w-64">
-                            Found in your ESPN cookies. In your browser, open DevTools → Application → Cookies → fantasy.espn.com, then copy the value of the espn_s2 cookie.
+                            Found in your ESPN cookies. In your browser, open
+                            DevTools → Application → Cookies → fantasy.espn.com,
+                            then copy the value of the espn_s2 cookie.
                           </TooltipContent>
                         </Tooltip>
                       </TooltipProvider>
@@ -404,10 +432,7 @@ export default function LeagueConnect() {
                     />
                     {espnErrors.espnS2 && (
                       <p className="text-sm text-destructive">
-                        {
-                          espnErrors.espnS2
-                            ?.message
-                        }
+                        {espnErrors.espnS2?.message}
                       </p>
                     )}
                   </div>
@@ -475,15 +500,23 @@ export default function LeagueConnect() {
             {pollStatus === 'failed' && (
               <Alert variant="destructive" className="mt-4">
                 <AlertTitle>
-                  {lastRequestType === 'REFRESH' ? 'Refresh Failed' : 'Onboarding Failed'}
+                  {lastRequestType === 'REFRESH'
+                    ? 'Refresh Failed'
+                    : 'Onboarding Failed'}
                 </AlertTitle>
                 <AlertDescription>
                   {lastRequestType === 'REFRESH'
                     ? 'League refresh failed. Please try again or contact support if the error persists.'
                     : 'League onboarding failed. Please try again or contact support if the error persists.'}
                   {operationId ? (
-                    <> Provide the below operation ID when contacting support: <CopyOperationId operationId={operationId} /></>
-                  ) : ''}
+                    <>
+                      {' '}
+                      Provide the below operation ID when contacting support:{' '}
+                      <CopyOperationId operationId={operationId} />
+                    </>
+                  ) : (
+                    ''
+                  )}
                 </AlertDescription>
               </Alert>
             )}

@@ -10,7 +10,12 @@ const linkClass = `
   transition-colors duration-200
 `;
 
-export const NavLink = memo(function NavLink({ href, icon: Icon, label, external = true }: NavLinkItem) {
+export const NavLink = memo(function NavLink({
+  href,
+  icon: Icon,
+  label,
+  external = true,
+}: NavLinkItem) {
   if (external) {
     return (
       <a
