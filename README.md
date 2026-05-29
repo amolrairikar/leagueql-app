@@ -18,10 +18,10 @@
 - All-time fantasy player performance records
 - All-time fantasy team performance records
 - League migration: track all-time metrics even if your fantasy league migrates platforms
+- Chrome extension to auto-fill your ESPN cookies during onboarding (see [`extension/`](./extension))
 
 # Roadmap
 - Add support for additional platforms (e.g. Yahoo, NFL.com)
-- Create a Chrome extension to auto-fill ESPN cookies
 - Support leagues with auction drafts (the current draft page is designed for snake drafts)
 
 

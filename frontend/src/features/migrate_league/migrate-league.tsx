@@ -34,6 +34,12 @@ import {
   type TeamEntry,
 } from '@/features/migrate_league/api-calls';
 import { setLeagueCookies, getLeagueCookies } from '@/lib/cookie-handler';
+import {
+  EspnExtensionError,
+  isEspnExtensionAvailable,
+  onEspnExtensionReady,
+  requestEspnCookies,
+} from '@/lib/espn-extension';
 import type { Platform } from '@/components/api/types';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -199,6 +205,15 @@ function Step2({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [extensionReady, setExtensionReady] = useState(isEspnExtensionAvailable);
+  const [autofilling, setAutofilling] = useState(false);
+  const [autofillError, setAutofillError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (extensionReady) return;
+    return onEspnExtensionReady(() => { setExtensionReady(true); });
+  }, [extensionReady]);
+
   function handlePlatformChange(value: 'ESPN' | 'SLEEPER') {
     setDestinationPlatform(value);
     setNewPlatformLeagueId('');
@@ -206,6 +221,25 @@ function Step2({
     setSwid('');
     setS2('');
     setError(null);
+    setAutofillError(null);
+  }
+
+  async function handleAutofill() {
+    setAutofillError(null);
+    setAutofilling(true);
+    try {
+      const { swid: nextSwid, espnS2 } = await requestEspnCookies();
+      setSwid(nextSwid);
+      setS2(espnS2);
+    } catch (err) {
+      setAutofillError(
+        err instanceof EspnExtensionError && err.reason === 'not_logged_in'
+          ? 'Log into fantasy.espn.com, then try again.'
+          : 'Could not reach the ESPN extension. Please try again.',
+      );
+    } finally {
+      setAutofilling(false);
+    }
   }
 
   async function handleNext() {
@@ -362,6 +396,28 @@ function Step2({
               onChange={(e) => setS2(e.target.value)}
             />
           </div>
+          {extensionReady && (
+            <div className="flex flex-col gap-2">
+              <Button
+                variant="outline"
+                className="w-full cursor-pointer"
+                disabled={autofilling}
+                onClick={() => void handleAutofill()}
+              >
+                {autofilling ? (
+                  <span className="flex items-center gap-2">
+                    <Spinner />
+                    Autofilling
+                  </span>
+                ) : (
+                  'Autofill cookies from ESPN'
+                )}
+              </Button>
+              {autofillError && (
+                <p className="text-sm text-destructive">{autofillError}</p>
+              )}
+            </div>
+          )}
         </>
       )}
 

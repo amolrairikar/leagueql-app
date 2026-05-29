@@ -40,6 +40,12 @@ import {
   leagueConnectSchema,
 } from '@/features/connect_league/league-connect-schema';
 import { clearEspnCookies, setLeagueCookies } from '@/lib/cookie-handler';
+import {
+  EspnExtensionError,
+  isEspnExtensionAvailable,
+  onEspnExtensionReady,
+  requestEspnCookies,
+} from '@/lib/espn-extension';
 import { ApiError, clearApiError } from '@/lib/api-client';
 
 const API_PLATFORM = { espn: 'ESPN', sleeper: 'SLEEPER' } as const;
@@ -137,6 +143,7 @@ export default function LeagueConnect() {
     control,
     register,
     handleSubmit,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<LeagueConnectFormValues>({
     resolver: zodResolver(leagueConnectSchema),
@@ -148,6 +155,33 @@ export default function LeagueConnect() {
 
   const platform = useWatch({ control, name: 'platform' });
   const espnErrors = errors as FieldErrors<EspnFormValues>;
+
+  const [extensionReady, setExtensionReady] = useState(isEspnExtensionAvailable);
+  const [autofilling, setAutofilling] = useState(false);
+  const [autofillError, setAutofillError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (extensionReady) return;
+    return onEspnExtensionReady(() => { setExtensionReady(true); });
+  }, [extensionReady]);
+
+  const handleAutofill = async () => {
+    setAutofillError(null);
+    setAutofilling(true);
+    try {
+      const { swid, espnS2 } = await requestEspnCookies();
+      setValue('swid', swid, { shouldValidate: true });
+      setValue('espnS2', espnS2, { shouldValidate: true });
+    } catch (err) {
+      setAutofillError(
+        err instanceof EspnExtensionError && err.reason === 'not_logged_in'
+          ? 'Log into fantasy.espn.com, then try again.'
+          : 'Could not reach the ESPN extension. Please try again.',
+      );
+    } finally {
+      setAutofilling(false);
+    }
+  };
 
   useEffect(() => {
     if (isSubmitting) {
@@ -377,6 +411,31 @@ export default function LeagueConnect() {
                       </p>
                     )}
                   </div>
+                  {extensionReady && (
+                    <div className="flex flex-col gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full cursor-pointer"
+                        disabled={autofilling}
+                        onClick={() => void handleAutofill()}
+                      >
+                        {autofilling ? (
+                          <span className="flex items-center gap-2">
+                            <Spinner />
+                            Autofilling
+                          </span>
+                        ) : (
+                          'Autofill cookies from ESPN'
+                        )}
+                      </Button>
+                      {autofillError && (
+                        <p className="text-sm text-destructive">
+                          {autofillError}
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </>
               )}
               <div className="flex gap-2">
