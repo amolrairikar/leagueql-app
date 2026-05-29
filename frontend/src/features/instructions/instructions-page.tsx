@@ -59,7 +59,7 @@ const FAQ_ITEMS: FaqItem[] = [
       'Go to Application → Cookies → fantasy.espn.com',
       'Find SWID and espn_s2 and copy their values',
     ],
-    note: '**A Chrome extension that auto-populates ESPN cookies is in development.',
+    note: 'With the LeagueQL ESPN Cookie Helper Chrome extension installed, you can skip these steps — just log into ESPN, then click "Autofill from ESPN" on the onboarding form.',
   },
   {
     q: 'The connection timed out — what happened?',
