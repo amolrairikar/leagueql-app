@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "Chrome extension that auto-fills ESPN SWID and espn_s2 cookies into the LeagueQL onboarding form.",
+  "description": "Chrome extension that auto-fills ESPN SWID and espn_s2 cookies for LeagueQL app.",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",

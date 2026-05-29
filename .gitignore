@@ -8,6 +8,9 @@ backend.hcl
 terraform.tfvars
 terraform.tfplan
 
+# Bundled Chrome extension
+extension/*.zip
+
 # Python files
 __pycache__
 .env
