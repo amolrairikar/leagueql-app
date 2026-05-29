@@ -78,6 +78,14 @@ export function AppSidebar() {
 
   const demoMode = isDemoMode();
 
+  // Pre-fill (and lock) the platform/league ID on the refresh form with the
+  // league the user is currently viewing.
+  const { leagueId: currentLeagueId, platform: currentPlatform } =
+    getLeagueCookies();
+  const refreshLeagueUrl = currentLeagueId
+    ? `/connect_league?leagueId=${encodeURIComponent(currentLeagueId)}&platform=${currentPlatform.toLowerCase()}`
+    : '/connect_league';
+
   function handleExitDemo() {
     clearAllLeagueCookies();
     void navigate('/');
@@ -160,7 +168,7 @@ export function AppSidebar() {
                       tooltip="Refresh League"
                       className="cursor-pointer"
                     >
-                      <Link to="/connect_league" onClick={closeMobileSidebar}>
+                      <Link to={refreshLeagueUrl} onClick={closeMobileSidebar}>
                         <RefreshCw />
                         <span>Refresh League</span>
                       </Link>
