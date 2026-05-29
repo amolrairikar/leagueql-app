@@ -9,7 +9,10 @@ function getBaseUrl(): string {
   if (override) return override;
   if (import.meta.env.PROD) return 'https://api.leagueql.com';
   const devUrl = import.meta.env.VITE_DEV_API_URL as string | undefined;
-  if (!devUrl) throw new Error('VITE_DEV_API_URL must be set in development (see .env.local)');
+  if (!devUrl)
+    throw new Error(
+      'VITE_DEV_API_URL must be set in development (see .env.local)',
+    );
   return devUrl;
 }
 
@@ -112,7 +115,8 @@ function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   if (method !== 'GET') return _doFetch<T>(path, init);
 
   const cached = _cache.get(path);
-  if (cached && Date.now() < cached.expires) return Promise.resolve(cached.data as T);
+  if (cached && Date.now() < cached.expires)
+    return Promise.resolve(cached.data as T);
 
   const existing = _inflight.get(path);
   if (existing) return existing as Promise<T>;

@@ -2,17 +2,22 @@ import { Fragment, Suspense, use, useEffect, useMemo, useState } from 'react';
 import { ChevronDown, Gem, Info, X } from 'lucide-react';
 
 import { Skeleton } from '@/components/ui/skeleton';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { getLeagueCookies } from '@/lib/cookie-handler';
 import { POSITION_COLORS } from '@/lib/color-constants';
 import { type DraftPickItem, getDraftData } from './api-calls';
 
 // ── Local color overrides (brighter than shared UI_COLORS for this page) ──────
 
-const GREEN  = '#16a34a';
-const RED    = '#dc2626';
+const GREEN = '#16a34a';
+const RED = '#dc2626';
 const GREEN_BG = '#dcfce7';
-const RED_BG   = '#fee2e2';
+const RED_BG = '#fee2e2';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -33,18 +38,21 @@ type DraftResult =
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const STEAL_DELTA_MIN       = 5;   // draft_rank_delta >= this → steal
-const BUST_DELTA_MAX        = -5;  // draft_rank_delta <= this → potential bust
-const BUST_ROUND_BUFFER     = 4;   // bust only when picked more than this many rounds before the last
-const BUST_ROUND_MAX        = 10;  // only flag busts / show alternatives for rounds 1–10
-const ALT_PICK_ROUND_WINDOW = 2;   // suggest alternatives within this many rounds of the pick
+const STEAL_DELTA_MIN = 5; // draft_rank_delta >= this → steal
+const BUST_DELTA_MAX = -5; // draft_rank_delta <= this → potential bust
+const BUST_ROUND_BUFFER = 4; // bust only when picked more than this many rounds before the last
+const BUST_ROUND_MAX = 10; // only flag busts / show alternatives for rounds 1–10
+const ALT_PICK_ROUND_WINDOW = 2; // suggest alternatives within this many rounds of the pick
 
 const DELTA_PILL_POS = 3;
 const DELTA_PILL_NEG = -3;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function getAlts(pick: DraftPickItem, allPicks: DraftPickItem[]): DraftPickItem[] {
+function getAlts(
+  pick: DraftPickItem,
+  allPicks: DraftPickItem[],
+): DraftPickItem[] {
   return allPicks
     .filter(
       (a) =>
@@ -106,14 +114,19 @@ function DraftRecapContent({
         seen.set(p.team_id, { id: p.team_id, username: p.owner_username });
       }
     }
-    return [...seen.values()].sort((a, b) => a.username.localeCompare(b.username));
+    return [...seen.values()].sort((a, b) =>
+      a.username.localeCompare(b.username),
+    );
   }, [allPicks]);
 
   const [selectedManager, setSelectedManager] = useState(managers[0]?.id ?? '');
   const [openBusts, setOpenBusts] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
-    if (managers.length > 0 && !managers.find((m) => m.id === selectedManager)) {
+    if (
+      managers.length > 0 &&
+      !managers.find((m) => m.id === selectedManager)
+    ) {
       setSelectedManager(managers[0].id);
     }
   }, [managers, selectedManager]);
@@ -123,19 +136,34 @@ function DraftRecapContent({
     [allPicks, selectedManager],
   );
 
-  const scorablePicks = picks.filter((p) => p.position !== 'K' && p.position !== 'D/ST');
+  const scorablePicks = picks.filter(
+    (p) => p.position !== 'K' && p.position !== 'D/ST',
+  );
 
   const bestPick = scorablePicks.length
-    ? scorablePicks.reduce((best, p) => p.draft_rank_delta > best.draft_rank_delta ? p : best)
+    ? scorablePicks.reduce((best, p) =>
+        p.draft_rank_delta > best.draft_rank_delta ? p : best,
+      )
     : null;
 
   const worstPick = scorablePicks.length
-    ? scorablePicks.reduce((worst, p) => p.draft_rank_delta < worst.draft_rank_delta ? p : worst)
+    ? scorablePicks.reduce((worst, p) =>
+        p.draft_rank_delta < worst.draft_rank_delta ? p : worst,
+      )
     : null;
 
-  const maxRound = allPicks.length ? Math.max(...allPicks.map((p) => p.round)) : 0;
-  const busts = picks.filter((p) => p.draft_rank_delta <= BUST_DELTA_MAX && p.round <= maxRound - BUST_ROUND_BUFFER && p.round <= BUST_ROUND_MAX).length;
-  const steals = picks.filter((p) => p.draft_rank_delta >= STEAL_DELTA_MIN).length;
+  const maxRound = allPicks.length
+    ? Math.max(...allPicks.map((p) => p.round))
+    : 0;
+  const busts = picks.filter(
+    (p) =>
+      p.draft_rank_delta <= BUST_DELTA_MAX &&
+      p.round <= maxRound - BUST_ROUND_BUFFER &&
+      p.round <= BUST_ROUND_MAX,
+  ).length;
+  const steals = picks.filter(
+    (p) => p.draft_rank_delta >= STEAL_DELTA_MIN,
+  ).length;
 
   const toggleBust = (key: string) => {
     setOpenBusts((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -151,7 +179,9 @@ function DraftRecapContent({
         if (!isBust) return [];
         const alts = getAlts(pick, allPicks);
         if (alts.length === 0) return [];
-        return [{ pick, alts, bustKey: `${selectedManager}-${selectedSeason}-${i}` }];
+        return [
+          { pick, alts, bustKey: `${selectedManager}-${selectedSeason}-${i}` },
+        ];
       }),
     [picks, allPicks, maxRound, selectedManager, selectedSeason],
   );
@@ -163,7 +193,9 @@ function DraftRecapContent({
 
   if (!result.ok) {
     return (
-      <p className="text-[13px] text-destructive text-center py-8">{result.error}</p>
+      <p className="text-[13px] text-destructive text-center py-8">
+        {result.error}
+      </p>
     );
   }
 
@@ -172,26 +204,36 @@ function DraftRecapContent({
       {/* Filter Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 mb-6">
         <div className="flex items-center gap-2.5">
-          <span className="text-[12px] font-medium text-muted-foreground w-16 sm:w-auto">Season</span>
+          <span className="text-[12px] font-medium text-muted-foreground w-16 sm:w-auto">
+            Season
+          </span>
           <select
             className="px-3 py-1.5 text-[13px] font-medium bg-card border border-border rounded-md text-foreground cursor-pointer"
             value={selectedSeason}
             onChange={(e) => onSeasonChange(e.target.value)}
           >
-            {[...seasons].sort((a, b) => Number(b) - Number(a)).map((s) => (
-              <option key={s} value={s}>{s}</option>
-            ))}
+            {[...seasons]
+              .sort((a, b) => Number(b) - Number(a))
+              .map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
           </select>
         </div>
         <div className="flex items-center gap-2.5">
-          <span className="text-[12px] font-medium text-muted-foreground w-16 sm:w-auto sm:ml-2">Manager</span>
+          <span className="text-[12px] font-medium text-muted-foreground w-16 sm:w-auto sm:ml-2">
+            Manager
+          </span>
           <select
             className="px-3 py-1.5 text-[13px] font-medium bg-card border border-border rounded-md text-foreground cursor-pointer"
             value={selectedManager}
             onChange={(e) => setSelectedManager(e.target.value)}
           >
             {managers.map((mgr) => (
-              <option key={mgr.id} value={mgr.id}>{mgr.username}</option>
+              <option key={mgr.id} value={mgr.id}>
+                {mgr.username}
+              </option>
             ))}
           </select>
         </div>
@@ -208,7 +250,8 @@ function DraftRecapContent({
                   <Info className="w-3 h-3 cursor-default" />
                 </TooltipTrigger>
                 <TooltipContent side="top">
-                  The player who most outperformed their drafted position rank — the pick with the highest rank delta. K and D/ST are excluded.
+                  The player who most outperformed their drafted position rank —
+                  the pick with the highest rank delta. K and D/ST are excluded.
                 </TooltipContent>
               </Tooltip>
             </span>
@@ -217,7 +260,9 @@ function DraftRecapContent({
             {bestPick ? bestPick.player_name : '—'}
           </div>
           <div className="text-[11px] text-muted-foreground mt-0.5">
-            {bestPick ? `Rd ${bestPick.round}, Pick ${bestPick.overall_pick_number}` : ''}
+            {bestPick
+              ? `Rd ${bestPick.round}, Pick ${bestPick.overall_pick_number}`
+              : ''}
           </div>
         </div>
         <div className="bg-card border border-border/50 rounded-lg p-3">
@@ -229,7 +274,9 @@ function DraftRecapContent({
                   <Info className="w-3 h-3 cursor-default" />
                 </TooltipTrigger>
                 <TooltipContent side="top">
-                  The player who most underperformed their drafted position rank — the pick with the lowest rank delta. K and D/ST are excluded.
+                  The player who most underperformed their drafted position rank
+                  — the pick with the lowest rank delta. K and D/ST are
+                  excluded.
                 </TooltipContent>
               </Tooltip>
             </span>
@@ -238,7 +285,9 @@ function DraftRecapContent({
             {worstPick ? worstPick.player_name : '—'}
           </div>
           <div className="text-[11px] text-muted-foreground mt-0.5">
-            {worstPick ? `Rd ${worstPick.round}, Pick ${worstPick.overall_pick_number}` : ''}
+            {worstPick
+              ? `Rd ${worstPick.round}, Pick ${worstPick.overall_pick_number}`
+              : ''}
           </div>
         </div>
         <div className="bg-card border border-border/50 rounded-lg p-3">
@@ -250,7 +299,8 @@ function DraftRecapContent({
                   <Info className="w-3 h-3 cursor-default" />
                 </TooltipTrigger>
                 <TooltipContent side="top">
-                  A steal is a player whose actual finish at their position was 5 or more spots better than where they were drafted.
+                  A steal is a player whose actual finish at their position was
+                  5 or more spots better than where they were drafted.
                 </TooltipContent>
               </Tooltip>
             </span>
@@ -268,7 +318,9 @@ function DraftRecapContent({
                   <Info className="w-3 h-3 cursor-default" />
                 </TooltipTrigger>
                 <TooltipContent side="top">
-                  A bust is a player whose actual finish at their position was 5 or more spots worse than where they were drafted. Only picks from rounds 1–10 are considered.
+                  A bust is a player whose actual finish at their position was 5
+                  or more spots worse than where they were drafted. Only picks
+                  from rounds 1–10 are considered.
                 </TooltipContent>
               </Tooltip>
             </span>
@@ -284,55 +336,102 @@ function DraftRecapContent({
         <table className="w-full border-separate border-spacing-0 table-fixed text-[12px]">
           <thead className="sticky top-0 z-10">
             <tr>
-              <th className="text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground px-3 py-2.5 text-left bg-muted border-b border-border/50 sticky left-0 z-20" style={{ width: '28px' }}>
+              <th
+                className="text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground px-3 py-2.5 text-left bg-muted border-b border-border/50 sticky left-0 z-20"
+                style={{ width: '28px' }}
+              >
                 #
               </th>
-              <th className="text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground px-3 py-2.5 text-left bg-muted border-b border-border/50 sticky left-[28px] z-20" style={{ width: '180px' }}>
+              <th
+                className="text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground px-3 py-2.5 text-left bg-muted border-b border-border/50 sticky left-[28px] z-20"
+                style={{ width: '180px' }}
+              >
                 Player
               </th>
-              <th className="text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground px-3 py-2.5 text-center bg-muted border-b border-border/50" style={{ width: '56px' }}>
+              <th
+                className="text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground px-3 py-2.5 text-center bg-muted border-b border-border/50"
+                style={{ width: '56px' }}
+              >
                 Pos
               </th>
-              <th className="text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground px-3 py-2.5 text-center bg-muted border-b border-border/50" style={{ width: '80px' }}>
+              <th
+                className="text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground px-3 py-2.5 text-center bg-muted border-b border-border/50"
+                style={{ width: '80px' }}
+              >
                 Total pts
               </th>
-              <th className="text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground px-3 py-2.5 text-center bg-muted border-b border-border/50" style={{ width: '72px' }}>
+              <th
+                className="text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground px-3 py-2.5 text-center bg-muted border-b border-border/50"
+                style={{ width: '72px' }}
+              >
                 VORP
               </th>
-              <th className="text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground px-3 py-2.5 text-center bg-muted border-b border-border/50" style={{ width: '100px' }}>
+              <th
+                className="text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground px-3 py-2.5 text-center bg-muted border-b border-border/50"
+                style={{ width: '100px' }}
+              >
                 Pos rank - draft
               </th>
-              <th className="text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground px-3 py-2.5 text-center bg-muted border-b border-border/50" style={{ width: '100px' }}>
+              <th
+                className="text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground px-3 py-2.5 text-center bg-muted border-b border-border/50"
+                style={{ width: '100px' }}
+              >
                 Pos rank - actual
               </th>
-              <th className="text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground px-3 py-2.5 text-center bg-muted border-b border-border/50" style={{ width: '90px' }}>
+              <th
+                className="text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground px-3 py-2.5 text-center bg-muted border-b border-border/50"
+                style={{ width: '90px' }}
+              >
                 Rank delta
               </th>
             </tr>
           </thead>
           <tbody>
             {picks.map((pick, i) => {
-              const pm = posMeta[pick.position] ?? { bg: POSITION_COLORS.K.bg, tc: POSITION_COLORS.K.tc };
+              const pm = posMeta[pick.position] ?? {
+                bg: POSITION_COLORS.K.bg,
+                tc: POSITION_COLORS.K.tc,
+              };
               const delta = pick.draft_rank_delta;
               const deltaStr = (delta >= 0 ? '+' : '') + delta;
-              const dpillCls = delta >= DELTA_PILL_POS ? 'delta-pos' : delta <= DELTA_PILL_NEG ? 'delta-neg' : 'delta-neu';
-              const isBust = delta <= BUST_DELTA_MAX && pick.round <= maxRound - BUST_ROUND_BUFFER && pick.round <= BUST_ROUND_MAX;
+              const dpillCls =
+                delta >= DELTA_PILL_POS
+                  ? 'delta-pos'
+                  : delta <= DELTA_PILL_NEG
+                    ? 'delta-neg'
+                    : 'delta-neu';
+              const isBust =
+                delta <= BUST_DELTA_MAX &&
+                pick.round <= maxRound - BUST_ROUND_BUFFER &&
+                pick.round <= BUST_ROUND_MAX;
               const bustKey = `${selectedManager}-${selectedSeason}-${i}`;
               const bustData = bustsWithAltsMap.get(bustKey);
               const isOpen = !!openBusts[bustKey];
 
               return (
                 <Fragment key={pick.pick_id}>
-                <tr>
+                  <tr>
                     <td className="border-b border-border/50 sticky left-0 z-10 bg-card">
-                      <div className="px-3 py-2.5 text-muted-foreground text-[11px]">{i + 1}</div>
+                      <div className="px-3 py-2.5 text-muted-foreground text-[11px]">
+                        {i + 1}
+                      </div>
                     </td>
                     <td className="border-b border-border/50 sticky left-[28px] z-10 bg-card">
                       <div className="px-3 py-2.5">
                         <div className="text-[13px] font-medium text-foreground flex items-center gap-1">
                           {pick.player_name}
-                          {pick.draft_rank_delta >= STEAL_DELTA_MIN && <Gem className="w-3 h-3 shrink-0" style={{ color: GREEN }} />}
-                          {isBust && <X className="w-3 h-3 shrink-0" style={{ color: RED }} />}
+                          {pick.draft_rank_delta >= STEAL_DELTA_MIN && (
+                            <Gem
+                              className="w-3 h-3 shrink-0"
+                              style={{ color: GREEN }}
+                            />
+                          )}
+                          {isBust && (
+                            <X
+                              className="w-3 h-3 shrink-0"
+                              style={{ color: RED }}
+                            />
+                          )}
                         </div>
                         <div className="text-[11px] text-muted-foreground mt-0.5">
                           <span className="inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium bg-muted text-muted-foreground">
@@ -358,9 +457,14 @@ function DraftRecapContent({
                     </td>
                     <td className="border-b border-border/50">
                       {pick.vorp === null ? (
-                        <div className="px-3 py-2.5 text-center text-[12px] text-muted-foreground">N/A</div>
+                        <div className="px-3 py-2.5 text-center text-[12px] text-muted-foreground">
+                          N/A
+                        </div>
                       ) : (
-                        <div className="px-3 py-2.5 text-center text-[13px] font-medium" style={{ color: pick.vorp >= 0 ? GREEN : RED }}>
+                        <div
+                          className="px-3 py-2.5 text-center text-[13px] font-medium"
+                          style={{ color: pick.vorp >= 0 ? GREEN : RED }}
+                        >
                           {(pick.vorp >= 0 ? '+' : '') + pick.vorp.toFixed(1)}
                         </div>
                       )}
@@ -380,67 +484,101 @@ function DraftRecapContent({
                         <span
                           className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium whitespace-nowrap ${dpillCls}`}
                           style={{
-                            background: dpillCls === 'delta-pos' ? GREEN_BG : dpillCls === 'delta-neg' ? RED_BG : POSITION_COLORS.K.bg,
-                            color: dpillCls === 'delta-pos' ? GREEN : dpillCls === 'delta-neg' ? RED : POSITION_COLORS.K.tc,
+                            background:
+                              dpillCls === 'delta-pos'
+                                ? GREEN_BG
+                                : dpillCls === 'delta-neg'
+                                  ? RED_BG
+                                  : POSITION_COLORS.K.bg,
+                            color:
+                              dpillCls === 'delta-pos'
+                                ? GREEN
+                                : dpillCls === 'delta-neg'
+                                  ? RED
+                                  : POSITION_COLORS.K.tc,
                           }}
                         >
                           {deltaStr} places
                         </span>
                       </div>
                     </td>
-                </tr>
-                {bustData && (
-                  <tr className="hidden sm:table-row">
-                    <td colSpan={8} className="border-b border-border/50 p-0">
-                      <div className="bg-muted/50 border-b border-border/50 px-3 py-2 flex items-center justify-between">
-                        <span className="text-[10px] font-medium uppercase tracking-[0.06em]" style={{ color: RED }}>
-                          Could have picked instead
-                        </span>
-                        <button
-                          className="bg-transparent border-none cursor-pointer text-[11px] text-muted-foreground p-0 flex items-center gap-1"
-                          onClick={() => toggleBust(bustKey)}
-                        >
-                          {isOpen ? 'Hide' : 'Show'} alternatives
-                          <ChevronDown
-                            className="w-2.5 h-2.5 transition-transform"
-                            style={{ transform: isOpen ? 'rotate(180deg)' : 'none' }}
-                          />
-                        </button>
-                      </div>
-                      {isOpen && (
-                        <div className="flex flex-col divide-y divide-border/50">
-                          {bustData.alts.map((alt) => {
-                            const altPm = posMeta[alt.position] ?? { bg: POSITION_COLORS.K.bg, tc: POSITION_COLORS.K.tc };
-                            const diff = (alt.total_points - pick.total_points).toFixed(2);
-                            const spotsLater = alt.overall_pick_number - pick.overall_pick_number;
-                            return (
-                              <div
-                                key={alt.pick_id}
-                                className="flex items-center gap-3 px-3 py-2.5 bg-muted/30"
-                              >
-                                <span
-                                  className="inline-flex px-1.5 py-0.5 rounded-full text-[10px] font-medium"
-                                  style={{ background: altPm.bg, color: altPm.tc }}
-                                >
-                                  {alt.position}
-                                </span>
-                                <span className="text-[12px] font-medium text-foreground flex-1">{alt.player_name}</span>
-                                <span className="text-[11px] text-muted-foreground">Picked {spotsLater} spots later</span>
-                                <span className="text-[13px] font-medium text-foreground">{alt.total_points.toFixed(2)} pts</span>
-                                <span
-                                  className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium whitespace-nowrap"
-                                  style={{ background: GREEN_BG, color: GREEN }}
-                                >
-                                  +{diff} more points
-                                </span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </td>
                   </tr>
-                )}
+                  {bustData && (
+                    <tr className="hidden sm:table-row">
+                      <td colSpan={8} className="border-b border-border/50 p-0">
+                        <div className="bg-muted/50 border-b border-border/50 px-3 py-2 flex items-center justify-between">
+                          <span
+                            className="text-[10px] font-medium uppercase tracking-[0.06em]"
+                            style={{ color: RED }}
+                          >
+                            Could have picked instead
+                          </span>
+                          <button
+                            className="bg-transparent border-none cursor-pointer text-[11px] text-muted-foreground p-0 flex items-center gap-1"
+                            onClick={() => toggleBust(bustKey)}
+                          >
+                            {isOpen ? 'Hide' : 'Show'} alternatives
+                            <ChevronDown
+                              className="w-2.5 h-2.5 transition-transform"
+                              style={{
+                                transform: isOpen ? 'rotate(180deg)' : 'none',
+                              }}
+                            />
+                          </button>
+                        </div>
+                        {isOpen && (
+                          <div className="flex flex-col divide-y divide-border/50">
+                            {bustData.alts.map((alt) => {
+                              const altPm = posMeta[alt.position] ?? {
+                                bg: POSITION_COLORS.K.bg,
+                                tc: POSITION_COLORS.K.tc,
+                              };
+                              const diff = (
+                                alt.total_points - pick.total_points
+                              ).toFixed(2);
+                              const spotsLater =
+                                alt.overall_pick_number -
+                                pick.overall_pick_number;
+                              return (
+                                <div
+                                  key={alt.pick_id}
+                                  className="flex items-center gap-3 px-3 py-2.5 bg-muted/30"
+                                >
+                                  <span
+                                    className="inline-flex px-1.5 py-0.5 rounded-full text-[10px] font-medium"
+                                    style={{
+                                      background: altPm.bg,
+                                      color: altPm.tc,
+                                    }}
+                                  >
+                                    {alt.position}
+                                  </span>
+                                  <span className="text-[12px] font-medium text-foreground flex-1">
+                                    {alt.player_name}
+                                  </span>
+                                  <span className="text-[11px] text-muted-foreground">
+                                    Picked {spotsLater} spots later
+                                  </span>
+                                  <span className="text-[13px] font-medium text-foreground">
+                                    {alt.total_points.toFixed(2)} pts
+                                  </span>
+                                  <span
+                                    className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium whitespace-nowrap"
+                                    style={{
+                                      background: GREEN_BG,
+                                      color: GREEN,
+                                    }}
+                                  >
+                                    +{diff} more points
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  )}
                 </Fragment>
               );
             })}
@@ -454,10 +592,16 @@ function DraftRecapContent({
           {bustsWithAlts.map(({ pick, alts, bustKey }) => {
             const isOpen = !!openBusts[bustKey];
             return (
-              <div key={bustKey} className="bg-card border border-border/50 rounded-lg overflow-hidden">
+              <div
+                key={bustKey}
+                className="bg-card border border-border/50 rounded-lg overflow-hidden"
+              >
                 <div className="bg-muted/50 border-b border-border/50 p-2.5 flex items-center justify-between">
                   <div>
-                    <div className="text-[10px] font-medium uppercase tracking-[0.06em] mb-0.5" style={{ color: RED }}>
+                    <div
+                      className="text-[10px] font-medium uppercase tracking-[0.06em] mb-0.5"
+                      style={{ color: RED }}
+                    >
                       Could have picked instead
                     </div>
                     <div className="text-[12px] font-medium text-foreground flex items-center gap-1">
@@ -482,9 +626,15 @@ function DraftRecapContent({
                 {isOpen && (
                   <div className="p-2.5 flex flex-col gap-1.5">
                     {alts.map((alt) => {
-                      const altPm = posMeta[alt.position] ?? { bg: POSITION_COLORS.K.bg, tc: POSITION_COLORS.K.tc };
-                      const diff = (alt.total_points - pick.total_points).toFixed(2);
-                      const spotsLater = alt.overall_pick_number - pick.overall_pick_number;
+                      const altPm = posMeta[alt.position] ?? {
+                        bg: POSITION_COLORS.K.bg,
+                        tc: POSITION_COLORS.K.tc,
+                      };
+                      const diff = (
+                        alt.total_points - pick.total_points
+                      ).toFixed(2);
+                      const spotsLater =
+                        alt.overall_pick_number - pick.overall_pick_number;
                       return (
                         <div
                           key={alt.pick_id}
@@ -496,9 +646,15 @@ function DraftRecapContent({
                           >
                             {alt.position}
                           </span>
-                          <span className="text-[12px] font-medium text-foreground flex-1">{alt.player_name}</span>
-                          <span className="text-[11px] text-muted-foreground">Picked {spotsLater} spots later</span>
-                          <span className="text-[12px] font-medium text-foreground ml-auto">{alt.total_points.toFixed(2)} pts</span>
+                          <span className="text-[12px] font-medium text-foreground flex-1">
+                            {alt.player_name}
+                          </span>
+                          <span className="text-[11px] text-muted-foreground">
+                            Picked {spotsLater} spots later
+                          </span>
+                          <span className="text-[12px] font-medium text-foreground ml-auto">
+                            {alt.total_points.toFixed(2)} pts
+                          </span>
                           <span
                             className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium whitespace-nowrap"
                             style={{ background: GREEN_BG, color: GREEN }}
@@ -524,7 +680,8 @@ function DraftRecapContent({
 export default function DraftRecap() {
   const { leagueId, platform, seasons } = useMemo(() => getLeagueCookies(), []);
 
-  const defaultSeason = [...seasons].sort((a, b) => Number(b) - Number(a))[0] ?? '';
+  const defaultSeason =
+    [...seasons].sort((a, b) => Number(b) - Number(a))[0] ?? '';
   const [selectedSeason, setSelectedSeason] = useState(defaultSeason);
 
   const draftPromise = useMemo(
@@ -534,7 +691,10 @@ export default function DraftRecap() {
             .then((res) => ({ ok: true as const, data: res.data }))
             .catch((err: unknown) => ({
               ok: false as const,
-              error: err instanceof Error ? err.message : 'Failed to load draft data.',
+              error:
+                err instanceof Error
+                  ? err.message
+                  : 'Failed to load draft data.',
             }))
         : Promise.resolve({ ok: true as const, data: [] }),
     [leagueId, platform, selectedSeason],

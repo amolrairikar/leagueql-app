@@ -1,7 +1,9 @@
 import { createClerkClient } from '@clerk/backend';
 import { test as base, expect } from '@playwright/test';
 
-const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
+const clerkClient = createClerkClient({
+  secretKey: process.env.CLERK_SECRET_KEY,
+});
 
 async function createAgentTaskWithRetry(maxRetries = 3) {
   for (let attempt = 0; attempt < maxRetries; attempt++) {
@@ -33,12 +35,32 @@ export const testWithDemo = base.extend<{ demoPage: void }>({
       await page.goto(agentTask.url);
       await page.waitForURL('**/home');
       await context.addCookies([
-        { name: 'demo_mode', value: 'true', domain: 'localhost', path: '/', sameSite: 'Strict' },
-        { name: 'leagueId', value: '888888888', domain: 'localhost', path: '/', sameSite: 'Strict' },
-        { name: 'leaguePlatform', value: 'SLEEPER', domain: 'localhost', path: '/', sameSite: 'Strict' },
+        {
+          name: 'demo_mode',
+          value: 'true',
+          domain: 'localhost',
+          path: '/',
+          sameSite: 'Strict',
+        },
+        {
+          name: 'leagueId',
+          value: '888888888',
+          domain: 'localhost',
+          path: '/',
+          sameSite: 'Strict',
+        },
+        {
+          name: 'leaguePlatform',
+          value: 'SLEEPER',
+          domain: 'localhost',
+          path: '/',
+          sameSite: 'Strict',
+        },
         {
           name: 'leagueSeasons',
-          value: encodeURIComponent(JSON.stringify(['2022', '2023', '2024', '2025'])),
+          value: encodeURIComponent(
+            JSON.stringify(['2022', '2023', '2024', '2025']),
+          ),
           domain: 'localhost',
           path: '/',
           sameSite: 'Strict',

@@ -4,34 +4,35 @@ import { BrowserRouter, Routes, Route, Navigate, Link } from 'react-router-dom';
 import { ErrorBoundary } from '@/components/error-boundary';
 import Footer from '@/components/footer';
 import Header from '@/components/header';
-import { NavLink } from '@/components/nav-link';
-import { Spinner } from '@/components/spinner';
-import { isDemoMode } from '@/lib/cookie-handler';
 import { ModeToggle } from '@/components/mode-toggle';
+import { NavLink } from '@/components/nav-link';
+import { ScrollToTop } from '@/components/scroll-to-top';
+import { Spinner } from '@/components/spinner';
 import {
   SidebarInset,
   SidebarProvider,
   SidebarTrigger,
 } from '@/components/ui/sidebar';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import ChangelogPage from '@/features/changelog/changelog-page';
 import LeagueConnect from '@/features/connect_league/league-connect';
+import DraftRecap from '@/features/draft_recap/draft-recap';
+import HomePage from '@/features/home_page/home-page';
+import InstructionsPage from '@/features/instructions/instructions-page';
 import { NAV_LINKS } from '@/features/landing_page/constants';
 import LeagueQLLanding from '@/features/landing_page/landing-page';
 import type { NavLinkItem } from '@/features/landing_page/types';
 import ManagerComparison from '@/features/manager_comparison/manager-comparison';
 import ManagerHistory from '@/features/manager_history/manager-history';
-import Matchups from '@/features/matchups/matchups';
-import PlayoffBracket from '@/features/playoff_bracket/playoff-bracket';
-import PlayerRecords from '@/features/player_records/player-records';
-import SeasonStandings from '@/features/season_standings/season-standings';
-import DraftRecap from '@/features/draft_recap/draft-recap';
-import HomePage from '@/features/home_page/home-page';
-import PrivacyPage from '@/features/privacy/privacy-page';
-import ChangelogPage from '@/features/changelog/changelog-page';
-import InstructionsPage from '@/features/instructions/instructions-page';
-import { AppSidebar } from '@/features/sidebar/app-sidebar';
 import MatchupRecords from '@/features/matchup_records/matchup-records';
+import Matchups from '@/features/matchups/matchups';
 import MigrateLeague from '@/features/migrate_league/migrate-league';
+import PlayerRecords from '@/features/player_records/player-records';
+import PlayoffBracket from '@/features/playoff_bracket/playoff-bracket';
+import PrivacyPage from '@/features/privacy/privacy-page';
+import SeasonStandings from '@/features/season_standings/season-standings';
+import { AppSidebar } from '@/features/sidebar/app-sidebar';
+import { isDemoMode } from '@/lib/cookie-handler';
 
 function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -74,7 +75,12 @@ function AppLayout({ children }: { children: React.ReactNode }) {
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isSignedIn, isLoaded } = useUser();
   if (isDemoMode()) return <>{children}</>;
-  if (!isLoaded) return <div className="flex min-h-screen items-center justify-center"><Spinner className="size-6 text-muted-foreground" /></div>;
+  if (!isLoaded)
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <Spinner className="size-6 text-muted-foreground" />
+      </div>
+    );
   if (!isSignedIn) return <Navigate to="/" replace />;
   return <>{children}</>;
 }
@@ -94,45 +100,85 @@ const APP_LAYOUT_ROUTES: { path: string; element: React.ReactNode }[] = [
 function App() {
   return (
     <ErrorBoundary>
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<><Header /><LeagueQLLanding /></>} />
-        <Route
-          path="/connect_league"
-          element={
-            <ProtectedRoute>
-              <Header />
-              <div className="pt-1"><LeagueConnect /></div>
-              <Footer />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/migrate_league"
-          element={
-            <ProtectedRoute>
-              <Header />
-              <div className="pt-1"><MigrateLeague /></div>
-              <Footer />
-            </ProtectedRoute>
-          }
-        />
-        {APP_LAYOUT_ROUTES.map(({ path, element }) => (
+      <BrowserRouter>
+        <ScrollToTop />
+        <Routes>
           <Route
-            key={path}
-            path={path}
+            path="/"
+            element={
+              <>
+                <Header />
+                <LeagueQLLanding />
+              </>
+            }
+          />
+          <Route
+            path="/connect_league"
             element={
               <ProtectedRoute>
-                <AppLayout>{element}</AppLayout>
+                <Header />
+                <div className="pt-1">
+                  <LeagueConnect />
+                </div>
+                <Footer />
               </ProtectedRoute>
             }
           />
-        ))}
-        <Route path="/privacy" element={<><Header /><PrivacyPage /><Footer /></>} />
-        <Route path="/changelog" element={<><Header /><ChangelogPage /><Footer /></>} />
-        <Route path="/docs" element={<><Header /><InstructionsPage /><Footer /></>} />
-      </Routes>
-    </BrowserRouter>
+          <Route
+            path="/migrate_league"
+            element={
+              <ProtectedRoute>
+                <Header />
+                <div className="pt-1">
+                  <MigrateLeague />
+                </div>
+                <Footer />
+              </ProtectedRoute>
+            }
+          />
+          {APP_LAYOUT_ROUTES.map(({ path, element }) => (
+            <Route
+              key={path}
+              path={path}
+              element={
+                <ProtectedRoute>
+                  <AppLayout>{element}</AppLayout>
+                </ProtectedRoute>
+              }
+            />
+          ))}
+          <Route
+            path="/privacy"
+            element={
+              <>
+                <Header />
+                <PrivacyPage />
+                <Footer />
+              </>
+            }
+          />
+          <Route
+            path="/changelog"
+            element={
+              <>
+                <Header />
+                <ChangelogPage />
+                <Footer />
+              </>
+            }
+          />
+          <Route
+            path="/docs"
+            element={
+              <>
+                <Header />
+                <InstructionsPage />
+                <Footer />
+              </>
+            }
+          />
+        </Routes>
+      </BrowserRouter>
     </ErrorBoundary>
   );
 }

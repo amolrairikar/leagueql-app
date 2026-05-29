@@ -683,9 +683,7 @@ export default function InstructionsPage() {
                     cookies.
                   </li>
                   <li>
-                    <strong className="text-foreground">
-                      Map managers:
-                    </strong>{' '}
+                    <strong className="text-foreground">Map managers:</strong>{' '}
                     Match each manager to their account on the new platform.
                     Managers who left can be marked as "Not returning" and their
                     historical stats remain visible.
@@ -694,8 +692,8 @@ export default function InstructionsPage() {
                     <strong className="text-foreground">
                       Preview & confirm:
                     </strong>{' '}
-                    Review the migration summary and confirm. The migration
-                    runs in the background (typically ~1 minute).
+                    Review the migration summary and confirm. The migration runs
+                    in the background (typically ~1 minute).
                   </li>
                 </ol>
               </div>

@@ -12,7 +12,7 @@ const releases = [
       'All historical league matchups + box scores',
       'Playoff brackets from each season',
       'Head-to-head comparison of any two managers',
-      'Year-to-year history of each manager\'s performance',
+      "Year-to-year history of each manager's performance",
       'Recap of draft picks and grades',
       'All-time fantasy player performance records',
       'All-time fantasy team performance records',
@@ -51,11 +51,15 @@ export default function ChangelogPage() {
           <div key={release.version} className="space-y-4">
             <div className="flex items-baseline gap-3">
               <h2 className="text-2xl font-semibold">[{release.version}]</h2>
-              <span className="text-sm text-muted-foreground">{release.date}</span>
+              <span className="text-sm text-muted-foreground">
+                {release.date}
+              </span>
             </div>
             {release.added && (
               <div className="space-y-2">
-                <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Added</h3>
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                  Added
+                </h3>
                 <ul className="list-disc pl-6 space-y-1 text-muted-foreground leading-relaxed">
                   {release.added.map((item) => (
                     <li key={item}>{item}</li>

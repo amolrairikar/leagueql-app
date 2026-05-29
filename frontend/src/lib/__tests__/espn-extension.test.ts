@@ -63,7 +63,11 @@ describe('requestEspnCookies', () => {
   it('rejects with not_logged_in on a failed response', async () => {
     setInstalled(true);
     const promise = requestEspnCookies();
-    postFromContentScript({ type: RESPONSE, ok: false, error: 'not_logged_in' });
+    postFromContentScript({
+      type: RESPONSE,
+      ok: false,
+      error: 'not_logged_in',
+    });
     await expect(promise).rejects.toMatchObject({ reason: 'not_logged_in' });
   });
 

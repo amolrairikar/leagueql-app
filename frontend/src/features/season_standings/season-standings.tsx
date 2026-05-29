@@ -57,7 +57,10 @@ function WinsProgressionChart({ promise }: { promise: Promise<WeeklyResult> }) {
   const maxWeek = Math.max(...weekly.map((d) => Number(d.snapshot_week)));
   const finalWeek = weekly.filter((d) => Number(d.snapshot_week) === maxWeek);
   const teams = [...finalWeek]
-    .sort((a, b) => b.wins - a.wins || a.owner_username.localeCompare(b.owner_username))
+    .sort(
+      (a, b) =>
+        b.wins - a.wins || a.owner_username.localeCompare(b.owner_username),
+    )
     .map((d) => ({ team_id: d.team_id, owner_username: d.owner_username }));
 
   const weeks = [...new Set(weekly.map((d) => Number(d.snapshot_week)))].sort(
@@ -66,13 +69,17 @@ function WinsProgressionChart({ promise }: { promise: Promise<WeeklyResult> }) {
 
   const chartData = weeks.map((week) => {
     const point: Record<string, number | string> = { week };
-    for (const entry of weekly.filter((d) => Number(d.snapshot_week) === week)) {
+    for (const entry of weekly.filter(
+      (d) => Number(d.snapshot_week) === week,
+    )) {
       point[entry.team_id] = entry.wins;
     }
     return point;
   });
 
-  const colorMap = new Map(teams.map((team, i) => [team.team_id, avatarColor(i)]));
+  const colorMap = new Map(
+    teams.map((team, i) => [team.team_id, avatarColor(i)]),
+  );
 
   const chartConfig: ChartConfig = Object.fromEntries(
     teams.map((team, i) => [
@@ -84,7 +91,10 @@ function WinsProgressionChart({ promise }: { promise: Promise<WeeklyResult> }) {
   return (
     <>
       <ChartContainer config={chartConfig} className="h-80 w-full aspect-auto">
-        <LineChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 4 }}>
+        <LineChart
+          data={chartData}
+          margin={{ top: 4, right: 4, left: 0, bottom: 4 }}
+        >
           <CartesianGrid vertical={false} />
           <XAxis
             dataKey="week"
@@ -93,17 +103,25 @@ function WinsProgressionChart({ promise }: { promise: Promise<WeeklyResult> }) {
             axisLine={false}
             tickMargin={8}
           />
-          <YAxis allowDecimals={false} tickLine={false} axisLine={false} width={28} />
+          <YAxis
+            allowDecimals={false}
+            tickLine={false}
+            axisLine={false}
+            width={28}
+          />
           <ChartTooltip
             content={
               <ChartTooltipContent
-                labelFormatter={(_val, payload) => `Week ${payload?.[0]?.payload?.week ?? ''}`}
+                labelFormatter={(_val, payload) =>
+                  `Week ${payload?.[0]?.payload?.week ?? ''}`
+                }
                 indicator="line"
               />
             }
           />
           {teams.map((team) => {
-            const isSelected = selectedTeamId === null || selectedTeamId === team.team_id;
+            const isSelected =
+              selectedTeamId === null || selectedTeamId === team.team_id;
             return (
               <Line
                 key={team.team_id}
@@ -111,7 +129,9 @@ function WinsProgressionChart({ promise }: { promise: Promise<WeeklyResult> }) {
                 dataKey={team.team_id}
                 stroke={colorMap.get(team.team_id)}
                 strokeWidth={2}
-                strokeOpacity={selectedTeamId === null ? 1 : isSelected ? 1 : 0.2}
+                strokeOpacity={
+                  selectedTeamId === null ? 1 : isSelected ? 1 : 0.2
+                }
                 dot={false}
                 activeDot={{ r: 4 }}
               />
@@ -121,19 +141,26 @@ function WinsProgressionChart({ promise }: { promise: Promise<WeeklyResult> }) {
       </ChartContainer>
       <div className="flex flex-wrap gap-4 mt-3">
         {teams.map((team) => {
-          const isSelected = selectedTeamId === null || selectedTeamId === team.team_id;
+          const isSelected =
+            selectedTeamId === null || selectedTeamId === team.team_id;
           return (
             <div
               key={team.team_id}
               className="flex items-center gap-2 cursor-pointer"
-              onClick={() => setSelectedTeamId(selectedTeamId === team.team_id ? null : team.team_id)}
+              onClick={() =>
+                setSelectedTeamId(
+                  selectedTeamId === team.team_id ? null : team.team_id,
+                )
+              }
               style={{ opacity: isSelected ? 1 : 0.4 }}
             >
               <div
                 className="w-3 h-3 rounded-sm"
                 style={{ backgroundColor: colorMap.get(team.team_id) }}
               />
-              <span className="text-[11px] text-foreground">{team.owner_username}</span>
+              <span className="text-[11px] text-foreground">
+                {team.owner_username}
+              </span>
             </div>
           );
         })}
@@ -281,9 +308,7 @@ function AwardsGrid({ promise }: { promise: Promise<StandingsResult> }) {
             </>
           ) : (
             <>
-              <div className="text-[15px] font-medium text-foreground">
-                TBD
-              </div>
+              <div className="text-[15px] font-medium text-foreground">TBD</div>
               <div className="text-[12px] text-muted-foreground">
                 Season in progress
               </div>
@@ -344,7 +369,11 @@ function AwardsGrid({ promise }: { promise: Promise<StandingsResult> }) {
             className="w-9 h-9 rounded-md flex items-center justify-center shrink-0"
             style={{ background: POSITION_COLORS.RB.bg }}
           >
-            <Clover size={18} stroke={POSITION_COLORS.RB.color} strokeWidth={1.5} />
+            <Clover
+              size={18}
+              stroke={POSITION_COLORS.RB.color}
+              strokeWidth={1.5}
+            />
           </div>
           <span
             className="text-[11px] font-medium uppercase tracking-[0.07em]"
@@ -541,8 +570,8 @@ export default function SeasonStandings() {
                           if they played every team in the league each week
                           aggregated over the season (i.e., if a team was the
                           2nd highest scoring team in a 10 team league, their
-                          record vs. league for that week would be 8-1, resulting
-                          in a win % of .889)
+                          record vs. league for that week would be 8-1,
+                          resulting in a win % of .889)
                         </TooltipContent>
                       </Tooltip>
                     </TooltipProvider>

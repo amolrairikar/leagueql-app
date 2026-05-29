@@ -33,12 +33,36 @@ interface MatchupRecord {
 }
 
 const RECORD_TYPES = [
-  { key: 'highest_team_score', label: 'Highest Team Score', color: RECORD_COLORS.highestTeamScore },
-  { key: 'lowest_team_score', label: 'Lowest Team Score', color: RECORD_COLORS.lowestTeamScore },
-  { key: 'highest_matchup_score', label: 'Highest Matchup Score', color: RECORD_COLORS.highestMatchupScore },
-  { key: 'lowest_matchup_score', label: 'Lowest Matchup Score', color: RECORD_COLORS.lowestMatchupScore },
-  { key: 'biggest_blowout', label: 'Biggest Blowout', color: RECORD_COLORS.biggestBlowout },
-  { key: 'closest_game', label: 'Closest Game', color: RECORD_COLORS.closestGame },
+  {
+    key: 'highest_team_score',
+    label: 'Highest Team Score',
+    color: RECORD_COLORS.highestTeamScore,
+  },
+  {
+    key: 'lowest_team_score',
+    label: 'Lowest Team Score',
+    color: RECORD_COLORS.lowestTeamScore,
+  },
+  {
+    key: 'highest_matchup_score',
+    label: 'Highest Matchup Score',
+    color: RECORD_COLORS.highestMatchupScore,
+  },
+  {
+    key: 'lowest_matchup_score',
+    label: 'Lowest Matchup Score',
+    color: RECORD_COLORS.lowestMatchupScore,
+  },
+  {
+    key: 'biggest_blowout',
+    label: 'Biggest Blowout',
+    color: RECORD_COLORS.biggestBlowout,
+  },
+  {
+    key: 'closest_game',
+    label: 'Closest Game',
+    color: RECORD_COLORS.closestGame,
+  },
 ];
 
 const EMPTY_MATCHUPS: MatchupItem[] = [];
@@ -276,7 +300,9 @@ function RecordCard({
                 <td
                   className="px-3 py-2"
                   style={
-                    isGold ? { borderLeft: `2px solid ${UI_COLORS.gold}` } : undefined
+                    isGold
+                      ? { borderLeft: `2px solid ${UI_COLORS.gold}` }
+                      : undefined
                   }
                 >
                   <span className="text-[11px] text-muted-foreground">
@@ -284,7 +310,8 @@ function RecordCard({
                   </span>
                 </td>
                 <td className="px-3 py-2">
-                  {recordType.key === 'highest_team_score' || recordType.key === 'lowest_team_score' ? (
+                  {recordType.key === 'highest_team_score' ||
+                  recordType.key === 'lowest_team_score' ? (
                     <div className="flex items-center gap-2">
                       <div className="flex items-center gap-1.5">
                         <div
@@ -311,7 +338,9 @@ function RecordCard({
                           {r.teamA}
                         </span>
                       </div>
-                      <span className="text-[11px] text-muted-foreground pl-6">vs</span>
+                      <span className="text-[11px] text-muted-foreground pl-6">
+                        vs
+                      </span>
                       <div className="flex items-center gap-1.5">
                         <div
                           className="w-4.5 h-4.5 rounded-full flex items-center justify-center text-[8px] font-medium text-white shrink-0"
@@ -336,11 +365,16 @@ function RecordCard({
                     <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden min-w-10">
                       <div
                         className="h-full rounded-full"
-                        style={{ width: `${barPct}%`, background: recordType.color }}
+                        style={{
+                          width: `${barPct}%`,
+                          background: recordType.color,
+                        }}
                       />
                     </div>
                     <span className="text-[13px] font-medium text-foreground min-w-9 text-right">
-                      {recordType.key === 'closest_game' ? r.value.toFixed(2) : r.value.toFixed(1)}
+                      {recordType.key === 'closest_game'
+                        ? r.value.toFixed(2)
+                        : r.value.toFixed(1)}
                     </span>
                   </div>
                 </td>
@@ -505,8 +539,10 @@ function MatchupRecordsContent({
         (m) =>
           m.season === selectedRecord.season &&
           parseInt(m.week, 10) === selectedRecord.week &&
-          ((m.team_a_display_name === selectedRecord.teamA && m.team_b_display_name === selectedRecord.teamB) ||
-           (m.team_a_display_name === selectedRecord.teamB && m.team_b_display_name === selectedRecord.teamA)),
+          ((m.team_a_display_name === selectedRecord.teamA &&
+            m.team_b_display_name === selectedRecord.teamB) ||
+            (m.team_a_display_name === selectedRecord.teamB &&
+              m.team_b_display_name === selectedRecord.teamA)),
       ) ?? null
     );
   }, [selectedRecord, matchups]);
@@ -581,7 +617,10 @@ export default function MatchupRecords() {
     (): Promise<Result> =>
       leagueId
         ? getAllMatchups(leagueId, platform)
-            .then((res: { data: MatchupItem[] }) => ({ ok: true as const, data: res.data }))
+            .then((res: { data: MatchupItem[] }) => ({
+              ok: true as const,
+              data: res.data,
+            }))
             .catch((err: unknown) => ({
               ok: false as const,
               error:

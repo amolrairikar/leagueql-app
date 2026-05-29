@@ -16,7 +16,11 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { getLeagueCookies } from '@/lib/cookie-handler';
-import { NEMESIS_COLORS, POSITION_COLORS, UI_COLORS } from '@/lib/color-constants';
+import {
+  NEMESIS_COLORS,
+  POSITION_COLORS,
+  UI_COLORS,
+} from '@/lib/color-constants';
 import {
   getManagerHistoryData,
   type ManagerStandingsItem,
@@ -85,7 +89,7 @@ interface RivalryAcc {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const DOMINATION_WIN_RATE = 0.65; // win rate at or above this → domination rivalry
-const NEMESIS_WIN_RATE    = 0.40; // win rate below this → nemesis rivalry
+const NEMESIS_WIN_RATE = 0.4; // win rate below this → nemesis rivalry
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -105,7 +109,10 @@ function resultBadge(result: string) {
     return (
       <span
         className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium"
-        style={{ background: UI_COLORS.champion.bg, color: UI_COLORS.champion.text }}
+        style={{
+          background: UI_COLORS.champion.bg,
+          color: UI_COLORS.champion.text,
+        }}
       >
         Champion
       </span>
@@ -114,7 +121,10 @@ function resultBadge(result: string) {
     return (
       <span
         className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium"
-        style={{ background: POSITION_COLORS.TE.bg, color: POSITION_COLORS.TE.tc }}
+        style={{
+          background: POSITION_COLORS.TE.bg,
+          color: POSITION_COLORS.TE.tc,
+        }}
       >
         Runner-up
       </span>
@@ -123,7 +133,10 @@ function resultBadge(result: string) {
     return (
       <span
         className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium"
-        style={{ background: POSITION_COLORS.RB.bg, color: POSITION_COLORS.RB.tc }}
+        style={{
+          background: POSITION_COLORS.RB.bg,
+          color: POSITION_COLORS.RB.tc,
+        }}
       >
         Playoffs
       </span>
@@ -159,8 +172,7 @@ function processData(
   const ownerStandingsMap = new Map<string, ManagerStandingsItem[]>();
   for (const row of standings) {
     const mappedId = migrationMapping.get(row.owner_id) ?? row.owner_id;
-    if (!ownerStandingsMap.has(mappedId))
-      ownerStandingsMap.set(mappedId, []);
+    if (!ownerStandingsMap.has(mappedId)) ownerStandingsMap.set(mappedId, []);
     ownerStandingsMap.get(mappedId)!.push(row);
   }
 
@@ -481,8 +493,13 @@ function ManagerHistoryContent({ promise }: { promise: Promise<DataResult> }) {
     .filter((s) => s.finish !== null)
     .map((s) => s.finish!);
   const maxFinish = finishValues.length > 0 ? Math.max(...finishValues) : 12;
-  const rankChartData = m.seasons.map((s) => ({ year: s.year, finish: s.finish }));
-  const rankChartConfig: ChartConfig = { finish: { label: 'Finish', color: m.color } };
+  const rankChartData = m.seasons.map((s) => ({
+    year: s.year,
+    finish: s.finish,
+  }));
+  const rankChartConfig: ChartConfig = {
+    finish: { label: 'Finish', color: m.color },
+  };
 
   const winPct =
     at.wins + at.losses > 0
@@ -790,7 +807,10 @@ function ManagerHistoryContent({ promise }: { promise: Promise<DataResult> }) {
                 typeBadge = (
                   <span
                     className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium"
-                    style={{ background: POSITION_COLORS.RB.bg, color: POSITION_COLORS.RB.tc }}
+                    style={{
+                      background: POSITION_COLORS.RB.bg,
+                      color: POSITION_COLORS.RB.tc,
+                    }}
                   >
                     Domination
                   </span>
@@ -800,7 +820,10 @@ function ManagerHistoryContent({ promise }: { promise: Promise<DataResult> }) {
                 typeBadge = (
                   <span
                     className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium"
-                    style={{ background: NEMESIS_COLORS.bg, color: NEMESIS_COLORS.text }}
+                    style={{
+                      background: NEMESIS_COLORS.bg,
+                      color: NEMESIS_COLORS.text,
+                    }}
                   >
                     Nemesis
                   </span>
@@ -810,7 +833,10 @@ function ManagerHistoryContent({ promise }: { promise: Promise<DataResult> }) {
                 typeBadge = (
                   <span
                     className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium"
-                    style={{ background: POSITION_COLORS.TE.bg, color: POSITION_COLORS.TE.tc }}
+                    style={{
+                      background: POSITION_COLORS.TE.bg,
+                      color: POSITION_COLORS.TE.tc,
+                    }}
                   >
                     Rival
                   </span>
@@ -893,7 +919,9 @@ function ManagerHistoryContent({ promise }: { promise: Promise<DataResult> }) {
                         className="text-[13px] font-medium"
                         style={{
                           color:
-                            parseFloat(margin) >= 0 ? UI_COLORS.positive : UI_COLORS.negative,
+                            parseFloat(margin) >= 0
+                              ? UI_COLORS.positive
+                              : UI_COLORS.negative,
                         }}
                       >
                         {marginSign}
@@ -907,7 +935,10 @@ function ManagerHistoryContent({ promise }: { promise: Promise<DataResult> }) {
                       <div
                         className="text-[13px] font-medium"
                         style={{
-                          color: r.lastResult === 'W' ? UI_COLORS.positive : UI_COLORS.negative,
+                          color:
+                            r.lastResult === 'W'
+                              ? UI_COLORS.positive
+                              : UI_COLORS.negative,
                         }}
                       >
                         {r.lastResult}

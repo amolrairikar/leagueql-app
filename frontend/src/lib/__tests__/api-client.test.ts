@@ -99,7 +99,9 @@ describe('error store', () => {
 
     mockFetchError(400, { message: 'bad input' });
     await expect(apiClient.post('/sub-set', {})).rejects.toThrow();
-    expect(listener).toHaveBeenCalledWith(expect.objectContaining({ status: 400 }));
+    expect(listener).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 400 }),
+    );
     unsub();
   });
 
@@ -141,7 +143,9 @@ describe('session token', () => {
     mockFetchOk({});
     await apiClient.post('/auth-absent', {});
     const [, init] = fetchMock().mock.calls[0] as [string, RequestInit];
-    expect((init.headers as Record<string, string>).Authorization).toBeUndefined();
+    expect(
+      (init.headers as Record<string, string>).Authorization,
+    ).toBeUndefined();
   });
 });
 
@@ -170,7 +174,9 @@ describe('error response parsing', () => {
 
   it('falls back to statusText when response body is not JSON', async () => {
     mockFetchError(503);
-    await expect(apiClient.post('/parse-status-text', {})).rejects.toMatchObject({
+    await expect(
+      apiClient.post('/parse-status-text', {}),
+    ).rejects.toMatchObject({
       message: 'Error 503',
     });
   });
