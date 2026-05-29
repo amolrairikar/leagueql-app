@@ -5,15 +5,11 @@ import { Button } from '@/components/ui/button';
 
 const sections = [
   { id: 'overview', title: '1. Overview' },
-  { id: 'data-we-collect', title: '2. Data We Collect' },
-  { id: 'how-we-use', title: '3. How We Use Your Data' },
-  { id: 'data-storage', title: '4. Data Storage' },
-  { id: 'third-party', title: '5. Third-Party Services' },
-  { id: 'data-sharing', title: '6. Data Sharing' },
-  { id: 'data-retention', title: '7. Data Retention' },
-  { id: 'your-rights', title: '8. Your Rights' },
-  { id: 'security', title: '9. Security' },
-  { id: 'contact', title: '10. Contact' },
+  { id: 'data-we-collect', title: '2. Data We Collect & Store' },
+  { id: 'third-party', title: '3. Third-Party Services' },
+  { id: 'data-sharing', title: '4. Data Sharing, Retention & Security' },
+  { id: 'your-rights', title: '5. Your Rights' },
+  { id: 'contact', title: '6. Contact Us' },
 ];
 
 export default function PrivacyPage() {
@@ -76,7 +72,9 @@ export default function PrivacyPage() {
           </section>
 
           <section id="data-we-collect" className="space-y-3">
-            <h2 className="text-2xl font-semibold">2. Data We Collect</h2>
+            <h2 className="text-2xl font-semibold">
+              2. Data We Collect & Store
+            </h2>
             <div className="space-y-4 text-muted-foreground leading-relaxed">
               <div>
                 <h3 className="font-semibold text-foreground mb-2">
@@ -102,51 +100,41 @@ export default function PrivacyPage() {
                   <li>User profile information you choose to provide</li>
                 </ul>
               </div>
+              <div>
+                <h3 className="font-semibold text-foreground mb-2">
+                  How We Store It:
+                </h3>
+                <ul className="list-disc pl-6 space-y-1">
+                  <li>All league data is stored in AWS</li>
+                  <li>
+                    User account data is managed by Clerk (see their privacy
+                    policy). Clerk uses cookies for session management.
+                  </li>
+                  <li>
+                    ESPN cookies are only used temporarily to fetch private
+                    league data and are not stored on our servers
+                  </li>
+                  <li>
+                    We offer an optional Chrome extension, "LeagueQL ESPN Cookie
+                    Helper," that auto-fills your ESPN cookies into our
+                    onboarding and refresh forms. The extension does not store
+                    or transmit your cookies to us; it only fills them into the
+                    form on your device. See the{' '}
+                    <a
+                      href="/extension-privacy"
+                      className="text-foreground underline underline-offset-4"
+                    >
+                      Chrome Extension Privacy Policy
+                    </a>{' '}
+                    for details.
+                  </li>
+                </ul>
+              </div>
             </div>
           </section>
 
-          <section id="how-we-use" className="space-y-3">
-            <h2 className="text-2xl font-semibold">3. How We Use Your Data</h2>
-            <ul className="list-disc pl-6 space-y-2 text-muted-foreground leading-relaxed">
-              <li>
-                Display league history, standings, draft recaps, and matchups
-              </li>
-              <li>Enable comparisons and statistical analysis</li>
-              <li>Refresh league data to keep information current</li>
-            </ul>
-          </section>
-
-          <section id="data-storage" className="space-y-3">
-            <h2 className="text-2xl font-semibold">4. Data Storage</h2>
-            <ul className="list-disc pl-6 space-y-2 text-muted-foreground leading-relaxed">
-              <li>All league data is stored in AWS</li>
-              <li>
-                Authentication is managed by Clerk (see their privacy policy).
-                Clerk uses cookies for session management.
-              </li>
-              <li>
-                ESPN cookies are only used temporarily to fetch private league
-                data and are not stored on our servers
-              </li>
-              <li>
-                We offer an optional Chrome extension, the "LeagueQL ESPN Cookie
-                Helper," that auto-fills your ESPN cookies into our onboarding
-                and refresh forms. The extension does not store or transmit your
-                cookies to us; it only fills them into the form on your device.
-                See the{' '}
-                <a
-                  href="/extension-privacy"
-                  className="text-foreground underline underline-offset-4"
-                >
-                  Chrome Extension Privacy Policy
-                </a>{' '}
-                for details.
-              </li>
-            </ul>
-          </section>
-
           <section id="third-party" className="space-y-3">
-            <h2 className="text-2xl font-semibold">5. Third-Party Services</h2>
+            <h2 className="text-2xl font-semibold">3. Third-Party Services</h2>
             <ul className="list-disc pl-6 space-y-2 text-muted-foreground leading-relaxed">
               <li>
                 <strong>Clerk:</strong> Handles user authentication
@@ -159,48 +147,45 @@ export default function PrivacyPage() {
                 data
               </li>
               <li>
-                <strong>AWS:</strong> Application hosting
+                <strong>AWS:</strong> Application backend hosting
+              </li>
+              <li>
+                <strong>Cloudflare:</strong> Website hosting (Cloudflare Pages)
               </li>
             </ul>
           </section>
 
           <section id="data-sharing" className="space-y-3">
-            <h2 className="text-2xl font-semibold">6. Data Sharing</h2>
-            <p className="text-muted-foreground leading-relaxed">
-              We do not sell your data. League data is only used to provide the
-              app's features.
-            </p>
-          </section>
-
-          <section id="data-retention" className="space-y-3">
-            <h2 className="text-2xl font-semibold">7. Data Retention</h2>
+            <h2 className="text-2xl font-semibold">
+              4. Data Sharing, Retention & Security
+            </h2>
             <ul className="list-disc pl-6 space-y-2 text-muted-foreground leading-relaxed">
+              <li>
+                We do not sell your data. League data is only used to provide
+                the app's features.
+              </li>
               <li>League data is retained until you request deletion</li>
               <li>You can request removal of your league data at any time</li>
+              <li>
+                We have implemented security measures to protect your data,
+                including encryption in transit and at rest for stored data
+              </li>
             </ul>
           </section>
 
           <section id="your-rights" className="space-y-3">
-            <h2 className="text-2xl font-semibold">8. Your Rights</h2>
+            <h2 className="text-2xl font-semibold">5. Your Rights</h2>
             <ul className="list-disc pl-6 space-y-2 text-muted-foreground leading-relaxed">
               <li>View the data we have about your leagues</li>
               <li>Request deletion of your league data</li>
             </ul>
           </section>
 
-          <section id="security" className="space-y-3">
-            <h2 className="text-2xl font-semibold">9. Security</h2>
-            <p className="text-muted-foreground leading-relaxed">
-              We have implemented security measures to protect your data,
-              including encryption in transit and at rest for stored data.
-            </p>
-          </section>
-
           <section id="contact" className="space-y-3">
-            <h2 className="text-2xl font-semibold">10. Contact</h2>
+            <h2 className="text-2xl font-semibold">6. Contact Us</h2>
             <p className="text-muted-foreground leading-relaxed">
-              For privacy inquiries or data deletion requests, contact us at
-              arairikar1@gmail.com.
+              For any additional questions regarding the privacy policy, contact
+              us at support@leagueql.com
             </p>
           </section>
         </div>
