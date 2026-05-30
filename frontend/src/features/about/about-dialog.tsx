@@ -1,5 +1,3 @@
-import { useEffect, useState } from 'react';
-
 import {
   Dialog,
   DialogContent,
@@ -13,15 +11,6 @@ interface AboutDialogProps {
 }
 
 export function AboutDialog({ open, onOpenChange }: AboutDialogProps) {
-  const [leagueCount, setLeagueCount] = useState<number | null>(null);
-
-  useEffect(() => {
-    fetch('https://api.leagueql.com/counts')
-      .then((r) => r.json())
-      .then((d: { leagueCount: number }) => setLeagueCount(d.leagueCount))
-      .catch(() => null);
-  }, []);
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
@@ -29,9 +18,20 @@ export function AboutDialog({ open, onOpenChange }: AboutDialogProps) {
           <DialogTitle className="text-2xl font-bold">About</DialogTitle>
         </DialogHeader>
         <p>
-          Welcome to LeagueQL! This app is designed to provide insightful
-          analytics for your fantasy football league.
+          Welcome to LeagueQL! This app is designed to help you answer questions
+          about your fantasy football league such as:
           <br />
+          <br />
+          <span className="block pl-4">
+            • Which player has scored the most fantasy football points in a
+            single game?
+          </span>
+          <span className="block pl-4">
+            • What is my all-time head-to-head record against each opponent?
+          </span>
+          <span className="block pl-4">
+            • Who could I have drafted instead of my current roster?
+          </span>
           <br />
           The source code can be found on{' '}
           <a
@@ -42,34 +42,26 @@ export function AboutDialog({ open, onOpenChange }: AboutDialogProps) {
           >
             GitHub
           </a>
-          . You can report any bugs or request new features there using the
-          corresponding forms.
+          . If you encounter any bugs, please report them there using the issues
+          section.
           <br />
           <br />
-          My goal is to always keep this app free and ad-free. However, there
-          are costs associated with hosting and maintaining the app. If you find
-          this app useful and would like to support its development, you can
-          donate using the link below.
-          <br />
-          <br />
+          Have a feature request? Add your idea to the board{' '}
           <a
-            href="https://www.buymeacoffee.com/amolrairikar"
+            href="https://leagueql.supahub.com/en"
             target="_blank"
             rel="noopener noreferrer"
-            className="flex justify-center"
+            className="text-blue-500 hover:underline"
           >
-            <img
-              src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png"
-              alt="Buy Me A Coffee"
-              style={{ height: '60px', width: '217px' }}
-            />
+            here
           </a>
+          .
+          <br />
+          <br />
+          My goal is to keep this app free. However, there are costs associated
+          with hosting and maintaining the app and there may be a subscription
+          model in the future.
         </p>
-        {leagueCount !== null && (
-          <p className="text-sm text-muted-foreground">
-            <span className="font-bold">Leagues Onboarded:</span> {leagueCount}
-          </p>
-        )}
       </DialogContent>
     </Dialog>
   );

@@ -767,8 +767,14 @@ function Step5({
     <Alert variant="destructive">
       <AlertTitle>Migration failed</AlertTitle>
       <AlertDescription>
-        The migration did not complete successfully. Please try again or contact
-        support{operationId ? ` with operation ID ${operationId}` : ''}.
+        The migration did not complete successfully. Please try again or{' '}
+        <a
+          href="mailto:support@leagueql.com"
+          className="font-medium underline underline-offset-4"
+        >
+          contact support
+        </a>
+        {operationId ? ` with operation ID ${operationId}` : ''}.
       </AlertDescription>
     </Alert>
   );
