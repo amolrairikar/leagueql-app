@@ -517,16 +517,22 @@ export default function LeagueConnect() {
                 </AlertTitle>
                 <AlertDescription>
                   {lastRequestType === 'REFRESH'
-                    ? 'League refresh failed. Please try again or contact support if the error persists.'
-                    : 'League onboarding failed. Please try again or contact support if the error persists.'}
+                    ? 'League refresh failed. Please try again, or contact '
+                    : 'League onboarding failed. Please try again, or contact '}
+                  <a
+                    href="mailto:support@leagueql.com"
+                    className="underline underline-offset-4"
+                  >
+                    support
+                  </a>
                   {operationId ? (
                     <>
                       {' '}
-                      Provide the below operation ID when contacting support:{' '}
+                      and provide the below operation ID if the error persists:{' '}
                       <CopyOperationId operationId={operationId} />
                     </>
                   ) : (
-                    ''
+                    ' if the error persists.'
                   )}
                 </AlertDescription>
               </Alert>

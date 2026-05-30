@@ -200,8 +200,14 @@ export default function ExtensionPrivacyPage() {
           <section id="contact" className="space-y-3">
             <h2 className="text-2xl font-semibold">8. Contact</h2>
             <p className="text-muted-foreground leading-relaxed">
-              For privacy inquiries related to the extension, contact us at
-              arairikar1@gmail.com.
+              For privacy inquiries related to the extension, contact us at{' '}
+              <a
+                href="mailto:support@leagueql.com"
+                className="font-medium underline underline-offset-4"
+              >
+                support@leagueql.com
+              </a>
+              .
             </p>
           </section>
         </div>

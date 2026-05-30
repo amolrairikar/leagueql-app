@@ -185,7 +185,13 @@ export default function PrivacyPage() {
             <h2 className="text-2xl font-semibold">6. Contact Us</h2>
             <p className="text-muted-foreground leading-relaxed">
               For any additional questions regarding the privacy policy, contact
-              us at support@leagueql.com
+              us at{' '}
+              <a
+                href="mailto:support@leagueql.com"
+                className="font-medium underline underline-offset-4"
+              >
+                support@leagueql.com
+              </a>
             </p>
           </section>
         </div>

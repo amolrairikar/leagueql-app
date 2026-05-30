@@ -1,5 +1,5 @@
 import { SignIn, useUser } from '@clerk/react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { getLeague } from '@/components/api/leagues';
@@ -84,7 +84,8 @@ export default function LeagueQLLanding() {
   const [loading, setLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
   const [progress, setProgress] = useState(0);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ReactNode>(null);
+  const [leagueCount, setLeagueCount] = useState<number | null>(null);
   const loadingStartRef = useRef<number | null>(null);
   const loadingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
     null,
@@ -96,6 +97,13 @@ export default function LeagueQLLanding() {
       setShowConnectForm(true);
     }
   }, [isSignedIn]);
+
+  useEffect(() => {
+    fetch('https://api.leagueql.com/counts')
+      .then((r) => r.json())
+      .then((d: { leagueCount: number }) => setLeagueCount(d.leagueCount))
+      .catch(() => null);
+  }, []);
 
   useEffect(() => {
     if (loading) {
@@ -171,7 +179,16 @@ export default function LeagueQLLanding() {
               void navigate('/home');
             } else {
               setError(
-                'League onboarding failed. Please try again or contact support if the error persists.',
+                <>
+                  League onboarding failed. Please try again or{' '}
+                  <a
+                    href="mailto:support@leagueql.com"
+                    className="underline underline-offset-4"
+                  >
+                    contact support
+                  </a>{' '}
+                  if the error persists.
+                </>,
               );
             }
           } catch {
@@ -210,7 +227,18 @@ export default function LeagueQLLanding() {
         }}
       />
 
-      <section className="relative z-10 flex flex-col items-center text-center px-6 pt-36 pb-20">
+      <section className="relative z-10 flex flex-col items-center text-center px-6 pt-24 pb-20">
+        {leagueCount !== null && (
+          <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-1.5 text-sm text-muted-foreground animate-[fadeUp_0.6s_0.1s_both]">
+            <span className="flex items-center -space-x-1">
+              <span className="block size-2.5 shrink-0 rounded-full bg-red-500" />
+              <span className="block size-2.5 shrink-0 rounded-full bg-green-500" />
+              <span className="block size-2.5 shrink-0 rounded-full bg-blue-500" />
+            </span>
+            Join {leagueCount} other leagues tracking their league&apos;s history
+          </div>
+        )}
+
         <h1
           className="
             text-[clamp(2.6rem,6vw,4.5rem)] leading-[1.1] tracking-tight
