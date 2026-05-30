@@ -1,13 +1,33 @@
 import { Info } from 'lucide-react';
-import { Suspense, use, useMemo, useState } from 'react';
+import {
+  Fragment,
+  Suspense,
+  use,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
 
+import {
+  BoxScoreCard,
+  type BoxScoreSide,
+  type PlayerStat,
+} from '@/components/box-score-card';
 import { avatarColor } from '@/components/team-avatar';
 import {
   ChartContainer,
   ChartTooltip,
   type ChartConfig,
 } from '@/components/ui/chart';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Tooltip,
@@ -15,19 +35,48 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { getLeagueCookies } from '@/lib/cookie-handler';
-import {
-  NEMESIS_COLORS,
-  POSITION_COLORS,
-  UI_COLORS,
-} from '@/lib/color-constants';
 import {
   getManagerHistoryData,
   type ManagerStandingsItem,
   type MatchupItem,
 } from '@/features/manager_history/api-calls';
+import {
+  NEMESIS_COLORS,
+  POSITION_COLORS,
+  UI_COLORS,
+} from '@/lib/color-constants';
+import { getLeagueCookies, type Platform } from '@/lib/cookie-handler';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
+
+interface RawBoxScoreSide {
+  ownerId: string;
+  teamLogo: string | null;
+  teamName: string;
+  ownerUsername: string;
+  score: number;
+  starters: PlayerStat[];
+  bench: PlayerStat[];
+  isWinner: boolean;
+}
+
+type BoxScoreSideData = RawBoxScoreSide & { color: string };
+
+interface RawScheduleGame {
+  week: number;
+  result: 'W' | 'L' | 'T';
+  isPostseason: boolean;
+  own: RawBoxScoreSide;
+  opp: RawBoxScoreSide;
+}
+
+interface ScheduleGame {
+  week: number;
+  result: 'W' | 'L' | 'T';
+  isPostseason: boolean;
+  own: BoxScoreSideData;
+  opp: BoxScoreSideData;
+}
 
 interface SeasonEntry {
   year: string;
@@ -38,6 +87,7 @@ interface SeasonEntry {
   high: number;
   result: 'champion' | 'runner' | 'playoff' | 'elim';
   finish: number | null;
+  schedule: ScheduleGame[];
 }
 
 interface RivalryEntry {
@@ -185,6 +235,9 @@ function processData(
 
   const rivalryMap = new Map<string, Map<string, RivalryAcc>>();
 
+  // Per-owner per-season schedule of every game played
+  const scheduleMap = new Map<string, Map<string, RawScheduleGame[]>>();
+
   for (const m of matchups) {
     const aOwner = remapOwner(m.team_a_primary_owner_id);
     const bOwner = remapOwner(m.team_b_primary_owner_id);
@@ -192,6 +245,44 @@ function processData(
     const week = parseInt(m.week, 10);
     const aScore = Number(m.team_a_score);
     const bScore = Number(m.team_b_score);
+    // Postseason includes winners, losers, and consolation brackets
+    const isPostseason = m.playoff_tier_type !== 'NONE';
+
+    const sideA: RawBoxScoreSide = {
+      ownerId: aOwner,
+      teamLogo: m.team_a_team_logo,
+      teamName: m.team_a_team_name,
+      ownerUsername: m.team_a_display_name,
+      score: aScore,
+      starters: m.team_a_starters,
+      bench: m.team_a_bench,
+      isWinner: aScore > bScore,
+    };
+    const sideB: RawBoxScoreSide = {
+      ownerId: bOwner,
+      teamLogo: m.team_b_team_logo,
+      teamName: m.team_b_team_name,
+      ownerUsername: m.team_b_display_name,
+      score: bScore,
+      starters: m.team_b_starters,
+      bench: m.team_b_bench,
+      isWinner: bScore > aScore,
+    };
+
+    // Build schedule entries from each team's perspective
+    for (const [owner, own, opp] of [
+      [aOwner, sideA, sideB],
+      [bOwner, sideB, sideA],
+    ] as [string, RawBoxScoreSide, RawBoxScoreSide][]) {
+      if (!scheduleMap.has(owner)) scheduleMap.set(owner, new Map());
+      const seasonMap = scheduleMap.get(owner)!;
+      if (!seasonMap.has(season)) seasonMap.set(season, []);
+      let result: 'W' | 'L' | 'T';
+      if (own.score > opp.score) result = 'W';
+      else if (own.score < opp.score) result = 'L';
+      else result = 'T';
+      seasonMap.get(season)!.push({ week, result, isPostseason, own, opp });
+    }
 
     // High scores per owner per season
     for (const [owner, score] of [
@@ -311,6 +402,24 @@ function processData(
           else if (isRunnerUp) finish = 2;
         }
 
+        const schedule: ScheduleGame[] = [
+          ...(scheduleMap.get(ownerId)?.get(r.season) ?? []),
+        ]
+          .sort((a, b) => a.week - b.week)
+          .map((g) => ({
+            week: g.week,
+            result: g.result,
+            isPostseason: g.isPostseason,
+            own: {
+              ...g.own,
+              color: colorMap.get(g.own.ownerId) ?? avatarColor(0),
+            },
+            opp: {
+              ...g.opp,
+              color: colorMap.get(g.opp.ownerId) ?? avatarColor(0),
+            },
+          }));
+
         return {
           year: r.season,
           team: r.team_name,
@@ -320,6 +429,7 @@ function processData(
           high: highScoreMap.get(ownerId)?.get(r.season) ?? 0,
           result,
           finish,
+          schedule,
         };
       })
       .sort((a, b) => a.year.localeCompare(b.year));
@@ -462,11 +572,182 @@ function SkeletonManagerHistory() {
   );
 }
 
+// ── Season schedule dialog ──────────────────────────────────────────────────
+
+function SeasonScheduleDialog({
+  season,
+  username,
+  platform,
+  onClose,
+}: {
+  season: SeasonEntry | null;
+  username: string;
+  platform: Platform;
+  onClose: () => void;
+}) {
+  const [selectedGame, setSelectedGame] = useState<ScheduleGame | null>(null);
+  const boxScoreRef = useRef<HTMLDivElement>(null);
+
+  // Reset the open box score whenever a different season is opened
+  const [prevYear, setPrevYear] = useState(season?.year);
+  if (season?.year !== prevYear) {
+    setPrevYear(season?.year);
+    setSelectedGame(null);
+  }
+
+  // Scroll the box score into view when a game is selected (matters on mobile,
+  // where the box score stacks below the schedule)
+  useEffect(() => {
+    if (selectedGame) {
+      boxScoreRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    }
+  }, [selectedGame]);
+
+  const resultColor = (r: 'W' | 'L' | 'T') =>
+    r === 'W' ? UI_COLORS.positive : r === 'L' ? UI_COLORS.negative : undefined;
+
+  const toSide = (s: BoxScoreSideData): BoxScoreSide => ({
+    teamLogo: s.teamLogo,
+    teamName: s.teamName,
+    ownerUsername: s.ownerUsername,
+    color: s.color,
+    score: s.score,
+    starters: s.starters,
+    bench: s.bench,
+    isWinner: s.isWinner,
+  });
+
+  return (
+    <Dialog open={season !== null} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent
+        className={`max-h-[90vh] overflow-y-auto ${
+          selectedGame ? 'sm:max-w-4xl' : 'sm:max-w-lg'
+        }`}
+        showCloseButton={!selectedGame}
+      >
+        {season && (
+          <div className="flex flex-col md:flex-row gap-6">
+            <div className={selectedGame ? 'md:w-80 md:shrink-0' : 'w-full'}>
+              <DialogHeader>
+                <DialogTitle>{season.year} Season Schedule</DialogTitle>
+                <DialogDescription>
+                  {(season.team || `Team ${username}`) + ` · ${season.record}`}
+                  {season.finish != null
+                    ? ` · ${ordinal(season.finish)} place`
+                    : ''}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="md:max-h-[60vh] md:overflow-y-auto -mx-1 px-1 mt-4">
+                <table className="w-full text-[13px] border-separate border-spacing-0">
+                  <thead>
+                    <tr className="text-[10px] uppercase tracking-[0.06em] text-muted-foreground">
+                      <th className="sticky top-0 z-10 bg-popover text-left font-medium py-2 pr-2">
+                        Wk
+                      </th>
+                      <th className="sticky top-0 z-10 bg-popover text-left font-medium py-2 px-2">
+                        Opponent
+                      </th>
+                      <th className="sticky top-0 z-10 bg-popover text-center font-medium py-2 px-2">
+                        Result
+                      </th>
+                      <th className="sticky top-0 z-10 bg-popover text-right font-medium py-2 pl-2">
+                        Score
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {season.schedule.map((g, i) => {
+                      const isFirstPostseason =
+                        g.isPostseason && !season.schedule[i - 1]?.isPostseason;
+                      const isSelected =
+                        selectedGame?.week === g.week &&
+                        selectedGame?.opp.ownerId === g.opp.ownerId;
+                      return (
+                        <Fragment
+                          key={`${g.week}-${g.opp.ownerId}-${g.opp.score}`}
+                        >
+                          {isFirstPostseason && (
+                            <tr>
+                              <td
+                                colSpan={4}
+                                className="pt-3 pb-1.5 text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground"
+                              >
+                                Postseason
+                              </td>
+                            </tr>
+                          )}
+                          <tr
+                            onClick={() => setSelectedGame(g)}
+                            className={`cursor-pointer transition-colors ${
+                              isSelected ? 'bg-accent/60' : 'hover:bg-accent/40'
+                            }`}
+                          >
+                            <td className="py-2 pr-2 text-muted-foreground tabular-nums border-b border-border/40 align-top">
+                              {g.week}
+                            </td>
+                            <td className="py-2 px-2 border-b border-border/40">
+                              <div className="font-medium text-foreground">
+                                {g.opp.teamName || g.opp.ownerUsername || 'Bye'}
+                              </div>
+                            </td>
+                            <td className="py-2 px-2 text-center border-b border-border/40">
+                              <span
+                                className="font-medium"
+                                style={{ color: resultColor(g.result) }}
+                              >
+                                {g.result}
+                              </span>
+                            </td>
+                            <td className="py-2 pl-2 text-right tabular-nums font-medium text-foreground border-b border-border/40">
+                              {g.own.score.toFixed(1)}–{g.opp.score.toFixed(1)}
+                            </td>
+                          </tr>
+                        </Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {selectedGame && (
+              <div
+                ref={boxScoreRef}
+                className="flex-1 min-w-0 md:max-h-[70vh] md:overflow-y-auto pt-3 pr-3 scroll-mt-4"
+              >
+                <BoxScoreCard
+                  left={toSide(selectedGame.own)}
+                  right={toSide(selectedGame.opp)}
+                  platform={platform}
+                  season={season.year}
+                  onClose={() => setSelectedGame(null)}
+                />
+              </div>
+            )}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ── Content ───────────────────────────────────────────────────────────────────
 
-function ManagerHistoryContent({ promise }: { promise: Promise<DataResult> }) {
+function ManagerHistoryContent({
+  promise,
+  platform,
+}: {
+  promise: Promise<DataResult>;
+  platform: Platform;
+}) {
   const result = use(promise);
   const [selectedManagerIndex, setSelectedManagerIndex] = useState(0);
+  const [selectedSeason, setSelectedSeason] = useState<SeasonEntry | null>(
+    null,
+  );
 
   if (!result.ok) {
     return (
@@ -695,9 +976,12 @@ function ManagerHistoryContent({ promise }: { promise: Promise<DataResult> }) {
       </p>
       <div className="flex flex-col gap-2.5 mb-6">
         {[...m.seasons].reverse().map((s) => (
-          <div
+          <button
             key={s.year}
-            className={`bg-card rounded-lg p-3.5 grid grid-cols-1 sm:grid-cols-[80px_1fr_auto] gap-3 items-start sm:items-center ${
+            type="button"
+            onClick={() => setSelectedSeason(s)}
+            disabled={s.schedule.length === 0}
+            className={`w-full text-left bg-card rounded-lg p-3.5 grid grid-cols-1 sm:grid-cols-[80px_1fr_auto] gap-3 items-start sm:items-center transition-colors enabled:cursor-pointer enabled:hover:bg-accent/40 disabled:cursor-default ${
               s.result === 'champion' ? 'border-2' : 'border border-border/50'
             }`}
             style={s.result === 'champion' ? { borderColor: m.color } : {}}
@@ -753,7 +1037,7 @@ function ManagerHistoryContent({ promise }: { promise: Promise<DataResult> }) {
               </div>
               <div className="text-[11px] text-muted-foreground">place</div>
             </div>
-          </div>
+          </button>
         ))}
       </div>
 
@@ -951,6 +1235,13 @@ function ManagerHistoryContent({ promise }: { promise: Promise<DataResult> }) {
           </div>
         </>
       )}
+
+      <SeasonScheduleDialog
+        season={selectedSeason}
+        username={m.owner_username}
+        platform={platform}
+        onClose={() => setSelectedSeason(null)}
+      />
     </div>
   );
 }
@@ -983,7 +1274,7 @@ export default function ManagerHistory() {
     <div className="flex flex-1 flex-col p-6 overflow-auto">
       <div className="max-w-225 mx-auto w-full">
         <Suspense fallback={<SkeletonManagerHistory />}>
-          <ManagerHistoryContent promise={dataPromise} />
+          <ManagerHistoryContent promise={dataPromise} platform={platform} />
         </Suspense>
       </div>
     </div>
