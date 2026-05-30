@@ -227,7 +227,7 @@ export default function LeagueQLLanding() {
         }}
       />
 
-      <section className="relative z-10 flex flex-col items-center text-center px-6 pt-36 pb-20">
+      <section className="relative z-10 flex flex-col items-center text-center px-6 pt-24 pb-20">
         {leagueCount !== null && (
           <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-1.5 text-sm text-muted-foreground animate-[fadeUp_0.6s_0.1s_both]">
             <span className="flex items-center -space-x-1">
