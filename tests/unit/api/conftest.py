@@ -65,6 +65,23 @@ def mock_s3_client():
 
 
 @pytest.fixture
+def mock_time_sleep():
+    """Patch the retry backoff sleep so delete tests run instantly."""
+    with patch("main.time.sleep") as mock:
+        yield mock
+
+
+@pytest.fixture
+def mock_sns_client():
+    """Patch the SNS client as if SNS_TOPIC_ARN were configured."""
+    with (
+        patch("main._sns_client") as mock,
+        patch("main._sns_topic_arn", "arn:aws:sns:us-east-1:123:test-topic"),
+    ):
+        yield mock
+
+
+@pytest.fixture
 def client(aws_env_vars):
     import main
 

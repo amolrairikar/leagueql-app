@@ -524,6 +524,17 @@ module "api-lambda-role" {
           "${local.primary_bucket_arn}/raw-api-data/*",
           "${local.secondary_bucket_arn}/raw-api-data/*"
         ]
+      },
+      {
+        Sid    = "PublishSNSFailureAlerts"
+        Effect = "Allow"
+        Action = [
+          "sns:Publish"
+        ]
+        Resource = [
+          "arn:aws:sns:us-east-1:${var.account_id}:leagueql-lambda-alerts-${var.environment}-east",
+          "arn:aws:sns:us-west-2:${var.account_id}:leagueql-lambda-alerts-${var.environment}-west"
+        ]
       }
     ]
   })

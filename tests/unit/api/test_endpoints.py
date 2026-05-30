@@ -371,7 +371,7 @@ class TestDeleteLeagueEndpoint:
         assert response.status_code == 404
 
     def test_deletes_gsi_lookup_items(
-        self, client, mock_table, mock_s3_client, league_lookup_item
+        self, client, mock_table, mock_s3_client, league_lookup_item, mock_time_sleep
     ):
         mock_table.get_item.return_value = {"Item": league_lookup_item}
         mock_table.delete_item.return_value = {}
@@ -398,7 +398,7 @@ class TestDeleteLeagueEndpoint:
         )
 
     def test_paginated_gsi_query_during_delete(
-        self, client, mock_table, mock_s3_client, league_lookup_item
+        self, client, mock_table, mock_s3_client, league_lookup_item, mock_time_sleep
     ):
         mock_table.get_item.return_value = {"Item": league_lookup_item}
         mock_table.delete_item.return_value = {}
@@ -426,7 +426,9 @@ class TestDeleteLeagueEndpoint:
         mock_s3_client.list_objects_v2.return_value = {}
         response = client.delete("/leagues/123?platform=SLEEPER")
         assert response.status_code == 200
-        assert mock_table.query.call_count == 8
+        # Pass 1 paginates the canonical-PK query (2 calls) + GSI1 (1 call);
+        # pass 2 verifies clean (PK + GSI1 = 2 calls).
+        assert mock_table.query.call_count == 5
 
     def test_decrements_league_count_on_successful_delete(
         self, client, mock_table, mock_s3_client, league_lookup_item
@@ -448,11 +450,31 @@ class TestDeleteLeagueEndpoint:
         import botocore.exceptions
 
         mock_table.get_item.return_value = {"Item": league_lookup_item}
-        mock_table.delete_item.side_effect = botocore.exceptions.ClientError(
-            {"Error": {"Code": "InternalError", "Message": "fail"}}, "DeleteItem"
+        mock_table.query.side_effect = botocore.exceptions.ClientError(
+            {"Error": {"Code": "InternalError", "Message": "fail"}}, "Query"
         )
         response = client.delete("/leagues/123?platform=SLEEPER")
         assert response.status_code == 500
+
+    def test_orphaned_items_fail_and_skip_count_update(
+        self, client, mock_table, league_lookup_item, mock_s3_client, mock_time_sleep
+    ):
+        mock_table.get_item.return_value = {"Item": league_lookup_item}
+        mock_writer = MagicMock()
+        mock_table.batch_writer.return_value.__enter__ = MagicMock(
+            return_value=mock_writer
+        )
+        mock_table.batch_writer.return_value.__exit__ = MagicMock(return_value=False)
+        # Items never clear, so every verify pass still finds them.
+        mock_table.query.return_value = {
+            "Items": [{"PK": "LEAGUE#canonical-abc", "SK": "TEAMS#2024"}]
+        }
+        response = client.delete("/leagues/123?platform=SLEEPER")
+        assert response.status_code == 500
+        assert "fully delete" in response.json()["detail"].lower()
+        # League count must not be decremented when the delete is incomplete.
+        mock_table.update_item.assert_not_called()
+        mock_s3_client.delete_objects.assert_not_called()
 
 
 class TestQueryLeagueEndpoint:

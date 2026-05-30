@@ -99,6 +99,7 @@ module "api_lambda" {
     DYNAMODB_TABLE_NAME   = "leagueql-table-${var.environment}"
     ONBOARDER_LAMBDA_NAME = "leagueql-onboarder-${var.environment}"
     S3_BUCKET_NAME        = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
+    SNS_TOPIC_ARN         = var.environment == "prod" ? aws_sns_topic.lambda_alerts[0].arn : ""
   }
 
   tags = {

@@ -207,51 +207,158 @@ class TestUpdateSubscriptionStatus:
         )
 
 
-class TestDeletePrefixedItems:
-    def test_deletes_items_in_batches(self, mock_table):
-        from main import delete_prefixed_items
-
+class TestDeleteLeagueHelpers:
+    def _setup_writer(self, mock_table):
         mock_writer = MagicMock()
         mock_table.batch_writer.return_value.__enter__ = MagicMock(
             return_value=mock_writer
         )
         mock_table.batch_writer.return_value.__exit__ = MagicMock(return_value=False)
-        mock_table.query.return_value = {
-            "Items": [
-                {"PK": "LEAGUE#abc", "SK": "MATCHUPS#2024"},
-                {"PK": "LEAGUE#abc", "SK": "MATCHUPS#2023"},
-            ]
-        }
-        delete_prefixed_items("LEAGUE#abc", "MATCHUPS#")
-        assert mock_writer.delete_item.call_count == 2
+        return mock_writer
 
-    def test_handles_pagination(self, mock_table):
-        from main import delete_prefixed_items
+    def test_query_all_keys_paginates(self, mock_table):
+        from main import _query_all_keys
 
-        mock_writer = MagicMock()
-        mock_table.batch_writer.return_value.__enter__ = MagicMock(
-            return_value=mock_writer
-        )
-        mock_table.batch_writer.return_value.__exit__ = MagicMock(return_value=False)
         mock_table.query.side_effect = [
             {
-                "Items": [{"PK": "LEAGUE#abc", "SK": "MATCHUPS#2023"}],
-                "LastEvaluatedKey": {"PK": "LEAGUE#abc", "SK": "MATCHUPS#2023"},
+                "Items": [{"PK": "LEAGUE#abc", "SK": "TEAMS#2024"}],
+                "LastEvaluatedKey": {"PK": "x", "SK": "y"},
             },
-            {"Items": [{"PK": "LEAGUE#abc", "SK": "MATCHUPS#2024"}]},
+            {"Items": [{"PK": "LEAGUE#abc", "SK": "TEAMS#2025"}]},
         ]
-        delete_prefixed_items("LEAGUE#abc", "MATCHUPS#")
-        assert mock_writer.delete_item.call_count == 2
+        keys = _query_all_keys({"KeyConditionExpression": "ignored"})
+        assert keys == [
+            {"PK": "LEAGUE#abc", "SK": "TEAMS#2024"},
+            {"PK": "LEAGUE#abc", "SK": "TEAMS#2025"},
+        ]
+        assert mock_table.query.call_count == 2
 
-    def test_raises_500_on_boto_error(self, mock_table):
-        from main import delete_prefixed_items
+    def test_collect_league_keys_merges_pk_and_gsi(self, mock_table):
+        from main import collect_league_keys
 
-        mock_table.batch_writer.return_value.__enter__ = MagicMock(
-            side_effect=botocore.exceptions.ClientError(
-                {"Error": {"Code": "InternalError", "Message": "fail"}}, "BatchWrite"
-            )
+        mock_table.query.side_effect = [
+            # canonical PK items (METADATA, views, orphan-prone migration item)
+            {
+                "Items": [
+                    {"PK": "LEAGUE#canonical-abc", "SK": "METADATA"},
+                    {
+                        "PK": "LEAGUE#canonical-abc",
+                        "SK": "PLATFORM_MIGRATION#SLEEPER#ESPN",
+                    },
+                ]
+            },
+            # GSI1 LEAGUE_LOOKUP items on their own PK
+            {"Items": [{"PK": "LEAGUE#123#PLATFORM#SLEEPER", "SK": "LEAGUE_LOOKUP"}]},
+        ]
+        keys = collect_league_keys("canonical-abc")
+        assert {"PK": "LEAGUE#canonical-abc", "SK": "METADATA"} in keys
+        assert {
+            "PK": "LEAGUE#canonical-abc",
+            "SK": "PLATFORM_MIGRATION#SLEEPER#ESPN",
+        } in keys
+        assert {"PK": "LEAGUE#123#PLATFORM#SLEEPER", "SK": "LEAGUE_LOOKUP"} in keys
+
+    def test_delete_all_league_items_deletes_everything(
+        self, mock_table, mock_time_sleep
+    ):
+        from main import delete_all_league_items
+
+        writer = self._setup_writer(mock_table)
+        mock_table.query.side_effect = [
+            {"Items": [{"PK": "LEAGUE#canonical-abc", "SK": "METADATA"}]},
+            {"Items": [{"PK": "LEAGUE#123#PLATFORM#SLEEPER", "SK": "LEAGUE_LOOKUP"}]},
+            {"Items": []},
+            {"Items": []},
+        ]
+        delete_all_league_items("canonical-abc")
+        writer.delete_item.assert_any_call(
+            Key={"PK": "LEAGUE#canonical-abc", "SK": "METADATA"}
         )
-        mock_table.batch_writer.return_value.__exit__ = MagicMock(return_value=False)
+        writer.delete_item.assert_any_call(
+            Key={"PK": "LEAGUE#123#PLATFORM#SLEEPER", "SK": "LEAGUE_LOOKUP"}
+        )
+
+    def test_delete_all_league_items_noop_when_empty(self, mock_table, mock_time_sleep):
+        from main import delete_all_league_items
+
+        writer = self._setup_writer(mock_table)
+        mock_table.query.return_value = {"Items": []}
+        delete_all_league_items("canonical-abc")
+        writer.delete_item.assert_not_called()
+        mock_time_sleep.assert_not_called()
+
+    def test_delete_all_league_items_retries_until_clean(
+        self, mock_table, mock_time_sleep
+    ):
+        from main import delete_all_league_items
+
+        writer = self._setup_writer(mock_table)
+        mock_table.query.side_effect = [
+            # pass 1: an item on the canonical PK, GSI1 empty
+            {"Items": [{"PK": "LEAGUE#canonical-abc", "SK": "METADATA"}]},
+            {"Items": []},
+            # pass 2: GSI1 was lagging, a lookup item now surfaces
+            {"Items": []},
+            {"Items": [{"PK": "LEAGUE#123#PLATFORM#SLEEPER", "SK": "LEAGUE_LOOKUP"}]},
+            # pass 3: clean
+            {"Items": []},
+            {"Items": []},
+        ]
+        delete_all_league_items("canonical-abc")
+        assert writer.delete_item.call_count == 2
+
+    def test_delete_all_league_items_raises_when_orphans_remain(
+        self, mock_table, mock_time_sleep, mock_sns_client
+    ):
+        from main import delete_all_league_items
+
+        self._setup_writer(mock_table)
+        # Every collect pass keeps returning the same item: it never clears.
+        mock_table.query.return_value = {
+            "Items": [{"PK": "LEAGUE#canonical-abc", "SK": "TEAMS#2024"}]
+        }
         with pytest.raises(HTTPException) as exc_info:
-            delete_prefixed_items("LEAGUE#abc", "MATCHUPS#")
+            delete_all_league_items("canonical-abc", max_attempts=2)
         assert exc_info.value.status_code == 500
+        assert "fully delete" in exc_info.value.detail.lower()
+        # Orphaned items should trigger an SNS failure notification.
+        mock_sns_client.publish.assert_called_once()
+        kwargs = mock_sns_client.publish.call_args.kwargs
+        assert "canonical-abc" in kwargs["Message"]
+        assert "TEAMS#2024" in kwargs["Message"]
+
+    def test_delete_all_league_items_raises_on_query_error(self, mock_table):
+        from main import delete_all_league_items
+
+        mock_table.query.side_effect = botocore.exceptions.ClientError(
+            {"Error": {"Code": "InternalError", "Message": "fail"}}, "Query"
+        )
+        with pytest.raises(botocore.exceptions.ClientError):
+            delete_all_league_items("canonical-abc")
+
+
+class TestPublishFailure:
+    def test_publish_failure_noop_when_unconfigured(self, monkeypatch):
+        import main
+
+        # No SNS topic configured -> client is None -> publish is a no-op.
+        monkeypatch.setattr(main, "_sns_client", None)
+        main.publish_failure("something broke")  # should not raise
+
+    def test_publish_failure_publishes_when_configured(self, mock_sns_client):
+        from main import publish_failure
+
+        publish_failure("something broke")
+        mock_sns_client.publish.assert_called_once()
+        kwargs = mock_sns_client.publish.call_args.kwargs
+        assert kwargs["Subject"] == "LeagueQL API Failure"
+        assert "something broke" in kwargs["Message"]
+
+    def test_publish_failure_swallows_publish_errors(self, mock_sns_client):
+        from main import publish_failure
+
+        mock_sns_client.publish.side_effect = botocore.exceptions.ClientError(
+            {"Error": {"Code": "InternalError", "Message": "fail"}}, "Publish"
+        )
+        # Failure to publish must not propagate out of the helper.
+        publish_failure("something broke")
