@@ -185,6 +185,22 @@ lambda_client = boto3.client("lambda", config=_retry_config)
 s3_client = boto3.client("s3", config=_retry_config)
 S3_BUCKET = os.environ["S3_BUCKET_NAME"]
 
+_sns_topic_arn = os.environ.get("SNS_TOPIC_ARN")
+_sns_client = boto3.client("sns", config=_retry_config) if _sns_topic_arn else None
+
+
+def publish_failure(error_message: str) -> None:
+    if not _sns_client:
+        return
+    try:
+        _sns_client.publish(
+            TopicArn=_sns_topic_arn,
+            Subject="LeagueQL API Failure",
+            Message=f"Correlation ID: {correlation_id_var.get()}\nError: {error_message}",
+        )
+    except Exception:
+        logger.warning("Failed to publish SNS failure notification", exc_info=True)
+
 
 def lookup_league(league_id: str, platform: Platform) -> str:
     """
@@ -305,41 +321,112 @@ def get_league_seasons(canonical_league_id: str) -> list[str]:
     return sorted(seasons)
 
 
-def delete_prefixed_items(pk_value: str, sk_prefix: str) -> None:
+def _query_all_keys(query_kwargs: dict) -> list[dict]:
     """
-    Queries and deletes all items sharing a PK and a specific SK prefix.
+    Run a paginated query, returning every matched item's {PK, SK} key.
 
     Args:
-        pk_value: The value of the PK to match.
-        sk_prefix: The prefix of the SK to match for deletion.
+        query_kwargs: Keyword arguments passed to table.query (must project PK/SK).
+
+    Returns:
+        A list of {"PK", "SK"} key dicts across all result pages.
     """
-    query_kwargs: dict = {
-        "KeyConditionExpression": Key("PK").eq(pk_value)
-        & Key("SK").begins_with(sk_prefix),
-        "ProjectionExpression": "PK, SK",
-    }
-    total_deleted = 0
-    try:
+    keys: list[dict] = []
+    kwargs = dict(query_kwargs)
+    while True:
+        response = table.query(**kwargs)
+        for item in response.get("Items", []):
+            keys.append({"PK": item["PK"], "SK": item["SK"]})
+        last_key = response.get("LastEvaluatedKey")
+        if not last_key:
+            return keys
+        kwargs["ExclusiveStartKey"] = last_key
+
+
+def collect_league_keys(canonical_league_id: str) -> list[dict]:
+    """
+    Collect the keys of every DynamoDB item belonging to a league.
+
+    This covers two key spaces:
+      * everything under the canonical PK (METADATA and all precomputed views,
+        including any future SK types) read with strong consistency, and
+      * the LEAGUE_LOOKUP items, which live under their own per-platform PKs and
+        are located via GSI1 (eventually consistent).
+
+    Args:
+        canonical_league_id: The canonical league ID.
+
+    Returns:
+        A list of {"PK", "SK"} key dicts for every item owned by the league.
+    """
+    keys = _query_all_keys(
+        {
+            "KeyConditionExpression": Key("PK").eq(f"LEAGUE#{canonical_league_id}"),
+            "ProjectionExpression": "PK, SK",
+            "ConsistentRead": True,
+        }
+    )
+    keys += _query_all_keys(
+        {
+            "IndexName": "GSI1",
+            "KeyConditionExpression": Key("canonical_league_id").eq(
+                canonical_league_id
+            ),
+            "ProjectionExpression": "PK, SK",
+        }
+    )
+    return keys
+
+
+def delete_all_league_items(canonical_league_id: str, max_attempts: int = 4) -> None:
+    """
+    Delete every DynamoDB item for a league, retrying until none remain.
+
+    Rather than deleting a hardcoded set of SK prefixes, this discovers the
+    league's actual items on each pass and deletes them, then re-verifies. This
+    catches orphaned items (e.g. PLATFORM_MIGRATION#) regardless of SK type and
+    tolerates GSI1 eventual-consistency lag on LEAGUE_LOOKUP items.
+
+    Args:
+        canonical_league_id: The canonical league ID.
+        max_attempts: Number of delete+verify passes before giving up.
+
+    Raises:
+        HTTPException: 500 if items still remain after max_attempts.
+    """
+    for attempt in range(1, max_attempts + 1):
+        keys = collect_league_keys(canonical_league_id)
+        if not keys:
+            return
+        logger.info(
+            "Delete attempt %d/%d: removing %d items for %s",
+            attempt,
+            max_attempts,
+            len(keys),
+            canonical_league_id,
+        )
         with table.batch_writer() as writer:
-            while True:
-                response = table.query(**query_kwargs)
-                items = response.get("Items", [])
-                for item in items:
-                    writer.delete_item(Key={"PK": item["PK"], "SK": item["SK"]})
-                total_deleted += len(items)
-                last_key = response.get("LastEvaluatedKey")
-                if not last_key:
-                    break
-                query_kwargs["ExclusiveStartKey"] = last_key
-    except botocore.exceptions.ClientError as e:
+            for key in keys:
+                writer.delete_item(Key=key)
+        time.sleep(0.5 * attempt)  # let GSI1 catch up before re-verifying
+
+    remaining = collect_league_keys(canonical_league_id)
+    if remaining:
+        remaining_sks = [key["SK"] for key in remaining]
         logger.error(
-            "Boto error occurred while deleting items with prefix %s: %s", sk_prefix, e
+            "Orphaned items remain for %s after %d attempts: %s",
+            canonical_league_id,
+            max_attempts,
+            remaining_sks,
+        )
+        publish_failure(
+            f"Orphaned items remain for league {canonical_league_id} after "
+            f"{max_attempts} delete attempts: {remaining_sks}"
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to delete league data",
+            detail="Failed to fully delete league data",
         )
-    logger.info("Deleted %d items with prefix %s", total_deleted, sk_prefix)
 
 
 def update_league_count(delta: int) -> None:
@@ -726,37 +813,7 @@ def delete_league(
         "Proceeding with delete for canonical_league_id: %s", canonical_league_id
     )
     try:
-        league_pk = f"LEAGUE#{canonical_league_id}"
-        table.delete_item(
-            Key={"PK": league_pk, "SK": "METADATA"},
-        )
-
-        lookup_kwargs: dict = {
-            "IndexName": "GSI1",
-            "KeyConditionExpression": Key("canonical_league_id").eq(
-                canonical_league_id
-            ),
-        }
-        with table.batch_writer() as writer:
-            while True:
-                lookup_response = table.query(**lookup_kwargs)
-                for item in lookup_response.get("Items", []):
-                    writer.delete_item(Key={"PK": item["PK"], "SK": item["SK"]})
-                last_key = lookup_response.get("LastEvaluatedKey")
-                if not last_key:
-                    break
-                lookup_kwargs["ExclusiveStartKey"] = last_key
-
-        prefixes_to_clear = [
-            "MATCHUPS#",
-            "TEAMS#",
-            "STANDINGS#",
-            "WEEKLY_STANDINGS#",
-            "PLAYOFF_BRACKET#",
-            "DRAFT#",
-        ]
-        for prefix in prefixes_to_clear:
-            delete_prefixed_items(pk_value=league_pk, sk_prefix=prefix)
+        delete_all_league_items(canonical_league_id=canonical_league_id)
 
         # After DB delete, delete raw API data files from S3
         s3_prefix = f"raw-api-data/{canonical_league_id}/"
