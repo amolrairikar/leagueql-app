@@ -3,8 +3,9 @@ import { useNavigate } from 'react-router-dom';
 
 import { AboutDialog } from '@/features/about/about-dialog';
 import { FOOTER_LINKS } from '@/features/landing_page/constants';
+import { cn } from '@/lib/utils';
 
-export default function Footer() {
+export default function Footer({ className }: { className?: string }) {
   const [aboutOpen, setAboutOpen] = useState(false);
   const navigate = useNavigate();
 
@@ -21,7 +22,12 @@ export default function Footer() {
   return (
     <>
       <AboutDialog open={aboutOpen} onOpenChange={setAboutOpen} />
-      <footer className="relative z-10 border-t border-border px-8 py-8 flex items-center justify-center">
+      <footer
+        className={cn(
+          'relative z-10 border-t border-border px-8 py-8 flex items-center justify-center',
+          className,
+        )}
+      >
         <div className="flex gap-6">
           {FOOTER_LINKS.map((l: string) => (
             <button

@@ -40,7 +40,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
     <TooltipProvider>
       <SidebarProvider>
         <AppSidebar />
-        <SidebarInset>
+        <SidebarInset className="h-svh overflow-hidden">
           {isDemoMode() && (
             <div className="flex h-8 shrink-0 items-center justify-center bg-primary/40 border-b border-primary/50 px-4">
               <span className="text-[0.72rem] font-medium text-white tracking-wide">
@@ -66,7 +66,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
             </div>
           </header>
           <ErrorBoundary>{children}</ErrorBoundary>
-          <Footer />
+          <Footer className="py-3" />
         </SidebarInset>
       </SidebarProvider>
     </TooltipProvider>
