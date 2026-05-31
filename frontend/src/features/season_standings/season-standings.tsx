@@ -513,12 +513,12 @@ export default function SeasonStandings() {
         </p>
 
         <div className="bg-card border border-border/50 rounded-lg overflow-hidden mb-6">
-          <div className="overflow-x-auto">
+          <div className="max-h-[70vh] overflow-auto">
             <table
               className="w-full border-collapse text-[13px]"
               style={{ tableLayout: 'fixed', minWidth: '540px' }}
             >
-              <thead>
+              <thead className="sticky top-0 z-20">
                 <tr>
                   <th
                     className="text-left text-[10px] font-medium uppercase tracking-[0.07em] text-muted-foreground px-3.5 py-2.5 border-b border-border/50 bg-muted sticky left-0 z-10"

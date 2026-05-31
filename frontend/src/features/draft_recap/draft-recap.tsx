@@ -332,9 +332,9 @@ function DraftRecapContent({
       </div>
 
       {/* Picks Table */}
-      <div className="bg-card border border-border/50 rounded-lg mb-6 overflow-x-auto">
+      <div className="bg-card border border-border/50 rounded-lg mb-6 max-h-[70vh] overflow-auto">
         <table className="w-full border-separate border-spacing-0 table-fixed text-[12px]">
-          <thead className="sticky top-0 z-10">
+          <thead className="sticky top-0 z-30">
             <tr>
               <th
                 className="text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground px-3 py-2.5 text-left bg-muted border-b border-border/50 sticky left-0 z-20"

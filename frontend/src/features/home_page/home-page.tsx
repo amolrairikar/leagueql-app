@@ -28,8 +28,8 @@ type ChampionItem = {
 
 function StatsSkeleton() {
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 mb-6">
-      {Array.from({ length: 5 }).map((_, i) => (
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-6">
+      {Array.from({ length: 4 }).map((_, i) => (
         <div
           key={i}
           className="bg-card border border-border/50 rounded-lg p-3 text-center"
@@ -285,22 +285,15 @@ function StatsWithTotalGames({
   totalGamesPromise,
   championsPromise,
   totalMembersPromise,
-  recordScorePromise,
 }: {
   stats: StatItem[];
   totalGamesPromise: Promise<number>;
   championsPromise: Promise<ChampionItem[]>;
   totalMembersPromise: Promise<number>;
-  recordScorePromise: Promise<{
-    score: number;
-    week: string;
-    season: string;
-  } | null>;
 }) {
   const totalGames = use(totalGamesPromise);
   const champions = use(championsPromise);
   const totalMembers = use(totalMembersPromise);
-  const recordScore = use(recordScorePromise);
 
   const uniqueChampions = new Set(
     champions.filter((c) => c.owner !== '—').map((c) => c.owner),
@@ -312,13 +305,6 @@ function StatsWithTotalGames({
       label: 'Total matchups',
       value: totalGames.toLocaleString(),
     },
-    recordScore
-      ? {
-          label: 'Record score',
-          value: recordScore.score.toFixed(2),
-          sub: `Week ${recordScore.week}, ${recordScore.season}`,
-        }
-      : { label: 'Record score', value: '—' },
     {
       label: 'Total members',
       value: String(totalMembers),
@@ -329,7 +315,7 @@ function StatsWithTotalGames({
     },
   ];
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 mb-6">
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-6">
       {displayStats.map((stat) => (
         <div
           key={stat.label}
@@ -463,33 +449,6 @@ export default function HomePage() {
     [allDataPromise],
   );
 
-  // Derive record score from the single data call
-  const recordScorePromise = useMemo(
-    (): Promise<{ score: number; week: string; season: string } | null> =>
-      allDataPromise.then(({ matchups }) => {
-        if (matchups.length === 0) return null;
-        let maxScore = 0;
-        let maxWeek = '';
-        let maxSeason = '';
-
-        for (const matchup of matchups) {
-          if (matchup.team_a_score > maxScore) {
-            maxScore = matchup.team_a_score;
-            maxWeek = matchup.week;
-            maxSeason = matchup.season;
-          }
-          if (matchup.team_b_score > maxScore) {
-            maxScore = matchup.team_b_score;
-            maxWeek = matchup.week;
-            maxSeason = matchup.season;
-          }
-        }
-
-        return { score: maxScore, week: maxWeek, season: maxSeason };
-      }),
-    [allDataPromise],
-  );
-
   // Use standings from the single data call for chart
   const standingsPromise = useMemo(
     (): Promise<{
@@ -526,7 +485,6 @@ export default function HomePage() {
             totalGamesPromise={totalGamesPromise}
             championsPromise={championsPromise}
             totalMembersPromise={totalMembersPromise}
-            recordScorePromise={recordScorePromise}
           />
         </Suspense>
 
