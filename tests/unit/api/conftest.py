@@ -49,7 +49,29 @@ def aws_env_vars():
 @pytest.fixture
 def mock_table():
     with patch("main.table") as mock:
+        # Default: a stale stored matchup so refresh-guard tests are strictly
+        # behind the default NFL state and proceed to the Lambda invoke. Tests
+        # exercising the guard or other queries override this.
+        mock.query.return_value = {"Items": [{"SK": "MATCHUPS#2024#WEEK#01"}]}
         yield mock
+
+
+@pytest.fixture(autouse=True)
+def default_nfl_state():
+    """Stub Sleeper's NFL state to a 'behind' regular-season week so existing
+    refresh tests still reach the Lambda invoke. Unit tests for get_nfl_state
+    and the refresh guard reconfigure this mock as needed."""
+    with patch("main.http_requests.get") as mock_get:
+        mock_get.return_value = MagicMock(
+            **{
+                "json.return_value": {
+                    "season_type": "regular",
+                    "season": "2025",
+                    "week": "10",
+                }
+            }
+        )
+        yield mock_get
 
 
 @pytest.fixture

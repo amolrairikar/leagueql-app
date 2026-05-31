@@ -171,7 +171,7 @@ Represents matchups for a given week in the fantasy league.
 | Attribute | Type | Required | Description |
 |---|---|---|---|
 | `PK` | String | Yes | `LEAGUE#{league_id}` |
-| `SK` | String | Yes | `MATCHUPS#{season}#{week}` |
+| `SK` | String | Yes | `MATCHUPS#{season}#WEEK#{week}` |
 | `data` | List\<Object\> | Yes | A list of objects containing weekly matchup details |
 
 **`data[n]` object:**
