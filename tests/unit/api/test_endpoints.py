@@ -264,6 +264,103 @@ class TestOnboardLeagueEndpoint:
         )
         assert response.status_code == 201
 
+    def test_refresh_blocked_when_stored_equals_current_state(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+        ]
+        # Default state is 2025 week 10; stored matchup is also 2025 week 10.
+        mock_table.query.return_value = {"Items": [{"SK": "MATCHUPS#2025#WEEK#10"}]}
+        response = client.post(
+            "/leagues?requestType=REFRESH",
+            json={"leagueId": "123", "platform": "SLEEPER"},
+        )
+        assert response.status_code == 409
+        assert "up to date" in response.json()["detail"].lower()
+
+    def test_refresh_blocked_when_stored_ahead_of_state(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+        ]
+        mock_table.query.return_value = {"Items": [{"SK": "MATCHUPS#2025#WEEK#11"}]}
+        response = client.post(
+            "/leagues?requestType=REFRESH",
+            json={"leagueId": "123", "platform": "SLEEPER"},
+        )
+        assert response.status_code == 409
+        assert "up to date" in response.json()["detail"].lower()
+
+    def test_refresh_blocked_during_offseason(
+        self,
+        client,
+        mock_table,
+        default_nfl_state,
+        league_lookup_item,
+        league_metadata_item,
+    ):
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+        ]
+        default_nfl_state.return_value.json.return_value = {"season_type": "off"}
+        response = client.post(
+            "/leagues?requestType=REFRESH",
+            json={"leagueId": "123", "platform": "SLEEPER"},
+        )
+        assert response.status_code == 409
+        assert "offseason" in response.json()["detail"].lower()
+
+    def test_refresh_allowed_when_no_matchups_stored(
+        self,
+        client,
+        mock_table,
+        mock_lambda_client,
+        league_lookup_item,
+        league_metadata_item,
+    ):
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+        ]
+        mock_table.query.return_value = {"Items": []}
+        mock_lambda_client.invoke.return_value = {}
+        response = client.post(
+            "/leagues?requestType=REFRESH",
+            json={"leagueId": "123", "platform": "SLEEPER"},
+        )
+        assert response.status_code == 201
+        mock_lambda_client.invoke.assert_called_once()
+
+    def test_refresh_fail_open_when_state_api_down(
+        self,
+        client,
+        mock_table,
+        mock_lambda_client,
+        default_nfl_state,
+        league_lookup_item,
+        league_metadata_item,
+    ):
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+        ]
+        default_nfl_state.side_effect = Exception("state API down")
+        # Stored matchup is at/ahead of any plausible state, but the guard is
+        # skipped because the state fetch fails, so the refresh still proceeds.
+        mock_table.query.return_value = {"Items": [{"SK": "MATCHUPS#2099#WEEK#18"}]}
+        mock_lambda_client.invoke.return_value = {}
+        response = client.post(
+            "/leagues?requestType=REFRESH",
+            json={"leagueId": "123", "platform": "SLEEPER"},
+        )
+        assert response.status_code == 201
+        mock_lambda_client.invoke.assert_called_once()
+
     def test_refresh_nonexistent_espn_league_returns_404(self, client, mock_table):
         mock_table.get_item.return_value = {}
         response = client.post(
@@ -790,3 +887,48 @@ class TestMigrateLeagueEndpoint:
         )
         assert response.status_code == 500
         assert "trigger" in response.json()["detail"].lower()
+
+
+class TestGetNflState:
+    def test_returns_state_on_success(self, default_nfl_state):
+        import main
+
+        default_nfl_state.return_value.json.return_value = {
+            "season_type": "regular",
+            "season": "2025",
+            "week": "10",
+        }
+        result = main.get_nfl_state()
+        assert result == {"season_type": "regular", "season": "2025", "week": "10"}
+        default_nfl_state.return_value.raise_for_status.assert_called_once()
+
+    def test_returns_none_on_failure(self, default_nfl_state):
+        import main
+
+        default_nfl_state.side_effect = Exception("network error")
+        assert main.get_nfl_state() is None
+
+
+class TestGetLatestStoredMatchup:
+    def test_parses_latest_season_and_week(self, mock_table):
+        import main
+
+        mock_table.query.return_value = {"Items": [{"SK": "MATCHUPS#2025#WEEK#07"}]}
+        assert main.get_latest_stored_matchup("canonical-abc") == (2025, 7)
+
+    def test_returns_none_when_no_matchups(self, mock_table):
+        import main
+
+        mock_table.query.return_value = {"Items": []}
+        assert main.get_latest_stored_matchup("canonical-abc") is None
+
+    def test_raises_500_on_client_error(self, mock_table):
+        import main
+        from fastapi import HTTPException
+
+        mock_table.query.side_effect = botocore.exceptions.ClientError(
+            {"Error": {"Code": "InternalError", "Message": "fail"}}, "Query"
+        )
+        with pytest.raises(HTTPException) as exc_info:
+            main.get_latest_stored_matchup("canonical-abc")
+        assert exc_info.value.status_code == 500
