@@ -364,7 +364,20 @@ function DraftRecapContent({
                 className="text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground px-3 py-2.5 text-center bg-muted border-b border-border/50"
                 style={{ width: '72px' }}
               >
-                VORP
+                <span className="inline-flex items-center justify-center gap-1">
+                  VORP
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info className="w-3 h-3 cursor-default" />
+                    </TooltipTrigger>
+                    <TooltipContent side="top">
+                      Value Over Replacement Player: the points a player scored
+                      above a replacement-level player at their position.
+                      For example, in a 10-team league with one starting QB,
+                      that's QB11.
+                    </TooltipContent>
+                  </Tooltip>
+                </span>
               </th>
               <th
                 className="text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground px-3 py-2.5 text-center bg-muted border-b border-border/50"
