@@ -774,12 +774,19 @@ export default function HomePage() {
     [allDataPromise, seasons],
   );
 
-  // Derive total members from the single data call
+  // Derive total members from the single data call.
+  // A member must appear in matchups, counted on the same remapped owner_id
+  // key the all-time standings table uses, so the two stay consistent.
   const totalMembersPromise = useMemo(
     (): Promise<number> =>
-      allDataPromise.then(({ standings }) => {
-        const allOwners = new Set(standings.map((s) => s.owner_username));
-        return allOwners.size;
+      allDataPromise.then(({ matchups, migrationMapping }) => {
+        const remapOwner = (id: string) => migrationMapping.get(id) ?? id;
+        const owners = new Set<string>();
+        for (const m of matchups) {
+          owners.add(remapOwner(m.team_a_primary_owner_id));
+          owners.add(remapOwner(m.team_b_primary_owner_id));
+        }
+        return owners.size;
       }),
     [allDataPromise],
   );
