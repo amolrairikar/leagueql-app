@@ -34,7 +34,7 @@ SEASONS = ["2022", "2023", "2024"]
 SLEEPER_SEASONS = ["2025"]
 ONBOARDED_AT = "2024-09-01T00:00:00"
 MIGRATED_AT = "2025-09-01T00:00:00"
-N_REG_WEEKS = 14
+N_REG_WEEKS = 15
 N_TEAMS = 10
 N_PLAYOFF_TEAMS = 4
 N_BYE_TEAMS = 0
@@ -615,7 +615,7 @@ def simulate_season(
     rng: random.Random,
 ) -> dict:
     """
-    Run regular season (weeks 1-14), determine playoff seeds, run playoffs.
+    Run regular season (weeks 1..N_REG_WEEKS), determine playoff seeds, run playoffs.
     Returns a big dict with all matchup/standings data needed to build DDB items.
     """
     owner_by_id = {o["id"]: o for o in owners}
@@ -787,32 +787,55 @@ def simulate_season(
             "season": None,
         }
 
-    # Week 15 — No playoff games (4-team format starts in week 16)
-    week15_matchups: list[dict] = []
+    # Playoffs run weeks 16-17 (a 2-week, 4-team format); week 15 is the final
+    # regular-season week, so there are no week-15 playoff games.
 
     # Week 16 — Semifinals: 1 vs 4, 2 vs 3
     m1 = playoff_matchup(s1, s4, 16, "WINNERS_BRACKET", "Semifinals")
     m2 = playoff_matchup(s2, s3, 16, "WINNERS_BRACKET", "Semifinals")
-    week16_matchups = [m1, m2]
+
+    # Losers bracket (consolation) for the next 4 seeds — determines places 5-8.
+    l1, l2, l3, l4 = (
+        consolation_teams[0],
+        consolation_teams[1],
+        consolation_teams[2],
+        consolation_teams[3],
+    )
+    lm1 = playoff_matchup(l1, l4, 16, "LOSERS_BRACKET", "Losers Bracket")
+    lm2 = playoff_matchup(l2, l3, 16, "LOSERS_BRACKET", "Losers Bracket")
+    week16_matchups = [m1, m2, lm1, lm2]
 
     # Week 17 — Championship
     sf1_winner, sf1_loser = m1["winner"], m1["loser"]
     sf2_winner, sf2_loser = m2["winner"], m2["loser"]
     m3 = playoff_matchup(sf1_winner, sf2_winner, 17, "WINNERS_BRACKET", "Finals")
-    week17_matchups = [m3]
+    # 3rd-place game between the semifinal losers — a winners consolation game.
+    m4 = playoff_matchup(
+        sf1_loser, sf2_loser, 17, "WINNERS_CONSOLATION_LADDER", "Winners Consolation"
+    )
+    # Losers bracket finals — 5th-place game (winners) and 7th-place game (losers).
+    lm3 = playoff_matchup(
+        lm1["winner"], lm2["winner"], 17, "LOSERS_BRACKET", "Losers Bracket"
+    )
+    lm4 = playoff_matchup(
+        lm1["loser"], lm2["loser"], 17, "LOSERS_BRACKET", "Losers Bracket"
+    )
+    week17_matchups = [m3, m4, lm3, lm4]
 
     champion = m3["winner"]
 
     # ── Final rankings ────────────────────────────────────────────────────────
-    sf_losers = sorted([sf1_loser, sf2_loser], key=lambda t: (-wins[t], -total_pf[t]))
-
     final_rank: dict[str, int] = {}
     final_rank[m3["winner"]] = 1
     final_rank[m3["loser"]] = 2
-    for i, t in enumerate(sf_losers):
-        final_rank[t] = 3 + i
-    for i, t in enumerate(consolation_teams):
-        final_rank[t] = 5 + i
+    final_rank[m4["winner"]] = 3  # 3rd-place game winner
+    final_rank[m4["loser"]] = 4
+    final_rank[lm3["winner"]] = 5  # 5th-place game winner
+    final_rank[lm3["loser"]] = 6
+    final_rank[lm4["winner"]] = 7  # 7th-place game winner
+    final_rank[lm4["loser"]] = 8
+    final_rank[consolation_teams[4]] = 9
+    final_rank[consolation_teams[5]] = 10
 
     # ── STANDINGS data ────────────────────────────────────────────────────────
     standings_data: list[dict] = []
@@ -898,8 +921,7 @@ def simulate_season(
     ]
 
     return {
-        "reg_matchups": reg_matchups,  # list of 14 lists of matchup dicts
-        "week15_matchups": week15_matchups,
+        "reg_matchups": reg_matchups,  # list of N_REG_WEEKS lists of matchup dicts
         "week16_matchups": week16_matchups,
         "week17_matchups": week17_matchups,
         "standings_data": standings_data,
@@ -964,7 +986,6 @@ def build_season_items(
         )
 
     for week, week_matchups in [
-        (15, sim["week15_matchups"]),
         (16, sim["week16_matchups"]),
         (17, sim["week17_matchups"]),
     ]:
@@ -995,7 +1016,7 @@ def build_season_items(
     items.append({"PK": pk, "SK": f"PLAYOFF_BRACKET#{season}", "data": bracket_stamped})
 
     # ── DRAFT ─────────────────────────────────────────────────────────────────
-    # Compute total_points per player (sum of all weekly scores, weeks 1-17)
+    # Compute total_points per player (sum of regular-season weekly scores)
     # For non-rostered weeks or bye weeks: use generated score regardless
     player_totals: dict[str, dict[int, float]] = {}  # team_id → player_id → total
     for team_id, roster in rosters.items():
@@ -1004,7 +1025,7 @@ def build_season_items(
             pid = player["player_id"]
             total = sum(
                 all_scores[team_id][w][pid]
-                for w in range(1, 15)  # regular season only for total_points
+                for w in range(1, N_REG_WEEKS + 1)  # regular season only
             )
             player_totals[team_id][pid] = fmt_score(total)
 
@@ -1146,7 +1167,7 @@ def build_all_items() -> list[dict]:
         draft_picks, rosters = build_draft(owners, rng, prev_standings)
 
         # Generate scores for all 17 weeks
-        all_scores = gen_weekly_scores(rosters, N_REG_WEEKS + 3, rng)
+        all_scores = gen_weekly_scores(rosters, N_REG_WEEKS + 2, rng)
 
         sim = simulate_season(owners, rosters, all_scores, rng)
 
@@ -1164,7 +1185,7 @@ def build_all_items() -> list[dict]:
     draft_picks_2025, rosters_2025 = build_draft(
         sleeper_owners, rng_2025, prev_standings
     )
-    all_scores_2025 = gen_weekly_scores(rosters_2025, N_REG_WEEKS + 3, rng_2025)
+    all_scores_2025 = gen_weekly_scores(rosters_2025, N_REG_WEEKS + 2, rng_2025)
     sim_2025 = simulate_season(sleeper_owners, rosters_2025, all_scores_2025, rng_2025)
     season_items_2025 = build_season_items(
         "2025",

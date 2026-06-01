@@ -106,6 +106,11 @@ export const MATCHUP_STATUS_COLORS = {
     bg: '#fef3c7',
     text: '#92400e',
   },
+  // Winners consolation bracket (ESPN WINNERS_CONSOLATION_LADDER)
+  consolation: {
+    bg: '#DBEAFE',
+    text: '#1E40AF',
+  },
 } as const;
 
 // ── Nemesis Color (for manager history) ─────────────────────────────────────────

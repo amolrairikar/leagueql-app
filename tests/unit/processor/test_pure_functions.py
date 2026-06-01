@@ -581,6 +581,156 @@ class TestRegisterSleeperRawData:
         result = processor_handler._register_sleeper_raw_data(raw, {}, {})
         assert result["brackets"][0]["bracket_type"] == "LOSERS_BRACKET"
 
+    def test_winners_consolation_tier_assigned_to_matchups(self, processor_handler):
+        # Winners bracket: semifinals (m1, m2) feed the championship (m3, p=1);
+        # their losers feed the 3rd-place game (m4, p=3).
+        raw = [
+            {
+                "season": "2024",
+                "data_type": "playoff_bracket",
+                "data": [
+                    {"m": 1, "r": 1, "t1": 1, "t2": 4, "w": 1, "l": 4, "p": None},
+                    {"m": 2, "r": 1, "t1": 2, "t2": 3, "w": 2, "l": 3, "p": None},
+                    {
+                        "m": 3,
+                        "r": 2,
+                        "t1": 1,
+                        "t2": 2,
+                        "w": 1,
+                        "l": 2,
+                        "p": 1,
+                        "t1_from": {"w": 1},
+                        "t2_from": {"w": 2},
+                    },
+                    {
+                        "m": 4,
+                        "r": 2,
+                        "t1": 4,
+                        "t2": 3,
+                        "w": 4,
+                        "l": 3,
+                        "p": 3,
+                        "t1_from": {"l": 1},
+                        "t2_from": {"l": 2},
+                    },
+                ],
+            },
+            {
+                "season": "2024",
+                "data_type": "matchupsweek16",
+                "data": [
+                    {"matchup_id": 1, "roster_id": 1, "points": 100.0},
+                    {"matchup_id": 1, "roster_id": 2, "points": 90.0},
+                    {"matchup_id": 2, "roster_id": 4, "points": 80.0},
+                    {"matchup_id": 2, "roster_id": 3, "points": 70.0},
+                ],
+            },
+        ]
+        result = processor_handler._register_sleeper_raw_data(raw, {}, {})
+        tiers = {
+            frozenset([m["team_a_roster_id"], m["team_b_roster_id"]]): m[
+                "playoff_tier_type"
+            ]
+            for m in result["matchups"]
+        }
+        assert tiers[frozenset([1, 2])] == "WINNERS_BRACKET"  # championship game
+        assert tiers[frozenset([4, 3])] == "WINNERS_CONSOLATION_LADDER"  # 3rd place
+
+    def test_playoff_week_start_keeps_week_15_regular_season(self, processor_handler):
+        # League with a 15-week regular season (playoffs start week 16): the
+        # week-15 game must be regular season, not defaulted to LOSERS_BRACKET.
+        raw = [
+            {
+                "season": "2024",
+                "data_type": "league_settings",
+                "data": {"settings": {"playoff_week_start": 16}},
+            },
+            {
+                "season": "2024",
+                "data_type": "matchupsweek15",
+                "data": [
+                    {"matchup_id": 1, "roster_id": 1, "points": 100.0},
+                    {"matchup_id": 1, "roster_id": 2, "points": 90.0},
+                ],
+            },
+        ]
+        result = processor_handler._register_sleeper_raw_data(raw, {}, {})
+        assert result["matchups"][0]["playoff_tier_type"] == "NONE"
+
+    def test_playoff_week_start_classifies_first_playoff_week(self, processor_handler):
+        # With playoffs starting week 16, a week-16 winners-bracket game is
+        # classified from the bracket, not suppressed to NONE.
+        raw = [
+            {
+                "season": "2024",
+                "data_type": "league_settings",
+                "data": {"settings": {"playoff_week_start": 16}},
+            },
+            {
+                "season": "2024",
+                "data_type": "playoff_bracket",
+                "data": [{"m": 1, "r": 1, "t1": 1, "t2": 2, "w": 1, "l": 2, "p": 1}],
+            },
+            {
+                "season": "2024",
+                "data_type": "matchupsweek16",
+                "data": [
+                    {"matchup_id": 1, "roster_id": 1, "points": 100.0},
+                    {"matchup_id": 1, "roster_id": 2, "points": 90.0},
+                ],
+            },
+        ]
+        result = processor_handler._register_sleeper_raw_data(raw, {}, {})
+        assert result["matchups"][0]["playoff_tier_type"] == "WINNERS_BRACKET"
+
+    def test_missing_playoff_week_start_falls_back_to_default(self, processor_handler):
+        # No playoff_week_start available: season >= 2021 falls back to week 15,
+        # so a week-15 game not in any bracket is postseason (LOSERS_BRACKET).
+        raw = [
+            {
+                "season": "2024",
+                "data_type": "matchupsweek15",
+                "data": [
+                    {"matchup_id": 1, "roster_id": 1, "points": 100.0},
+                    {"matchup_id": 1, "roster_id": 2, "points": 90.0},
+                ],
+            },
+        ]
+        result = processor_handler._register_sleeper_raw_data(raw, {}, {})
+        assert result["matchups"][0]["playoff_tier_type"] == "LOSERS_BRACKET"
+
+
+class TestTraceSleeperChampionshipPath:
+    def test_excludes_consolation_games(self, processor_handler):
+        entries = [
+            {"m": 1, "r": 1, "t1": 1, "t2": 4, "p": None},
+            {"m": 2, "r": 1, "t1": 2, "t2": 3, "p": None},
+            {
+                "m": 3,
+                "r": 2,
+                "t1": 1,
+                "t2": 2,
+                "p": 1,
+                "t1_from": {"w": 1},
+                "t2_from": {"w": 2},
+            },
+            {
+                "m": 4,
+                "r": 2,
+                "t1": 4,
+                "t2": 3,
+                "p": 3,
+                "t1_from": {"l": 1},
+                "t2_from": {"l": 2},
+            },
+        ]
+        path = processor_handler._trace_sleeper_championship_path(entries)
+        assert path == {1, 2, 3}  # 3rd-place game (m4) excluded
+
+    def test_returns_none_without_championship_game(self, processor_handler):
+        entries = [{"m": 1, "r": 1, "t1": 1, "t2": 2, "p": None}]
+        assert processor_handler._trace_sleeper_championship_path(entries) is None
+
 
 class TestWriteMetadataItems:
     def test_refresh_sets_refresh_status_completed(self, processor_handler):
