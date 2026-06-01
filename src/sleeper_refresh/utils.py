@@ -1,43 +1,13 @@
-import json
-import logging
 import os
-import time
 from collections import defaultdict
-from contextvars import ContextVar
 
 import boto3
 import requests
 
+from common.logging_utils import logger  # noqa: F401  re-exported for handler import
+from common.onboarder_invoke import invoke_onboarder
+
 SLEEPER_BASE_URL = "https://api.sleeper.app/v1"
-
-correlation_id_var: ContextVar[str] = ContextVar("correlation_id", default="")
-
-
-class JsonFormatter(logging.Formatter):
-    """Class to format logs in JSON format."""
-
-    def format(self, record) -> str:
-        log_object = {
-            "timestamp": int(time.time() * 1000),
-            "level": record.levelname,
-            "message": record.getMessage(),
-            "function": record.funcName,
-            "correlation_id": correlation_id_var.get(),
-        }
-        return json.dumps(log_object)
-
-
-def setup_logger() -> logging.Logger:
-    logger = logging.getLogger("leagueql")
-    logger.setLevel(logging.INFO)
-    handler = logging.StreamHandler()
-    handler.setFormatter(JsonFormatter())
-    if not logger.handlers:
-        logger.addHandler(handler)
-    return logger
-
-
-logger = setup_logger()
 
 DYNAMODB_TABLE_NAME = os.environ["DYNAMODB_TABLE_NAME"]
 ONBOARDER_LAMBDA_NAME = os.environ["ONBOARDER_LAMBDA_NAME"]
@@ -129,17 +99,13 @@ def invoke_onboarder_lambda(
     Raises:
         Exception: If lambda invocation fails.
     """
-    payload = {
-        "requestType": "REFRESH",
-        "canonicalLeagueId": canonical_league_id,
-        "body": {"leagueId": league_id, "platform": "SLEEPER"},
-        "correlation_id": correlation_id,
-    }
-
-    response = _lambda_client.invoke(
-        FunctionName=ONBOARDER_LAMBDA_NAME,
-        InvocationType="Event",  # Asynchronous invocation
-        Payload=json.dumps(payload),
+    response = invoke_onboarder(
+        lambda_client=_lambda_client,
+        function_name=ONBOARDER_LAMBDA_NAME,
+        body={"leagueId": league_id, "platform": "SLEEPER"},
+        request_type="REFRESH",
+        canonical_league_id=canonical_league_id,
+        correlation_id=correlation_id,
     )
 
     # Check if invocation was successful

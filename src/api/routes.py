@@ -6,7 +6,6 @@ module are reached through ``main`` at call time so test patches on
 ``main.table`` etc. take effect here.
 """
 
-import json
 import os
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -18,6 +17,7 @@ from boto3.dynamodb.conditions import Key
 from fastapi import APIRouter, HTTPException, Path, Query, Response, status
 
 import main
+from common.onboarder_invoke import invoke_onboarder
 from main import (
     DEFAULT_SUBSCRIPTION_STATUS,
     QUERY_TYPE_TO_SK_BASE,
@@ -205,17 +205,13 @@ def onboard_league(
     logger.info("%s, proceeding with Lambda trigger...", log_msg)
 
     try:
-        main.lambda_client.invoke(
-            FunctionName=os.environ["ONBOARDER_LAMBDA_NAME"],
-            InvocationType="Event",
-            Payload=json.dumps(
-                {
-                    "body": payload.model_dump(),
-                    "requestType": requestType.value,
-                    "canonicalLeagueId": canonical_league_id,
-                    "correlation_id": correlation_id,
-                }
-            ),
+        invoke_onboarder(
+            lambda_client=main.lambda_client,
+            function_name=os.environ["ONBOARDER_LAMBDA_NAME"],
+            body=payload.model_dump(),
+            request_type=requestType.value,
+            canonical_league_id=canonical_league_id,
+            correlation_id=correlation_id,
         )
 
         detail_msg = (
@@ -374,23 +370,19 @@ def migrate_league(
         )
 
     try:
-        main.lambda_client.invoke(
-            FunctionName=os.environ["ONBOARDER_LAMBDA_NAME"],
-            InvocationType="Event",
-            Payload=json.dumps(
-                {
-                    "body": {
-                        "leagueId": payload.newPlatformLeagueId,
-                        "platform": payload.newPlatform.value,
-                        "season": payload.season,
-                        "s2": payload.s2,
-                        "swid": payload.swid,
-                    },
-                    "requestType": "MIGRATE",
-                    "canonicalLeagueId": canonical_league_id,
-                    "correlation_id": correlation_id,
-                }
-            ),
+        invoke_onboarder(
+            lambda_client=main.lambda_client,
+            function_name=os.environ["ONBOARDER_LAMBDA_NAME"],
+            body={
+                "leagueId": payload.newPlatformLeagueId,
+                "platform": payload.newPlatform.value,
+                "season": payload.season,
+                "s2": payload.s2,
+                "swid": payload.swid,
+            },
+            request_type="MIGRATE",
+            canonical_league_id=canonical_league_id,
+            correlation_id=correlation_id,
         )
     except botocore.exceptions.ClientError as e:
         logger.error("Failed to invoke onboarder Lambda for migration: %s", e)

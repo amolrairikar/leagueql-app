@@ -7,10 +7,11 @@ import requests
 from yarl import URL
 
 from utils import (
-    EXTENDED_SEASON_CUTOFF,
     V2_CUTOFF,
     fetch_with_retry,
     logger,
+    matchup_weeks,
+    run_fetches,
     validate_api_results,
 )
 
@@ -214,11 +215,7 @@ class ESPNClient:
                 else:
                     api_base_url = f"https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/{season}/segments/0/leagues/{self.league_id}"
                 if data_type == "matchups":
-                    weeks = (
-                        range(1, 19)
-                        if season_int >= EXTENDED_SEASON_CUTOFF
-                        else range(1, 18)
-                    )
+                    weeks = matchup_weeks(season_int)
                     for week in weeks:
                         full_url = self._construct_request_url(
                             base_url=api_base_url, data_type=data_type, week=week
@@ -256,12 +253,7 @@ class ESPNClient:
         async with aiohttp.ClientSession(
             cookies=cookies, timeout=aiohttp.ClientTimeout(total=30)
         ) as session:
-            semaphore = asyncio.Semaphore(10)
-            tasks = [
-                self._fetch(session=session, semaphore=semaphore, url_data=url_data)
-                for url_data in self.request_urls
-            ]
-            results = await asyncio.gather(*tasks, return_exceptions=True)
+            results = await run_fetches(session, self.request_urls, self._fetch)
             return self._process_api_results(results=results)
 
     async def _fetch(

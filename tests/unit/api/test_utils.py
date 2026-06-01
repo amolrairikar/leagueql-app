@@ -1,7 +1,9 @@
-"""Tests for utility functions in main.py."""
+"""Tests for utility functions in main.py.
 
-import json
-import logging
+JSON logging (``JsonFormatter`` / ``setup_logger``) is shared code now exercised by
+``tests/unit/common/test_logging_utils.py``.
+"""
+
 from decimal import Decimal
 from unittest.mock import MagicMock
 
@@ -42,26 +44,6 @@ def test_convert_decimals_passthrough():
     assert convert_decimals("hello") == "hello"
     assert convert_decimals(42) == 42
     assert convert_decimals(None) is None
-
-
-def test_json_formatter_keys():
-    from main import JsonFormatter
-
-    formatter = JsonFormatter()
-    record = logging.LogRecord(
-        name="test",
-        level=logging.INFO,
-        pathname="",
-        lineno=0,
-        msg="hello world",
-        args=(),
-        exc_info=None,
-    )
-    output = json.loads(formatter.format(record))
-    assert output["level"] == "INFO"
-    assert output["message"] == "hello world"
-    assert "timestamp" in output
-    assert "function" in output
 
 
 class TestLookupLeague:
@@ -338,14 +320,9 @@ class TestDeleteLeagueHelpers:
 
 
 class TestPublishFailure:
-    def test_publish_failure_noop_when_unconfigured(self, monkeypatch):
-        import main
-
-        # No SNS topic configured -> client is None -> publish is a no-op.
-        monkeypatch.setattr(main, "_sns_client", None)
-        main.publish_failure("something broke")  # should not raise
-
-    def test_publish_failure_publishes_when_configured(self, mock_sns_client):
+    # The shared publish/no-op/error-swallow behavior is covered by
+    # tests/unit/common/test_sns.py; here we verify the API binds its own subject.
+    def test_publish_failure_binds_api_subject(self, mock_sns_client):
         from main import publish_failure
 
         publish_failure("something broke")
@@ -353,12 +330,3 @@ class TestPublishFailure:
         kwargs = mock_sns_client.publish.call_args.kwargs
         assert kwargs["Subject"] == "LeagueQL API Failure"
         assert "something broke" in kwargs["Message"]
-
-    def test_publish_failure_swallows_publish_errors(self, mock_sns_client):
-        from main import publish_failure
-
-        mock_sns_client.publish.side_effect = botocore.exceptions.ClientError(
-            {"Error": {"Code": "InternalError", "Message": "fail"}}, "Publish"
-        )
-        # Failure to publish must not propagate out of the helper.
-        publish_failure("something broke")

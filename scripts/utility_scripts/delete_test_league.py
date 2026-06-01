@@ -21,7 +21,9 @@ os.environ.setdefault("DYNAMODB_TABLE_NAME", "leagueql-table-dev")
 account_id = os.environ.get("AWS_ACCOUNT_ID", "")
 os.environ["S3_BUCKET_NAME"] = f"leagueql-dev-bucket-east-{account_id}"
 
-sys.path.insert(0, str(Path(__file__).parents[2] / "src" / "api"))
+_SRC = Path(__file__).parents[2] / "src"
+sys.path.insert(0, str(_SRC / "api"))
+sys.path.insert(0, str(_SRC))  # makes the shared ``common`` package importable
 
 from fastapi import HTTPException  # noqa: E402
 from main import Platform, delete_league  # noqa: E402

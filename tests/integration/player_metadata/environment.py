@@ -6,7 +6,8 @@ from pathlib import Path
 
 import boto3
 
-_PLAYER_METADATA_SRC = Path(__file__).parents[3] / "src" / "player_metadata"
+_SRC = Path(__file__).parents[3] / "src"
+_PLAYER_METADATA_SRC = _SRC / "player_metadata"
 
 _REQUIRED_ENV_VARS = ["AWS_ACCOUNT_ID"]
 
@@ -28,6 +29,10 @@ def before_all(context):
 
     s3_bucket = f"leagueql-dev-bucket-east-{os.environ['AWS_ACCOUNT_ID']}"
     os.environ["S3_BUCKET_NAME"] = s3_bucket
+
+    # Make the shared ``common`` package importable before loading the handler.
+    if str(_SRC) not in sys.path:
+        sys.path.insert(0, str(_SRC))
 
     pkg = types.ModuleType("player_metadata")
     pkg.__path__ = [str(_PLAYER_METADATA_SRC)]

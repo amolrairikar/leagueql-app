@@ -1,3 +1,3 @@
 [tool.pytest.ini_options]
-pythonpath = [".", "src/api", "src/processor", "src/onboarder"]
+pythonpath = [".", "src", "src/api", "src/processor", "src/onboarder"]
 asyncio_mode = "auto"

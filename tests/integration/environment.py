@@ -6,9 +6,10 @@ from pathlib import Path
 
 import boto3
 
-_ONBOARDER_SRC = Path(__file__).parents[2] / "src" / "onboarder"
-_SLEEPER_REFRESH_SRC = Path(__file__).parents[2] / "src" / "sleeper_refresh"
-_API_SRC = Path(__file__).parents[2] / "src" / "api"
+_SRC = Path(__file__).parents[2] / "src"
+_ONBOARDER_SRC = _SRC / "onboarder"
+_SLEEPER_REFRESH_SRC = _SRC / "sleeper_refresh"
+_API_SRC = _SRC / "api"
 
 _REQUIRED_ENV_VARS = ["TEST_SLEEPER_LEAGUE_ID", "AWS_ACCOUNT_ID"]
 
@@ -47,8 +48,10 @@ def before_all(context):
 
     test_league_id = os.environ["TEST_SLEEPER_LEAGUE_ID"]
 
-    if str(_API_SRC) not in sys.path:
-        sys.path.insert(0, str(_API_SRC))
+    # _SRC makes the shared ``common`` package importable; _API_SRC makes ``main`` etc. resolve.
+    for path in (_SRC, _API_SRC):
+        if str(path) not in sys.path:
+            sys.path.insert(0, str(path))
 
     _cleanup_test_league(test_league_id)
 
