@@ -614,6 +614,40 @@ def _register_espn_raw_data(
     }
 
 
+def _trace_sleeper_championship_path(entries: list[dict]) -> set | None:
+    """
+    Identify the match IDs on the championship path of a Sleeper winners bracket.
+
+    The championship game (position == 1) and every match feeding into it via the
+    t1_from/t2_from links form the championship path. All other winners-bracket
+    games are consolation games (3rd place, 5th place, etc.), analogous to ESPN's
+    WINNERS_CONSOLATION_LADDER tier.
+
+    Args:
+        entries: Winners-bracket entry dicts, each with m, p, t1_from, and t2_from.
+
+    Returns:
+        The set of match IDs on the championship path, or None if the championship
+        game (position == 1) is absent and the path cannot be determined.
+    """
+    by_id = {e["m"]: e for e in entries if e.get("m") is not None}
+    final = next((e for e in entries if e.get("p") == 1), None)
+    if final is None or final.get("m") is None:
+        return None
+    path: set = set()
+    stack = [final["m"]]
+    while stack:
+        match_id = stack.pop()
+        if match_id is None or match_id in path or match_id not in by_id:
+            continue
+        path.add(match_id)
+        for from_key in ("t1_from", "t2_from"):
+            ref = by_id[match_id].get(from_key)
+            if isinstance(ref, dict):
+                stack.extend(ref.values())
+    return path
+
+
 def _register_sleeper_raw_data(
     raw_data: list[dict],
     player_metadata: dict,
@@ -633,22 +667,21 @@ def _register_sleeper_raw_data(
     """
     bracket_by_season: dict[str, dict[frozenset, dict]] = defaultdict(dict)
     all_brackets: list[dict] = []
+    # Winners-bracket entries per season, collected so we can trace the
+    # championship path and flag off-path games as winners consolation games.
+    winners_entries_by_season: dict[str, list[dict]] = defaultdict(list)
     for item in raw_data:
         if item["data_type"] in ("playoff_bracket", "losers_bracket"):
             for entry in item["data"]:
                 t1, t2 = entry.get("t1"), entry.get("t2")
                 if t1 is None or t2 is None:
                     continue
-                p = entry.get("p")
                 if item["data_type"] == "losers_bracket":
-                    tier = "LOSERS_BRACKET"
+                    bracket_by_season[item["season"]][frozenset([t1, t2])] = {
+                        "tier": "LOSERS_BRACKET",
+                    }
                 else:
-                    tier = (
-                        "WINNERS_BRACKET" if (p is None or p == 1) else "LOSERS_BRACKET"
-                    )
-                bracket_by_season[item["season"]][frozenset([t1, t2])] = {
-                    "tier": tier,
-                }
+                    winners_entries_by_season[item["season"]].append(entry)
                 all_brackets.append(
                     {
                         "match_id": entry.get("m"),
@@ -657,7 +690,7 @@ def _register_sleeper_raw_data(
                         "team_2": t2,
                         "winner": entry.get("w"),
                         "loser": entry.get("l"),
-                        "position": p,
+                        "position": entry.get("p"),
                         "bracket_type": "LOSERS_BRACKET"
                         if item["data_type"] == "losers_bracket"
                         else "WINNERS_BRACKET",
@@ -671,14 +704,37 @@ def _register_sleeper_raw_data(
                     }
                 )
 
-    # Pre-pass: collect roster_positions per season so matchup processing can
-    # assign the correct slot label (e.g. "FLEX") to each starter.
+    # Classify winners-bracket games: those on the championship path are
+    # WINNERS_BRACKET; the rest (3rd place, 5th place, etc.) are
+    # WINNERS_CONSOLATION_LADDER, mirroring ESPN's consolation tier.
+    for season, entries in winners_entries_by_season.items():
+        championship_ids = _trace_sleeper_championship_path(entries)
+        for entry in entries:
+            if championship_ids is None:
+                # Championship game not yet known; fall back to position heuristic.
+                position = entry.get("p")
+                on_path = position is None or position == 1
+            else:
+                on_path = entry.get("m") in championship_ids
+            tier = "WINNERS_BRACKET" if on_path else "WINNERS_CONSOLATION_LADDER"
+            bracket_by_season[season][frozenset([entry["t1"], entry["t2"]])] = {
+                "tier": tier,
+            }
+
+    # Pre-pass: collect roster_positions and the playoff start week per season so
+    # matchup processing can assign the correct slot label (e.g. "FLEX") to each
+    # starter and classify regular-season vs. playoff games. A pre-pass is needed
+    # because league_settings items can appear after matchups items in raw_data.
     roster_positions_by_season: dict[str, list[str]] = {}
+    playoff_week_start_by_season: dict[str, int] = {}
     for item in raw_data:
         if item["data_type"] == "league_settings":
             rp = item["data"].get("roster_positions")
             if rp:
                 roster_positions_by_season[item["season"]] = rp
+            pws = item["data"].get("settings", {}).get("playoff_week_start")
+            if isinstance(pws, int) and pws > 0:
+                playoff_week_start_by_season[item["season"]] = pws
 
     all_users, all_rosters, all_matchups, all_draft_picks = [], [], [], []
     league_name_by_season: dict[str, str] = {}
@@ -717,9 +773,13 @@ def _register_sleeper_raw_data(
                     winner = "TIE"
                     loser = "TIE"
                 pair = frozenset([team_a["roster_id"], team_b["roster_id"]])
-                if (int(season) >= 2021 and int(week) < 15) or (
-                    int(season) < 2021 and int(week) < 14
-                ):
+                # Use the league's configured playoff start week; fall back to the
+                # historical default when the setting is unavailable.
+                default_start = 15 if int(season) >= 2021 else 14
+                playoff_week_start = playoff_week_start_by_season.get(
+                    season, default_start
+                )
+                if int(week) < playoff_week_start:
                     playoff_tier_type = "NONE"
                 else:
                     bracket_entry = bracket.get(pair)

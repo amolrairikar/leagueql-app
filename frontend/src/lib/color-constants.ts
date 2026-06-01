@@ -108,8 +108,8 @@ export const MATCHUP_STATUS_COLORS = {
   },
   // Winners consolation bracket (ESPN WINNERS_CONSOLATION_LADDER)
   consolation: {
-    bg: '#EEEDFE',
-    text: '#3C3489',
+    bg: '#DBEAFE',
+    text: '#1E40AF',
   },
 } as const;
 
