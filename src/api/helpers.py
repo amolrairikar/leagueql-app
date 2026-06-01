@@ -1,13 +1,14 @@
 """Helper functions for the LeagueQL API.
 
 DynamoDB access, Sleeper NFL state, SNS alerting, and small data utilities.
-Functions that touch the patched singletons (``table``, ``_sns_client``) reach
-them through the ``main`` module at call time so tests can patch ``main.table``
-etc. and have it take effect here.
+Functions that touch the patched singleton ``table`` reach it through the ``main``
+module at call time so tests can patch ``main.table`` and have it take effect here.
+SNS failure alerting lives in the shared ``common.sns`` module.
 """
 
 import time
 from decimal import Decimal
+from functools import partial
 from typing import Any
 
 import botocore.exceptions
@@ -16,12 +17,16 @@ from boto3.dynamodb.conditions import Key
 from fastapi import HTTPException, status
 
 import main
+from common.sns import publish_failure as _publish_failure
 from main import (
     SLEEPER_STATE_URL,
     SubscriptionStatus,
-    correlation_id_var,
     logger,
 )
+
+# Binds the API's SNS subject; the shared implementation handles the no-op guard,
+# correlation_id, and error swallowing.
+publish_failure = partial(_publish_failure, subject="LeagueQL API Failure")
 
 
 def convert_decimals(obj: Any) -> Any:
@@ -33,19 +38,6 @@ def convert_decimals(obj: Any) -> Any:
     if isinstance(obj, Decimal):
         return float(obj)
     return obj
-
-
-def publish_failure(error_message: str) -> None:
-    if not main._sns_client:
-        return
-    try:
-        main._sns_client.publish(
-            TopicArn=main._sns_topic_arn,
-            Subject="LeagueQL API Failure",
-            Message=f"Correlation ID: {correlation_id_var.get()}\nError: {error_message}",
-        )
-    except Exception:
-        logger.warning("Failed to publish SNS failure notification", exc_info=True)
 
 
 def lookup_league(league_id: str, platform) -> str:

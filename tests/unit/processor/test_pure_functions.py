@@ -158,6 +158,28 @@ class TestCompileESPNStarterStats:
         assert ids == []
 
 
+class TestSleeperPlayerDisplayFields:
+    def test_joins_name_and_keeps_position(self, processor_handler):
+        full_name, position = processor_handler.sleeper_player_display_fields(
+            {"first_name": "Joe", "last_name": "Burrow", "position": "QB"}
+        )
+        assert full_name == "Joe Burrow"
+        assert position == "QB"
+
+    def test_normalizes_def_to_dst(self, processor_handler):
+        _, position = processor_handler.sleeper_player_display_fields(
+            {"first_name": "Cowboys", "last_name": "", "position": "DEF"}
+        )
+        assert position == "D/ST"
+
+    def test_missing_metadata_yields_empty_name_and_none_position(
+        self, processor_handler
+    ):
+        full_name, position = processor_handler.sleeper_player_display_fields({})
+        assert full_name == ""
+        assert position is None
+
+
 class TestCompileSleeperStarterStats:
     def test_builds_stats_from_starters_and_points(self, processor_handler):
         metadata = {

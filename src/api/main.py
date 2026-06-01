@@ -6,11 +6,7 @@ route handlers in ``routes.py``; both are wired together here. Helper functions
 are re-exported from this module so ``main.<helper>`` remains the public surface.
 """
 
-import json
-import logging
 import os
-import time
-from contextvars import ContextVar
 from enum import Enum
 from typing import Any, Optional
 
@@ -22,12 +18,19 @@ from fastapi.middleware.cors import CORSMiddleware
 from mangum import Mangum
 from pydantic import BaseModel, Field
 
+# Re-exported so ``main.<name>`` stays the public surface for helpers, routes,
+# and tests (e.g. ``from main import correlation_id_var, JsonFormatter``).
+from common.logging_utils import (  # noqa: F401
+    JsonFormatter,
+    correlation_id_var,
+    logger,
+    setup_logger,
+)
+
 ORIGINS = [
     "http://localhost:5173",  # LOCAL/DEV
     "https://leagueql.com",  # PROD
 ]
-
-correlation_id_var: ContextVar[str] = ContextVar("correlation_id", default="")
 
 
 class APIResponse(BaseModel):
@@ -114,47 +117,6 @@ class MigratePayload(BaseModel):
     managerMapping: list[dict] = Field(default_factory=list)
 
 
-class JsonFormatter(logging.Formatter):
-    """Class to format logs in JSON format."""
-
-    def format(self, record) -> str:
-        """
-        Format the log record as a JSON object.
-
-        Args:
-            record (logging.LogRecord): The log record to format.
-
-        Returns:
-            str: JSON formatted log string.
-        """
-        log_object = {
-            "timestamp": int(time.time() * 1000),
-            "level": record.levelname,
-            "message": record.getMessage(),
-            "function": record.funcName,
-            "correlation_id": correlation_id_var.get(),
-        }
-        return json.dumps(log_object)
-
-
-def setup_logger() -> logging.Logger:
-    """
-    Set up the logger with JSON formatted log entries.
-
-    Returns:
-        logging.Logger: Configured logger instance.
-    """
-    logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
-    handler = logging.StreamHandler()
-    handler.setFormatter(JsonFormatter())
-    logger.handlers = [handler]
-    return logger
-
-
-logger = setup_logger()
-
-
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
@@ -178,9 +140,6 @@ lambda_client = boto3.client("lambda", config=_retry_config)
 
 s3_client = boto3.client("s3", config=_retry_config)
 S3_BUCKET = os.environ["S3_BUCKET_NAME"]
-
-_sns_topic_arn = os.environ.get("SNS_TOPIC_ARN")
-_sns_client = boto3.client("sns", config=_retry_config) if _sns_topic_arn else None
 
 
 # Re-export helpers so ``main.<helper>`` stays the public surface. Imported after

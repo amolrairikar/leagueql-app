@@ -135,6 +135,25 @@ def compile_espn_starter_stats(
     return stats, ids
 
 
+def sleeper_player_display_fields(meta: dict) -> tuple[str, str | None]:
+    """
+    Derive a Sleeper player's display name and normalized position from metadata.
+
+    Args:
+        meta: Sleeper player metadata dict (first_name, last_name, position).
+
+    Returns:
+        Tuple of (full_name, position) where full_name joins first/last name and
+        position normalizes the "DEF" label to the "D/ST" display convention.
+    """
+    full_name = (
+        (meta.get("first_name") or "") + " " + (meta.get("last_name") or "")
+    ).strip()
+    position_raw = meta.get("position")
+    position = "D/ST" if position_raw == "DEF" else position_raw
+    return full_name, position
+
+
 def compile_sleeper_starter_stats(
     starters: list[str],
     starters_points: list[float],
@@ -165,7 +184,7 @@ def compile_sleeper_starter_stats(
     stats = []
     for i, (player_id, points) in enumerate(zip(starters, starters_points)):
         meta = player_metadata.get(player_id, {})
-        position_raw = meta.get("position")
+        full_name, position = sleeper_player_display_fields(meta)
         slot = starter_slots[i] if i < len(starter_slots) else None
         # Normalise the DEF slot label to match the display convention used for
         # bench players ("D/ST"), so starters and bench are labelled consistently.
@@ -174,11 +193,9 @@ def compile_sleeper_starter_stats(
         stats.append(
             {
                 "player_id": player_id,
-                "full_name": (
-                    (meta.get("first_name") or "") + " " + (meta.get("last_name") or "")
-                ).strip(),
+                "full_name": full_name,
                 "points_scored": points,
-                "position": "D/ST" if position_raw == "DEF" else position_raw,
+                "position": position,
                 "fantasy_position": slot,
             }
         )
@@ -208,15 +225,13 @@ def compile_sleeper_bench_stats(
         if player_id in starter_ids:
             continue
         meta = player_metadata.get(player_id, {})
-        position_raw = meta.get("position")
+        full_name, position = sleeper_player_display_fields(meta)
         result.append(
             {
                 "player_id": player_id,
-                "full_name": (
-                    (meta.get("first_name") or "") + " " + (meta.get("last_name") or "")
-                ).strip(),
+                "full_name": full_name,
                 "points_scored": players_points.get(player_id, 0.0),
-                "position": "D/ST" if position_raw == "DEF" else position_raw,
+                "position": position,
             }
         )
     return result
@@ -241,11 +256,7 @@ def compile_sleeper_player_scoring_totals(
     rows = []
     for player_id, season_stats in player_stats.items():
         meta = player_metadata.get(player_id, {})
-        first_name = meta.get("first_name") or ""
-        last_name = meta.get("last_name") or ""
-        player_name = f"{first_name} {last_name}".strip()
-        position_raw = meta.get("position")
-        position = "D/ST" if position_raw == "DEF" else position_raw
+        player_name, position = sleeper_player_display_fields(meta)
 
         for season, scoring_settings in scoring_settings_by_season.items():
             stats = season_stats.get(season)

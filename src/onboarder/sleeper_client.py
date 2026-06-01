@@ -1,13 +1,19 @@
 import asyncio
 import os
-from typing import Any
+from typing import Any, Iterator
 
 import aiohttp
 import boto3
 import botocore.exceptions
 import requests
 
-from utils import EXTENDED_SEASON_CUTOFF, fetch_with_retry, logger, validate_api_results
+from utils import (
+    fetch_with_retry,
+    logger,
+    matchup_weeks,
+    run_fetches,
+    validate_api_results,
+)
 
 SLEEPER_BASE_URL = "https://api.sleeper.app/v1"
 MAX_CHAIN_DEPTH = 50
@@ -24,26 +30,31 @@ DATA_FETCH_TYPES = [
 ]
 
 
-def resolve_sleeper_canonical_league_id(new_league_id: str) -> str | None:
+def _iter_sleeper_league_chain(start_league_id: str) -> Iterator[dict]:
     """
-    Resolves the canonical_league_id for a new Sleeper season by walking the
-    previous_league_id chain until a known league ID is found in DynamoDB.
+    Walk a Sleeper league's previous_league_id chain, yielding each season's API data.
+
+    Fetches ``{SLEEPER_BASE_URL}/league/{id}`` starting at start_league_id and follows
+    previous_league_id back to the oldest season (previous_league_id == "0"), yielding
+    the parsed JSON for each league. Bounded by MAX_CHAIN_DEPTH to guard against cycles.
 
     Args:
-        new_league_id: The new season's Sleeper league ID that is not yet in LEAGUE_LOOKUP.
+        start_league_id: The most recent season's Sleeper league ID to start from.
 
-    Returns:
-        The canonical_league_id if a prior season is found in LEAGUE_LOOKUP, or None if
-        the chain is exhausted without finding a match (truly unknown league).
+    Yields:
+        The parsed Sleeper API response dict for each league in the chain.
+
+    Raises:
+        requests.exceptions.HTTPError: If any league fetch fails.
+        RuntimeError: If the chain exceeds MAX_CHAIN_DEPTH.
     """
-    table_name = os.environ["DYNAMODB_TABLE_NAME"]
-    current_id = new_league_id
+    current_id = start_league_id
     depth = 0
-
     while True:
         if depth >= MAX_CHAIN_DEPTH:
             raise RuntimeError(
-                f"Exceeded maximum chain depth of {MAX_CHAIN_DEPTH} while resolving canonical league ID for {new_league_id}"
+                f"Exceeded maximum chain depth of {MAX_CHAIN_DEPTH} while walking "
+                f"Sleeper league chain from {start_league_id}"
             )
         depth += 1
         url = f"{SLEEPER_BASE_URL}/league/{current_id}"
@@ -57,13 +68,32 @@ def resolve_sleeper_canonical_league_id(new_league_id: str) -> str | None:
             raise
 
         data = response.json()
+        yield data
+
         previous_league_id = data.get("previous_league_id", "0")
         if previous_league_id == "0":
-            logger.warning(
-                "Exhausted previous_league_id chain from %s without finding a known league",
-                new_league_id,
-            )
-            return None
+            return
+        current_id = previous_league_id
+
+
+def resolve_sleeper_canonical_league_id(new_league_id: str) -> str | None:
+    """
+    Resolves the canonical_league_id for a new Sleeper season by walking the
+    previous_league_id chain until a known league ID is found in DynamoDB.
+
+    Args:
+        new_league_id: The new season's Sleeper league ID that is not yet in LEAGUE_LOOKUP.
+
+    Returns:
+        The canonical_league_id if a prior season is found in LEAGUE_LOOKUP, or None if
+        the chain is exhausted without finding a match (truly unknown league).
+    """
+    table_name = os.environ["DYNAMODB_TABLE_NAME"]
+
+    for data in _iter_sleeper_league_chain(new_league_id):
+        previous_league_id = data.get("previous_league_id", "0")
+        if previous_league_id == "0":
+            break
 
         try:
             result = _dynamodb.get_item(
@@ -90,7 +120,11 @@ def resolve_sleeper_canonical_league_id(new_league_id: str) -> str | None:
             )
             return canonical_league_id
 
-        current_id = previous_league_id
+    logger.warning(
+        "Exhausted previous_league_id chain from %s without finding a known league",
+        new_league_id,
+    )
+    return None
 
 
 class SleeperClient:
@@ -132,24 +166,7 @@ class SleeperClient:
                 that season.
         """
         result: dict[str, str] = {}
-        current_id = self.league_id
-        depth = 0
-
-        while True:
-            if depth >= MAX_CHAIN_DEPTH:
-                raise RuntimeError(
-                    f"Exceeded maximum chain depth of {MAX_CHAIN_DEPTH} while fetching league seasons for {self.league_id}"
-                )
-            depth += 1
-            url = f"{SLEEPER_BASE_URL}/league/{current_id}"
-            response = requests.get(url, timeout=(5, 30))
-            try:
-                response.raise_for_status()
-            except requests.exceptions.HTTPError as e:
-                logger.error("Error fetching Sleeper league %s: %s", current_id, e)
-                raise
-
-            data = response.json()
+        for data in _iter_sleeper_league_chain(self.league_id):
             try:
                 result[data["season"]] = data["league_id"]
             except KeyError as e:
@@ -160,12 +177,6 @@ class SleeperClient:
 
             if is_refresh:
                 break
-
-            previous_league_id = data.get("previous_league_id", "0")
-            if previous_league_id == "0":
-                break
-
-            current_id = previous_league_id
 
         logger.info(
             "Resolved Sleeper league seasons: league_id=%s season_count=%d seasons=%s",
@@ -224,11 +235,7 @@ class SleeperClient:
         for season, league_id in self.season_mapping.items():
             for data_type in DATA_FETCH_TYPES:
                 if data_type in ("matchups", "transactions"):
-                    weeks = (
-                        range(1, 19)
-                        if int(season) >= EXTENDED_SEASON_CUTOFF
-                        else range(1, 18)
-                    )
+                    weeks = matchup_weeks(season)
                     for week in weeks:
                         full_url = self._construct_request_url(
                             league_id=league_id, data_type=data_type, week=week
@@ -256,21 +263,12 @@ class SleeperClient:
         async with aiohttp.ClientSession(
             timeout=aiohttp.ClientTimeout(total=30)
         ) as session:
-            semaphore = asyncio.Semaphore(10)
-            tasks = [
-                self._fetch(session=session, semaphore=semaphore, url_data=url_data)
-                for url_data in self.request_urls
-            ]
-            results = await asyncio.gather(*tasks, return_exceptions=True)
+            results = await run_fetches(session, self.request_urls, self._fetch)
             processed_results = validate_api_results(results=results)
 
             draft_pick_urls = self._build_draft_pick_urls(processed_results)
             if draft_pick_urls:
-                pick_tasks = [
-                    self._fetch(session=session, semaphore=semaphore, url_data=url_data)
-                    for url_data in draft_pick_urls
-                ]
-                pick_results = await asyncio.gather(*pick_tasks, return_exceptions=True)
+                pick_results = await run_fetches(session, draft_pick_urls, self._fetch)
                 processed_results.extend(validate_api_results(results=pick_results))
 
             return processed_results

@@ -88,6 +88,15 @@ process_lambda() {
         cp "$pyfile" "$BUILD_DIR/"
     done
 
+    # Copy the shared common package (vendored into every function zip so
+    # ``import common.*`` resolves at runtime).
+    COMMON_DIR="$(dirname "$SOURCE_DIR")/common"
+    if [[ -d "$COMMON_DIR" ]]; then
+        echo "    Copying shared common package..."
+        cp -R "$COMMON_DIR" "$BUILD_DIR/"
+        rm -rf "$BUILD_DIR/common/__pycache__"
+    fi
+
     # Copy the OTEL collector config
     if [[ -f "$SOURCE_DIR/otel-collector-config.yaml" ]]; then
         cp "$SOURCE_DIR/otel-collector-config.yaml" "$BUILD_DIR/"

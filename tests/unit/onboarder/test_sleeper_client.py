@@ -134,6 +134,16 @@ class TestSleeperClientGetLeagueSeasons:
             with pytest.raises(RuntimeError, match="missing field"):
                 onboarder_sleeper_client.SleeperClient("league-2024")
 
+    def test_chain_depth_limit_raises(self, onboarder_sleeper_client):
+        # previous_league_id never reaches "0", so the shared chain walk must bail
+        # out once MAX_CHAIN_DEPTH is exceeded rather than loop forever.
+        http_resp = _mock_http_response(
+            {"season": "2024", "league_id": "lg", "previous_league_id": "lg-prev"}
+        )
+        with patch("requests.get", return_value=http_resp):
+            with pytest.raises(RuntimeError, match="maximum chain depth"):
+                onboarder_sleeper_client.SleeperClient("lg")
+
 
 class TestSleeperClientGetSeasons:
     def test_get_seasons_returns_keys(self, onboarder_sleeper_client):

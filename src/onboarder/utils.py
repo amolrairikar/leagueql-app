@@ -1,76 +1,70 @@
 import asyncio
-import json
-import logging
-import os
-import time
-from contextvars import ContextVar
-from typing import Any, Sequence
+from functools import partial
+from typing import Any, Awaitable, Callable, Sequence
 
 import aiohttp
-import boto3
+
+# Re-exported so existing ``from utils import correlation_id_var, logger`` imports
+# across the onboarder package keep working.
+from common.logging_utils import (  # noqa: F401
+    JsonFormatter,
+    correlation_id_var,
+    logger,
+    setup_logger,
+)
+from common.sns import publish_failure as _publish_failure
 
 V2_CUTOFF = 2018
 EXTENDED_SEASON_CUTOFF = 2021
 
-correlation_id_var: ContextVar[str] = ContextVar("correlation_id", default="")
+publish_failure = partial(_publish_failure, subject="LeagueQL Onboarder Failure")
 
 
-class JsonFormatter(logging.Formatter):
-    """Class to format logs in JSON format."""
-
-    def format(self, record) -> str:
-        """
-        Format the log record as a JSON object.
-
-        Args:
-            record (logging.LogRecord): The log record to format.
-
-        Returns:
-            str: JSON formatted log string.
-        """
-        log_object = {
-            "timestamp": int(time.time() * 1000),
-            "level": record.levelname,
-            "message": record.getMessage(),
-            "function": record.funcName,
-            "correlation_id": correlation_id_var.get(),
-        }
-        return json.dumps(log_object)
-
-
-def setup_logger() -> logging.Logger:
+def matchup_weeks(season: str | int) -> range:
     """
-    Set up the logger with JSON formatted log entries.
+    Return the 1-indexed week range for a season's matchups/transactions.
+
+    Seasons from EXTENDED_SEASON_CUTOFF onward run an 18-week schedule (weeks
+    1-18); earlier seasons run 17 (weeks 1-17). Shared by the ESPN and Sleeper
+    clients when expanding per-week request URLs.
+
+    Args:
+        season: The season year.
 
     Returns:
-        logging.Logger: Configured logger instance.
+        A range over the season's week numbers.
     """
-    logger = logging.getLogger("leagueql")
-    logger.setLevel(logging.INFO)
-    handler = logging.StreamHandler()
-    handler.setFormatter(JsonFormatter())
-    if not logger.handlers:
-        logger.addHandler(handler)
-    return logger
+    return range(1, 19) if int(season) >= EXTENDED_SEASON_CUTOFF else range(1, 18)
 
 
-logger = setup_logger()
+async def run_fetches(
+    session: aiohttp.ClientSession,
+    url_data_list: Sequence[tuple[str, str, str]],
+    fetcher: Callable[..., Awaitable[dict[str, Any]]],
+    concurrency: int = 10,
+) -> list[dict[str, Any] | BaseException]:
+    """
+    Run fetches concurrently under a shared semaphore, gathering all results.
 
-_sns_topic_arn = os.environ.get("SNS_TOPIC_ARN")
-_sns_client = boto3.client("sns") if _sns_topic_arn else None
+    Captures the fetch orchestration shared by the ESPN and Sleeper clients:
+    bound concurrency with a semaphore and gather every result, surfacing
+    exceptions rather than raising (so callers can validate them).
 
+    Args:
+        session: The aiohttp session to fetch with.
+        url_data_list: (season, data_type, url) tuples to fetch.
+        fetcher: Coroutine invoked as ``fetcher(session=, semaphore=, url_data=)``.
+        concurrency: Maximum number of simultaneously in-flight requests.
 
-def publish_failure(error_message: str) -> None:
-    if not _sns_client:
-        return
-    try:
-        _sns_client.publish(
-            TopicArn=_sns_topic_arn,
-            Subject="LeagueQL Onboarder Failure",
-            Message=f"Correlation ID: {correlation_id_var.get()}\nError: {error_message}",
-        )
-    except Exception:
-        logger.warning("Failed to publish SNS failure notification", exc_info=True)
+    Returns:
+        Raw ``asyncio.gather`` results (result dicts or exceptions) in input order.
+    """
+    semaphore = asyncio.Semaphore(concurrency)
+    tasks = [
+        fetcher(session=session, semaphore=semaphore, url_data=url_data)
+        for url_data in url_data_list
+    ]
+    return await asyncio.gather(*tasks, return_exceptions=True)
 
 
 async def fetch_with_retry(

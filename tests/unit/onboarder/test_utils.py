@@ -1,7 +1,9 @@
-"""Tests for onboarder/utils.py."""
+"""Tests for onboarder/utils.py.
 
-import json
-import logging
+JSON logging (``JsonFormatter`` / ``setup_logger``) is shared code now exercised by
+``tests/unit/common/test_logging_utils.py``.
+"""
+
 from unittest.mock import AsyncMock, MagicMock
 
 import aiohttp
@@ -23,38 +25,39 @@ def _make_async_cm(status: int, json_data, raise_for_status=None):
     return cm
 
 
-class TestJsonFormatter:
-    def test_format_returns_valid_json(self, onboarder_utils):
-        formatter = onboarder_utils.JsonFormatter()
-        record = logging.LogRecord(
-            name="test",
-            level=logging.INFO,
-            pathname="",
-            lineno=0,
-            msg="hello %s",
-            args=("world",),
-            exc_info=None,
+class TestMatchupWeeks:
+    def test_extended_season_has_18_weeks(self, onboarder_utils):
+        assert list(onboarder_utils.matchup_weeks("2021")) == list(range(1, 19))
+
+    def test_pre_extended_season_has_17_weeks(self, onboarder_utils):
+        assert list(onboarder_utils.matchup_weeks(2020)) == list(range(1, 18))
+
+
+class TestRunFetches:
+    async def test_runs_all_fetchers_and_returns_results(self, onboarder_utils):
+        calls = []
+
+        async def fake_fetch(session, semaphore, url_data):
+            calls.append(url_data)
+            return {"season": url_data[0], "data_type": url_data[1], "data": {"ok": 1}}
+
+        url_data_list = [("2024", "users", "u"), ("2024", "rosters", "r")]
+        results = await onboarder_utils.run_fetches(
+            session=MagicMock(), url_data_list=url_data_list, fetcher=fake_fetch
         )
-        result = formatter.format(record)
-        parsed = json.loads(result)
-        assert parsed["level"] == "INFO"
-        assert parsed["message"] == "hello world"
-        assert "timestamp" in parsed
-        assert "function" in parsed
+        assert len(results) == 2
+        assert {r["data_type"] for r in results} == {"users", "rosters"}
+        assert len(calls) == 2
 
+    async def test_gathers_exceptions_instead_of_raising(self, onboarder_utils):
+        async def boom(session, semaphore, url_data):
+            raise RuntimeError("nope")
 
-class TestSetupLogger:
-    def test_returns_logger_instance(self, onboarder_utils):
-        logger = onboarder_utils.setup_logger()
-        assert isinstance(logger, logging.Logger)
-
-    def test_logger_has_handler(self, onboarder_utils):
-        logger = onboarder_utils.setup_logger()
-        assert len(logger.handlers) >= 1
-
-    def test_logger_level_is_info(self, onboarder_utils):
-        logger = onboarder_utils.setup_logger()
-        assert logger.level == logging.INFO
+        results = await onboarder_utils.run_fetches(
+            session=MagicMock(), url_data_list=[("2024", "users", "u")], fetcher=boom
+        )
+        assert len(results) == 1
+        assert isinstance(results[0], RuntimeError)
 
 
 class TestFetchWithRetry:
