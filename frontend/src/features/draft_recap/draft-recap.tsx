@@ -320,7 +320,7 @@ function DraftRecapContent({
                 <TooltipContent side="top">
                   A bust is a player whose actual finish at their position was 5
                   or more spots worse than where they were drafted. Only picks
-                  from rounds 1–10 are considered.
+                  from rounds 1-10 are considered.
                 </TooltipContent>
               </Tooltip>
             </span>
@@ -343,7 +343,7 @@ function DraftRecapContent({
                 #
               </th>
               <th
-                className="text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground px-3 py-2.5 text-left bg-muted border-b border-border/50 sticky left-[28px] z-20"
+                className="text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground px-3 py-2.5 text-left bg-muted border-b border-border/50 sticky left-7 z-20"
                 style={{ width: '180px' }}
               >
                 Player
@@ -429,7 +429,7 @@ function DraftRecapContent({
                         {i + 1}
                       </div>
                     </td>
-                    <td className="border-b border-border/50 sticky left-[28px] z-10 bg-card">
+                    <td className="border-b border-border/50 sticky left-7 z-10 bg-card">
                       <div className="px-3 py-2.5">
                         <div className="text-[13px] font-medium text-foreground flex items-center gap-1">
                           {pick.player_name}
