@@ -192,7 +192,7 @@ export function AppSidebar() {
                       tooltip="View Another League"
                       className="cursor-pointer"
                     >
-                      <Link to="/" onClick={closeMobileSidebar}>
+                      <Link to="/?connect=true" onClick={closeMobileSidebar}>
                         <Search />
                         <span>View Another League</span>
                       </Link>
