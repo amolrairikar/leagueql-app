@@ -100,6 +100,7 @@ QUERIES = {
                                 ELSE NULL
                             END
                     END
+                WHEN m.playoff_tier_type = 'WINNERS_CONSOLATION_LADDER' THEN 'Winners Consolation'
                 WHEN m.playoff_tier_type = 'NONE' THEN NULL
                 ELSE 'Losers Bracket'
             END AS playoff_round,

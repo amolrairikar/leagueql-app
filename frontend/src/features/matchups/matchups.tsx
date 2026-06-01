@@ -107,8 +107,12 @@ function processData(
 
   for (const week of Object.keys(byWeek)) {
     byWeek[Number(week)].sort((a, b) => {
-      const rank = (r: string | null) =>
-        r === null || r === 'Losers Bracket' ? 1 : 0;
+      const rank = (r: string | null) => {
+        if (r === null) return 3;
+        if (r === 'Losers Bracket') return 2;
+        if (r === 'Winners Consolation') return 1;
+        return 0;
+      };
       return rank(a.playoffRound) - rank(b.playoffRound);
     });
   }
@@ -118,6 +122,28 @@ function processData(
     .sort((a, b) => a - b);
 
   return { weeks, matchupsByWeek: byWeek };
+}
+
+function playoffBadgeColors(playoffRound: string): {
+  background: string;
+  color: string;
+} {
+  if (playoffRound === 'Losers Bracket') {
+    return {
+      background: MATCHUP_STATUS_COLORS.pending.bg,
+      color: MATCHUP_STATUS_COLORS.pending.text,
+    };
+  }
+  if (playoffRound === 'Winners Consolation') {
+    return {
+      background: MATCHUP_STATUS_COLORS.consolation.bg,
+      color: MATCHUP_STATUS_COLORS.consolation.text,
+    };
+  }
+  return {
+    background: MATCHUP_STATUS_COLORS.completed.bg,
+    color: MATCHUP_STATUS_COLORS.completed.text,
+  };
 }
 
 function MatchupCard({
@@ -147,17 +173,7 @@ function MatchupCard({
         {matchup.playoffRound !== null && (
           <span
             className="text-[10px] font-medium px-2 py-0.5 rounded-full"
-            style={
-              matchup.playoffRound === 'Losers Bracket'
-                ? {
-                    background: MATCHUP_STATUS_COLORS.pending.bg,
-                    color: MATCHUP_STATUS_COLORS.pending.text,
-                  }
-                : {
-                    background: MATCHUP_STATUS_COLORS.completed.bg,
-                    color: MATCHUP_STATUS_COLORS.completed.text,
-                  }
-            }
+            style={playoffBadgeColors(matchup.playoffRound)}
           >
             {matchup.playoffRound}
           </span>
