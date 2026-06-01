@@ -10,13 +10,15 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { getLeagueCookies } from '@/lib/cookie-handler';
-import { POS_NORMALIZE } from '@/lib/position-constants';
-import { POSITION_COLORS, UI_COLORS } from '@/lib/color-constants';
 import {
   getAllMatchups,
   type MatchupItem,
 } from '@/features/player_records/api-calls';
+import { POSITION_COLORS, UI_COLORS } from '@/lib/color-constants';
+import { getLeagueCookies } from '@/lib/cookie-handler';
+import { POS_NORMALIZE } from '@/lib/position-constants';
+import { type Result, toResult } from '@/lib/result';
+import { initials } from '@/lib/utils';
 
 interface ScoringRecord {
   pos: string;
@@ -43,16 +45,6 @@ function buildColorMap(matchups: MatchupItem[]): Map<string, string> {
     .sort((a, b) => a[1].localeCompare(b[1]))
     .map(([id]) => id);
   return new Map(sortedIds.map((id, i) => [id, avatarColor(i)]));
-}
-
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  if (parts.length >= 2) {
-    return (
-      (parts[0]?.[0] ?? '') + (parts[parts.length - 1]?.[0] ?? '')
-    ).toUpperCase();
-  }
-  return name.slice(0, 2).toUpperCase();
 }
 
 function extractEntries(
@@ -305,13 +297,11 @@ function SkeletonPlayerRecords() {
   );
 }
 
-type Result = { ok: true; data: MatchupItem[] } | { ok: false; error: string };
-
 function PlayerRecordsContent({
   promise,
   platform,
 }: {
-  promise: Promise<Result>;
+  promise: Promise<Result<MatchupItem[]>>;
   platform: 'ESPN' | 'SLEEPER';
 }) {
   const result = use(promise);
@@ -478,17 +468,12 @@ export default function PlayerRecords() {
   const { leagueId, platform } = getLeagueCookies();
 
   const promise = useMemo(
-    (): Promise<Result> =>
+    (): Promise<Result<MatchupItem[]>> =>
       leagueId
-        ? getAllMatchups(leagueId, platform)
-            .then((res) => ({ ok: true as const, data: res.data }))
-            .catch((err) => ({
-              ok: false as const,
-              error:
-                err instanceof Error
-                  ? err.message
-                  : 'Failed to load scoring records.',
-            }))
+        ? toResult(
+            getAllMatchups(leagueId, platform).then((res) => res.data),
+            'Failed to load scoring records.',
+          )
         : Promise.resolve({ ok: true as const, data: [] }),
     [leagueId, platform],
   );

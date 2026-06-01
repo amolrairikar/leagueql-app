@@ -1,22 +1,12 @@
 import { useCallback, useState } from 'react';
 
 import { AVATAR_COLORS } from '@/lib/color-constants';
+import { initials } from '@/lib/utils';
 
 export { AVATAR_COLORS };
 
 export function avatarColor(index: number): string {
   return AVATAR_COLORS[index % AVATAR_COLORS.length];
-}
-
-function initials(username: string): string {
-  const parts = username
-    .replace(/[^a-zA-Z0-9]/g, ' ')
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
-  if (parts.length >= 2)
-    return ((parts[0]?.[0] ?? '') + (parts[1]?.[0] ?? '')).toUpperCase();
-  return username.slice(0, 2).toUpperCase();
 }
 
 export function TeamAvatar({

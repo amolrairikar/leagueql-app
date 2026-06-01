@@ -10,9 +10,10 @@ import {
   type PlayerStat,
   type WeeklyStandingItem,
 } from '@/features/matchups/api-calls';
-import { getLeagueCookies } from '@/lib/cookie-handler';
-import { MATCHUP_STATUS_COLORS } from '@/lib/color-constants';
 import SeasonSelect from '@/features/season_select/season-select';
+import { MATCHUP_STATUS_COLORS } from '@/lib/color-constants';
+import { getLeagueCookies } from '@/lib/cookie-handler';
+import { type Result, toResult } from '@/lib/result';
 
 interface TeamSide {
   teamId: string;
@@ -38,9 +39,7 @@ interface MatchupsData {
   matchupsByWeek: Record<number, ProcessedMatchup[]>;
 }
 
-type MatchupsResult =
-  | { ok: true; data: MatchupsData }
-  | { ok: false; error: string };
+type MatchupsResult = Result<MatchupsData>;
 
 function processData(
   matchups: MatchupItem[],
@@ -432,19 +431,15 @@ export default function Matchups() {
   const matchupsPromise = useMemo(
     (): Promise<MatchupsResult> =>
       leagueId && selectedSeason
-        ? Promise.all([
-            getSeasonMatchups(leagueId, platform, selectedSeason),
-            getSeasonWeeklyStandings(leagueId, platform, selectedSeason),
-          ])
-            .then(([matchupsRes, standingsRes]) => ({
-              ok: true as const,
-              data: processData(matchupsRes.data, standingsRes.data),
-            }))
-            .catch((err) => ({
-              ok: false as const,
-              error:
-                err instanceof Error ? err.message : 'Failed to load matchups.',
-            }))
+        ? toResult(
+            Promise.all([
+              getSeasonMatchups(leagueId, platform, selectedSeason),
+              getSeasonWeeklyStandings(leagueId, platform, selectedSeason),
+            ]).then(([matchupsRes, standingsRes]) =>
+              processData(matchupsRes.data, standingsRes.data),
+            ),
+            'Failed to load matchups.',
+          )
         : Promise.resolve({
             ok: true as const,
             data: { weeks: [], matchupsByWeek: {} },

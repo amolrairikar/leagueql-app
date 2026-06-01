@@ -16,6 +16,7 @@ import {
   type MatchupItem,
 } from '@/features/manager_comparison/api-calls';
 import { getLeagueCookies } from '@/lib/cookie-handler';
+import { initials, pct } from '@/lib/utils';
 
 interface Manager {
   name: string;
@@ -110,19 +111,6 @@ const STAT_DEFS: StatDef[] = [
     higher: true,
   },
 ];
-
-function pct(a: number, b: number): number {
-  const total = a + b;
-  return total === 0 ? 50 : Math.round((a / total) * 100);
-}
-
-function initials(name: string): string {
-  return name
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase() ?? '')
-    .join('');
-}
 
 function longestWinStreak(games: GameLog[], side: 'left' | 'right'): number {
   let best = 0;
