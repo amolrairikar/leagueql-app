@@ -110,10 +110,7 @@ function TeamRow({
             {team.display_name}
           </span>
           {isChampion && (
-            <Trophy
-              className="w-3 h-3 shrink-0"
-              style={{ color: UI_COLORS.gold }}
-            />
+            <Trophy className="h-3.5 w-3.5 shrink-0 text-yellow-500 fill-yellow-500" />
           )}
         </div>
         <div className="text-[10px] text-muted-foreground truncate">

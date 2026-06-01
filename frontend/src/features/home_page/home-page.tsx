@@ -1,3 +1,4 @@
+import { Trophy } from 'lucide-react';
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
 import { Suspense, use, useMemo, useState } from 'react';
 
@@ -417,6 +418,18 @@ function AllTimeStandingsTable({
     [standings, matchups, migrationMapping, showPlayoffs],
   );
 
+  // Championships per owner (remapped through migration mapping)
+  const championshipCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const row of standings) {
+      if (row.champion === 'Yes') {
+        const id = migrationMapping.get(row.owner_id) ?? row.owner_id;
+        counts.set(id, (counts.get(id) ?? 0) + 1);
+      }
+    }
+    return counts;
+  }, [standings, migrationMapping]);
+
   return (
     <div className="mb-6">
       <div className="flex items-center justify-between mb-2.5">
@@ -527,6 +540,25 @@ function AllTimeStandingsTable({
                           <span className="text-[13px] font-medium text-foreground truncate">
                             {row.username}
                           </span>
+                          {(() => {
+                            const titles =
+                              championshipCounts.get(row.ownerId) ?? 0;
+                            if (titles === 0) return null;
+                            return (
+                              <span
+                                className="flex items-center shrink-0"
+                                title={`${titles} championship${titles > 1 ? 's' : ''}`}
+                                aria-label={`${titles} championship${titles > 1 ? 's' : ''}`}
+                              >
+                                {Array.from({ length: titles }).map((_, t) => (
+                                  <Trophy
+                                    key={t}
+                                    className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500"
+                                  />
+                                ))}
+                              </span>
+                            );
+                          })()}
                         </div>
                       </td>
                       <td className="px-3.5 py-2.5 text-right text-muted-foreground">
