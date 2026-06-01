@@ -5,11 +5,7 @@ import { Trophy } from 'lucide-react';
 import { BoxScoreCard } from '@/components/box-score-card';
 import SeasonSelect from '@/features/season_select/season-select';
 import { getLeagueCookies } from '@/lib/cookie-handler';
-import {
-  AVATAR_COLORS,
-  UI_COLORS,
-  POSITION_COLORS,
-} from '@/lib/color-constants';
+import { AVATAR_COLORS, UI_COLORS } from '@/lib/color-constants';
 import { logger } from '@/lib/logger';
 import {
   getPlayoffBracket,
@@ -42,6 +38,7 @@ function TeamRow({
   played,
   isBye,
   record,
+  isChampion,
 }: {
   team: Team | null;
   score: number | null;
@@ -49,6 +46,7 @@ function TeamRow({
   played: boolean;
   isBye: boolean;
   record?: string | null;
+  isChampion?: boolean;
 }) {
   if (!team) {
     return (
@@ -107,8 +105,16 @@ function TeamRow({
         {init}
       </div>
       <div className="flex-1 min-w-0">
-        <div className="text-[12px] font-medium text-foreground truncate">
-          {team.display_name}
+        <div className="flex items-center gap-2">
+          <span className="text-[12px] font-medium text-foreground truncate">
+            {team.display_name}
+          </span>
+          {isChampion && (
+            <Trophy
+              className="w-3 h-3 shrink-0"
+              style={{ color: UI_COLORS.gold }}
+            />
+          )}
         </div>
         <div className="text-[10px] text-muted-foreground truncate">
           {team.team_name || `Team ${team.display_name}`}
@@ -128,6 +134,7 @@ function MatchupCard({
   onClick,
   record1,
   record2,
+  championId,
 }: {
   match: BracketMatch | null;
   extraClass?: string;
@@ -136,6 +143,7 @@ function MatchupCard({
   onClick?: () => void;
   record1?: string | null;
   record2?: string | null;
+  championId?: string | null;
 }) {
   if (!match) {
     return (
@@ -177,6 +185,7 @@ function MatchupCard({
         played={played}
         isBye={false}
         record={record1}
+        isChampion={championId === team1.team_id}
       />
       <TeamRow
         team={team2}
@@ -185,6 +194,7 @@ function MatchupCard({
         played={played}
         isBye={false}
         record={record2}
+        isChampion={championId === team2.team_id}
       />
     </div>
   );
@@ -220,38 +230,6 @@ function ByeCard({ team }: { team: Team }) {
         >
           BYE
         </span>
-      </div>
-    </div>
-  );
-}
-
-function ChampionCard({ team }: { team: Team }) {
-  const color = getTeamColor(team.team_id);
-  const init = team.display_name.slice(0, 2).toUpperCase();
-
-  return (
-    <div
-      className="bg-card border-2 rounded-lg p-4 flex flex-col items-center gap-2 w-full"
-      style={{ borderColor: UI_COLORS.gold }}
-    >
-      <Trophy className="w-6 h-6" />
-      <div
-        className="text-[10px] font-medium uppercase tracking-[0.08em]"
-        style={{ color: POSITION_COLORS.TE.color }}
-      >
-        Champion
-      </div>
-      <div
-        className="w-10 h-10 rounded-full flex items-center justify-center text-[14px] font-medium text-white"
-        style={{ background: color }}
-      >
-        {init}
-      </div>
-      <div className="text-[14px] font-medium text-foreground text-center">
-        {team.display_name}
-      </div>
-      <div className="text-[11px] text-muted-foreground text-center">
-        {team.team_name || `Team ${team.display_name}`}
       </div>
     </div>
   );
@@ -439,24 +417,6 @@ export default function PlayoffBracket() {
     return { byeTeam, wildcardMatch };
   });
 
-  const champTeam = championship
-    ? {
-        team_id: championship.winner || '',
-        display_name:
-          championship.winner === championship.team_1_id
-            ? championship.team_1_display_name
-            : championship.team_2_display_name,
-        team_name:
-          championship.winner === championship.team_1_id
-            ? championship.team_1_team_name
-            : championship.team_2_team_name,
-        team_logo:
-          championship.winner === championship.team_1_id
-            ? championship.team_1_team_logo
-            : championship.team_2_team_logo,
-      }
-    : null;
-
   const seasonOptions = allSeasons;
 
   // Derive championship week from matchup state (same logic as fetchBracketData)
@@ -537,7 +497,7 @@ export default function PlayoffBracket() {
         {/* Main bracket */}
         <div className="overflow-x-auto -mx-6 px-6 mb-6">
           <div
-            className={`grid ${maxRound >= 3 ? 'grid-cols-[1fr_8px_1fr_8px_1fr_8px_160px]' : 'grid-cols-[1fr_8px_1fr_8px_160px]'} gap-0 items-stretch ${maxRound >= 3 ? 'min-w-[560px]' : 'min-w-[380px]'}`}
+            className={`grid ${maxRound >= 3 ? 'grid-cols-[1fr_8px_1fr_8px_1fr]' : 'grid-cols-[1fr_8px_1fr]'} gap-0 items-stretch ${maxRound >= 3 ? 'min-w-[560px]' : 'min-w-[380px]'}`}
           >
             {/* Wild Card Round (6-team+ formats only) */}
             {maxRound >= 3 && (
@@ -697,34 +657,10 @@ export default function PlayoffBracket() {
                     }
                     record1={recordMap[championship.team_1_id] ?? null}
                     record2={recordMap[championship.team_2_id] ?? null}
+                    championId={championship.winner}
                   />
                 )}
               </div>
-            </div>
-
-            {/* Connector 3 */}
-            <div className="flex flex-col justify-center pt-11">
-              <svg
-                width="20"
-                height="64"
-                viewBox="0 0 20 64"
-                overflow="visible"
-                className="block"
-              >
-                <line
-                  x1="0"
-                  y1="32"
-                  x2="20"
-                  y2="32"
-                  stroke="hsl(var(--border))"
-                  strokeWidth="1"
-                />
-              </svg>
-            </div>
-
-            {/* Champion Card */}
-            <div className="flex flex-col items-center justify-center pt-11 pl-1">
-              {champTeam && <ChampionCard team={champTeam} />}
             </div>
           </div>
         </div>

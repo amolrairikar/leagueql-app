@@ -11,11 +11,11 @@ import {
 import { BoxScoreCard, type BoxScoreSide } from '@/components/box-score-card';
 import { avatarColor } from '@/components/team-avatar';
 import { Skeleton } from '@/components/ui/skeleton';
-import { getLeagueCookies } from '@/lib/cookie-handler';
 import {
   getAllSeasonsMatchups,
   type MatchupItem,
 } from '@/features/manager_comparison/api-calls';
+import { getLeagueCookies } from '@/lib/cookie-handler';
 
 interface Manager {
   name: string;
@@ -32,6 +32,8 @@ interface Manager {
     winPct: number;
     h2hWins: number;
     longestStreak: number;
+    playoffApps: number;
+    championships: number;
   };
 }
 
@@ -68,21 +70,29 @@ const STAT_DEFS: StatDef[] = [
     higher: true,
   },
   {
-    key: 'record',
-    label: 'Overall Record',
-    value: (m) => m.stats.winPct,
-    fmt: (m) => `${m.stats.wins}-${m.stats.losses}-${m.stats.ties}`,
+    key: 'championships',
+    label: 'Championships',
+    value: (m) => m.stats.championships,
+    fmt: (m) => String(m.stats.championships),
     higher: true,
   },
   {
-    key: 'winPct',
-    label: 'Win %',
+    key: 'playoffApps',
+    label: 'Playoff Apps',
+    value: (m) => m.stats.playoffApps,
+    fmt: (m) => String(m.stats.playoffApps),
+    higher: true,
+  },
+  {
+    key: 'record',
+    label: 'Record',
     value: (m) => m.stats.winPct,
     fmt: (m) =>
-      '.' +
-      Math.round(m.stats.winPct * 1000)
+      `${m.stats.wins}-${m.stats.losses}-${m.stats.ties} (.${Math.round(
+        m.stats.winPct * 1000,
+      )
         .toString()
-        .padStart(3, '0'),
+        .padStart(3, '0')})`,
     higher: true,
   },
   {
@@ -144,6 +154,10 @@ function buildManagers(
       ties: number;
     }
   >();
+  // Distinct seasons each owner reached the winners bracket
+  const playoffSeasons = new Map<string, Set<string>>();
+  // Championship wins (winner of the winners-bracket Finals) per owner
+  const championships = new Map<string, number>();
 
   for (const m of matchups) {
     for (const side of ['a', 'b'] as const) {
@@ -173,6 +187,28 @@ function buildManagers(
       if (score > otherScore) entry.wins++;
       else if (score < otherScore) entry.losses++;
       else entry.ties++;
+    }
+
+    // Playoff appearances and championships from the winners bracket
+    if (m.playoff_tier_type === 'WINNERS_BRACKET') {
+      const aOwner =
+        migrationMapping.get(m.team_a_primary_owner_id) ??
+        m.team_a_primary_owner_id;
+      const bOwner =
+        migrationMapping.get(m.team_b_primary_owner_id) ??
+        m.team_b_primary_owner_id;
+      for (const owner of [aOwner, bOwner]) {
+        if (!playoffSeasons.has(owner)) playoffSeasons.set(owner, new Set());
+        playoffSeasons.get(owner)!.add(m.season);
+      }
+      if (
+        m.playoff_round === 'Finals' &&
+        m.winner !== 'TIE' &&
+        m.winner !== ''
+      ) {
+        const champOwner = m.winner === m.team_a_id ? aOwner : bOwner;
+        championships.set(champOwner, (championships.get(champOwner) ?? 0) + 1);
+      }
     }
   }
 
@@ -204,6 +240,8 @@ function buildManagers(
         highScore,
         h2hWins: 0,
         longestStreak: 0,
+        playoffApps: playoffSeasons.get(ownerId)?.size ?? 0,
+        championships: championships.get(ownerId) ?? 0,
       },
     };
   });
@@ -537,9 +575,6 @@ function ManagerComparisonInner({
               <div className="flex flex-col items-center gap-1.5 pb-4.5 pt-2.5">
                 <MgrAvatar color={LWithH2H.color} init={LWithH2H.init} />
                 <span className="text-[13px] font-medium text-foreground text-center">
-                  {LWithH2H.team || `Team ${LWithH2H.name}`}
-                </span>
-                <span className="text-[11px] text-muted-foreground">
                   {LWithH2H.name}
                 </span>
               </div>
@@ -547,9 +582,6 @@ function ManagerComparisonInner({
               <div className="flex flex-col items-center gap-1.5 pb-4.5 pt-2.5">
                 <MgrAvatar color={RWithH2H.color} init={RWithH2H.init} />
                 <span className="text-[13px] font-medium text-foreground text-center">
-                  {RWithH2H.team || `Team ${RWithH2H.name}`}
-                </span>
-                <span className="text-[11px] text-muted-foreground">
                   {RWithH2H.name}
                 </span>
               </div>
@@ -659,13 +691,11 @@ function ManagerComparisonSkeleton() {
               <div className="flex flex-col items-center gap-1.5 pb-4.5 pt-2.5">
                 <Skeleton className="w-14 h-14 rounded-full" />
                 <Skeleton className="h-3 w-20 mt-0.5" />
-                <Skeleton className="h-3 w-16" />
               </div>
               <div />
               <div className="flex flex-col items-center gap-1.5 pb-4.5 pt-2.5">
                 <Skeleton className="w-14 h-14 rounded-full" />
                 <Skeleton className="h-3 w-20 mt-0.5" />
-                <Skeleton className="h-3 w-16" />
               </div>
               {/* Stat rows */}
               {STAT_DEFS.map((s) => (

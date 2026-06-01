@@ -480,9 +480,8 @@ function SkeletonManagerHistory() {
       <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-6">
         <div className="flex items-center gap-4 sm:flex-1 order-2 sm:order-1">
           <Skeleton className="w-14 h-14 rounded-full shrink-0" />
-          <div className="flex-1 flex flex-col gap-1.5">
+          <div className="flex-1">
             <Skeleton className="h-4 w-32" />
-            <Skeleton className="h-3 w-24" />
           </div>
         </div>
         <Skeleton className="h-9 w-full sm:w-36 rounded-md order-1 sm:order-2" />
@@ -819,11 +818,8 @@ function ManagerHistoryContent({
             {m.init}
           </div>
           <div className="flex-1">
-            <div className="text-[18px] font-medium text-foreground mb-0.5">
+            <div className="text-[18px] font-medium text-foreground">
               {m.owner_username}
-            </div>
-            <div className="text-[13px] text-muted-foreground">
-              {m.currentTeam || `Team ${m.owner_username}`}
             </div>
           </div>
         </div>
