@@ -46,6 +46,8 @@ import {
   UI_COLORS,
 } from '@/lib/color-constants';
 import { getLeagueCookies, type Platform } from '@/lib/cookie-handler';
+import { type Result, toResult } from '@/lib/result';
+import { pct } from '@/lib/utils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -121,9 +123,7 @@ interface ManagerData {
   rivalries: RivalryEntry[];
 }
 
-type DataResult =
-  | { ok: true; data: ManagerData[] }
-  | { ok: false; error: string };
+type DataResult = Result<ManagerData[]>;
 
 interface RivalryAcc {
   w: number;
@@ -205,11 +205,6 @@ function ordinal(n: number) {
   const s = ['th', 'st', 'nd', 'rd'],
     v = n % 100;
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
-}
-
-function pct(a: number, b: number) {
-  const t = a + b;
-  return t === 0 ? 50 : Math.round((a / t) * 100);
 }
 
 // ── Data processing ───────────────────────────────────────────────────────────
@@ -1250,18 +1245,13 @@ export default function ManagerHistory() {
   const dataPromise = useMemo(
     (): Promise<DataResult> =>
       leagueId && seasons.length > 0
-        ? getManagerHistoryData(leagueId, platform, seasons)
-            .then(({ standings, matchups, migrationMapping }) => ({
-              ok: true as const,
-              data: processData(standings, matchups, migrationMapping),
-            }))
-            .catch((err: unknown) => ({
-              ok: false as const,
-              error:
-                err instanceof Error
-                  ? err.message
-                  : 'Failed to load manager data.',
-            }))
+        ? toResult(
+            getManagerHistoryData(leagueId, platform, seasons).then(
+              ({ standings, matchups, migrationMapping }) =>
+                processData(standings, matchups, migrationMapping),
+            ),
+            'Failed to load manager data.',
+          )
         : Promise.resolve({ ok: true as const, data: [] }),
     [leagueId, platform, seasons],
   );

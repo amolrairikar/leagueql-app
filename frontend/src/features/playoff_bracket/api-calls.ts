@@ -1,6 +1,4 @@
-import { apiClient } from '@/lib/api-client';
-import { isDemoMode } from '@/lib/cookie-handler';
-import { queryDemoLeague } from '@/lib/demo-api';
+import { queryLeague } from '@/components/api/leagues';
 import type { Platform, MatchupItem } from '@/components/api/types';
 
 export type Matchup = MatchupItem;
@@ -50,14 +48,10 @@ export function getPlayoffBracket(
   platform: Platform,
   season: string,
 ): Promise<GetPlayoffBracketResponse> {
-  if (isDemoMode())
-    return queryDemoLeague<BracketMatch>(`PLAYOFF_BRACKET#${season}`);
-  const params = new URLSearchParams({
+  return queryLeague<BracketMatch>(
+    leagueId,
     platform,
-    queryType: `PLAYOFF_BRACKET#${season}`,
-  });
-  return apiClient.get<GetPlayoffBracketResponse>(
-    `/leagues/${leagueId}/query?${params}`,
+    `PLAYOFF_BRACKET#${season}`,
   );
 }
 
@@ -66,14 +60,7 @@ export function getMatchups(
   platform: Platform,
   season: string,
 ): Promise<GetMatchupsResponse> {
-  if (isDemoMode()) return queryDemoLeague<MatchupItem>(`MATCHUPS#${season}#`);
-  const params = new URLSearchParams({
-    platform,
-    queryType: `MATCHUPS#${season}#`,
-  });
-  return apiClient.get<GetMatchupsResponse>(
-    `/leagues/${leagueId}/query?${params}`,
-  );
+  return queryLeague<MatchupItem>(leagueId, platform, `MATCHUPS#${season}#`);
 }
 
 export function getWeeklyStandings(
@@ -81,13 +68,9 @@ export function getWeeklyStandings(
   platform: Platform,
   season: string,
 ): Promise<GetWeeklyStandingsResponse> {
-  if (isDemoMode())
-    return queryDemoLeague<WeeklyStandingItem>(`WEEKLY_STANDINGS#${season}`);
-  const params = new URLSearchParams({
+  return queryLeague<WeeklyStandingItem>(
+    leagueId,
     platform,
-    queryType: `WEEKLY_STANDINGS#${season}`,
-  });
-  return apiClient.get<GetWeeklyStandingsResponse>(
-    `/leagues/${leagueId}/query?${params}`,
+    `WEEKLY_STANDINGS#${season}`,
   );
 }

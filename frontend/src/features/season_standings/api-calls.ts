@@ -1,6 +1,4 @@
-import { apiClient } from '@/lib/api-client';
-import { isDemoMode } from '@/lib/cookie-handler';
-import { queryDemoLeague } from '@/lib/demo-api';
+import { queryLeague } from '@/components/api/leagues';
 import type { Platform, SeasonStandingsItem } from '@/components/api/types';
 
 export type { SeasonStandingsItem } from '@/components/api/types';
@@ -14,13 +12,9 @@ export function getSeasonStandings(
   platform: Platform,
   season: string,
 ): Promise<GetSeasonStandingsResponse> {
-  if (isDemoMode())
-    return queryDemoLeague<SeasonStandingsItem>(`SEASON_STANDINGS#${season}`);
-  const params = new URLSearchParams({
+  return queryLeague<SeasonStandingsItem>(
+    leagueId,
     platform,
-    queryType: `SEASON_STANDINGS#${season}`,
-  });
-  return apiClient.get<GetSeasonStandingsResponse>(
-    `/leagues/${leagueId}/query?${params}`,
+    `SEASON_STANDINGS#${season}`,
   );
 }

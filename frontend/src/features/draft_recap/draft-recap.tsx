@@ -1,5 +1,7 @@
-import { Fragment, Suspense, use, useEffect, useMemo, useState } from 'react';
 import { ChevronDown, Gem, Info, X } from 'lucide-react';
+import { Fragment, Suspense, use, useEffect, useMemo, useState } from 'react';
+
+import { type DraftPickItem, getDraftData } from './api-calls';
 
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -8,9 +10,9 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { getLeagueCookies } from '@/lib/cookie-handler';
 import { POSITION_COLORS } from '@/lib/color-constants';
-import { type DraftPickItem, getDraftData } from './api-calls';
+import { getLeagueCookies } from '@/lib/cookie-handler';
+import { type Result, toResult } from '@/lib/result';
 
 // ── Local color overrides (brighter than shared UI_COLORS for this page) ──────
 
@@ -32,9 +34,7 @@ const posMeta: Record<string, { bg: string; tc: string }> = {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type DraftResult =
-  | { ok: true; data: DraftPickItem[] }
-  | { ok: false; error: string };
+type DraftResult = Result<DraftPickItem[]>;
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -372,9 +372,9 @@ function DraftRecapContent({
                     </TooltipTrigger>
                     <TooltipContent side="top">
                       Value Over Replacement Player: the points a player scored
-                      above a replacement-level player at their position.
-                      For example, in a 10-team league with one starting QB,
-                      that's QB11.
+                      above a replacement-level player at their position. For
+                      example, in a 10-team league with one starting QB, that's
+                      QB11.
                     </TooltipContent>
                   </Tooltip>
                 </span>
@@ -700,15 +700,12 @@ export default function DraftRecap() {
   const draftPromise = useMemo(
     (): Promise<DraftResult> =>
       leagueId && selectedSeason
-        ? getDraftData(leagueId, platform, selectedSeason)
-            .then((res) => ({ ok: true as const, data: res.data }))
-            .catch((err: unknown) => ({
-              ok: false as const,
-              error:
-                err instanceof Error
-                  ? err.message
-                  : 'Failed to load draft data.',
-            }))
+        ? toResult(
+            getDraftData(leagueId, platform, selectedSeason).then(
+              (res) => res.data,
+            ),
+            'Failed to load draft data.',
+          )
         : Promise.resolve({ ok: true as const, data: [] }),
     [leagueId, platform, selectedSeason],
   );

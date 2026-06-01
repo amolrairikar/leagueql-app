@@ -20,21 +20,18 @@ import {
   type WeeklyStandingItem,
   getSeasonWeeklyStandings,
 } from '@/features/matchups/api-calls';
-import { getLeagueCookies } from '@/lib/cookie-handler';
-import { POSITION_COLORS, UI_COLORS } from '@/lib/color-constants';
 import SeasonSelect from '@/features/season_select/season-select';
 import {
   type SeasonStandingsItem,
   getSeasonStandings,
 } from '@/features/season_standings/api-calls';
+import { POSITION_COLORS, UI_COLORS } from '@/lib/color-constants';
+import { getLeagueCookies } from '@/lib/cookie-handler';
+import { type Result, toResult } from '@/lib/result';
 
-type StandingsResult =
-  | { ok: true; data: SeasonStandingsItem[] }
-  | { ok: false; error: string };
+type StandingsResult = Result<SeasonStandingsItem[]>;
 
-type WeeklyResult =
-  | { ok: true; data: WeeklyStandingItem[] }
-  | { ok: false; error: string };
+type WeeklyResult = Result<WeeklyStandingItem[]>;
 
 function SkeletonChart() {
   return <Skeleton className="w-full h-80" />;
@@ -458,15 +455,12 @@ export default function SeasonStandings() {
   const standingsPromise = useMemo(
     (): Promise<StandingsResult> =>
       leagueId && selectedSeason
-        ? getSeasonStandings(leagueId, platform, selectedSeason)
-            .then((res) => ({ ok: true as const, data: res.data }))
-            .catch((err: unknown) => ({
-              ok: false as const,
-              error:
-                err instanceof Error
-                  ? err.message
-                  : 'Failed to load standings.',
-            }))
+        ? toResult(
+            getSeasonStandings(leagueId, platform, selectedSeason).then(
+              (res) => res.data,
+            ),
+            'Failed to load standings.',
+          )
         : Promise.resolve({ ok: true as const, data: [] }),
     [leagueId, platform, selectedSeason],
   );
@@ -474,15 +468,12 @@ export default function SeasonStandings() {
   const weeklyStandingsPromise = useMemo(
     (): Promise<WeeklyResult> =>
       leagueId && selectedSeason
-        ? getSeasonWeeklyStandings(leagueId, platform, selectedSeason)
-            .then((res) => ({ ok: true as const, data: res.data }))
-            .catch((err: unknown) => ({
-              ok: false as const,
-              error:
-                err instanceof Error
-                  ? err.message
-                  : 'Failed to load weekly standings.',
-            }))
+        ? toResult(
+            getSeasonWeeklyStandings(leagueId, platform, selectedSeason).then(
+              (res) => res.data,
+            ),
+            'Failed to load weekly standings.',
+          )
         : Promise.resolve({ ok: true as const, data: [] }),
     [leagueId, platform, selectedSeason],
   );

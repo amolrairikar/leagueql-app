@@ -1,6 +1,5 @@
-import { apiClient } from '@/lib/api-client';
-import { isDemoMode } from '@/lib/cookie-handler';
-import { queryDemoLeague } from '@/lib/demo-api';
+import { queryLeague } from '@/components/api/leagues';
+import type { Platform } from '@/components/api/types';
 
 export interface DraftPickItem {
   actual_position_rank: number;
@@ -32,15 +31,8 @@ export interface DraftPickItem {
 
 export function getDraftData(
   leagueId: string,
-  platform: 'ESPN' | 'SLEEPER',
+  platform: Platform,
   season: string,
 ): Promise<{ data: DraftPickItem[] }> {
-  if (isDemoMode()) return queryDemoLeague<DraftPickItem>(`DRAFT#${season}`);
-  const params = new URLSearchParams({
-    platform,
-    queryType: `DRAFT#${season}`,
-  });
-  return apiClient.get<{ data: DraftPickItem[] }>(
-    `/leagues/${leagueId}/query?${params}`,
-  );
+  return queryLeague<DraftPickItem>(leagueId, platform, `DRAFT#${season}`);
 }
