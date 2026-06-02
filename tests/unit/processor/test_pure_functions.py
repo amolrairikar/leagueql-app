@@ -981,3 +981,154 @@ class TestEspnDraftRankCalculation:
         assert not any(r["is_auction"] for r in rows.values())
         assert rows["10"]["drafted_position_rank"] == 1
         assert rows["11"]["drafted_position_rank"] == 2
+
+
+def _sleeper_draft_pick(player_id, roster_id, season, pick_no, position, bid=None):
+    """Build a single Sleeper draft_picks row with the columns the query reads.
+
+    Pass ``bid`` to make it an auction pick — Sleeper stores the winning bid as a
+    string in ``metadata.amount`` and omits the key entirely for snake drafts.
+    """
+    metadata = {
+        "first_name": f"First{player_id}",
+        "last_name": f"Last{player_id}",
+        "position": position,
+    }
+    if bid is not None:
+        metadata["amount"] = str(bid)
+    return {
+        "player_id": player_id,
+        "roster_id": roster_id,
+        "season": season,
+        "pick_no": pick_no,
+        "round": 1,
+        "draft_slot": pick_no,
+        "is_keeper": False,
+        "picked_by": f"member-{player_id}",
+        "metadata": metadata,
+    }
+
+
+class TestSleeperDraftRankCalculation:
+    """End-to-end checks of QUERIES['DRAFT']['SLEEPER'] for auction vs. snake seasons."""
+
+    def _run_query(self, processor_handler, draft_picks, scoring, teams):
+        con = duckdb.connect()
+        con.register("draft_picks", pd.DataFrame(draft_picks))
+        con.register("player_scoring_totals", pd.DataFrame(scoring))
+        con.register("teams_output", pd.DataFrame(teams))
+        rel = con.sql(processor_handler.QUERIES["DRAFT"]["SLEEPER"])
+        rows = {r["player_id"]: r for r in rel.df().to_dict("records")}
+        con.close()
+        return rows
+
+    def test_auction_season_ranks_by_bid_amount(self, processor_handler):
+        # 2024 is an auction season: highest bid wins, nomination order is noise.
+        # The highest-bid RB is nominated LAST (pick_no 3) to prove the rank comes
+        # from metadata.amount, not pick_no.
+        draft_picks = [
+            _sleeper_draft_pick("1", "8", "2024", pick_no=3, position="RB", bid=50),
+            _sleeper_draft_pick("2", "9", "2024", pick_no=1, position="RB", bid=30),
+            _sleeper_draft_pick("3", "8", "2024", pick_no=2, position="RB", bid=30),
+        ]
+        scoring = [
+            {
+                "player_id": "1",
+                "season": "2024",
+                "player_name": "RB One",
+                "position": "RB",
+                "total_points": 200.0,
+            },
+            {
+                "player_id": "2",
+                "season": "2024",
+                "player_name": "RB Two",
+                "position": "RB",
+                "total_points": 150.0,
+            },
+            {
+                "player_id": "3",
+                "season": "2024",
+                "player_name": "RB Three",
+                "position": "RB",
+                "total_points": 100.0,
+            },
+        ]
+        teams = [
+            {
+                "team_id": "8",
+                "season": "2024",
+                "display_name": "u8",
+                "team_name": "T8",
+                "team_logo": "l8",
+            },
+            {
+                "team_id": "9",
+                "season": "2024",
+                "display_name": "u9",
+                "team_name": "T9",
+                "team_logo": "l9",
+            },
+        ]
+
+        rows = self._run_query(processor_handler, draft_picks, scoring, teams)
+
+        assert all(r["is_auction"] for r in rows.values())
+        # The bid amount is surfaced from metadata.amount.
+        assert rows["1"]["bid_amount"] == 50
+        assert rows["2"]["bid_amount"] == 30
+        # Highest bid -> drafted rank 1 despite being nominated last.
+        assert rows["1"]["drafted_position_rank"] == 1
+        # Equal bids share a rank (RANK semantics, no tiebreak).
+        assert rows["2"]["drafted_position_rank"] == 2
+        assert rows["3"]["drafted_position_rank"] == 2
+        # delta = drafted - actual position rank.
+        assert rows["1"]["draft_rank_delta"] == 0
+        assert rows["2"]["draft_rank_delta"] == 0
+        assert rows["3"]["draft_rank_delta"] == -1
+
+    def test_snake_season_ranks_by_pick_no(self, processor_handler):
+        # 2023 has no bids -> snake season -> rank by pick_no, bid_amount is null.
+        draft_picks = [
+            _sleeper_draft_pick("10", "8", "2023", pick_no=1, position="WR"),
+            _sleeper_draft_pick("11", "9", "2023", pick_no=2, position="WR"),
+        ]
+        scoring = [
+            {
+                "player_id": "10",
+                "season": "2023",
+                "player_name": "WR One",
+                "position": "WR",
+                "total_points": 300.0,
+            },
+            {
+                "player_id": "11",
+                "season": "2023",
+                "player_name": "WR Two",
+                "position": "WR",
+                "total_points": 250.0,
+            },
+        ]
+        teams = [
+            {
+                "team_id": "8",
+                "season": "2023",
+                "display_name": "u8",
+                "team_name": "T8",
+                "team_logo": "l8",
+            },
+            {
+                "team_id": "9",
+                "season": "2023",
+                "display_name": "u9",
+                "team_name": "T9",
+                "team_logo": "l9",
+            },
+        ]
+
+        rows = self._run_query(processor_handler, draft_picks, scoring, teams)
+
+        assert not any(r["is_auction"] for r in rows.values())
+        assert pd.isna(rows["10"]["bid_amount"])
+        assert rows["10"]["drafted_position_rank"] == 1
+        assert rows["11"]["drafted_position_rank"] == 2
