@@ -1,6 +1,6 @@
 """Tests for FastAPI endpoint handlers in main.py."""
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import botocore.exceptions
 import pytest
@@ -982,3 +982,62 @@ class TestGetLatestStoredMatchup:
         with pytest.raises(HTTPException) as exc_info:
             main.get_latest_stored_matchup("canonical-abc")
         assert exc_info.value.status_code == 500
+
+
+class TestEspnMembersEndpoint:
+    """The /espn_members endpoint proxies ESPN's API server-side to avoid CORS."""
+
+    _PAYLOAD = {"swid": "{abc}", "s2": "s2-token"}
+    _URL = "/leagues/123/espn_members?platform=ESPN&espnLeagueId=99&season=2024"
+
+    def test_returns_members_on_success(self, client, mock_table, league_lookup_item):
+        mock_table.get_item.return_value = {"Item": league_lookup_item}
+        espn_resp = MagicMock()
+        espn_resp.raise_for_status = MagicMock()
+        espn_resp.json.return_value = {
+            "members": [
+                {"id": "m1", "displayName": "Alice"},
+                {"id": "m2"},  # no displayName -> falls back to id
+            ]
+        }
+        with patch("main.http_requests.get", return_value=espn_resp):
+            response = client.post(self._URL, json=self._PAYLOAD)
+        assert response.status_code == 200
+        data = response.json()["data"]
+        assert {"owner_id": "m1", "display_name": "Alice"} in data
+        assert {"owner_id": "m2", "display_name": "m2"} in data
+
+    def test_http_error_returns_502(self, client, mock_table, league_lookup_item):
+        import requests
+
+        mock_table.get_item.return_value = {"Item": league_lookup_item}
+        espn_resp = MagicMock()
+        espn_resp.raise_for_status.side_effect = requests.exceptions.HTTPError("403")
+        with patch("main.http_requests.get", return_value=espn_resp):
+            response = client.post(self._URL, json=self._PAYLOAD)
+        assert response.status_code == 502
+        assert "fetch ESPN league members" in response.json()["detail"]
+
+    def test_request_exception_returns_502(
+        self, client, mock_table, league_lookup_item
+    ):
+        import requests
+
+        mock_table.get_item.return_value = {"Item": league_lookup_item}
+        with patch(
+            "main.http_requests.get",
+            side_effect=requests.exceptions.ConnectionError("boom"),
+        ):
+            response = client.post(self._URL, json=self._PAYLOAD)
+        assert response.status_code == 502
+        assert "reach ESPN API" in response.json()["detail"]
+
+    def test_parse_error_returns_502(self, client, mock_table, league_lookup_item):
+        mock_table.get_item.return_value = {"Item": league_lookup_item}
+        espn_resp = MagicMock()
+        espn_resp.raise_for_status = MagicMock()
+        espn_resp.json.return_value = {"members": [{}]}  # missing "id" -> KeyError
+        with patch("main.http_requests.get", return_value=espn_resp):
+            response = client.post(self._URL, json=self._PAYLOAD)
+        assert response.status_code == 502
+        assert "parse ESPN API response" in response.json()["detail"]

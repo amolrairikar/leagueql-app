@@ -1,0 +1,656 @@
+"""Tests for processor/handler.py I/O helpers and the lambda handler orchestration.
+
+Pure transformation functions are covered in test_pure_functions.py; this file
+covers the S3/DynamoDB-touching helpers and _lambda_handler_impl, which wires
+them together.
+"""
+
+import datetime as dt
+import json
+from unittest.mock import MagicMock, patch
+
+import botocore.exceptions
+import duckdb
+import pytest
+
+
+class TestReadS3Object:
+    def test_reads_and_parses_json(self, processor_handler):
+        mock_s3 = MagicMock()
+        body = MagicMock()
+        body.read.return_value = json.dumps({"key": "val"}).encode("utf-8")
+        mock_s3.get_object.return_value = {"Body": body}
+        with patch.object(processor_handler, "s3_client", mock_s3):
+            result = processor_handler.read_s3_object("bucket", "key")
+        assert result == {"key": "val"}
+        mock_s3.get_object.assert_called_once_with(Bucket="bucket", Key="key")
+
+    def test_passes_version_id_when_provided(self, processor_handler):
+        mock_s3 = MagicMock()
+        body = MagicMock()
+        body.read.return_value = b"[]"
+        mock_s3.get_object.return_value = {"Body": body}
+        with patch.object(processor_handler, "s3_client", mock_s3):
+            processor_handler.read_s3_object("bucket", "key", version_id="v1")
+        assert mock_s3.get_object.call_args[1]["VersionId"] == "v1"
+
+    def test_raises_on_client_error(self, processor_handler):
+        mock_s3 = MagicMock()
+        mock_s3.get_object.side_effect = botocore.exceptions.ClientError(
+            {"Error": {"Code": "NoSuchKey", "Message": "x"}}, "GetObject"
+        )
+        with patch.object(processor_handler, "s3_client", mock_s3):
+            with pytest.raises(botocore.exceptions.ClientError):
+                processor_handler.read_s3_object("bucket", "key")
+
+
+class TestGetPreviousVersionId:
+    def test_returns_second_most_recent_version(self, processor_handler):
+        mock_s3 = MagicMock()
+        mock_s3.list_object_versions.return_value = {
+            "Versions": [
+                {
+                    "Key": "k",
+                    "VersionId": "v1",
+                    "LastModified": dt.datetime(2024, 1, 1),
+                },
+                {
+                    "Key": "k",
+                    "VersionId": "v2",
+                    "LastModified": dt.datetime(2024, 1, 2),
+                },
+            ]
+        }
+        with patch.object(processor_handler, "s3_client", mock_s3):
+            result = processor_handler.get_previous_version_id("b", "k")
+        assert result == "v1"  # v2 is newest, v1 is the previous version
+
+    def test_returns_none_with_single_version(self, processor_handler):
+        mock_s3 = MagicMock()
+        mock_s3.list_object_versions.return_value = {
+            "Versions": [
+                {
+                    "Key": "k",
+                    "VersionId": "v1",
+                    "LastModified": dt.datetime(2024, 1, 1),
+                },
+            ]
+        }
+        with patch.object(processor_handler, "s3_client", mock_s3):
+            assert processor_handler.get_previous_version_id("b", "k") is None
+
+    def test_filters_out_other_keys(self, processor_handler):
+        mock_s3 = MagicMock()
+        mock_s3.list_object_versions.return_value = {
+            "Versions": [
+                {
+                    "Key": "k",
+                    "VersionId": "v1",
+                    "LastModified": dt.datetime(2024, 1, 1),
+                },
+                {
+                    "Key": "other",
+                    "VersionId": "v9",
+                    "LastModified": dt.datetime(2024, 1, 5),
+                },
+            ]
+        }
+        with patch.object(processor_handler, "s3_client", mock_s3):
+            # Only one version matches the key, so there is no previous version.
+            assert processor_handler.get_previous_version_id("b", "k") is None
+
+
+class TestBuildESPNBracketsBranches:
+    def test_team_2_wins_round_one(self, processor_handler):
+        # Covers the `elif winner == team_2` branch.
+        matchups = [
+            {
+                "season": "2024",
+                "playoff_tier_type": "WINNERS_BRACKET",
+                "week": 15,
+                "team_a_id": 1,
+                "team_b_id": 2,
+                "winner": 2,
+                "loser": 1,
+            }
+        ]
+        result = processor_handler._build_espn_brackets(matchups)
+        assert result[0]["winner"] == "2"
+
+    def test_playoff_tie_has_no_winner(self, processor_handler):
+        # A tied playoff game leaves winner None, so neither the team_1 nor team_2
+        # win branch is taken when recording round results.
+        matchups = [
+            {
+                "season": "2024",
+                "playoff_tier_type": "WINNERS_BRACKET",
+                "week": 15,
+                "team_a_id": 1,
+                "team_b_id": 2,
+                "winner": "TIE",
+                "loser": "TIE",
+            }
+        ]
+        result = processor_handler._build_espn_brackets(matchups)
+        assert result[0]["winner"] is None
+        assert result[0]["loser"] is None
+
+    def test_round_two_entry_with_empty_team_skips_from_link(self, processor_handler):
+        # A round-2 entry whose team_1 is empty exercises the `if team_id:` false
+        # branch in the team_from back-linking loop.
+        matchups = [
+            {
+                "season": "2024",
+                "playoff_tier_type": "WINNERS_BRACKET",
+                "week": 15,
+                "team_a_id": 2,
+                "team_b_id": 3,
+                "winner": 2,
+                "loser": 3,
+            },
+            {
+                "season": "2024",
+                "playoff_tier_type": "WINNERS_BRACKET",
+                "week": 16,
+                "team_a_id": "",  # empty team in round 2
+                "team_b_id": 2,
+                "winner": 2,
+                "loser": "",
+            },
+        ]
+        result = processor_handler._build_espn_brackets(matchups)
+        round_two = next(e for e in result if e["round"] == 2)
+        assert round_two["team_1_from"] is None  # empty team got no back-link
+
+
+class TestRegisterESPNRawDataMatchups:
+    def test_parses_full_matchup_with_rosters(self, processor_handler):
+        raw = [
+            {
+                "season": "2024",
+                "data_type": "matchups_week1",
+                "data": {
+                    "matchups": [
+                        {
+                            "matchupPeriodId": 1,
+                            "playoffTierType": "NONE",
+                            "home": {
+                                "teamId": 1,
+                                "totalPoints": "100.0",
+                                "rosterForMatchupPeriod": {
+                                    "entries": [
+                                        {
+                                            "playerId": 11,
+                                            "lineupSlotId": 0,
+                                            "playerPoolEntry": {
+                                                "player": {
+                                                    "fullName": "QB One",
+                                                    "defaultPositionId": 1,
+                                                },
+                                                "appliedStatTotal": 20.0,
+                                            },
+                                        }
+                                    ]
+                                },
+                                "rosterForCurrentScoringPeriod": {
+                                    "entries": [
+                                        {
+                                            "playerId": 11,
+                                            "lineupSlotId": 0,
+                                            "playerPoolEntry": {
+                                                "player": {
+                                                    "fullName": "QB One",
+                                                    "defaultPositionId": 1,
+                                                },
+                                                "appliedStatTotal": 20.0,
+                                            },
+                                        }
+                                    ]
+                                },
+                            },
+                            "away": {
+                                "teamId": 2,
+                                "totalPoints": "90.0",
+                                "rosterForMatchupPeriod": {"entries": []},
+                                "rosterForCurrentScoringPeriod": {"entries": []},
+                            },
+                        }
+                    ]
+                },
+            }
+        ]
+        result = processor_handler._register_espn_raw_data(raw)
+        assert len(result["matchups"]) == 1
+        matchup = result["matchups"][0]
+        assert matchup["winner"] == 1  # home outscored away
+        assert matchup["loser"] == 2
+
+    def test_tie_matchup_marks_tie(self, processor_handler):
+        raw = [
+            {
+                "season": "2024",
+                "data_type": "matchups_week1",
+                "data": {
+                    "matchups": [
+                        {
+                            "matchupPeriodId": 1,
+                            "home": {"teamId": 1, "totalPoints": "100.0"},
+                            "away": {"teamId": 2, "totalPoints": "100.0"},
+                        }
+                    ]
+                },
+            }
+        ]
+        result = processor_handler._register_espn_raw_data(raw)
+        assert result["matchups"][0]["winner"] == "TIE"
+
+    def test_away_team_wins(self, processor_handler):
+        raw = [
+            {
+                "season": "2024",
+                "data_type": "matchups_week1",
+                "data": {
+                    "matchups": [
+                        {
+                            "matchupPeriodId": 1,
+                            "home": {"teamId": 1, "totalPoints": "80.0"},
+                            "away": {"teamId": 2, "totalPoints": "120.0"},
+                        }
+                    ]
+                },
+            }
+        ]
+        result = processor_handler._register_espn_raw_data(raw)
+        assert result["matchups"][0]["winner"] == 2
+
+    def test_settings_without_name_skipped(self, processor_handler):
+        # Covers the `if league_name:` false branch for ESPN settings.
+        raw = [
+            {
+                "season": "2024",
+                "data_type": "settings",
+                "data": {"settings": {}},
+            }
+        ]
+        result = processor_handler._register_espn_raw_data(raw)
+        assert result["league_name_by_season"] == {}
+
+    def test_unrecognized_data_type_ignored(self, processor_handler):
+        # An item matching none of the branches falls through to the next iteration.
+        raw = [{"season": "2024", "data_type": "unknown_type", "data": {}}]
+        result = processor_handler._register_espn_raw_data(raw)
+        assert result["members"] == []
+
+
+class TestTraceSleeperChampionshipPathContinue:
+    def test_skips_unknown_and_revisited_match_ids(self, processor_handler):
+        # m3 (final) references match 99 (not in by_id) and match 1 twice, so the
+        # stack hits both the "not in by_id" and "already in path" continue cases.
+        entries = [
+            {"m": 1, "r": 1, "t1": 1, "t2": 2, "p": None},
+            {
+                "m": 3,
+                "r": 2,
+                "t1": 1,
+                "t2": 2,
+                "p": 1,
+                "t1_from": {"w": 1},
+                "t2_from": {"w": 99},
+            },
+        ]
+        path = processor_handler._trace_sleeper_championship_path(entries)
+        assert path == {1, 3}  # 99 ignored, 1 added once
+
+
+class TestRegisterSleeperRawDataBranches:
+    def test_parses_rosters(self, processor_handler):
+        raw = [
+            {
+                "season": "2024",
+                "data_type": "rosters",
+                "data": [{"roster_id": 1, "owner_id": "u1"}],
+            }
+        ]
+        result = processor_handler._register_sleeper_raw_data(raw, {}, {})
+        assert len(result["rosters"]) == 1
+        assert result["rosters"][0]["season"] == "2024"
+
+    def test_league_settings_roster_positions_collected(self, processor_handler):
+        # Covers the roster_positions pre-pass assignment and team_b-wins matchup.
+        raw = [
+            {
+                "season": "2024",
+                "data_type": "league_settings",
+                "data": {
+                    "roster_positions": ["QB", "RB", "BN"],
+                    "settings": {"playoff_week_start": 15},
+                },
+            },
+            {
+                "season": "2024",
+                "data_type": "matchupsweek1",
+                "data": [
+                    {
+                        "matchup_id": 1,
+                        "roster_id": 1,
+                        "points": 80.0,
+                        "starters": [],
+                        "starters_points": [],
+                    },
+                    {
+                        "matchup_id": 1,
+                        "roster_id": 2,
+                        "points": 120.0,
+                        "starters": [],
+                        "starters_points": [],
+                    },
+                ],
+            },
+        ]
+        result = processor_handler._register_sleeper_raw_data(raw, {}, {})
+        assert result["matchups"][0]["winner"] == 2  # team_b outscored team_a
+
+    def test_tie_matchup_marks_tie(self, processor_handler):
+        raw = [
+            {
+                "season": "2024",
+                "data_type": "matchupsweek1",
+                "data": [
+                    {"matchup_id": 1, "roster_id": 1, "points": 100.0},
+                    {"matchup_id": 1, "roster_id": 2, "points": 100.0},
+                ],
+            }
+        ]
+        result = processor_handler._register_sleeper_raw_data(raw, {}, {})
+        assert result["matchups"][0]["winner"] == "TIE"
+
+    def test_unpaired_matchup_skipped(self, processor_handler):
+        # A matchup_id with only one team is not a valid pairing and is skipped.
+        raw = [
+            {
+                "season": "2024",
+                "data_type": "matchupsweek1",
+                "data": [{"matchup_id": 1, "roster_id": 1, "points": 100.0}],
+            }
+        ]
+        result = processor_handler._register_sleeper_raw_data(raw, {}, {})
+        assert result["matchups"] == []
+
+
+class TestRegisterRawDataRegistersViews:
+    def test_espn_registers_dataframes(self, processor_handler):
+        # The inner parser is covered separately; here we verify register_raw_data
+        # routes to it and registers each non-metadata group as a DuckDB view.
+        con = duckdb.connect()
+        grouped = {
+            "members": [{"id": "m1"}],
+            "teams": [{"id": 1}],
+            "league_name_by_season": {"2024": "X"},
+        }
+        with patch.object(
+            processor_handler, "_register_espn_raw_data", return_value=grouped
+        ):
+            result = processor_handler.register_raw_data([], con, platform="ESPN")
+        assert result is grouped
+        registered = {row[0] for row in con.execute("SHOW TABLES").fetchall()}
+        assert "members" in registered
+        assert "teams" in registered
+        assert "league_name_by_season" not in registered  # skipped, not a view
+
+    def test_sleeper_registers_dataframes(self, processor_handler):
+        con = duckdb.connect()
+        grouped = {
+            "users": [{"user_id": "u1"}],
+            "league_name_by_season": {},
+        }
+        with patch.object(
+            processor_handler, "_register_sleeper_raw_data", return_value=grouped
+        ):
+            result = processor_handler.register_raw_data(
+                [], con, platform="SLEEPER", player_metadata={}, player_stats={}
+            )
+        assert result is grouped
+        registered = {row[0] for row in con.execute("SHOW TABLES").fetchall()}
+        assert "users" in registered
+
+
+class TestWriteItems:
+    def test_batch_writes_each_item(self, processor_handler):
+        mock_table = MagicMock()
+        writer = MagicMock()
+        mock_table.batch_writer.return_value.__enter__.return_value = writer
+        items = [
+            {"PK": "p", "SK": "s1", "data": []},
+            {"PK": "p", "SK": "s2", "data": []},
+        ]
+        with patch.object(processor_handler, "table", mock_table):
+            processor_handler.write_items(items)
+        assert writer.put_item.call_count == 2
+        writer.put_item.assert_any_call(Item=items[0])
+
+
+def _s3_event(key="raw/canonical-abc/manifest.json", principal="AWS:role/abc"):
+    return {
+        "Records": [
+            {
+                "userIdentity": {"principalId": principal},
+                "s3": {"bucket": {"name": "bucket"}, "object": {"key": key}},
+            }
+        ]
+    }
+
+
+def _manifest_response(manifest: dict, correlation_id="corr-1"):
+    body = MagicMock()
+    body.read.return_value = json.dumps(manifest).encode("utf-8")
+    return {"Body": body, "Metadata": {"correlation_id": correlation_id}}
+
+
+_FAKE_QUERIES = {
+    "TEAMS": {"ESPN": "SELECT 1", "SLEEPER": "SELECT 1"},
+    "MATCHUPS": {"ESPN": "SELECT 1", "SLEEPER": "SELECT 1"},
+    "PLAYOFF_BRACKET": {"ESPN": "SELECT 1", "SLEEPER": "SELECT 1"},
+    "DRAFT": {"ESPN": "SELECT 1", "SLEEPER": "SELECT 1"},
+    "STANDINGS": "SELECT 1",
+    "WEEKLY_STANDINGS": "SELECT 1",
+}
+
+
+class TestLambdaHandlerImpl:
+    def test_replication_event_returns_early(self, processor_handler):
+        mock_s3 = MagicMock()
+        with patch.object(processor_handler, "s3_client", mock_s3):
+            processor_handler._lambda_handler_impl(
+                _s3_event(principal="AWS:s3-replication"), MagicMock()
+            )
+        mock_s3.get_object.assert_not_called()
+
+    def test_malformed_event_raises_value_error(self, processor_handler):
+        with pytest.raises(ValueError, match="Unexpected S3 event structure"):
+            processor_handler._lambda_handler_impl({"Records": []}, MagicMock())
+
+    def test_espn_onboard_processes_and_increments_count(self, processor_handler):
+        mock_s3 = MagicMock()
+        mock_s3.get_object.return_value = _manifest_response({"ESPN": ["2024"]})
+        grouped = {"league_name_by_season": {"2024": "My League"}}
+        write_meta = MagicMock()
+        update_count = MagicMock()
+        with patch.multiple(
+            processor_handler,
+            s3_client=mock_s3,
+            get_previous_version_id=MagicMock(return_value=None),
+            read_s3_object=MagicMock(return_value=[{"data_type": "users", "data": {}}]),
+            register_raw_data=MagicMock(return_value=grouped),
+            dataframe_to_dynamo_items=MagicMock(return_value=[]),
+            write_items=MagicMock(),
+            write_metadata_items=write_meta,
+            update_league_count=update_count,
+            QUERIES=_FAKE_QUERIES,
+        ):
+            with patch.object(
+                processor_handler.duckdb, "connect", return_value=MagicMock()
+            ):
+                processor_handler._lambda_handler_impl(_s3_event(), MagicMock())
+        update_count.assert_called_once_with(delta=1)
+        # league_name extracted from the most recent season and passed through.
+        assert write_meta.call_args[1]["league_name"] == "My League"
+        assert write_meta.call_args[1]["refresh"] is False
+
+    def test_sleeper_refresh_reads_previous_manifest_and_player_data(
+        self, processor_handler
+    ):
+        mock_s3 = MagicMock()
+        mock_s3.get_object.return_value = _manifest_response({"SLEEPER": ["2024"]})
+        write_meta = MagicMock()
+        update_count = MagicMock()
+
+        def fake_read(bucket, key, version_id=None):
+            if version_id:
+                return {"SLEEPER": ["2024"]}  # previous manifest
+            if key.endswith("sleeper_nfl_players.json"):
+                return {"p1": {"full_name": "Player One"}}
+            if key.endswith("sleeper_nfl_player_stats.json"):
+                return {"p1": {"2024": {"pts": 10}}}
+            return [{"data_type": "users", "data": []}]  # season data
+
+        with patch.multiple(
+            processor_handler,
+            s3_client=mock_s3,
+            get_previous_version_id=MagicMock(return_value="v-prev"),
+            read_s3_object=MagicMock(side_effect=fake_read),
+            # grouped without a league_name_by_season key exercises the
+            # `if "league_name_by_season" in grouped` false branch.
+            register_raw_data=MagicMock(return_value={}),
+            dataframe_to_dynamo_items=MagicMock(return_value=[]),
+            write_items=MagicMock(),
+            write_metadata_items=write_meta,
+            update_league_count=update_count,
+            QUERIES=_FAKE_QUERIES,
+        ):
+            with patch.object(
+                processor_handler.duckdb, "connect", return_value=MagicMock()
+            ):
+                processor_handler._lambda_handler_impl(_s3_event(), MagicMock())
+        # Refresh: count is not incremented and refresh flag is set.
+        update_count.assert_not_called()
+        assert write_meta.call_args[1]["refresh"] is True
+
+    def test_sleeper_missing_player_metadata_and_stats_warns(self, processor_handler):
+        mock_s3 = MagicMock()
+        mock_s3.get_object.return_value = _manifest_response({"SLEEPER": ["2024"]})
+        not_found = botocore.exceptions.ClientError(
+            {"Error": {"Code": "NoSuchKey", "Message": "x"}}, "GetObject"
+        )
+
+        def fake_read(bucket, key, version_id=None):
+            if key.endswith("sleeper_nfl_players.json"):
+                raise not_found
+            if key.endswith("sleeper_nfl_player_stats.json"):
+                raise not_found
+            return [{"data_type": "users", "data": []}]
+
+        with patch.multiple(
+            processor_handler,
+            s3_client=mock_s3,
+            get_previous_version_id=MagicMock(return_value=None),
+            read_s3_object=MagicMock(side_effect=fake_read),
+            register_raw_data=MagicMock(return_value={"league_name_by_season": {}}),
+            dataframe_to_dynamo_items=MagicMock(return_value=[]),
+            write_items=MagicMock(),
+            write_metadata_items=MagicMock(),
+            update_league_count=MagicMock(),
+            QUERIES=_FAKE_QUERIES,
+        ):
+            with patch.object(
+                processor_handler.duckdb, "connect", return_value=MagicMock()
+            ):
+                # Missing metadata/stats are tolerated (warnings, not failures).
+                processor_handler._lambda_handler_impl(_s3_event(), MagicMock())
+
+    def test_sleeper_player_metadata_other_error_raises(self, processor_handler):
+        mock_s3 = MagicMock()
+        mock_s3.get_object.return_value = _manifest_response({"SLEEPER": ["2024"]})
+        other_error = botocore.exceptions.ClientError(
+            {"Error": {"Code": "AccessDenied", "Message": "x"}}, "GetObject"
+        )
+
+        def fake_read(bucket, key, version_id=None):
+            if key.endswith("sleeper_nfl_players.json"):
+                raise other_error
+            return [{"data_type": "users", "data": []}]
+
+        with patch.multiple(
+            processor_handler,
+            s3_client=mock_s3,
+            get_previous_version_id=MagicMock(return_value=None),
+            read_s3_object=MagicMock(side_effect=fake_read),
+            QUERIES=_FAKE_QUERIES,
+        ):
+            with patch.object(
+                processor_handler.duckdb, "connect", return_value=MagicMock()
+            ):
+                with pytest.raises(botocore.exceptions.ClientError):
+                    processor_handler._lambda_handler_impl(_s3_event(), MagicMock())
+
+    def test_sleeper_player_stats_other_error_raises(self, processor_handler):
+        mock_s3 = MagicMock()
+        mock_s3.get_object.return_value = _manifest_response({"SLEEPER": ["2024"]})
+        other_error = botocore.exceptions.ClientError(
+            {"Error": {"Code": "AccessDenied", "Message": "x"}}, "GetObject"
+        )
+
+        def fake_read(bucket, key, version_id=None):
+            if key.endswith("sleeper_nfl_players.json"):
+                return {"p1": {}}
+            if key.endswith("sleeper_nfl_player_stats.json"):
+                raise other_error
+            return [{"data_type": "users", "data": []}]
+
+        with patch.multiple(
+            processor_handler,
+            s3_client=mock_s3,
+            get_previous_version_id=MagicMock(return_value=None),
+            read_s3_object=MagicMock(side_effect=fake_read),
+            QUERIES=_FAKE_QUERIES,
+        ):
+            with patch.object(
+                processor_handler.duckdb, "connect", return_value=MagicMock()
+            ):
+                with pytest.raises(botocore.exceptions.ClientError):
+                    processor_handler._lambda_handler_impl(_s3_event(), MagicMock())
+
+    def test_failed_season_read_raises_runtime_error(self, processor_handler):
+        mock_s3 = MagicMock()
+        mock_s3.get_object.return_value = _manifest_response({"ESPN": ["2024"]})
+        with patch.multiple(
+            processor_handler,
+            s3_client=mock_s3,
+            get_previous_version_id=MagicMock(return_value=None),
+            read_s3_object=MagicMock(side_effect=RuntimeError("S3 down")),
+            QUERIES=_FAKE_QUERIES,
+        ):
+            with pytest.raises(RuntimeError, match="Failed to load seasons"):
+                processor_handler._lambda_handler_impl(_s3_event(), MagicMock())
+
+    def test_no_league_name_when_grouping_empty(self, processor_handler):
+        # grouped has an empty league_name_by_season -> league_name stays None.
+        mock_s3 = MagicMock()
+        mock_s3.get_object.return_value = _manifest_response({"ESPN": ["2024"]})
+        write_meta = MagicMock()
+        with patch.multiple(
+            processor_handler,
+            s3_client=mock_s3,
+            get_previous_version_id=MagicMock(return_value=None),
+            read_s3_object=MagicMock(return_value=[{"data_type": "users", "data": {}}]),
+            register_raw_data=MagicMock(return_value={"league_name_by_season": {}}),
+            dataframe_to_dynamo_items=MagicMock(return_value=[]),
+            write_items=MagicMock(),
+            write_metadata_items=write_meta,
+            update_league_count=MagicMock(),
+            QUERIES=_FAKE_QUERIES,
+        ):
+            with patch.object(
+                processor_handler.duckdb, "connect", return_value=MagicMock()
+            ):
+                processor_handler._lambda_handler_impl(_s3_event(), MagicMock())
+        assert write_meta.call_args[1]["league_name"] is None

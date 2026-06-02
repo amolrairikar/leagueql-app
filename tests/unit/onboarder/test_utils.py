@@ -122,6 +122,31 @@ class TestFetchWithRetry:
         )
         assert result == {"ok": True}
 
+    async def test_raises_after_max_retries_on_connection_error(self, onboarder_utils):
+        # Every attempt hits a connection error; the final attempt re-raises rather
+        # than retrying again.
+        session = MagicMock()
+        cm_error = MagicMock()
+        cm_error.__aenter__ = AsyncMock(
+            side_effect=aiohttp.ClientConnectionError("conn refused")
+        )
+        cm_error.__aexit__ = AsyncMock(return_value=False)
+        session.get.return_value = cm_error
+
+        with pytest.raises(aiohttp.ClientConnectionError):
+            await onboarder_utils.fetch_with_retry(
+                session=session, url="http://test.com", max_retries=1, base_delay=0
+            )
+
+    async def test_raises_runtime_error_when_no_attempts(self, onboarder_utils):
+        # A negative max_retries yields an empty attempt range, so the loop body
+        # never runs and the exhausted-retries guard raises.
+        session = MagicMock()
+        with pytest.raises(RuntimeError, match="Exhausted retries"):
+            await onboarder_utils.fetch_with_retry(
+                session=session, url="http://test.com", max_retries=-1
+            )
+
     async def test_passes_headers_to_request(self, onboarder_utils):
         session = MagicMock()
         session.get.return_value = _make_async_cm(200, {})

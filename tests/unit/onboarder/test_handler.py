@@ -165,6 +165,18 @@ class TestLambdaHandlerRunErrors:
             result = onboarder_handler.lambda_handler(event, MagicMock())
         assert result["statusCode"] == 502
 
+    def test_http_error_during_run_returns_502(self, onboarder_handler):
+        event = {
+            "requestType": "ONBOARD",
+            "body": {"leagueId": "123", "platform": "ESPN", "season": "2024"},
+        }
+        err = requests.exceptions.HTTPError("503")
+        err.response = MagicMock(status_code=503)
+        svc = self._make_service_mock(err)
+        with patch.object(onboarder_handler, "OnboardingService", return_value=svc):
+            result = onboarder_handler.lambda_handler(event, MagicMock())
+        assert result["statusCode"] == 502
+
     def test_generic_exception_during_run_returns_500(self, onboarder_handler):
         event = {
             "requestType": "ONBOARD",

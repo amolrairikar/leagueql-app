@@ -283,3 +283,133 @@ class TestESPNClientProcessApiResults:
         ]
         with pytest.raises(ValueError):
             client._process_api_results(results)
+
+
+class TestESPNClientFetch:
+    def _client(self, mod):
+        return mod.ESPNClient(league_id="123", latest_season="2024", is_refresh=True)
+
+    async def test_fetch_returns_data(self, onboarder_espn_client):
+        import asyncio
+        from unittest.mock import AsyncMock
+
+        client = self._client(onboarder_espn_client)
+        with patch.object(
+            onboarder_espn_client,
+            "fetch_with_retry",
+            AsyncMock(return_value={"members": []}),
+        ):
+            result = await client._fetch(
+                session=MagicMock(),
+                semaphore=asyncio.Semaphore(1),
+                url_data=("2024", "users", "http://x"),
+            )
+        assert result == {
+            "season": "2024",
+            "data_type": "users",
+            "data": {"members": []},
+        }
+
+    async def test_fetch_unwraps_list_response(self, onboarder_espn_client):
+        import asyncio
+        from unittest.mock import AsyncMock
+
+        client = self._client(onboarder_espn_client)
+        with patch.object(
+            onboarder_espn_client,
+            "fetch_with_retry",
+            AsyncMock(return_value=[{"first": 1}, {"second": 2}]),
+        ):
+            result = await client._fetch(
+                session=MagicMock(),
+                semaphore=asyncio.Semaphore(1),
+                url_data=("2024", "users", "http://x"),
+            )
+        assert result["data"] == {"first": 1}  # first element of the list
+
+    async def test_fetch_player_scoring_totals_sets_filter_header(
+        self, onboarder_espn_client
+    ):
+        import asyncio
+        from unittest.mock import AsyncMock
+
+        client = self._client(onboarder_espn_client)
+        mock_fetch = AsyncMock(return_value={"players": []})
+        with patch.object(onboarder_espn_client, "fetch_with_retry", mock_fetch):
+            await client._fetch(
+                session=MagicMock(),
+                semaphore=asyncio.Semaphore(1),
+                url_data=("2024", "player_scoring_totals", "http://x"),
+            )
+        headers = mock_fetch.call_args[1]["headers"]
+        assert "X-Fantasy-Filter" in headers
+
+    async def test_fetch_returns_none_on_error(self, onboarder_espn_client):
+        import asyncio
+        from unittest.mock import AsyncMock
+
+        client = self._client(onboarder_espn_client)
+        with patch.object(
+            onboarder_espn_client,
+            "fetch_with_retry",
+            AsyncMock(side_effect=RuntimeError("boom")),
+        ):
+            result = await client._fetch(
+                session=MagicMock(),
+                semaphore=asyncio.Semaphore(1),
+                url_data=("2024", "users", "http://x"),
+            )
+        assert result == {"season": "2024", "data_type": "users", "data": None}
+
+
+class TestESPNClientFetchAll:
+    async def test_fetch_all_processes_results(self, onboarder_espn_client):
+        from unittest.mock import AsyncMock
+
+        client = onboarder_espn_client.ESPNClient(
+            league_id="123",
+            latest_season="2024",
+            s2="abc",
+            swid="{xyz}",
+            is_refresh=True,
+        )
+        session_cm = MagicMock()
+        session_cm.__aenter__ = AsyncMock(return_value=MagicMock())
+        session_cm.__aexit__ = AsyncMock(return_value=False)
+        raw_results = [
+            {
+                "season": "2024",
+                "data_type": "users",
+                "data": {"members": [], "teams": []},
+            }
+        ]
+        with (
+            patch("aiohttp.ClientSession", return_value=session_cm),
+            patch.object(
+                onboarder_espn_client,
+                "run_fetches",
+                AsyncMock(return_value=raw_results),
+            ),
+        ):
+            processed = await client.fetch_all()
+        assert processed[0]["data_type"] == "users"
+        assert "members" in processed[0]["data"]
+
+    async def test_fetch_all_without_cookies(self, onboarder_espn_client):
+        from unittest.mock import AsyncMock
+
+        client = onboarder_espn_client.ESPNClient(
+            league_id="123", latest_season="2024", is_refresh=True
+        )
+        session_cm = MagicMock()
+        session_cm.__aenter__ = AsyncMock(return_value=MagicMock())
+        session_cm.__aexit__ = AsyncMock(return_value=False)
+        with (
+            patch("aiohttp.ClientSession", return_value=session_cm) as mock_session,
+            patch.object(
+                onboarder_espn_client, "run_fetches", AsyncMock(return_value=[])
+            ),
+        ):
+            await client.fetch_all()
+        # No cookies -> ClientSession is created with cookies=None.
+        assert mock_session.call_args[1]["cookies"] is None
