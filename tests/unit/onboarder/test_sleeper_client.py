@@ -267,3 +267,148 @@ class TestSleeperClientBuildDraftPickUrls:
             client = onboarder_sleeper_client.SleeperClient("lg")
 
         assert client._build_draft_pick_urls([]) == []
+
+
+class TestResolveSleeperCanonicalLeagueIdExhaustion:
+    def test_chain_iterates_without_terminal_zero_returns_none(
+        self, onboarder_sleeper_client, monkeypatch
+    ):
+        # Patch the chain iterator to yield entries that never set previous_league_id
+        # to "0" and never match a known league, so the loop runs to exhaustion and
+        # falls through to the final "return None".
+        monkeypatch.setenv("DYNAMODB_TABLE_NAME", "test-table")
+
+        def fake_chain(_new_id):
+            yield {"previous_league_id": "prev-1"}
+
+        with (
+            patch.object(
+                onboarder_sleeper_client,
+                "_iter_sleeper_league_chain",
+                side_effect=fake_chain,
+            ),
+            patch.object(
+                onboarder_sleeper_client._dynamodb,
+                "get_item",
+                return_value={"Item": {}},  # no canonical_league_id
+            ),
+        ):
+            result = onboarder_sleeper_client.resolve_sleeper_canonical_league_id(
+                "new-1"
+            )
+        assert result is None
+
+
+class TestSleeperClientBuildDraftPickUrlsNonList:
+    def test_non_list_draft_data_skipped(self, onboarder_sleeper_client):
+        http_resp = _mock_http_response(
+            {"season": "2024", "league_id": "lg", "previous_league_id": "0"}
+        )
+        with patch("requests.get", return_value=http_resp):
+            client = onboarder_sleeper_client.SleeperClient("lg")
+        # drafts data that is not a list exercises the `isinstance(..., list)` guard.
+        results = [{"data_type": "drafts", "season": "2024", "data": None}]
+        assert client._build_draft_pick_urls(results) == []
+
+
+class TestSleeperClientFetch:
+    def _client(self, mod):
+        http_resp = _mock_http_response(
+            {"season": "2024", "league_id": "lg", "previous_league_id": "0"}
+        )
+        with patch("requests.get", return_value=http_resp):
+            return mod.SleeperClient("lg")
+
+    async def test_fetch_returns_data(self, onboarder_sleeper_client):
+        import asyncio
+        from unittest.mock import AsyncMock
+
+        client = self._client(onboarder_sleeper_client)
+        with patch.object(
+            onboarder_sleeper_client,
+            "fetch_with_retry",
+            AsyncMock(return_value=[{"user_id": "u1"}]),
+        ):
+            result = await client._fetch(
+                session=MagicMock(),
+                semaphore=asyncio.Semaphore(1),
+                url_data=("2024", "users", "http://x"),
+            )
+        assert result == {
+            "season": "2024",
+            "data_type": "users",
+            "data": [{"user_id": "u1"}],
+        }
+
+    async def test_fetch_returns_none_on_error(self, onboarder_sleeper_client):
+        import asyncio
+        from unittest.mock import AsyncMock
+
+        client = self._client(onboarder_sleeper_client)
+        with patch.object(
+            onboarder_sleeper_client,
+            "fetch_with_retry",
+            AsyncMock(side_effect=RuntimeError("boom")),
+        ):
+            result = await client._fetch(
+                session=MagicMock(),
+                semaphore=asyncio.Semaphore(1),
+                url_data=("2024", "users", "http://x"),
+            )
+        assert result["data"] is None
+
+
+class TestSleeperClientFetchAll:
+    def _client(self, mod):
+        http_resp = _mock_http_response(
+            {"season": "2024", "league_id": "lg", "previous_league_id": "0"}
+        )
+        with patch("requests.get", return_value=http_resp):
+            return mod.SleeperClient("lg")
+
+    async def test_fetch_all_fetches_draft_picks_when_present(
+        self, onboarder_sleeper_client
+    ):
+        from unittest.mock import AsyncMock
+
+        client = self._client(onboarder_sleeper_client)
+        session_cm = MagicMock()
+        session_cm.__aenter__ = AsyncMock(return_value=MagicMock())
+        session_cm.__aexit__ = AsyncMock(return_value=False)
+
+        first_results = [
+            {"season": "2024", "data_type": "drafts", "data": [{"draft_id": "d1"}]}
+        ]
+        pick_results = [
+            {"season": "2024", "data_type": "draft_picks", "data": [{"pick": 1}]}
+        ]
+        mock_run = AsyncMock(side_effect=[first_results, pick_results])
+        with (
+            patch("aiohttp.ClientSession", return_value=session_cm),
+            patch.object(onboarder_sleeper_client, "run_fetches", mock_run),
+        ):
+            processed = await client.fetch_all()
+        data_types = {r["data_type"] for r in processed}
+        assert "drafts" in data_types
+        assert "draft_picks" in data_types
+        assert mock_run.call_count == 2  # second call fetched the draft picks
+
+    async def test_fetch_all_skips_draft_picks_when_absent(
+        self, onboarder_sleeper_client
+    ):
+        from unittest.mock import AsyncMock
+
+        client = self._client(onboarder_sleeper_client)
+        session_cm = MagicMock()
+        session_cm.__aenter__ = AsyncMock(return_value=MagicMock())
+        session_cm.__aexit__ = AsyncMock(return_value=False)
+
+        results = [{"season": "2024", "data_type": "users", "data": [{"id": 1}]}]
+        mock_run = AsyncMock(return_value=results)
+        with (
+            patch("aiohttp.ClientSession", return_value=session_cm),
+            patch.object(onboarder_sleeper_client, "run_fetches", mock_run),
+        ):
+            processed = await client.fetch_all()
+        assert processed[0]["data_type"] == "users"
+        assert mock_run.call_count == 1  # no draft picks -> single fetch round

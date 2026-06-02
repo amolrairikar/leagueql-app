@@ -235,7 +235,8 @@ export default function LeagueQLLanding() {
               <span className="block size-2.5 shrink-0 rounded-full bg-green-500" />
               <span className="block size-2.5 shrink-0 rounded-full bg-blue-500" />
             </span>
-            Join {leagueCount} other leagues tracking their league&apos;s history
+            Join {leagueCount} other leagues tracking their league&apos;s
+            history
           </div>
         )}
 

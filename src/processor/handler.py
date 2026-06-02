@@ -481,10 +481,12 @@ def _build_espn_brackets(all_matchups: list[dict]) -> list[dict]:
                         if from_str:
                             parsed = json.loads(from_str)
                             mid = parsed.get("w") or parsed.get("l")
-                            if mid is not None:
-                                from_types.append(
-                                    match_id_to_type.get(mid, "CONSOLATION")
-                                )
+                            # from_str is always a {"w"|"l": match_id} object with a
+                            # positive match id, so mid is never None here; the guard
+                            # is defensive only.
+                            if mid is None:  # pragma: no cover
+                                continue
+                            from_types.append(match_id_to_type.get(mid, "CONSOLATION"))
                     entry["position"] = (
                         3 if from_types and all(t == "WB" for t in from_types) else 5
                     )

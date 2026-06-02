@@ -289,6 +289,25 @@ class TestDeleteLeagueHelpers:
         delete_all_league_items("canonical-abc")
         assert writer.delete_item.call_count == 2
 
+    def test_delete_all_league_items_exits_clean_after_final_pass(
+        self, mock_table, mock_time_sleep
+    ):
+        # With a single attempt that deletes items, the loop runs to completion and
+        # the post-loop verification finds nothing remaining -> clean exit (no raise).
+        from main import delete_all_league_items
+
+        writer = self._setup_writer(mock_table)
+        mock_table.query.side_effect = [
+            # attempt 1 collect: one item on the PK, GSI empty
+            {"Items": [{"PK": "LEAGUE#canonical-abc", "SK": "METADATA"}]},
+            {"Items": []},
+            # post-loop verification: clean
+            {"Items": []},
+            {"Items": []},
+        ]
+        delete_all_league_items("canonical-abc", max_attempts=1)
+        writer.delete_item.assert_called_once()
+
     def test_delete_all_league_items_raises_when_orphans_remain(
         self, mock_table, mock_time_sleep, mock_sns_client
     ):
@@ -330,3 +349,84 @@ class TestPublishFailure:
         kwargs = mock_sns_client.publish.call_args.kwargs
         assert kwargs["Subject"] == "LeagueQL API Failure"
         assert "something broke" in kwargs["Message"]
+
+
+class TestJobStatusHelpers:
+    def test_create_job_status_omits_optional_fields(self, mock_table):
+        # With no league_id/platform, the IN_PROGRESS item carries only the
+        # canonical id, exercising the optional-field skip branches.
+        from main import create_job_status
+
+        create_job_status(
+            correlation_id="corr-1",
+            request_type="ONBOARD",
+            canonical_league_id="canonical-abc",
+        )
+        item = mock_table.put_item.call_args.kwargs["Item"]
+        assert item["PK"] == "JOB#corr-1"
+        assert item["status"] == "IN_PROGRESS"
+        assert "league_id" not in item
+        assert "platform" not in item
+        assert item["canonical_league_id"] == "canonical-abc"
+
+    def test_create_job_status_includes_optional_fields(self, mock_table):
+        from main import create_job_status
+
+        create_job_status(
+            correlation_id="corr-1",
+            request_type="REFRESH",
+            league_id="123",
+            platform="SLEEPER",
+        )
+        item = mock_table.put_item.call_args.kwargs["Item"]
+        assert item["league_id"] == "123"
+        assert item["platform"] == "SLEEPER"
+
+    def test_create_job_status_swallows_client_error(self, mock_table):
+        # A failure to write JOB_STATUS must not propagate (best-effort).
+        from main import create_job_status
+
+        mock_table.put_item.side_effect = botocore.exceptions.ClientError(
+            {"Error": {"Code": "InternalError", "Message": "fail"}}, "PutItem"
+        )
+        create_job_status(correlation_id="corr-1", request_type="ONBOARD")
+
+    def test_get_job_status_returns_item(self, mock_table):
+        from main import get_job_status
+
+        mock_table.get_item.return_value = {"Item": {"status": "COMPLETED"}}
+        assert get_job_status("corr-1") == {"status": "COMPLETED"}
+
+    def test_get_job_status_returns_none_when_absent(self, mock_table):
+        from main import get_job_status
+
+        mock_table.get_item.return_value = {}
+        assert get_job_status("corr-1") is None
+
+    def test_get_job_status_raises_500_on_client_error(self, mock_table):
+        from fastapi import HTTPException
+
+        from main import get_job_status
+
+        mock_table.get_item.side_effect = botocore.exceptions.ClientError(
+            {"Error": {"Code": "InternalError", "Message": "fail"}}, "GetItem"
+        )
+        with pytest.raises(HTTPException) as exc_info:
+            get_job_status("corr-1")
+        assert exc_info.value.status_code == 500
+
+    def test_set_active_job_updates_metadata(self, mock_table):
+        from main import set_active_job
+
+        set_active_job("canonical-abc", "corr-1")
+        kwargs = mock_table.update_item.call_args.kwargs
+        assert kwargs["ExpressionAttributeValues"] == {":j": "corr-1"}
+
+    def test_set_active_job_swallows_client_error(self, mock_table):
+        # Setting the active-job pointer is best-effort; errors are logged only.
+        from main import set_active_job
+
+        mock_table.update_item.side_effect = botocore.exceptions.ClientError(
+            {"Error": {"Code": "InternalError", "Message": "fail"}}, "UpdateItem"
+        )
+        set_active_job("canonical-abc", "corr-1")
