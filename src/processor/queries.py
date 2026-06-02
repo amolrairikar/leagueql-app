@@ -410,6 +410,11 @@ QUERIES = {
             FROM draft_picks
             GROUP BY season
         ),
+        auction_seasons AS (
+            SELECT season, MAX(bidAmount) > 0 AS is_auction
+            FROM draft_picks
+            GROUP BY season
+        ),
         replacement_level AS (
             SELECT
                 apr.season,
@@ -432,13 +437,20 @@ QUERIES = {
                 apr.position,
                 apr.total_points,
                 apr.actual_position_rank,
+                a.is_auction,
                 RANK() OVER (
                     PARTITION BY dp.season, apr.position
                     ORDER BY dp.overallPickNumber ASC
-                ) AS drafted_position_rank
+                ) AS snake_rank,
+                RANK() OVER (
+                    PARTITION BY dp.season, apr.position
+                    ORDER BY dp.bidAmount DESC
+                ) AS auction_rank
             FROM draft_picks dp
             LEFT JOIN actual_position_ranks apr
                 ON (dp.playerId = apr.player_id AND dp.season = apr.season)
+            INNER JOIN auction_seasons a
+                ON dp.season = a.season
         )
         SELECT
             CAST(ds.teamId AS STRING) AS team_id,
@@ -462,9 +474,11 @@ QUERIES = {
             ds.nominatingTeamId AS nominating_team_id,
             ds.tradeLocked AS trade_locked,
             ds.season,
-            ds.drafted_position_rank,
+            ds.is_auction,
+            CASE WHEN ds.is_auction THEN ds.auction_rank ELSE ds.snake_rank END AS drafted_position_rank,
             ds.actual_position_rank,
-            ds.drafted_position_rank - ds.actual_position_rank AS draft_rank_delta,
+            (CASE WHEN ds.is_auction THEN ds.auction_rank ELSE ds.snake_rank END)
+                - ds.actual_position_rank AS draft_rank_delta,
             CASE
                 WHEN ds.position IN ('K', 'D/ST') THEN NULL
                 ELSE ds.total_points - rl.replacement_points
