@@ -63,8 +63,12 @@ class TestWriteJobStatus:
         assert values[":status"] == {"S": "IN_PROGRESS"}
         assert values[":request_type"] == {"S": "REFRESH"}
         assert int(values[":ttl"]["N"]) > 0
-        assert "ttl = :ttl" in kwargs["UpdateExpression"]
-        assert kwargs["ExpressionAttributeNames"]["#status"] == "status"
+        # "status" and "ttl" are reserved words and must be aliased.
+        assert "#ttl = :ttl" in kwargs["UpdateExpression"]
+        assert "#status = :status" in kwargs["UpdateExpression"]
+        names = kwargs["ExpressionAttributeNames"]
+        assert names["#status"] == "status"
+        assert names["#ttl"] == "ttl"
 
     def test_failure_code_stores_friendly_reason(self, monkeypatch):
         monkeypatch.setenv("DYNAMODB_TABLE_NAME", "test-table")

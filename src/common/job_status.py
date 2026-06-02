@@ -128,7 +128,8 @@ def write_job_status(
         return
 
     now = datetime.datetime.now(datetime.timezone.utc)
-    expr_names = {"#status": "status"}
+    # "status" and "ttl" are both DynamoDB reserved words, so alias them.
+    expr_names = {"#status": "status", "#ttl": "ttl"}
     expr_values = {
         ":status": {"S": status},
         ":updated_at": {"S": now.isoformat()},
@@ -137,7 +138,7 @@ def write_job_status(
     set_parts = [
         "#status = :status",
         "updated_at = :updated_at",
-        "ttl = :ttl",
+        "#ttl = :ttl",
         "created_at = if_not_exists(created_at, :updated_at)",
     ]
 
