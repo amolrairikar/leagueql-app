@@ -110,9 +110,17 @@ const CACHE_TTL_MS = 30_000;
 const _inflight = new Map<string, Promise<unknown>>();
 const _cache = new Map<string, { data: unknown; expires: number }>();
 
-function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+function apiFetch<T>(
+  path: string,
+  init?: RequestInit,
+  opts?: { skipCache?: boolean },
+): Promise<T> {
   const method = (init?.method ?? 'GET').toUpperCase();
   if (method !== 'GET') return _doFetch<T>(path, init);
+
+  // Polling endpoints (e.g. job status) must read fresh each time, so skip both
+  // the settled-response cache and in-flight dedup.
+  if (opts?.skipCache) return _doFetch<T>(path, init);
 
   const cached = _cache.get(path);
   if (cached && Date.now() < cached.expires)
@@ -144,8 +152,12 @@ export function clearApiCache(): void {
 // ── Public client ─────────────────────────────────────────────────────────────
 
 export const apiClient = {
-  get<T>(path: string, init?: Omit<RequestInit, 'method'>): Promise<T> {
-    return apiFetch<T>(path, { ...init, method: 'GET' });
+  get<T>(
+    path: string,
+    init?: Omit<RequestInit, 'method'>,
+    opts?: { skipCache?: boolean },
+  ): Promise<T> {
+    return apiFetch<T>(path, { ...init, method: 'GET' }, opts);
   },
   post<T>(
     path: string,

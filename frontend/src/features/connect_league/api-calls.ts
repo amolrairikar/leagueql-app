@@ -11,7 +11,11 @@ export interface GetJobStatusResponse {
 }
 
 export function getJobStatus(jobId: string): Promise<GetJobStatusResponse> {
-  return apiClient.get<GetJobStatusResponse>(`/jobs/${jobId}`);
+  // Bypass the client-side GET cache so each poll reflects the live job status
+  // (the cache would otherwise serve a stale IN_PROGRESS for up to 30s).
+  return apiClient.get<GetJobStatusResponse>(`/jobs/${jobId}`, undefined, {
+    skipCache: true,
+  });
 }
 
 export interface OnboardRequest {
