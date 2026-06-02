@@ -1,6 +1,7 @@
 import { UserButton } from '@clerk/react';
 import {
   ArrowLeftRight,
+  GraduationCap,
   History,
   Home,
   Lightbulb,
@@ -60,6 +61,7 @@ const navItems = [
   { title: 'Manager Comparison', url: '/manager_comparison', icon: Users },
   { title: 'Manager History', url: '/manager_history', icon: History },
   { title: 'Draft Recap', url: '/draft_recap', icon: Scroll },
+  { title: 'Draft Grades', url: '/draft_grades', icon: GraduationCap },
   { title: 'Player Records', url: '/player_records', icon: Star },
   { title: 'Matchup Records', url: '/matchup_records', icon: Zap },
 ];
