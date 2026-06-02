@@ -505,9 +505,25 @@ QUERIES = {
             FROM player_scoring_totals
             WHERE position IS NOT NULL
         ),
+        draft_bids AS (
+            -- Sleeper only populates metadata.amount for auction drafts, and the
+            -- struct field is absent entirely for snake-only leagues, so go through
+            -- JSON to read it without a binder error.
+            SELECT
+                dp.*,
+                TRY_CAST(
+                    json_extract_string(to_json(dp.metadata), '$.amount') AS INTEGER
+                ) AS bid_amount
+            FROM draft_picks dp
+        ),
         team_counts AS (
             SELECT season, COUNT(DISTINCT CAST(roster_id AS STRING)) AS num_teams
-            FROM draft_picks
+            FROM draft_bids
+            GROUP BY season
+        ),
+        auction_seasons AS (
+            SELECT season, COALESCE(MAX(bid_amount), 0) > 0 AS is_auction
+            FROM draft_bids
             GROUP BY season
         ),
         replacement_level AS (
@@ -532,13 +548,20 @@ QUERIES = {
                 COALESCE(apr.position, dp.metadata.position) AS resolved_position,
                 apr.total_points,
                 apr.actual_position_rank,
+                a.is_auction,
                 RANK() OVER (
                     PARTITION BY dp.season, COALESCE(apr.position, dp.metadata.position)
                     ORDER BY dp.pick_no ASC
-                ) AS drafted_position_rank
-            FROM draft_picks dp
+                ) AS snake_rank,
+                RANK() OVER (
+                    PARTITION BY dp.season, COALESCE(apr.position, dp.metadata.position)
+                    ORDER BY dp.bid_amount DESC
+                ) AS auction_rank
+            FROM draft_bids dp
             LEFT JOIN actual_position_ranks apr
                 ON (dp.player_id = apr.player_id AND dp.season = apr.season)
+            INNER JOIN auction_seasons a
+                ON dp.season = a.season
         )
         SELECT
             CAST(ds.roster_id AS STRING) AS team_id,
@@ -556,15 +579,17 @@ QUERIES = {
             ds.is_keeper AS keeper,
             NULL AS reserved_for_keeper,
             NULL AS auto_draft_type_id,
-            NULL AS bid_amount,
+            ds.bid_amount,
             NULL AS lineup_slot_id,
             ds.picked_by AS member_id,
             NULL AS nominating_team_id,
             NULL AS trade_locked,
             ds.season,
-            ds.drafted_position_rank,
+            ds.is_auction,
+            CASE WHEN ds.is_auction THEN ds.auction_rank ELSE ds.snake_rank END AS drafted_position_rank,
             ds.actual_position_rank,
-            ds.drafted_position_rank - ds.actual_position_rank AS draft_rank_delta,
+            (CASE WHEN ds.is_auction THEN ds.auction_rank ELSE ds.snake_rank END)
+                - ds.actual_position_rank AS draft_rank_delta,
             CASE
                 WHEN ds.resolved_position IN ('K', 'D/ST') THEN NULL
                 ELSE ds.total_points - rl.replacement_points
