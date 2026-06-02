@@ -179,8 +179,9 @@ def write_job_status(
             request_type,
             failure_code,
         )
-    except botocore.exceptions.ClientError as e:
+    except (botocore.exceptions.BotoCoreError, botocore.exceptions.ClientError) as e:
         # Best-effort: never let a status-tracking write mask the real error.
+        # BotoCoreError covers credential/endpoint/connection failures too.
         logger.error(
             "Failed to write JOB_STATUS for correlation_id=%s: %s", correlation_id, e
         )

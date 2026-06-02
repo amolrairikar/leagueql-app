@@ -114,3 +114,12 @@ class TestWriteJobStatus:
         with patch.object(job_status, "_dynamodb", mock_ddb):
             # Best-effort: must not raise.
             job_status.write_job_status("corr-1", "FAILED", "ONBOARD")
+
+    def test_swallows_botocore_error(self, monkeypatch):
+        monkeypatch.setenv("DYNAMODB_TABLE_NAME", "test-table")
+        mock_ddb = MagicMock()
+        mock_ddb.update_item.side_effect = botocore.exceptions.NoCredentialsError()
+        with patch.object(job_status, "_dynamodb", mock_ddb):
+            # Credential/connection failures (BotoCoreError) must also be swallowed
+            # so a status write never masks the underlying error.
+            job_status.write_job_status("corr-1", "FAILED", "ONBOARD")
