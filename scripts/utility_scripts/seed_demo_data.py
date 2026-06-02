@@ -383,6 +383,81 @@ def fmt_win_pct(pct: float) -> float:
 # ── Draft ─────────────────────────────────────────────────────────────────────
 
 
+# Synthetic auction pricing. Bids are derived from a player's preseason
+# projection (their generating `avg`) above a positional baseline, so the market
+# price reflects expectations while realized points may differ — producing genuine
+# auction steals and busts. Used to build the separate DRAFT_AUCTION#<season>
+# demo dataset.
+AUCTION_POS_BASELINE = {"QB": 17.0, "RB": 10.0, "WR": 10.0, "TE": 9.0}
+AUCTION_POS_SCALE = {"QB": 3.0, "RB": 3.0, "WR": 3.0, "TE": 3.0}
+
+
+def _auction_bid(pos: str, avg: float, rng: random.Random) -> int:
+    """Synthetic auction bid (in dollars) for a player.
+
+    Skill players are priced off their projection above a positional baseline,
+    with small jitter so price order isn't a perfect echo of projection. Kickers
+    and defenses sit at near-minimum bids, as in real auctions.
+    """
+    if pos in ("K", "D/ST"):
+        return max(1, round(rng.uniform(1.0, 3.0)))
+    baseline = AUCTION_POS_BASELINE.get(pos, 10.0)
+    scale = AUCTION_POS_SCALE.get(pos, 3.0)
+    return max(1, round((avg - baseline) * scale + rng.gauss(0.0, 3.0)))
+
+
+def _rank_desc_with_ties(values: dict[Any, float]) -> dict[Any, int]:
+    """Rank keys by value descending using SQL RANK() semantics: ties share a
+    rank and the next distinct value skips ranks accordingly."""
+    ranks: dict[Any, int] = {}
+    prev_val: float | None = None
+    prev_rank = 0
+    for i, (key, val) in enumerate(
+        sorted(values.items(), key=lambda kv: -kv[1]), start=1
+    ):
+        if val != prev_val:
+            prev_rank, prev_val = i, val
+        ranks[key] = prev_rank
+    return ranks
+
+
+def build_auction_draft_rows(snake_rows: list[dict], rng: random.Random) -> list[dict]:
+    """Build auction-format draft rows from the snake draft rows.
+
+    Reuses the same player→team assignments and realized point totals (so the
+    rest of the demo league stays coherent), but re-expresses the draft as an
+    auction: each player gets a bid, drafted_position_rank is ranked by bid
+    within position, and is_auction is set. Bids reflect projections while ranks
+    elsewhere reflect realized points, so the rank delta surfaces real value.
+    """
+    bids: dict[int, int] = {}
+    pos_bids: dict[str, dict[int, float]] = {}
+    for i, row in enumerate(snake_rows):
+        pos = row["position"]
+        avg = ALL_PLAYERS[int(row["player_id"])]["avg"]
+        bid = _auction_bid(pos, avg, rng)
+        bids[i] = bid
+        pos_bids.setdefault(pos, {})[i] = float(bid)
+
+    drafted_rank: dict[int, int] = {}
+    for entries in pos_bids.values():
+        drafted_rank.update(_rank_desc_with_ties(entries))
+
+    auction_rows: list[dict] = []
+    for i, row in enumerate(snake_rows):
+        dr = drafted_rank[i]
+        auction_rows.append(
+            {
+                **row,
+                "bid_amount": bids[i],
+                "is_auction": True,
+                "drafted_position_rank": dr,
+                "draft_rank_delta": dr - row["actual_position_rank"],
+            }
+        )
+    return auction_rows
+
+
 def _draft_value(pos: str, player: dict, pos_counts: dict[str, int]) -> float:
     """Returns relative draft value for a skill-round pick (rounds 1-12)."""
     avg = player["avg"]
@@ -1088,6 +1163,7 @@ def build_season_items(
                     "reserved_for_keeper": False,
                     "auto_draft_type_id": 0,
                     "bid_amount": 0,
+                    "is_auction": False,
                     "lineup_slot_id": 0,
                     "member_id": pick["owner_id"],
                     "nominating_team_id": 0,
@@ -1102,6 +1178,12 @@ def build_season_items(
         )
 
     items.append({"PK": pk, "SK": f"DRAFT#{season}", "data": draft_data})
+
+    # Separate auction-format draft dataset (DRAFT_AUCTION#<season>), demo only.
+    # Seeded per season so the bids are deterministic across runs.
+    auction_rng = random.Random(SEED + int(season))
+    auction_data = build_auction_draft_rows(draft_data, auction_rng)
+    items.append({"PK": pk, "SK": f"DRAFT_AUCTION#{season}", "data": auction_data})
 
     return items
 

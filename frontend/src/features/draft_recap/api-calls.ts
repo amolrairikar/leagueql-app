@@ -7,6 +7,7 @@ export interface DraftPickItem {
   bid_amount: number;
   drafted_position_rank: number;
   draft_rank_delta: number;
+  is_auction: boolean;
   keeper: boolean;
   lineup_slot_id: number;
   member_id: string;
@@ -33,6 +34,10 @@ export function getDraftData(
   leagueId: string,
   platform: Platform,
   season: string,
+  auction = false,
 ): Promise<{ data: DraftPickItem[] }> {
-  return queryLeague<DraftPickItem>(leagueId, platform, `DRAFT#${season}`);
+  // `auction` selects the demo-only DRAFT_AUCTION dataset; in production this is
+  // always false and the standard DRAFT query is used.
+  const queryType = auction ? `DRAFT_AUCTION#${season}` : `DRAFT#${season}`;
+  return queryLeague<DraftPickItem>(leagueId, platform, queryType);
 }
