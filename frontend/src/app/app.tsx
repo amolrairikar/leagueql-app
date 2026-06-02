@@ -183,11 +183,13 @@ function App() {
           <Route
             path="/docs"
             element={
-              <>
+              <div className="flex h-svh flex-col">
                 <Header />
-                <InstructionsPage />
-                <Footer />
-              </>
+                <main className="flex-1 overflow-auto">
+                  <InstructionsPage />
+                </main>
+                <Footer className="shrink-0" />
+              </div>
             }
           />
         </Routes>

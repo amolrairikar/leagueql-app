@@ -11,31 +11,12 @@ const TOC_ITEMS = [
   { id: 'espn-leagues', label: 'ESPN Leagues', level: 3 },
   { id: 'sleeper-leagues', label: 'Sleeper Leagues', level: 3 },
   { id: 'navigation', label: 'Navigation', level: 1 },
-  { id: 'pages-and-features', label: 'Pages and Features', level: 1 },
-  { id: 'home', label: 'Home', level: 2 },
-  { id: 'standings', label: 'Standings', level: 2 },
-  { id: 'matchups', label: 'Matchups', level: 2 },
-  { id: 'playoff-bracket', label: 'Playoff Bracket', level: 2 },
-  { id: 'manager-comparison', label: 'Manager Comparison', level: 2 },
-  { id: 'manager-history', label: 'Manager History', level: 2 },
-  { id: 'draft-grades', label: 'Draft Grades', level: 2 },
-  { id: 'player-records', label: 'Player Records', level: 2 },
-  { id: 'matchup-records', label: 'Matchup Records', level: 2 },
   { id: 'managing-your-league', label: 'Managing Your League', level: 1 },
   { id: 'refreshing-league-data', label: 'Refreshing League Data', level: 2 },
   { id: 'migrating-your-league', label: 'Migrating Your League', level: 2 },
   { id: 'switching-leagues', label: 'Switching Leagues', level: 2 },
   { id: 'deleting-a-league', label: 'Deleting a League', level: 2 },
   { id: 'faq-and-troubleshooting', label: 'FAQ & Troubleshooting', level: 1 },
-] as const;
-
-const MATCHUP_RECORDS = [
-  ['Highest team score', 'The single-game team high'],
-  ['Lowest team score', 'The single-game team low'],
-  ['Biggest blowout', 'Largest margin of victory'],
-  ['Closest game', 'Smallest margin of victory'],
-  ['Highest combined score', 'Most total points in a single matchup'],
-  ['Lowest combined score', 'Fewest total points in a single matchup'],
 ] as const;
 
 type FaqItem = {
@@ -74,6 +55,10 @@ const FAQ_ITEMS: FaqItem[] = [
         refresh automatically each week during the season.
       </>
     ),
+  },
+  {
+    q: 'Why is there a subscription for the app?',
+    a: 'The subscription helps cover the cost of hosting the app and the time spent developing and maintaining it.',
   },
   {
     q: 'Can I connect more than one league?',
@@ -262,7 +247,7 @@ export default function InstructionsPage() {
 
       <div className="flex gap-12">
         <aside className="hidden lg:block w-52 shrink-0">
-          <div className="sticky top-24">
+          <div className="sticky top-24 max-h-[calc(100svh-8rem)] overflow-y-auto">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
               On this page
             </p>
@@ -276,7 +261,7 @@ export default function InstructionsPage() {
                       ?.scrollIntoView({ behavior: 'smooth' })
                   }
                   className={[
-                    'block w-full text-left text-sm py-1 transition-colors rounded',
+                    'block w-full text-left text-sm py-1 transition-colors rounded cursor-pointer',
                     item.level === 2 ? 'pl-3' : item.level === 3 ? 'pl-5' : '',
                     activeId === item.id
                       ? 'text-primary font-medium'
@@ -448,168 +433,6 @@ export default function InstructionsPage() {
               to view another league, submit a feature request, and delete the
               current league.
             </p>
-          </section>
-
-          {/* Pages and Features */}
-          <section>
-            <SectionHeading id="pages-and-features">
-              Pages and Features
-            </SectionHeading>
-            <div className="space-y-8">
-              <div>
-                <SubHeading id="home">Home</SubHeading>
-                <p className="text-muted-foreground leading-relaxed mb-2">
-                  A high-level overview of your entire league history.
-                </p>
-                <ul className="list-disc pl-6 space-y-1 text-muted-foreground leading-relaxed">
-                  <li>
-                    Total seasons played, total matchups, and total members
-                  </li>
-                  <li>Record-setting single-game scores</li>
-                  <li>Gallery display of champions from every season</li>
-                  <li>
-                    A line chart tracking each manager's final standings
-                    position across every season
-                  </li>
-                </ul>
-              </div>
-
-              <div>
-                <SubHeading id="standings">Standings</SubHeading>
-                <p className="text-muted-foreground leading-relaxed mb-2">
-                  Displays standings from a given season.
-                </p>
-                <ul className="list-disc pl-6 space-y-1 text-muted-foreground leading-relaxed">
-                  <li>
-                    Season awards — view awards for league champion, high
-                    scorer, and luckiest team
-                  </li>
-                  <li>
-                    View the standings table showing each team's record and
-                    points for/against
-                  </li>
-                  <li>
-                    A chart shows each team's cumulative win progression over
-                    the course of the regular season, revealing which teams
-                    surged late or faded down the stretch
-                  </li>
-                </ul>
-              </div>
-
-              <div>
-                <SubHeading id="matchups">Matchups</SubHeading>
-                <p className="text-muted-foreground leading-relaxed mb-2">
-                  The complete game-by-game log for your league.
-                </p>
-                <ul className="list-disc pl-6 space-y-1 text-muted-foreground leading-relaxed">
-                  <li>Filter by season and week</li>
-                  <li>
-                    View the box score to see full box scores including starters
-                    and bench players
-                  </li>
-                </ul>
-              </div>
-
-              <div>
-                <SubHeading id="playoff-bracket">Playoff Bracket</SubHeading>
-                <p className="text-muted-foreground leading-relaxed mb-2">
-                  A visual representation of the playoff field for a given
-                  season.
-                </p>
-                <ul className="list-disc pl-6 space-y-1 text-muted-foreground leading-relaxed">
-                  <li>Select a season to view its bracket</li>
-                  <li>
-                    Scores and results are displayed for each matchup, from the
-                    first round through the championship
-                  </li>
-                  <li>Click on a matchup to view the full box score</li>
-                </ul>
-              </div>
-
-              <div>
-                <SubHeading id="manager-comparison">
-                  Manager Comparison
-                </SubHeading>
-                <p className="text-muted-foreground leading-relaxed mb-2">
-                  Head-to-head analysis between any two managers across all
-                  seasons they have been a part of.
-                </p>
-                <ul className="list-disc pl-6 space-y-1 text-muted-foreground leading-relaxed">
-                  <li>
-                    View the complete game log of every matchup between the
-                    selected managers
-                  </li>
-                  <li>
-                    Summary statistics include all-time wins, average points
-                    scored, single-game high score, and longest win streak for
-                    each manager in the head-to-head series
-                  </li>
-                </ul>
-              </div>
-
-              <div>
-                <SubHeading id="manager-history">Manager History</SubHeading>
-                <p className="text-muted-foreground leading-relaxed mb-2">
-                  An individual manager's full performance profile.
-                </p>
-                <ul className="list-disc pl-6 space-y-1 text-muted-foreground leading-relaxed">
-                  <li>
-                    See championship wins, playoff appearances, and
-                    season-by-season records
-                  </li>
-                  <li>View average scoring trends over the years</li>
-                  <li>
-                    View the managers' rivals: teams they have dominated,
-                    struggled against, and had the closest battles with
-                  </li>
-                </ul>
-              </div>
-
-              <div>
-                <SubHeading id="draft-grades">Draft Grades</SubHeading>
-                <p className="text-muted-foreground leading-relaxed mb-2">
-                  A season-by-season breakdown of how each draft played out.
-                </p>
-                <ul className="list-disc pl-6 space-y-1 text-muted-foreground leading-relaxed">
-                  <li>
-                    Compare a player's draft position to their actual
-                    performance
-                  </li>
-                  <li>
-                    View the value a player contributed over the average player
-                    at the position
-                  </li>
-                  <li>
-                    View alternate picks that could have been made instead of
-                    busts
-                  </li>
-                </ul>
-              </div>
-
-              <div>
-                <SubHeading id="player-records">Player Records</SubHeading>
-                <p className="text-muted-foreground leading-relaxed mb-2">
-                  The best individual player performances in league history.
-                </p>
-                <ul className="list-disc pl-6 space-y-1 text-muted-foreground leading-relaxed">
-                  <li>
-                    Single-game records: highest score posted by any player in a
-                    single week, grouped by position
-                  </li>
-                </ul>
-              </div>
-
-              <div>
-                <SubHeading id="matchup-records">Matchup Records</SubHeading>
-                <p className="text-muted-foreground leading-relaxed mb-4">
-                  All-time team-level records across every game ever played.
-                </p>
-                <DocTable
-                  headers={['Record', 'Description']}
-                  rows={MATCHUP_RECORDS.map(([r, d]) => [r, d])}
-                />
-              </div>
-            </div>
           </section>
 
           {/* Managing Your League */}

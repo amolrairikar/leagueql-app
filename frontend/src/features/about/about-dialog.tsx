@@ -57,26 +57,6 @@ export function AboutDialog({ open, onOpenChange }: AboutDialogProps) {
           </a>
           .
           <br />
-          <br />
-          My goal is to keep this app free. However, there are costs associated
-          with hosting and maintaining the app. There are a couple of ways you
-          can support the development of this app. We offer a premium subscription
-          to access advanced features. Alternatively, if you do not need the premium
-          features you can consider donating using the link below.
-          <br />
-          <br />
-          <a
-            href="https://www.buymeacoffee.com/amolrairikar"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex justify-center"
-          >
-            <img
-              src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png"
-              alt="Buy Me A Coffee"
-              style={{ height: '60px', width: '217px' }}
-            />
-          </a>
         </p>
       </DialogContent>
     </Dialog>
