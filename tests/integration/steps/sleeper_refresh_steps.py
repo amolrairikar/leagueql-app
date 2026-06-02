@@ -58,8 +58,11 @@ def step_assert_response(context, code, expected_status):
     assert body["status"] == expected_status
 
 
-@then('DynamoDB shows refresh_status "{expected}" for the test league')
-def step_poll_refresh_status(context, expected):
+@then("the last_refresh_at on the test league is updated within 5 minutes")
+def step_poll_last_refresh_at(context):
+    # Job status now lives in the JOB_STATUS item keyed by the correlation_id the
+    # refresh handler generates internally (not observable here), so the
+    # processor-written last_refresh_at on METADATA is the completion signal.
     deadline = datetime.now(timezone.utc) + timedelta(minutes=3)
     while datetime.now(timezone.utc) < deadline:
         resp = context.dynamodb_client.get_item(
@@ -70,23 +73,14 @@ def step_poll_refresh_status(context, expected):
             },
         )
         item = resp.get("Item", {})
-        if item.get("refresh_status", {}).get("S") == expected:
-            context.last_refresh_at = item.get("last_refresh_at", {}).get("S")
-            return
+        last_refresh_at = item.get("last_refresh_at", {}).get("S")
+        if last_refresh_at:
+            refresh_dt = datetime.fromisoformat(last_refresh_at)
+            # Only accept a value freshly written by this invocation's refresh.
+            if refresh_dt >= context.invoke_time - timedelta(seconds=5):
+                return
         time.sleep(5)
     raise AssertionError(
-        f"refresh_status '{expected}' not seen on METADATA record within 3 minutes"
-    )
-
-
-@then("the last_refresh_at is within 5 minutes of the current time")
-def step_assert_last_refresh_at(context):
-    assert context.last_refresh_at, "last_refresh_at not set on METADATA record"
-    refresh_dt = datetime.fromisoformat(context.last_refresh_at)
-    now = datetime.now(timezone.utc)
-    assert refresh_dt >= context.invoke_time - timedelta(seconds=5), (
-        f"last_refresh_at ({refresh_dt}) predates the handler invocation ({context.invoke_time})"
-    )
-    assert now - refresh_dt < timedelta(minutes=5), (
-        f"last_refresh_at is {now - refresh_dt} old (> 5 minutes)"
+        "last_refresh_at was not updated on the METADATA record within 3 minutes "
+        "of the refresh invocation"
     )

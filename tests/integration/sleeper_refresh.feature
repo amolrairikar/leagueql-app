@@ -9,8 +9,7 @@ Feature: Sleeper refresh integration
     Given a Sleeper league exists in DynamoDB
     When the sleeper refresh Lambda handler is invoked
     Then the handler returns statusCode 200 with status "succeeded"
-    And DynamoDB shows refresh_status "COMPLETED" for the test league
-    And the last_refresh_at is within 5 minutes of the current time
+    And the last_refresh_at on the test league is updated within 5 minutes
 
   Scenario: Handler skips refresh when NFL season is off-season
     Given the NFL state API returns off-season

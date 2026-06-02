@@ -1,5 +1,6 @@
 import json
 import time
+import uuid
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock
 
@@ -11,8 +12,12 @@ def step_invoke_onboarder(context):
     mock_ctx = MagicMock()
     mock_ctx.aws_request_id = "integration-test-onboard-request-id"
     mock_ctx.function_name = "onboarder-integration-test"
+    # Pass a known correlation_id so we can poll the JOB_STATUS item the processor
+    # upserts (status now lives there, keyed by correlation_id, not on METADATA).
+    context.test_correlation_id = str(uuid.uuid4())
     event = {
         "requestType": "ONBOARD",
+        "correlation_id": context.test_correlation_id,
         "body": {"leagueId": context.test_league_id, "platform": "SLEEPER"},
     }
     context.response = context.onboarder_handler_mod.lambda_handler(event, mock_ctx)
@@ -20,23 +25,23 @@ def step_invoke_onboarder(context):
     context.test_canonical_id = body.get("canonical_league_id")
 
 
-@then('DynamoDB shows onboarding_status "{expected}" for the test league')
-def step_poll_onboarding_status(context, expected):
+@then('DynamoDB shows job status "{expected}" for the test league')
+def step_poll_job_status(context, expected):
     deadline = datetime.now(timezone.utc) + timedelta(minutes=3)
     while datetime.now(timezone.utc) < deadline:
         resp = context.dynamodb_client.get_item(
             TableName=context.table_name,
             Key={
-                "PK": {"S": f"LEAGUE#{context.test_canonical_id}"},
-                "SK": {"S": "METADATA"},
+                "PK": {"S": f"JOB#{context.test_correlation_id}"},
+                "SK": {"S": "JOB_STATUS"},
             },
         )
         item = resp.get("Item", {})
-        if item.get("onboarding_status", {}).get("S") == expected:
+        if item.get("status", {}).get("S") == expected:
             return
         time.sleep(5)
     raise AssertionError(
-        f"onboarding_status '{expected}' not seen on METADATA record within 3 minutes"
+        f"job status '{expected}' not seen on JOB_STATUS record within 3 minutes"
     )
 
 
