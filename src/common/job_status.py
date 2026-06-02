@@ -34,7 +34,8 @@ JOB_TTL_SECONDS = 24 * 60 * 60
 
 # User-facing failure messages, keyed by failure_code. Raw exception detail is
 # only ever logged / sent to SNS — never stored here — so credentials and stack
-# traces are not exposed to end users.
+# traces are not exposed to end users. Messages may contain a ``{platform}``
+# placeholder filled in by ``failure_reason()``.
 FAILURE_REASONS: dict[str, str] = {
     "INVALID_INPUT": (
         "Some of the information provided was invalid. Please double-check your "
@@ -45,12 +46,11 @@ FAILURE_REASONS: dict[str, str] = {
         "expired — re-copy them from ESPN and try again."
     ),
     "NOT_FOUND": (
-        "We couldn't find that league on the selected platform. Please confirm "
-        "the league ID is correct."
+        "We couldn't find that league on {platform}. Please confirm the league ID "
+        "is correct."
     ),
     "UPSTREAM": (
-        "We couldn't reach the fantasy platform right now. Please try again in a "
-        "few minutes."
+        "We couldn't reach {platform} right now. Please try again in a few minutes."
     ),
     "PROCESSING": (
         "We hit a problem while building your league dashboard. Please try again, "
@@ -61,6 +61,28 @@ FAILURE_REASONS: dict[str, str] = {
         "it keeps happening."
     ),
 }
+
+# How a platform value is rendered in user-facing messages.
+PLATFORM_DISPLAY = {"ESPN": "ESPN", "SLEEPER": "Sleeper"}
+
+
+def failure_reason(failure_code: str, platform: str | None = None) -> str:
+    """
+    Resolve a user-facing failure message, filling in the platform name.
+
+    Args:
+        failure_code: A key into FAILURE_REASONS (falls back to INTERNAL).
+        platform: The platform value (e.g. "ESPN" / "SLEEPER"); when unknown the
+            message reads "the fantasy platform".
+
+    Returns:
+        The resolved, user-facing failure message.
+    """
+    template = FAILURE_REASONS.get(failure_code, FAILURE_REASONS["INTERNAL"])
+    platform_display = PLATFORM_DISPLAY.get(
+        (platform or "").upper(), "the fantasy platform"
+    )
+    return template.format(platform=platform_display)
 
 
 def job_status_key(correlation_id: str) -> dict[str, dict[str, str]]:
@@ -151,9 +173,7 @@ def write_job_status(
 
     if failure_code:
         expr_values[":failure_code"] = {"S": failure_code}
-        expr_values[":failure_reason"] = {
-            "S": FAILURE_REASONS.get(failure_code, FAILURE_REASONS["INTERNAL"])
-        }
+        expr_values[":failure_reason"] = {"S": failure_reason(failure_code, platform)}
         set_parts += [
             "failure_code = :failure_code",
             "failure_reason = :failure_reason",

@@ -37,6 +37,23 @@ class TestClassifyHttpError:
         assert job_status.classify_http_error(Exception("boom")) == "UPSTREAM"
 
 
+class TestFailureReason:
+    def test_fills_known_platform(self):
+        assert "Sleeper" in job_status.failure_reason("UPSTREAM", "SLEEPER")
+        assert "ESPN" in job_status.failure_reason("NOT_FOUND", "ESPN")
+
+    def test_case_insensitive_platform(self):
+        assert "Sleeper" in job_status.failure_reason("UPSTREAM", "sleeper")
+
+    def test_unknown_platform_uses_generic_phrase(self):
+        assert "the fantasy platform" in job_status.failure_reason("UPSTREAM", None)
+
+    def test_unknown_code_falls_back_to_internal(self):
+        assert (
+            job_status.failure_reason("NOPE") == job_status.FAILURE_REASONS["INTERNAL"]
+        )
+
+
 class TestWriteJobStatus:
     def test_noop_when_correlation_id_empty(self, monkeypatch):
         monkeypatch.setenv("DYNAMODB_TABLE_NAME", "test-table")
@@ -83,8 +100,25 @@ class TestWriteJobStatus:
         values = mock_ddb.update_item.call_args.kwargs["ExpressionAttributeValues"]
         assert values[":failure_code"] == {"S": "ESPN_AUTH"}
         assert values[":failure_reason"] == {
-            "S": job_status.FAILURE_REASONS["ESPN_AUTH"]
+            "S": job_status.failure_reason("ESPN_AUTH")
         }
+
+    def test_failure_reason_interpolates_platform(self, monkeypatch):
+        monkeypatch.setenv("DYNAMODB_TABLE_NAME", "test-table")
+        mock_ddb = MagicMock()
+        with patch.object(job_status, "_dynamodb", mock_ddb):
+            job_status.write_job_status(
+                "corr-1",
+                "FAILED",
+                "ONBOARD",
+                failure_code="UPSTREAM",
+                platform="SLEEPER",
+            )
+        reason = mock_ddb.update_item.call_args.kwargs["ExpressionAttributeValues"][
+            ":failure_reason"
+        ]["S"]
+        assert "Sleeper" in reason
+        assert "{platform}" not in reason
 
     def test_request_type_omitted_when_not_given(self, monkeypatch):
         monkeypatch.setenv("DYNAMODB_TABLE_NAME", "test-table")
