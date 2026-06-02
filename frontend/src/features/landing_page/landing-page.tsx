@@ -160,16 +160,14 @@ export default function LeagueQLLanding() {
         clearApiError();
         if (platform === 'SLEEPER') {
           try {
-            await onboardLeague('ONBOARD', {
+            const onboardResult = await onboardLeague('ONBOARD', {
               leagueId: leagueId.trim(),
               platform: 'SLEEPER',
             });
             const result = await pollForCompletion(
-              leagueId.trim(),
-              'SLEEPER',
-              'ONBOARD',
+              onboardResult.data.correlation_id,
             );
-            if (result === 'success') {
+            if (result.status === 'success') {
               const leagueData = await getLeague(leagueId.trim(), 'SLEEPER');
               setLeagueCookies(
                 leagueId.trim(),
@@ -177,6 +175,8 @@ export default function LeagueQLLanding() {
                 leagueData.data.seasons,
               );
               void navigate('/home');
+            } else if (result.failureReason) {
+              setError(result.failureReason);
             } else {
               setError(
                 <>

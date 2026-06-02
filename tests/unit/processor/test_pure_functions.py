@@ -755,29 +755,45 @@ class TestTraceSleeperChampionshipPath:
 
 
 class TestWriteMetadataItems:
-    def test_refresh_sets_refresh_status_completed(self, processor_handler):
+    def test_refresh_marks_job_completed_no_status_on_metadata(self, processor_handler):
+        # Job status now lives in the JOB_STATUS item; METADATA carries no status.
         mock_ddb = MagicMock()
-        with patch.object(processor_handler, "ddb_client", mock_ddb):
+        with (
+            patch.object(processor_handler, "ddb_client", mock_ddb),
+            patch.object(processor_handler, "write_job_status") as mock_write_job,
+        ):
             processor_handler.write_metadata_items(
                 league_id="canonical-abc", refresh=True
             )
         item = mock_ddb.transact_write_items.call_args[1]["TransactItems"][0]["Update"]
-        assert "refresh_status" in item["UpdateExpression"]
-        assert item["ExpressionAttributeValues"][":val"] == {"S": "COMPLETED"}
+        assert "refresh_status" not in item["UpdateExpression"]
+        assert "onboarding_status" not in item["UpdateExpression"]
+        mock_write_job.assert_called_once()
+        assert mock_write_job.call_args[0][1] == "COMPLETED"
 
-    def test_onboard_sets_onboarding_status_completed(self, processor_handler):
+    def test_onboard_marks_job_completed_without_metadata_write(
+        self, processor_handler
+    ):
+        # A plain onboard (no refresh, no league_name) has nothing to write to
+        # METADATA, so only the JOB_STATUS COMPLETED write happens.
         mock_ddb = MagicMock()
-        with patch.object(processor_handler, "ddb_client", mock_ddb):
+        with (
+            patch.object(processor_handler, "ddb_client", mock_ddb),
+            patch.object(processor_handler, "write_job_status") as mock_write_job,
+        ):
             processor_handler.write_metadata_items(
                 league_id="canonical-abc", refresh=False
             )
-        item = mock_ddb.transact_write_items.call_args[1]["TransactItems"][0]["Update"]
-        assert "onboarding_status" in item["UpdateExpression"]
-        assert item["ExpressionAttributeValues"][":val"] == {"S": "COMPLETED"}
+        mock_ddb.transact_write_items.assert_not_called()
+        mock_write_job.assert_called_once()
+        assert mock_write_job.call_args[0][1] == "COMPLETED"
 
     def test_refresh_writes_last_refresh_at(self, processor_handler):
         mock_ddb = MagicMock()
-        with patch.object(processor_handler, "ddb_client", mock_ddb):
+        with (
+            patch.object(processor_handler, "ddb_client", mock_ddb),
+            patch.object(processor_handler, "write_job_status"),
+        ):
             processor_handler.write_metadata_items(
                 league_id="canonical-abc", refresh=True
             )
@@ -785,16 +801,6 @@ class TestWriteMetadataItems:
         assert "last_refresh_at" in item["UpdateExpression"]
         assert ":lra" in item["ExpressionAttributeValues"]
         assert item["ExpressionAttributeValues"][":lra"]["S"]  # non-empty ISO string
-
-    def test_onboard_does_not_write_last_refresh_at(self, processor_handler):
-        mock_ddb = MagicMock()
-        with patch.object(processor_handler, "ddb_client", mock_ddb):
-            processor_handler.write_metadata_items(
-                league_id="canonical-abc", refresh=False
-            )
-        item = mock_ddb.transact_write_items.call_args[1]["TransactItems"][0]["Update"]
-        assert "last_refresh_at" not in item["UpdateExpression"]
-        assert ":lra" not in item["ExpressionAttributeValues"]
 
     def test_league_name_included_when_provided(self, processor_handler):
         mock_ddb = MagicMock()
@@ -815,6 +821,26 @@ class TestWriteMetadataItems:
         item = mock_ddb.transact_write_items.call_args[1]["TransactItems"][0]["Update"]
         assert "league_name" not in item["UpdateExpression"]
         assert ":league_name" not in item["ExpressionAttributeValues"]
+
+
+class TestLambdaHandlerFailure:
+    def test_records_failed_job_and_reraises(self, processor_handler):
+        with (
+            patch.object(
+                processor_handler,
+                "_lambda_handler_impl",
+                side_effect=RuntimeError("boom"),
+            ),
+            patch.object(processor_handler, "publish_failure") as mock_pf,
+            patch.object(processor_handler, "write_job_status") as mock_wjs,
+        ):
+            with pytest.raises(RuntimeError):
+                processor_handler.lambda_handler({}, MagicMock())
+        mock_pf.assert_called_once()
+        mock_wjs.assert_called_once()
+        args, kwargs = mock_wjs.call_args
+        assert args[1] == "FAILED"
+        assert kwargs["failure_code"] == "PROCESSING"
 
 
 class TestUpdateLeagueCount:

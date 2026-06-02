@@ -95,7 +95,7 @@ def upload_results_to_s3(
         raise
 
 
-def write_onboarding_status_to_dynamodb(
+def write_league_records(
     league_id: str,
     platform: str,
     canonical_league_id: str,
@@ -104,7 +104,11 @@ def write_onboarding_status_to_dynamodb(
     is_new_season_refresh: bool = False,
 ) -> None:
     """
-    Writes the onboarding status to DynamoDB for client to poll to determine onboarding status.
+    Writes the league's METADATA (on first onboard) and LEAGUE_LOOKUP records.
+
+    Job status is tracked separately in the JOB_STATUS item (keyed by
+    correlation_id), so this no longer writes any status attribute — it persists
+    the league/season lookup records the rest of the pipeline and API rely on.
 
     Args:
         league_id: The ID for the league on its platform.
@@ -120,18 +124,9 @@ def write_onboarding_status_to_dynamodb(
         now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
         if request_type == "MIGRATE":
+            # Job status now lives in the JOB_STATUS item (keyed by correlation_id),
+            # so the only METADATA write needed here is none — just the lookup.
             transact_items = [
-                {
-                    "Update": {
-                        "TableName": table_name,
-                        "Key": {
-                            "PK": {"S": f"LEAGUE#{canonical_league_id}"},
-                            "SK": {"S": "METADATA"},
-                        },
-                        "UpdateExpression": "SET onboarding_status = :os",
-                        "ExpressionAttributeValues": {":os": {"S": "IN_PROGRESS"}},
-                    }
-                },
                 {
                     "Put": {
                         "TableName": table_name,
@@ -178,23 +173,9 @@ def write_onboarding_status_to_dynamodb(
                     }
                 }
 
-            transact_items = [
-                {
-                    "Update": {
-                        "TableName": table_name,
-                        "Key": {
-                            "PK": {"S": f"LEAGUE#{canonical_league_id}"},
-                            "SK": {"S": "METADATA"},
-                        },
-                        "UpdateExpression": "SET refresh_status = :rs, last_refreshed_date = :rd",
-                        "ExpressionAttributeValues": {
-                            ":rs": {"S": "IN_PROGRESS"},
-                            ":rd": {"S": now_iso},
-                        },
-                    }
-                },
-                league_lookup_operation,
-            ]
+            # Job status now lives in the JOB_STATUS item (keyed by correlation_id);
+            # the refresh's only DynamoDB write here is the LEAGUE_LOOKUP update.
+            transact_items = [league_lookup_operation]
         else:
             transact_items = [
                 {
@@ -205,7 +186,6 @@ def write_onboarding_status_to_dynamodb(
                             "SK": {"S": "METADATA"},
                             "platform": {"S": platform},
                             "onboarded_at": {"S": now_iso},
-                            "onboarding_status": {"S": "IN_PROGRESS"},
                             "subscription_status": {"S": DEFAULT_SUBSCRIPTION_STATUS},
                         },
                     }

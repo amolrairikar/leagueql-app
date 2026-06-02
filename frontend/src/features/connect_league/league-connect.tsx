@@ -31,7 +31,7 @@ import {
 import { getLeague } from '@/components/api/leagues';
 import {
   type OnboardRequest,
-  getRefreshStatus,
+  getJobStatus,
   onboardLeague,
 } from '@/features/connect_league/api-calls';
 import {
@@ -58,42 +58,40 @@ const MAX_CONSECUTIVE_ERRORS = 3;
 const ONBOARD_RETRY_DELAY_MS = 2000;
 const POLL_INITIAL_DELAY_MS = 5000;
 const POLL_INTERVAL_MS = 1000;
-const POLL_TIMEOUT_MS = 45000;
+// The backend can take a while end-to-end (the processor alone runs up to 120s on
+// large leagues), so poll long enough to actually observe COMPLETED rather than
+// giving up early and showing a false failure.
+const POLL_TIMEOUT_MS = 150000;
 
-export async function pollForCompletion(
-  leagueId: string,
-  platform: 'ESPN' | 'SLEEPER',
-  requestType: 'ONBOARD' | 'REFRESH',
-): Promise<'success' | 'failed'> {
+export interface PollResult {
+  status: 'success' | 'failed';
+  failureReason?: string;
+}
+
+export async function pollForCompletion(jobId: string): Promise<PollResult> {
   const deadline = Date.now() + POLL_TIMEOUT_MS;
   let consecutiveErrors = 0;
-  let pollCount = 0;
 
   while (Date.now() < deadline) {
-    pollCount += 1;
     await sleep(POLL_INTERVAL_MS);
     try {
-      const statusData = await getRefreshStatus(
-        leagueId,
-        platform,
-        requestType,
-      );
-      const { refresh_status } = statusData.data;
+      const statusData = await getJobStatus(jobId);
+      const { status, failure_reason } = statusData.data;
       consecutiveErrors = 0;
-      if (refresh_status === 'COMPLETED') {
-        return 'success';
+      if (status === 'COMPLETED') {
+        return { status: 'success' };
       }
-      if (refresh_status === 'FAILED') {
-        return 'failed';
+      if (status === 'FAILED') {
+        return { status: 'failed', failureReason: failure_reason ?? undefined };
       }
-    } catch (err) {
+    } catch {
       consecutiveErrors += 1;
       if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
-        return 'failed';
+        return { status: 'failed' };
       }
     }
   }
-  return 'failed';
+  return { status: 'failed' };
 }
 
 function CopyOperationId({ operationId }: { operationId: string }) {
@@ -146,6 +144,7 @@ export default function LeagueConnect() {
     'ONBOARD' | 'REFRESH' | null
   >(null);
   const [operationId, setOperationId] = useState<string | null>(null);
+  const [failureReason, setFailureReason] = useState<string | null>(null);
   const [loadingMessage, setLoadingMessage] = useState('');
   const loadingStartRef = useRef<number | null>(null);
   const loadingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
@@ -241,6 +240,7 @@ export default function LeagueConnect() {
     setPollStatus('idle');
     setLastRequestType(null);
     setOperationId(null);
+    setFailureReason(null);
     const apiPlatform = API_PLATFORM[data.platform];
 
     let requestType: 'ONBOARD' | 'REFRESH';
@@ -289,14 +289,15 @@ export default function LeagueConnect() {
 
     setLastRequestType(requestType);
     await sleep(POLL_INITIAL_DELAY_MS);
-    const result = await pollForCompletion(
-      data.leagueId,
-      apiPlatform,
-      requestType,
-    );
-    if (result === 'failed') setOperationId(capturedOperationId);
-    setPollStatus(result);
-    if (result === 'success') {
+    const result = capturedOperationId
+      ? await pollForCompletion(capturedOperationId)
+      : { status: 'failed' as const };
+    if (result.status === 'failed') {
+      setOperationId(capturedOperationId);
+      setFailureReason(result.failureReason ?? null);
+    }
+    setPollStatus(result.status);
+    if (result.status === 'success') {
       const leagueData = await getLeague(data.leagueId, apiPlatform);
       setLeagueCookies(data.leagueId, apiPlatform, leagueData.data.seasons);
       void navigate('/home');
@@ -516,15 +517,19 @@ export default function LeagueConnect() {
                     : 'Onboarding Failed'}
                 </AlertTitle>
                 <AlertDescription>
-                  {lastRequestType === 'REFRESH'
-                    ? 'League refresh failed. Please try again, or contact '
-                    : 'League onboarding failed. Please try again, or contact '}
-                  <a
-                    href="mailto:support@leagueql.com"
-                    className="underline underline-offset-4"
-                  >
-                    support
-                  </a>
+                  {failureReason
+                    ? `${failureReason} `
+                    : lastRequestType === 'REFRESH'
+                      ? 'League refresh failed. Please try again, or contact '
+                      : 'League onboarding failed. Please try again, or contact '}
+                  {!failureReason && (
+                    <a
+                      href="mailto:support@leagueql.com"
+                      className="underline underline-offset-4"
+                    >
+                      support
+                    </a>
+                  )}
                   {operationId ? (
                     <>
                       {' '}

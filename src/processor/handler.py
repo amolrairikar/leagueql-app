@@ -13,6 +13,7 @@ import botocore.config
 import botocore.exceptions
 import duckdb
 import pandas as pd
+from common.job_status import write_job_status
 from utils import correlation_id_var, logger, publish_failure
 from queries import QUERIES
 
@@ -970,38 +971,45 @@ def write_metadata_items(
     league_id: str, refresh: bool, league_name: str | None = None
 ) -> None:
     """
-    Writes metadata items to DynamoDB to track onboarding/refresh status.
+    Persists league METADATA (name, last refresh time) and marks the job COMPLETED.
+
+    Job status lives in the JOB_STATUS item (keyed by correlation_id), so the
+    success signal is written there; this function only updates the durable
+    METADATA attributes (league_name, last_refresh_at).
 
     Args:
         league_id: The league ID for which the metadata is being written.
         refresh: Whether this is a refresh operation (vs initial onboarding).
         league_name: Optional league name to include in the metadata.
     """
-    status_attr = "refresh_status" if refresh else "onboarding_status"
-    update_expression = f"SET {status_attr} = :val"
-    expression_values = {":val": {"S": "COMPLETED"}}
+    update_parts = []
+    expression_values: dict[str, Any] = {}
     if refresh:
         now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
-        update_expression += ", last_refresh_at = :lra"
+        update_parts.append("last_refresh_at = :lra")
         expression_values[":lra"] = {"S": now_iso}
     if league_name:
-        update_expression += ", league_name = :league_name"
+        update_parts.append("league_name = :league_name")
         expression_values[":league_name"] = {"S": league_name}
-    ddb_client.transact_write_items(
-        TransactItems=[
-            {
-                "Update": {
-                    "TableName": table.name,
-                    "Key": {
-                        "PK": {"S": f"LEAGUE#{league_id}"},
-                        "SK": {"S": "METADATA"},
-                    },
-                    "UpdateExpression": update_expression,
-                    "ExpressionAttributeValues": expression_values,
+
+    if update_parts:
+        ddb_client.transact_write_items(
+            TransactItems=[
+                {
+                    "Update": {
+                        "TableName": table.name,
+                        "Key": {
+                            "PK": {"S": f"LEAGUE#{league_id}"},
+                            "SK": {"S": "METADATA"},
+                        },
+                        "UpdateExpression": "SET " + ", ".join(update_parts),
+                        "ExpressionAttributeValues": expression_values,
+                    }
                 }
-            }
-        ]
-    )
+            ]
+        )
+
+    write_job_status(correlation_id_var.get(), "COMPLETED")
 
 
 def update_league_count(delta: int) -> None:
@@ -1029,6 +1037,9 @@ def lambda_handler(event, context) -> None:
         _lambda_handler_impl(event, context)
     except Exception as e:
         publish_failure(str(e))
+        # correlation_id is set from the manifest metadata once it is read; if the
+        # failure happened before then it is empty and the write is skipped.
+        write_job_status(correlation_id_var.get(), "FAILED", failure_code="PROCESSING")
         raise
 
 

@@ -86,12 +86,12 @@ class TestUploadResultsToS3:
                 )
 
 
-class TestWriteOnboardingStatusToDynamoDB:
+class TestWriteLeagueRecords:
     def test_onboard_writes_metadata_and_lookup(self, onboarder_writer, monkeypatch):
         monkeypatch.setenv("DYNAMODB_TABLE_NAME", "test-table")
         mock_ddb = MagicMock()
         with patch.object(onboarder_writer, "_dynamodb", mock_ddb):
-            onboarder_writer.write_onboarding_status_to_dynamodb(
+            onboarder_writer.write_league_records(
                 league_id="123",
                 platform="SLEEPER",
                 canonical_league_id="canonical-abc",
@@ -108,7 +108,7 @@ class TestWriteOnboardingStatusToDynamoDB:
         monkeypatch.setenv("DYNAMODB_TABLE_NAME", "test-table")
         mock_ddb = MagicMock()
         with patch.object(onboarder_writer, "_dynamodb", mock_ddb):
-            onboarder_writer.write_onboarding_status_to_dynamodb(
+            onboarder_writer.write_league_records(
                 league_id="123",
                 platform="SLEEPER",
                 canonical_league_id="canonical-abc",
@@ -125,7 +125,7 @@ class TestWriteOnboardingStatusToDynamoDB:
         monkeypatch.setenv("DYNAMODB_TABLE_NAME", "test-table")
         mock_ddb = MagicMock()
         with patch.object(onboarder_writer, "_dynamodb", mock_ddb):
-            onboarder_writer.write_onboarding_status_to_dynamodb(
+            onboarder_writer.write_league_records(
                 league_id="123",
                 platform="SLEEPER",
                 canonical_league_id="canonical-abc",
@@ -137,13 +137,15 @@ class TestWriteOnboardingStatusToDynamoDB:
         metadata_update = items[0]["Update"]
         assert "subscription_status" not in metadata_update["UpdateExpression"]
 
-    def test_migrate_does_not_touch_subscription_status(
+    def test_migrate_writes_only_lookup_no_metadata(
         self, onboarder_writer, monkeypatch
     ):
+        # Status now lives in the JOB_STATUS item, so MIGRATE writes only the
+        # LEAGUE_LOOKUP item — no METADATA update at all.
         monkeypatch.setenv("DYNAMODB_TABLE_NAME", "test-table")
         mock_ddb = MagicMock()
         with patch.object(onboarder_writer, "_dynamodb", mock_ddb):
-            onboarder_writer.write_onboarding_status_to_dynamodb(
+            onboarder_writer.write_league_records(
                 league_id="123",
                 platform="SLEEPER",
                 canonical_league_id="canonical-abc",
@@ -151,14 +153,16 @@ class TestWriteOnboardingStatusToDynamoDB:
                 request_type="MIGRATE",
             )
         items = mock_ddb.transact_write_items.call_args[1]["TransactItems"]
-        metadata_update = items[0]["Update"]
-        assert "subscription_status" not in metadata_update["UpdateExpression"]
+        assert len(items) == 1
+        assert items[0]["Put"]["Item"]["SK"] == {"S": "LEAGUE_LOOKUP"}
 
     def test_refresh_existing_season_uses_update(self, onboarder_writer, monkeypatch):
+        # REFRESH now writes only the LEAGUE_LOOKUP item (status moved to
+        # JOB_STATUS); an existing season updates the lookup in place.
         monkeypatch.setenv("DYNAMODB_TABLE_NAME", "test-table")
         mock_ddb = MagicMock()
         with patch.object(onboarder_writer, "_dynamodb", mock_ddb):
-            onboarder_writer.write_onboarding_status_to_dynamodb(
+            onboarder_writer.write_league_records(
                 league_id="123",
                 platform="SLEEPER",
                 canonical_league_id="canonical-abc",
@@ -167,14 +171,15 @@ class TestWriteOnboardingStatusToDynamoDB:
                 is_new_season_refresh=False,
             )
         items = mock_ddb.transact_write_items.call_args[1]["TransactItems"]
-        lookup_item = items[1]
-        assert "Update" in lookup_item
+        assert len(items) == 1
+        assert "Update" in items[0]
+        assert items[0]["Update"]["Key"]["SK"] == {"S": "LEAGUE_LOOKUP"}
 
     def test_refresh_new_season_uses_put(self, onboarder_writer, monkeypatch):
         monkeypatch.setenv("DYNAMODB_TABLE_NAME", "test-table")
         mock_ddb = MagicMock()
         with patch.object(onboarder_writer, "_dynamodb", mock_ddb):
-            onboarder_writer.write_onboarding_status_to_dynamodb(
+            onboarder_writer.write_league_records(
                 league_id="456",
                 platform="SLEEPER",
                 canonical_league_id="canonical-abc",
@@ -183,13 +188,14 @@ class TestWriteOnboardingStatusToDynamoDB:
                 is_new_season_refresh=True,
             )
         items = mock_ddb.transact_write_items.call_args[1]["TransactItems"]
-        lookup_item = items[1]
-        assert "Put" in lookup_item
+        assert len(items) == 1
+        assert "Put" in items[0]
+        assert items[0]["Put"]["Item"]["SK"] == {"S": "LEAGUE_LOOKUP"}
 
     def test_missing_env_var_raises_key_error(self, onboarder_writer, monkeypatch):
         monkeypatch.delenv("DYNAMODB_TABLE_NAME", raising=False)
         with pytest.raises(KeyError):
-            onboarder_writer.write_onboarding_status_to_dynamodb(
+            onboarder_writer.write_league_records(
                 league_id="123",
                 platform="SLEEPER",
                 canonical_league_id="canonical-abc",
@@ -206,7 +212,7 @@ class TestWriteOnboardingStatusToDynamoDB:
         )
         with patch.object(onboarder_writer, "_dynamodb", mock_ddb):
             with pytest.raises(botocore.exceptions.ClientError):
-                onboarder_writer.write_onboarding_status_to_dynamodb(
+                onboarder_writer.write_league_records(
                     league_id="123",
                     platform="SLEEPER",
                     canonical_league_id="canonical-abc",

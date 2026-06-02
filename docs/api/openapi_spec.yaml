@@ -315,43 +315,28 @@ paths:
         uri: "arn:aws:apigateway:${aws_region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations"
         payloadFormatVersion: "2.0"
 
-  /leagues/{leagueId}/refresh_status:
+  /jobs/{jobId}:
     get:
-      summary: Check onboarding/refresh status for a league
+      summary: Get the status of an onboard/refresh/migrate job
       description: >
-        Returns the current status of an onboarding or refresh operation for the specified league.
-        Used for polling after triggering onboarding or a refresh to know when the data is ready.
-      operationId: checkRefreshStatus
+        Returns the status of a job triggered by onboarding, refresh, or migration,
+        identified by the correlation (job) ID returned when the job was triggered.
+        Used for polling until the job completes. When the job fails, a user-friendly
+        failure_reason is included. A missing item (never created, or expired after
+        its 24h TTL) is reported as FAILED.
+      operationId: getJobStatus
       parameters:
-        - name: leagueId
+        - name: jobId
           in: path
           required: true
-          description: The ESPN or Sleeper league ID
+          description: The correlation (job) ID returned when the job was triggered
           schema:
             type: string
-            pattern: '^\d+$'
-            example: "12345678"
-        - name: platform
-          in: query
-          required: true
-          description: The name of the platform the fantasy football league is on
-          schema:
-            type: string
-            enum: [ESPN, SLEEPER]
-            example: "ESPN"
-        - name: refreshOperation
-          in: query
-          required: true
-          description: The type of refresh ("ONBOARD" or "REFRESH") to check the status of.
-          schema:
-            type: string
-            enum: [ONBOARD, REFRESH]
-            example: "ONBOARD"
+            pattern: '^[0-9a-fA-F-]{36}$'
+            example: "f47ac10b-58cc-4372-a567-0e02b2c3d479"
       responses:
         "200":
-          ref: "#/components/responses/LeagueStatusSuccessResponse"
-        "404":
-          $ref: "#/components/responses/LeagueNotFoundError"
+          $ref: "#/components/responses/JobStatusSuccessResponse"
         "500":
           $ref: "#/components/responses/InternalError"
       security:
@@ -568,8 +553,8 @@ components:
           schema:
             $ref: "#/components/schemas/QueryResponse"
 
-    LeagueStatusSuccessResponse:
-      description: League status returned successfully
+    JobStatusSuccessResponse:
+      description: Job status returned successfully
       content:
         application/json:
           schema:
@@ -579,23 +564,29 @@ components:
                 properties:
                   data:
                     type: object
-                    required: [refresh_operation, refresh_status]
+                    required: [status]
                     properties:
-                      refresh_operation:
-                        type: string
-                        enum: [ONBOARD, REFRESH]
-                        description: The type of operation whose status is being reported.
-                        example: "ONBOARD"
-                      refresh_status:
+                      status:
                         type: string
                         enum: [IN_PROGRESS, COMPLETED, FAILED]
-                        description: Current status of the onboarding or refresh operation.
+                        description: Current status of the onboard/refresh/migrate job.
                         example: "IN_PROGRESS"
+                      failure_code:
+                        type: string
+                        nullable: true
+                        description: Machine-readable failure category (only when FAILED).
+                        example: "ESPN_AUTH"
+                      failure_reason:
+                        type: string
+                        nullable: true
+                        description: User-friendly failure message (only when FAILED).
+                        example: "ESPN rejected your credentials. Your espn_s2 / SWID cookies may have expired — re-copy them from ESPN and try again."
           example:
-            detail: "Found refresh status"
+            detail: "Found job status"
             data:
-              refresh_operation: "ONBOARD"
-              refresh_status: "IN_PROGRESS"
+              status: "IN_PROGRESS"
+              failure_code: null
+              failure_reason: null
 
     EspnMembersResponse:
       description: ESPN league members returned successfully
