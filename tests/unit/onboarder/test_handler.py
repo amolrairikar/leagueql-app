@@ -176,6 +176,85 @@ class TestLambdaHandlerRunErrors:
         assert result["statusCode"] == 500
 
 
+class TestLambdaHandlerRecordsJobStatus:
+    """Failure branches must record a FAILED JOB_STATUS with the right code."""
+
+    def _assert_failed(self, mock_wjs, expected_code):
+        mock_wjs.assert_called_once()
+        args, kwargs = mock_wjs.call_args
+        assert args[1] == "FAILED"
+        assert kwargs["failure_code"] == expected_code
+
+    def test_espn_http_error_records_espn_auth(self, onboarder_handler):
+        event = {
+            "requestType": "ONBOARD",
+            "correlation_id": "corr-1",
+            "body": {"leagueId": "123", "platform": "ESPN", "season": "2024"},
+        }
+        err = requests.exceptions.HTTPError("403")
+        err.response = MagicMock(status_code=403)
+        with (
+            patch.object(onboarder_handler, "OnboardingService", side_effect=err),
+            patch.object(onboarder_handler, "write_job_status") as mock_wjs,
+        ):
+            result = onboarder_handler.lambda_handler(event, MagicMock())
+        assert result["statusCode"] == 502
+        self._assert_failed(mock_wjs, "ESPN_AUTH")
+
+    def test_value_error_records_invalid_input(self, onboarder_handler):
+        event = {
+            "requestType": "ONBOARD",
+            "correlation_id": "corr-1",
+            "body": {"leagueId": "123", "platform": "YAHOO"},
+        }
+        with (
+            patch.object(
+                onboarder_handler,
+                "OnboardingService",
+                side_effect=ValueError("Unsupported platform"),
+            ),
+            patch.object(onboarder_handler, "write_job_status") as mock_wjs,
+        ):
+            result = onboarder_handler.lambda_handler(event, MagicMock())
+        assert result["statusCode"] == 400
+        self._assert_failed(mock_wjs, "INVALID_INPUT")
+
+    def test_sleeper_not_found_records_not_found(self, onboarder_handler):
+        event = {
+            "requestType": "REFRESH",
+            "correlation_id": "corr-1",
+            "body": {"leagueId": "new-lg", "platform": "SLEEPER"},
+        }
+        with (
+            patch.object(
+                onboarder_handler,
+                "resolve_sleeper_canonical_league_id",
+                return_value=None,
+            ),
+            patch.object(onboarder_handler, "write_job_status") as mock_wjs,
+        ):
+            result = onboarder_handler.lambda_handler(event, MagicMock())
+        assert result["statusCode"] == 404
+        self._assert_failed(mock_wjs, "NOT_FOUND")
+
+    def test_runtime_error_during_run_records_upstream(self, onboarder_handler):
+        event = {
+            "requestType": "ONBOARD",
+            "correlation_id": "corr-1",
+            "body": {"leagueId": "123", "platform": "SLEEPER"},
+        }
+        svc = MagicMock()
+        svc.canonical_league_id = "canonical-abc"
+        svc.run.side_effect = RuntimeError("S3 error")
+        with (
+            patch.object(onboarder_handler, "OnboardingService", return_value=svc),
+            patch.object(onboarder_handler, "write_job_status") as mock_wjs,
+        ):
+            result = onboarder_handler.lambda_handler(event, MagicMock())
+        assert result["statusCode"] == 502
+        self._assert_failed(mock_wjs, "UPSTREAM")
+
+
 class TestLambdaHandlerSuccess:
     def test_returns_200_with_canonical_id(self, onboarder_handler):
         event = {

@@ -1,23 +1,17 @@
 import { apiClient } from '@/lib/api-client';
 import type { Platform } from '@/components/api/types';
 
-export interface GetRefreshStatusResponse {
+export interface GetJobStatusResponse {
   detail: string;
   data: {
-    refresh_operation: 'ONBOARD' | 'REFRESH';
-    refresh_status: string;
+    status: string;
+    failure_code?: string | null;
+    failure_reason?: string | null;
   };
 }
 
-export function getRefreshStatus(
-  leagueId: string,
-  platform: Platform,
-  refreshOperation: 'ONBOARD' | 'REFRESH' | 'MIGRATE',
-): Promise<GetRefreshStatusResponse> {
-  const params = new URLSearchParams({ platform, refreshOperation });
-  return apiClient.get<GetRefreshStatusResponse>(
-    `/leagues/${leagueId}/refresh_status?${params}`,
-  );
+export function getJobStatus(jobId: string): Promise<GetJobStatusResponse> {
+  return apiClient.get<GetJobStatusResponse>(`/jobs/${jobId}`);
 }
 
 export interface OnboardRequest {

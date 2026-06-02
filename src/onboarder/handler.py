@@ -3,9 +3,30 @@ import uuid
 
 import requests
 
+from common.job_status import classify_http_error, write_job_status
 from onboarding_service import OnboardingService
 from sleeper_client import resolve_sleeper_canonical_league_id
 from utils import correlation_id_var, logger, publish_failure
+
+
+def _record_failure(
+    request_type: str,
+    failure_code: str,
+    body: dict | None = None,
+    canonical_league_id: str | None = None,
+) -> None:
+    """Write a FAILED JOB_STATUS item so the failure reaches the user (best-effort)."""
+    body = body or {}
+    league_id = body.get("leagueId")
+    write_job_status(
+        correlation_id_var.get(),
+        "FAILED",
+        request_type or "ONBOARD",
+        failure_code=failure_code,
+        league_id=str(league_id) if league_id else None,
+        platform=body.get("platform"),
+        canonical_league_id=canonical_league_id,
+    )
 
 
 def lambda_handler(event, context) -> dict[str, str | int]:
@@ -64,6 +85,7 @@ def lambda_handler(event, context) -> dict[str, str | int]:
         except requests.exceptions.HTTPError as e:
             logger.error("HTTP error resolving Sleeper canonical league ID: %s", e)
             publish_failure(str(e))
+            _record_failure(request_type, classify_http_error(e), body)
             return {
                 "statusCode": 502,
                 "body": json.dumps(
@@ -78,6 +100,7 @@ def lambda_handler(event, context) -> dict[str, str | int]:
                 "Unexpected error resolving Sleeper canonical league ID: %s", e
             )
             publish_failure(str(e))
+            _record_failure(request_type, "INTERNAL", body)
             return {
                 "statusCode": 500,
                 "body": json.dumps(
@@ -93,6 +116,7 @@ def lambda_handler(event, context) -> dict[str, str | int]:
                 "Could not resolve canonical league ID for Sleeper league %s; league has not been onboarded",
                 body.get("leagueId"),
             )
+            _record_failure(request_type, "NOT_FOUND", body)
             return {
                 "statusCode": 404,
                 "body": json.dumps(
@@ -121,6 +145,7 @@ def lambda_handler(event, context) -> dict[str, str | int]:
         )
     except KeyError as e:
         logger.error("Missing required field in request body: %s", e)
+        _record_failure(request_type, "INVALID_INPUT", body, canonical_league_id)
         return {
             "statusCode": 400,
             "body": json.dumps({"status": "failed", "error_msg": str(e)}),
@@ -129,6 +154,7 @@ def lambda_handler(event, context) -> dict[str, str | int]:
         logger.error(
             "Incorrect value error while initializing onboarding service: %s", e
         )
+        _record_failure(request_type, "INVALID_INPUT", body, canonical_league_id)
         return {
             "statusCode": 400,
             "body": json.dumps({"status": "failed", "error_msg": str(e)}),
@@ -139,6 +165,7 @@ def lambda_handler(event, context) -> dict[str, str | int]:
             e,
         )
         publish_failure(str(e))
+        _record_failure(request_type, classify_http_error(e), body, canonical_league_id)
         return {
             "statusCode": 502,
             "body": json.dumps(
@@ -153,6 +180,7 @@ def lambda_handler(event, context) -> dict[str, str | int]:
             "Runtime error occurred while initializing onboarding service: %s", e
         )
         publish_failure(str(e))
+        _record_failure(request_type, "UPSTREAM", body, canonical_league_id)
         return {
             "statusCode": 502,
             "body": json.dumps(
@@ -172,6 +200,9 @@ def lambda_handler(event, context) -> dict[str, str | int]:
     except KeyError as e:
         logger.error("Missing required environment variable: %s", e)
         publish_failure(str(e))
+        _record_failure(
+            request_type, "INTERNAL", body, onboarding_service.canonical_league_id
+        )
         return {
             "statusCode": 500,
             "body": json.dumps(
@@ -181,9 +212,30 @@ def lambda_handler(event, context) -> dict[str, str | int]:
                 }
             ),
         }
+    except requests.exceptions.HTTPError as e:
+        logger.error("HTTP error occurred while running onboarding service: %s", e)
+        publish_failure(str(e))
+        _record_failure(
+            request_type,
+            classify_http_error(e),
+            body,
+            onboarding_service.canonical_league_id,
+        )
+        return {
+            "statusCode": 502,
+            "body": json.dumps(
+                {
+                    "status": "failed",
+                    "error_msg": "An upstream service error occurred.",
+                }
+            ),
+        }
     except RuntimeError as e:
         logger.error("Runtime error occurred while running onboarding service: %s", e)
         publish_failure(str(e))
+        _record_failure(
+            request_type, "UPSTREAM", body, onboarding_service.canonical_league_id
+        )
         return {
             "statusCode": 502,
             "body": json.dumps(
@@ -198,6 +250,9 @@ def lambda_handler(event, context) -> dict[str, str | int]:
             "Unexpected error occurred while running onboarding service: %s", e
         )
         publish_failure(str(e))
+        _record_failure(
+            request_type, "INTERNAL", body, onboarding_service.canonical_league_id
+        )
         return {
             "statusCode": 500,
             "body": json.dumps(

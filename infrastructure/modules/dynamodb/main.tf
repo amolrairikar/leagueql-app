@@ -32,6 +32,13 @@ resource "aws_dynamodb_table" "global_table" {
     enabled = true
   }
 
+  # JOB_STATUS items carry a Unix-epoch `ttl` so old onboard/refresh/migrate jobs
+  # self-clean ~24h after creation. Only items with the attribute are reaped.
+  ttl {
+    attribute_name = "ttl"
+    enabled        = true
+  }
+
   attribute {
     name = "canonical_league_id"
     type = "S"

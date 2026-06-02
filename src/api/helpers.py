@@ -7,6 +7,7 @@ SNS failure alerting lives in the shared ``common.sns`` module.
 """
 
 import time
+from datetime import datetime, timezone
 from decimal import Decimal
 from functools import partial
 from typing import Any
@@ -17,6 +18,7 @@ from boto3.dynamodb.conditions import Key
 from fastapi import HTTPException, status
 
 import main
+from common.job_status import JOB_TTL_SECONDS
 from common.sns import publish_failure as _publish_failure
 from main import (
     SLEEPER_STATE_URL,
@@ -322,6 +324,116 @@ def delete_all_league_items(canonical_league_id: str, max_attempts: int = 4) -> 
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to fully delete league data",
         )
+
+
+def create_job_status(
+    correlation_id: str,
+    request_type: str,
+    league_id: str | None = None,
+    platform: str | None = None,
+    canonical_league_id: str | None = None,
+) -> None:
+    """
+    Create the initial IN_PROGRESS JOB_STATUS item for a triggered job.
+
+    Keyed by correlation_id so it is reachable by the frontend even when no
+    league lookup record exists yet (e.g. a brand-new onboard). The onboarder /
+    processor later upsert this same item to FAILED / COMPLETED. Best-effort: a
+    failure here is logged but does not block triggering the job (the onboarder
+    upserts the item regardless).
+
+    Args:
+        correlation_id: The job's correlation ID (its key).
+        request_type: "ONBOARD" | "REFRESH" | "MIGRATE".
+        league_id: The platform league ID (observability).
+        platform: The platform, e.g. "ESPN" / "SLEEPER" (observability).
+        canonical_league_id: The canonical league ID, when known (observability).
+    """
+    now = datetime.now(timezone.utc)
+    item: dict[str, Any] = {
+        "PK": f"JOB#{correlation_id}",
+        "SK": "JOB_STATUS",
+        "status": "IN_PROGRESS",
+        "request_type": request_type,
+        "created_at": now.isoformat(),
+        "updated_at": now.isoformat(),
+        "ttl": int(now.timestamp()) + JOB_TTL_SECONDS,
+    }
+    if league_id:
+        item["league_id"] = league_id
+    if platform:
+        item["platform"] = platform
+    if canonical_league_id:
+        item["canonical_league_id"] = canonical_league_id
+    try:
+        main.table.put_item(Item=item)
+    except botocore.exceptions.ClientError as e:
+        logger.error("Failed to create JOB_STATUS for %s: %s", correlation_id, e)
+
+
+def get_job_status(correlation_id: str) -> dict | None:
+    """
+    Fetch a job's JOB_STATUS item, or None if it has expired / never existed.
+
+    Args:
+        correlation_id: The job's correlation ID.
+
+    Returns:
+        The JOB_STATUS item dict, or None.
+    """
+    try:
+        response = main.table.get_item(
+            Key={"PK": f"JOB#{correlation_id}", "SK": "JOB_STATUS"}
+        )
+    except botocore.exceptions.ClientError as e:
+        logger.error("Boto error occurred: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve job status",
+        )
+    return response.get("Item")
+
+
+def set_active_job(canonical_league_id: str, correlation_id: str) -> None:
+    """
+    Point a league's METADATA at its in-flight job (concurrency-guard pointer).
+
+    Stores ``active_job_id`` on METADATA so a subsequent request can dereference
+    the current job and reject duplicates while it is IN_PROGRESS. Best-effort.
+
+    Args:
+        canonical_league_id: The canonical league ID (must already have METADATA).
+        correlation_id: The job's correlation ID to record as active.
+    """
+    try:
+        main.table.update_item(
+            Key={"PK": f"LEAGUE#{canonical_league_id}", "SK": "METADATA"},
+            UpdateExpression="SET active_job_id = :j",
+            ExpressionAttributeValues={":j": correlation_id},
+        )
+    except botocore.exceptions.ClientError as e:
+        logger.error("Failed to set active_job_id for %s: %s", canonical_league_id, e)
+
+
+def is_job_in_progress(metadata: dict) -> bool:
+    """
+    Whether a league has an in-flight onboard/refresh/migrate job.
+
+    Dereferences the METADATA ``active_job_id`` pointer to the JOB_STATUS item;
+    a missing/expired job or a terminal status means no job is in progress (the
+    JOB_STATUS TTL also releases stuck jobs after 24h).
+
+    Args:
+        metadata: The league's METADATA item.
+
+    Returns:
+        True only if the referenced job exists and is IN_PROGRESS.
+    """
+    active_job_id = metadata.get("active_job_id")
+    if not active_job_id:
+        return False
+    job = get_job_status(active_job_id)
+    return bool(job) and job.get("status") == "IN_PROGRESS"
 
 
 def update_league_count(delta: int) -> None:

@@ -22,7 +22,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { getLeague } from '@/components/api/leagues';
-import { getRefreshStatus } from '@/features/connect_league/api-calls';
+import { getJobStatus } from '@/features/connect_league/api-calls';
 import {
   getEspnMembers,
   getSleeperUsers,
@@ -49,7 +49,9 @@ const sleep = (ms: number): Promise<void> =>
 
 const POLL_INITIAL_DELAY_MS = 5000;
 const POLL_INTERVAL_MS = 1000;
-const POLL_TIMEOUT_MS = 60000;
+// Migration runs the same onboarder + processor pipeline, which can take a while
+// end-to-end; poll long enough to observe COMPLETED rather than time out early.
+const POLL_TIMEOUT_MS = 150000;
 const MAX_CONSECUTIVE_ERRORS = 3;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -78,27 +80,31 @@ function getUserDisplayName(user: NewPlatformUser): string {
 
 // ── Polling ───────────────────────────────────────────────────────────────────
 
-async function pollForCompletion(
-  leagueId: string,
-  platform: Platform,
-): Promise<'success' | 'failed'> {
+interface PollResult {
+  status: 'success' | 'failed';
+  failureReason?: string;
+}
+
+async function pollForCompletion(jobId: string): Promise<PollResult> {
   const deadline = Date.now() + POLL_TIMEOUT_MS;
   let consecutiveErrors = 0;
 
   while (Date.now() < deadline) {
     await sleep(POLL_INTERVAL_MS);
     try {
-      const statusData = await getRefreshStatus(leagueId, platform, 'MIGRATE');
-      const { refresh_status } = statusData.data;
+      const statusData = await getJobStatus(jobId);
+      const { status, failure_reason } = statusData.data;
       consecutiveErrors = 0;
-      if (refresh_status === 'COMPLETED') return 'success';
-      if (refresh_status === 'FAILED') return 'failed';
+      if (status === 'COMPLETED') return { status: 'success' };
+      if (status === 'FAILED')
+        return { status: 'failed', failureReason: failure_reason ?? undefined };
     } catch {
       consecutiveErrors += 1;
-      if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) return 'failed';
+      if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS)
+        return { status: 'failed' };
     }
   }
-  return 'failed';
+  return { status: 'failed' };
 }
 
 // ── Step 1: Confirm current league ───────────────────────────────────────────
@@ -736,9 +742,11 @@ function Step4({
 function Step5({
   pollOutcome,
   operationId,
+  failureReason,
 }: {
   pollOutcome: 'polling' | 'success' | 'failed';
   operationId: string | null;
+  failureReason: string | null;
 }) {
   if (pollOutcome === 'polling') {
     return (
@@ -767,14 +775,20 @@ function Step5({
     <Alert variant="destructive">
       <AlertTitle>Migration failed</AlertTitle>
       <AlertDescription>
-        The migration did not complete successfully. Please try again or{' '}
-        <a
-          href="mailto:support@leagueql.com"
-          className="font-medium underline underline-offset-4"
-        >
-          contact support
-        </a>
-        {operationId ? ` with operation ID ${operationId}` : ''}.
+        {failureReason ? (
+          `${failureReason}`
+        ) : (
+          <>
+            The migration did not complete successfully. Please try again or{' '}
+            <a
+              href="mailto:support@leagueql.com"
+              className="font-medium underline underline-offset-4"
+            >
+              contact support
+            </a>
+          </>
+        )}
+        {operationId ? ` (operation ID ${operationId})` : ''}.
       </AlertDescription>
     </Alert>
   );
@@ -803,6 +817,7 @@ export default function MigrateLeague() {
     'polling' | 'success' | 'failed'
   >('polling');
   const [operationId, setOperationId] = useState<string | null>(null);
+  const [failureReason, setFailureReason] = useState<string | null>(null);
   const initRef = useRef(false);
 
   useEffect(() => {
@@ -863,10 +878,15 @@ export default function MigrateLeague() {
     setOperationId(correlationId);
 
     await sleep(POLL_INITIAL_DELAY_MS);
-    const outcome = await pollForCompletion(leagueId, platform);
-    setPollOutcome(outcome);
+    const result = correlationId
+      ? await pollForCompletion(correlationId)
+      : { status: 'failed' as const };
+    if (result.status === 'failed') {
+      setFailureReason(result.failureReason ?? null);
+    }
+    setPollOutcome(result.status);
 
-    if (outcome === 'success') {
+    if (result.status === 'success') {
       try {
         const newLeagueData = await getLeague(
           newPlatformInfo.newPlatformLeagueId,
@@ -978,7 +998,11 @@ export default function MigrateLeague() {
               />
             )}
             {step === 5 && (
-              <Step5 pollOutcome={pollOutcome} operationId={operationId} />
+              <Step5
+                pollOutcome={pollOutcome}
+                operationId={operationId}
+                failureReason={failureReason}
+              />
             )}
           </CardContent>
         </Card>

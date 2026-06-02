@@ -87,68 +87,50 @@ class TestGetLeagueEndpoint:
         assert response.headers["cache-control"] == "no-store"
 
 
-class TestGetRefreshStatusEndpoint:
-    def test_returns_onboard_status(
-        self, client, mock_table, league_lookup_item, league_metadata_item
-    ):
-        mock_table.get_item.side_effect = [
-            {"Item": league_lookup_item},
-            {"Item": league_metadata_item},
-        ]
-        response = client.get(
-            "/leagues/123/refresh_status?platform=SLEEPER&refreshOperation=ONBOARD"
-        )
+_JOB_ID = "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+
+
+class TestGetJobEndpoint:
+    def test_returns_in_progress_status(self, client, mock_table):
+        mock_table.get_item.return_value = {
+            "Item": {
+                "PK": f"JOB#{_JOB_ID}",
+                "SK": "JOB_STATUS",
+                "status": "IN_PROGRESS",
+            }
+        }
+        response = client.get(f"/jobs/{_JOB_ID}")
         assert response.status_code == 200
         data = response.json()["data"]
-        assert data["refresh_operation"] == "ONBOARD"
-        assert data["refresh_status"] == "COMPLETED"
+        assert data["status"] == "IN_PROGRESS"
+        assert data["failure_reason"] is None
 
-    def test_returns_refresh_status(
-        self, client, mock_table, league_lookup_item, league_metadata_item
-    ):
-        mock_table.get_item.side_effect = [
-            {"Item": league_lookup_item},
-            {"Item": league_metadata_item},
-        ]
-        response = client.get(
-            "/leagues/123/refresh_status?platform=SLEEPER&refreshOperation=REFRESH"
-        )
+    def test_returns_failure_reason_when_failed(self, client, mock_table):
+        mock_table.get_item.return_value = {
+            "Item": {
+                "PK": f"JOB#{_JOB_ID}",
+                "SK": "JOB_STATUS",
+                "status": "FAILED",
+                "failure_code": "ESPN_AUTH",
+                "failure_reason": "ESPN rejected your credentials.",
+            }
+        }
+        response = client.get(f"/jobs/{_JOB_ID}")
         assert response.status_code == 200
         data = response.json()["data"]
-        assert data["refresh_operation"] == "REFRESH"
-        assert data["refresh_status"] == "COMPLETED"
+        assert data["status"] == "FAILED"
+        assert data["failure_code"] == "ESPN_AUTH"
+        assert data["failure_reason"] == "ESPN rejected your credentials."
 
-    def test_defaults_to_failed_when_status_missing(
-        self, client, mock_table, league_lookup_item
-    ):
-        mock_table.get_item.side_effect = [
-            {"Item": league_lookup_item},
-            {"Item": {"PK": "LEAGUE#canonical-abc", "SK": "METADATA"}},
-        ]
-        response = client.get(
-            "/leagues/123/refresh_status?platform=SLEEPER&refreshOperation=ONBOARD"
-        )
-        assert response.status_code == 200
-        assert response.json()["data"]["refresh_status"] == "FAILED"
-
-    def test_case_insensitive_refresh_operation(
-        self, client, mock_table, league_lookup_item, league_metadata_item
-    ):
-        mock_table.get_item.side_effect = [
-            {"Item": league_lookup_item},
-            {"Item": league_metadata_item},
-        ]
-        response = client.get(
-            "/leagues/123/refresh_status?platform=sleeper&refreshOperation=onboard"
-        )
-        assert response.status_code == 200
-
-    def test_returns_404_for_unknown_league(self, client, mock_table):
+    def test_missing_job_reports_failed(self, client, mock_table):
         mock_table.get_item.return_value = {}
-        response = client.get(
-            "/leagues/999/refresh_status?platform=SLEEPER&refreshOperation=ONBOARD"
-        )
-        assert response.status_code == 404
+        response = client.get(f"/jobs/{_JOB_ID}")
+        assert response.status_code == 200
+        assert response.json()["data"]["status"] == "FAILED"
+
+    def test_invalid_job_id_rejected(self, client):
+        response = client.get("/jobs/not-a-valid-uuid")
+        assert response.status_code == 422
 
 
 class TestOnboardLeagueEndpoint:
@@ -194,13 +176,15 @@ class TestOnboardLeagueEndpoint:
         assert response.status_code == 201
         assert "refresh" in response.json()["detail"].lower()
 
-    def test_refresh_returns_409_when_refresh_in_progress(
+    def test_refresh_returns_409_when_job_in_progress(
         self, client, mock_table, league_lookup_item, league_metadata_item
     ):
-        league_metadata_item["refresh_status"] = "IN_PROGRESS"
+        # An active_job_id pointing at an IN_PROGRESS JOB_STATUS blocks a refresh.
+        league_metadata_item["active_job_id"] = _JOB_ID
         mock_table.get_item.side_effect = [
             {"Item": league_lookup_item},
             {"Item": league_metadata_item},
+            {"Item": {"status": "IN_PROGRESS"}},
         ]
         response = client.post(
             "/leagues?requestType=REFRESH",
@@ -209,20 +193,73 @@ class TestOnboardLeagueEndpoint:
         assert response.status_code == 409
         assert "in progress" in response.json()["detail"].lower()
 
-    def test_refresh_returns_409_when_onboarding_in_progress(
-        self, client, mock_table, league_lookup_item, league_metadata_item
+    def test_refresh_proceeds_when_active_job_terminal(
+        self,
+        client,
+        mock_table,
+        mock_lambda_client,
+        league_lookup_item,
+        league_metadata_item,
     ):
-        league_metadata_item["onboarding_status"] = "IN_PROGRESS"
+        # A completed/expired job must not block a new refresh.
+        league_metadata_item["active_job_id"] = _JOB_ID
         mock_table.get_item.side_effect = [
             {"Item": league_lookup_item},
             {"Item": league_metadata_item},
+            {"Item": {"status": "COMPLETED"}},
         ]
+        mock_lambda_client.invoke.return_value = {}
         response = client.post(
             "/leagues?requestType=REFRESH",
             json={"leagueId": "123", "platform": "SLEEPER"},
         )
-        assert response.status_code == 409
-        assert "in progress" in response.json()["detail"].lower()
+        assert response.status_code == 201
+
+    def test_onboard_creates_job_status_item(
+        self, client, mock_table, mock_lambda_client
+    ):
+        mock_table.get_item.return_value = {}
+        mock_lambda_client.invoke.return_value = {}
+        response = client.post(
+            "/leagues",
+            json={"leagueId": "123", "platform": "SLEEPER", "season": "2024"},
+        )
+        assert response.status_code == 201
+        job_puts = [
+            c
+            for c in mock_table.put_item.call_args_list
+            if c.kwargs["Item"]["PK"].startswith("JOB#")
+        ]
+        assert len(job_puts) == 1
+        item = job_puts[0].kwargs["Item"]
+        assert item["status"] == "IN_PROGRESS"
+        assert item["request_type"] == "ONBOARD"
+        assert "ttl" in item
+
+    def test_refresh_sets_active_job_pointer(
+        self,
+        client,
+        mock_table,
+        mock_lambda_client,
+        league_lookup_item,
+        league_metadata_item,
+    ):
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+        ]
+        mock_lambda_client.invoke.return_value = {}
+        response = client.post(
+            "/leagues?requestType=REFRESH",
+            json={"leagueId": "123", "platform": "SLEEPER"},
+        )
+        assert response.status_code == 201
+        active_updates = [
+            c
+            for c in mock_table.update_item.call_args_list
+            if "active_job_id" in c.kwargs.get("UpdateExpression", "")
+        ]
+        assert active_updates
 
     def test_refresh_returns_429_when_within_cooldown(
         self, client, mock_table, league_lookup_item, league_metadata_item
@@ -766,35 +803,48 @@ class TestMigrateLeagueEndpoint:
         assert parsed["body"]["leagueId"] == "456"
         assert parsed["body"]["platform"] == "SLEEPER"
 
-    def test_returns_409_when_onboarding_in_progress(
+    def test_migration_creates_job_and_active_pointer(
         self,
         client,
         mock_table,
+        mock_lambda_client,
         league_lookup_item,
         league_metadata_item,
     ):
-        league_metadata_item["onboarding_status"] = "IN_PROGRESS"
-        mock_table.get_item.side_effect = [
-            {"Item": league_lookup_item},
-            {"Item": league_metadata_item},
-        ]
+        self._setup_success_mocks(
+            mock_table, mock_lambda_client, league_lookup_item, league_metadata_item
+        )
         response = client.post(
             "/leagues/123/migrate?platform=SLEEPER", json=self._PAYLOAD
         )
-        assert response.status_code == 409
-        assert "in progress" in response.json()["detail"].lower()
+        assert response.status_code == 202
+        job_puts = [
+            c
+            for c in mock_table.put_item.call_args_list
+            if c.kwargs["Item"]["PK"].startswith("JOB#")
+        ]
+        assert len(job_puts) == 1
+        assert job_puts[0].kwargs["Item"]["request_type"] == "MIGRATE"
+        active_updates = [
+            c
+            for c in mock_table.update_item.call_args_list
+            if "active_job_id" in c.kwargs.get("UpdateExpression", "")
+        ]
+        assert active_updates
 
-    def test_returns_409_when_refresh_in_progress(
+    def test_returns_409_when_job_in_progress(
         self,
         client,
         mock_table,
         league_lookup_item,
         league_metadata_item,
     ):
-        league_metadata_item["refresh_status"] = "IN_PROGRESS"
+        # An active_job_id pointing at an IN_PROGRESS job blocks a migration.
+        league_metadata_item["active_job_id"] = _JOB_ID
         mock_table.get_item.side_effect = [
             {"Item": league_lookup_item},
             {"Item": league_metadata_item},
+            {"Item": {"status": "IN_PROGRESS"}},
         ]
         response = client.post(
             "/leagues/123/migrate?platform=SLEEPER", json=self._PAYLOAD

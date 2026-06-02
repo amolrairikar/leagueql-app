@@ -146,7 +146,7 @@ class TestOnboardingServiceRun:
 
         with (
             patch.object(
-                onboarder_onboarding_service, "write_onboarding_status_to_dynamodb"
+                onboarder_onboarding_service, "write_league_records"
             ) as mock_ddb,
             patch.object(
                 onboarder_onboarding_service, "upload_results_to_s3"

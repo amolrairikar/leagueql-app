@@ -122,12 +122,13 @@ def league_lookup_item():
 
 @pytest.fixture
 def league_metadata_item():
+    # Status no longer lives on METADATA — it is tracked in the JOB_STATUS item.
+    # By default there is no in-flight job (no active_job_id), so the concurrency
+    # guard lets requests through; guard tests add active_job_id explicitly.
     return {
         "PK": "LEAGUE#canonical-abc",
         "SK": "METADATA",
         "league_name": "Test League",
-        "onboarding_status": "COMPLETED",
-        "refresh_status": "COMPLETED",
     }
 
 

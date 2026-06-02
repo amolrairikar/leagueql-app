@@ -36,12 +36,16 @@ from main import (
 )
 from helpers import (
     convert_decimals,
+    create_job_status,
     delete_all_league_items,
+    get_job_status,
     get_latest_stored_matchup,
     get_league_metadata,
     get_league_seasons,
     get_nfl_state,
+    is_job_in_progress,
     lookup_league,
+    set_active_job,
     update_league_count,
 )
 
@@ -85,34 +89,35 @@ def get_league(
     )
 
 
-@router.get("/leagues/{leagueId}/refresh_status", status_code=status.HTTP_200_OK)
-def get_refresh_status(
-    leagueId: Annotated[
-        str, Path(description="The ID of the fantasy league", pattern=r"^\d+$")
-    ],
-    platform: Annotated[Platform, Query(description="The platform the league is on")],
-    refreshOperation: Annotated[
-        RequestType,
-        Query(
-            description="The type of refresh ('ONBOARD' or 'REFRESH') to check the status of"
+@router.get("/jobs/{jobId}", status_code=status.HTTP_200_OK)
+def get_job(
+    jobId: Annotated[
+        str,
+        Path(
+            description="The job (correlation) ID returned when onboarding/refresh was triggered",
+            pattern=r"^[0-9a-fA-F-]{36}$",
         ),
     ],
     response: Response,
 ) -> APIResponse:
-    """Gets the refresh status for a given league."""
-    canonical_league_id = lookup_league(league_id=leagueId, platform=platform)
-    league_metadata = get_league_metadata(canonical_league_id=canonical_league_id)
-    if refreshOperation in (RequestType.ONBOARD, RequestType.MIGRATE):
-        refresh_status = league_metadata.get("onboarding_status", "FAILED")
-    else:
-        refresh_status = league_metadata.get("refresh_status", "FAILED")
+    """
+    Gets the status of an onboard/refresh/migrate job.
 
+    Returns the job's status plus a user-friendly failure_reason when it failed.
+    A missing item (never created, or expired after its 24h TTL) is reported as
+    FAILED so the frontend stops polling.
+    """
+    job = get_job_status(correlation_id=jobId)
     response.headers["Cache-Control"] = "no-store"
+    if not job:
+        logger.info("No JOB_STATUS found for job %s; reporting FAILED", jobId)
+        return APIResponse(detail="Job not found", data={"status": "FAILED"})
     return APIResponse(
-        detail="Found refresh status",
+        detail="Found job status",
         data={
-            "refresh_operation": refreshOperation.value,
-            "refresh_status": refresh_status,
+            "status": job.get("status", "FAILED"),
+            "failure_code": job.get("failure_code"),
+            "failure_reason": job.get("failure_reason"),
         },
     )
 
@@ -164,10 +169,7 @@ def onboard_league(
 
     if requestType == RequestType.REFRESH and canonical_league_id:
         league_metadata = get_league_metadata(canonical_league_id)
-        if (
-            league_metadata.get("refresh_status") == "IN_PROGRESS"
-            or league_metadata.get("onboarding_status") == "IN_PROGRESS"
-        ):
+        if is_job_in_progress(league_metadata):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="A refresh is already in progress for this league",
@@ -203,6 +205,16 @@ def onboard_league(
         "Refreshing existing league" if canonical_league_id else "New league detected"
     )
     logger.info("%s, proceeding with Lambda trigger...", log_msg)
+
+    create_job_status(
+        correlation_id=correlation_id,
+        request_type=requestType.value,
+        league_id=payload.leagueId,
+        platform=platform.value,
+        canonical_league_id=canonical_league_id,
+    )
+    if canonical_league_id:
+        set_active_job(canonical_league_id, correlation_id)
 
     try:
         invoke_onboarder(
@@ -306,10 +318,7 @@ def migrate_league(
     )
 
     league_metadata = get_league_metadata(canonical_league_id)
-    if (
-        league_metadata.get("onboarding_status") == "IN_PROGRESS"
-        or league_metadata.get("refresh_status") == "IN_PROGRESS"
-    ):
+    if is_job_in_progress(league_metadata):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="An operation is already in progress for this league",
@@ -326,6 +335,14 @@ def migrate_league(
     except HTTPException as e:
         if e.status_code != status.HTTP_404_NOT_FOUND:
             raise
+
+    create_job_status(
+        correlation_id=correlation_id,
+        request_type="MIGRATE",
+        league_id=leagueId,
+        platform=platform.value,
+        canonical_league_id=canonical_league_id,
+    )
 
     now_iso = datetime.now(timezone.utc).isoformat()
 
@@ -352,14 +369,14 @@ def migrate_league(
             Key={"PK": f"LEAGUE#{canonical_league_id}", "SK": "METADATA"},
             UpdateExpression=(
                 "SET active_platform = :ap, migrated_from = :mf, "
-                "migrated_at = :ma, onboarding_status = :os, #p = :ap"
+                "migrated_at = :ma, active_job_id = :ajid, #p = :ap"
             ),
             ExpressionAttributeNames={"#p": "platform"},
             ExpressionAttributeValues={
                 ":ap": payload.newPlatform.value,
                 ":mf": platform.value,
                 ":ma": now_iso,
-                ":os": "IN_PROGRESS",
+                ":ajid": correlation_id,
             },
         )
     except botocore.exceptions.ClientError as e:
