@@ -26,7 +26,7 @@ export const POSITION_COLORS: Record<string, PositionColorMeta> = {
     tc: '#085041',
     label: 'Running backs',
   },
-  TE: { color: '#BA7517', bg: '#FAEEDA', tc: '#633806', label: 'Tight ends' },
+  TE: { color: '#be185d', bg: '#FCE7F0', tc: '#9D174D', label: 'Tight ends' },
   DEF: { color: '#185FA5', bg: '#E6F1FB', tc: '#0C447C', label: 'Defenses' },
   K: { color: '#5F5E5A', bg: '#F1EFE8', tc: '#444441', label: 'Kickers' },
 };

@@ -51,8 +51,8 @@ export const SLIDES: Slide[] = [
     image: managerHistoryScreenshot,
   },
   {
-    title: 'Draft Recap',
-    url: 'leagueql.app/draft_recap',
+    title: 'Draft Grades',
+    url: 'leagueql.app/draft_grades',
     caption: 'Draft picks and their season performance',
     image: draftRecapScreenshot,
   },

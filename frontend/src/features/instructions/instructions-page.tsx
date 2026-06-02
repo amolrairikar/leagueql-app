@@ -18,7 +18,7 @@ const TOC_ITEMS = [
   { id: 'playoff-bracket', label: 'Playoff Bracket', level: 2 },
   { id: 'manager-comparison', label: 'Manager Comparison', level: 2 },
   { id: 'manager-history', label: 'Manager History', level: 2 },
-  { id: 'draft-recap', label: 'Draft Recap', level: 2 },
+  { id: 'draft-grades', label: 'Draft Grades', level: 2 },
   { id: 'player-records', label: 'Player Records', level: 2 },
   { id: 'matchup-records', label: 'Matchup Records', level: 2 },
   { id: 'managing-your-league', label: 'Managing Your League', level: 1 },
@@ -566,7 +566,7 @@ export default function InstructionsPage() {
               </div>
 
               <div>
-                <SubHeading id="draft-recap">Draft Recap</SubHeading>
+                <SubHeading id="draft-grades">Draft Grades</SubHeading>
                 <p className="text-muted-foreground leading-relaxed mb-2">
                   A season-by-season breakdown of how each draft played out.
                 </p>
