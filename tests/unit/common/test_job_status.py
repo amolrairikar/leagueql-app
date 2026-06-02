@@ -26,6 +26,9 @@ class TestClassifyHttpError:
             job_status.classify_http_error(_FakeHttpError(status_code)) == "ESPN_AUTH"
         )
 
+    def test_not_found_maps_to_not_found(self):
+        assert job_status.classify_http_error(_FakeHttpError(404)) == "NOT_FOUND"
+
     @pytest.mark.parametrize("status_code", [429, 500, 502, 503])
     def test_other_status_maps_to_upstream(self, status_code):
         assert job_status.classify_http_error(_FakeHttpError(status_code)) == "UPSTREAM"

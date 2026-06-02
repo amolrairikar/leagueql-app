@@ -72,20 +72,23 @@ def classify_http_error(exc: Exception) -> str:
     """
     Map an HTTP-ish exception to a JOB_STATUS failure_code.
 
-    A 401/403 from an upstream platform means the user's credentials were
-    rejected (the common case being expired ESPN cookies); anything else from
-    an upstream call is treated as a transient upstream failure.
+    A 401/403 means the user's credentials were rejected (commonly expired ESPN
+    cookies); a 404 means the league genuinely does not exist on the platform
+    (e.g. a mistyped league ID); anything else is treated as a transient upstream
+    failure.
 
     Args:
         exc: The raised exception (e.g. requests.exceptions.HTTPError).
 
     Returns:
-        "ESPN_AUTH" for auth failures, otherwise "UPSTREAM".
+        "ESPN_AUTH" for auth failures, "NOT_FOUND" for 404s, otherwise "UPSTREAM".
     """
     response = getattr(exc, "response", None)
     status_code = getattr(response, "status_code", None)
     if status_code in (401, 403):
         return "ESPN_AUTH"
+    if status_code == 404:
+        return "NOT_FOUND"
     return "UPSTREAM"
 
 
