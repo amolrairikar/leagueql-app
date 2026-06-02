@@ -1,0 +1,29 @@
+# FE-015: Demo Mode
+
+## Description
+Lets visitors explore the full app experience with sample data, without signing in or
+connecting a real league. When demo mode is active, protected routes are accessible without
+authentication, API calls are served from local demo fixtures, and a persistent banner
+reminds the user they're viewing sample data.
+
+## Scope
+- Detection: `isDemoMode()` (`src/lib/cookie-handler.ts`).
+- Demo data: `src/lib/demo-api.ts`, `src/lib/demo-constants.ts`.
+- Banner + auth bypass: `AppLayout` / `ProtectedRoute` (`src/app/app.tsx`).
+
+## Edge Cases
+- **Auth bypass:** in demo mode `ProtectedRoute` renders children without requiring sign-in.
+- **No real API calls:** queries resolve from demo fixtures, not live endpoints.
+- **Connect/refresh in demo mode:** onboarding/refresh/migrate actions are disabled or
+  redirected (no real backend mutation).
+- **Exiting demo mode:** returning to the real app clears demo state.
+- **Banner visibility:** the demo banner shows on every in-app page while demo mode is active.
+
+## Acceptance Criteria
+- [ ] With demo mode active, all analytics pages render using demo fixtures without sign-in.
+- [ ] The demo banner is shown on every in-app page in demo mode.
+- [ ] No live backend mutations occur from within demo mode.
+- [ ] Live API calls are not made for demo data.
+
+## Sources
+`src/lib/cookie-handler.ts`, `src/lib/demo-api.ts`, `src/lib/demo-constants.ts`, `src/app/app.tsx`.
