@@ -617,7 +617,7 @@ function SeasonScheduleDialog({
   return (
     <Dialog open={season !== null} onOpenChange={(open) => !open && onClose()}>
       <DialogContent
-        className={`max-h-[90vh] overflow-y-auto ${
+        className={`max-h-[85vh] overflow-y-auto ${
           selectedGame ? 'sm:max-w-4xl' : 'sm:max-w-lg'
         }`}
         showCloseButton={!selectedGame}
@@ -634,7 +634,7 @@ function SeasonScheduleDialog({
                     : ''}
                 </DialogDescription>
               </DialogHeader>
-              <div className="md:max-h-[60vh] md:overflow-y-auto -mx-1 px-1 mt-4">
+              <div className="max-h-[55vh] overflow-y-auto md:max-h-[60vh] -mx-1 px-1 mt-4">
                 <table className="w-full text-[13px] border-separate border-spacing-0">
                   <thead>
                     <tr className="text-[10px] uppercase tracking-[0.06em] text-muted-foreground">
