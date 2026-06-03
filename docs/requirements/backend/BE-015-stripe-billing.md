@@ -23,7 +23,10 @@ event-driven webhook.
   league `METADATA` (conditional write — see Idempotency Layer 1), creates a Stripe Checkout
   Session in `subscription` mode with `subscription_data.metadata.canonical_league_id` and
   `subscription_data.trial_period_days` (included only when the league has no `trial_used`
-  marker — see the trial edge case), and returns the session URL. Returns `409` when the
+  marker — see the trial edge case), sets `allow_promotion_codes=True` so the Stripe-hosted
+  page renders an "Add promotion code" field, and returns the session URL. Customers redeem a
+  **promotion code** (a customer-facing code mapped to a Stripe coupon — e.g. the founders
+  100%-off coupon), not a bare coupon, which has no redeemable code. Returns `409` when the
   league already has an active subscription or an unexpired in-flight checkout.
 - **Webhook endpoint / Lambda** (no Clerk auth; `Stripe-Signature` verified): `POST
   /stripe/webhook` — on `checkout.session.completed`,

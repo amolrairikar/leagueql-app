@@ -77,6 +77,7 @@ class TestCheckoutSessionEndpoint:
             == "canonical-abc"
         )
         assert kwargs["mode"] == "subscription"
+        assert kwargs["allow_promotion_codes"] is True
 
     def test_omits_trial_when_already_used(
         self,
