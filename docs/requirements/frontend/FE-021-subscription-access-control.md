@@ -8,16 +8,28 @@ reads the current league's `subscription_end_time` (from `GET /leagues/{id}` via
 with an inline "Subscription required" paywall while keeping the sidebar and header visible.
 The sidebar's former "Request a Feature" item is replaced with a "Manage Subscription" item that
 opens a (currently skeleton) subscription dialog — the real Clerk/Stripe billing UI is a later
-task. Backend enforcement is covered by [BE-014](../backend/BE-014-subscription-access-control.md).
+task. When the current league's subscription is active but lapses within
+`SUBSCRIPTION_EXPIRY_WARNING_DAYS` (14) days, a red alert dot is overlaid on the item's icon as an
+early-renewal nudge. Backend enforcement is covered by
+[BE-014](../backend/BE-014-subscription-access-control.md).
+
+The guard and the sidebar dot both read subscription state through one shared hook,
+`useSubscription` (`frontend/src/features/subscription/use-subscription.ts`), so they fetch the
+current league's `subscription_end_time` through a single path with identical bypass/error
+handling.
 
 ## Scope
+- Shared hook: `frontend/src/features/subscription/use-subscription.ts` — reads the current
+  league's `subscription_end_time` via `getLeague()` (`src/components/api/leagues.ts`) using
+  `getLeagueCookies()` for `leagueId`/`platform`, and derives `loading` / `isActive` /
+  `expiringSoon`.
 - Guard: `frontend/src/features/subscription/subscription-guard.tsx` wraps `AppLayout` children
-  in `src/app/app.tsx`. Uses `getLeagueCookies()` for the current `leagueId`/`platform` and
-  `getLeague()` (`src/components/api/leagues.ts`) for `subscription_end_time`.
+  in `src/app/app.tsx`. Consumes `useSubscription`.
 - Paywall: `frontend/src/features/subscription/subscription-required.tsx` (inline, rendered
   inside the app layout) with a button that opens the manage dialog.
 - Dialog: `frontend/src/features/subscription/manage-subscription-dialog.tsx` (skeleton).
-- Sidebar: `frontend/src/features/sidebar/app-sidebar.tsx` — "Manage Subscription" item.
+- Sidebar: `frontend/src/features/sidebar/app-sidebar.tsx` — "Manage Subscription" item plus the
+  expiring-soon alert dot.
 
 ## Edge Cases
 - **Loading:** while `getLeague` resolves, show a spinner rather than the paywall.
@@ -27,6 +39,13 @@ task. Backend enforcement is covered by [BE-014](../backend/BE-014-subscription-
 - **No league connected:** behaves like the rest of the app when cookies are empty (the
   guard does not crash on a missing league).
 - **Manage Subscription dialog:** opens/closes; content is a placeholder skeleton for now.
+- **Expiring-soon dot:** shown only when the subscription is active *and* `subscription_end_time`
+  is within `SUBSCRIPTION_EXPIRY_WARNING_DAYS` (14) days. An expired subscription shows the paywall
+  (not the dot); a subscription expiring further out shows neither.
+- **Dot visibility while collapsed:** the dot is overlaid on the icon (not the hidden label), so it
+  remains visible when the sidebar is collapsed to icons.
+- **Dot during load / error / demo / no league:** the dot is hidden (the hook reports active and
+  non-expiring in the bypass and error cases, and `expiringSoon` is false while loading).
 
 ## Acceptance Criteria
 - [ ] Analytics routes show the inline paywall when the current league's subscription is
@@ -36,6 +55,9 @@ task. Backend enforcement is covered by [BE-014](../backend/BE-014-subscription-
 - [ ] Demo mode bypasses the subscription gate.
 - [ ] The sidebar shows "Manage Subscription" (replacing "Request a Feature") and clicking it
       opens the subscription dialog.
+- [ ] A red alert dot appears on the "Manage Subscription" icon when the current league's
+      subscription is active but expires within 14 days, and is hidden otherwise (active >14 days
+      out, expired, loading, demo mode, or no league).
 
 ## Sources
 `src/features/subscription/`, `src/app/app.tsx`, `src/features/sidebar/app-sidebar.tsx`,

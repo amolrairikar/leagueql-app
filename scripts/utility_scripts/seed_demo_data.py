@@ -1224,7 +1224,6 @@ def build_all_items() -> list[dict]:
             "migrated_from": PLATFORM,
             "migrated_at": MIGRATED_AT,
             "league_name": DEMO_LEAGUE_NAME,
-            "onboarding_status": "COMPLETED",
             "onboarded_at": ONBOARDED_AT,
         }
     )

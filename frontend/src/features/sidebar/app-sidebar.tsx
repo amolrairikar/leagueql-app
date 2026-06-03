@@ -46,6 +46,7 @@ import {
 } from '@/components/ui/sidebar';
 import { deleteLeague } from '@/features/sidebar/api-calls';
 import { ManageSubscriptionDialog } from '@/features/subscription/manage-subscription-dialog';
+import { useSubscription } from '@/features/subscription/use-subscription';
 import { clearApiCache } from '@/lib/api-client';
 import {
   clearAllLeagueCookies,
@@ -79,6 +80,8 @@ export function AppSidebar() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [subscriptionDialogOpen, setSubscriptionDialogOpen] = useState(false);
+
+  const { expiringSoon } = useSubscription();
 
   const demoMode = isDemoMode();
 
@@ -204,15 +207,32 @@ export function AppSidebar() {
                   </SidebarMenuItem>
                   <SidebarMenuItem>
                     <SidebarMenuButton
-                      tooltip="Manage Subscription"
+                      tooltip={
+                        expiringSoon
+                          ? 'Manage Subscription — expiring soon'
+                          : 'Manage Subscription'
+                      }
                       className="cursor-pointer"
                       onClick={() => {
                         closeMobileSidebar();
                         setSubscriptionDialogOpen(true);
                       }}
                     >
-                      <CreditCard />
-                      <span>Manage Subscription</span>
+                      <span className="relative flex shrink-0 items-center justify-center">
+                        <CreditCard />
+                        {expiringSoon && (
+                          <span
+                            aria-hidden="true"
+                            className="absolute -top-1 -right-1 size-2 rounded-full bg-destructive ring-2 ring-sidebar"
+                          />
+                        )}
+                      </span>
+                      <span>
+                        Manage Subscription
+                        {expiringSoon && (
+                          <span className="sr-only"> (expiring soon)</span>
+                        )}
+                      </span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                   <SidebarMenuItem>
