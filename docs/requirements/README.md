@@ -56,6 +56,8 @@ criteria. Frontend, backend, and extension features are kept separate.
 | [FE-019](frontend/FE-019-authentication.md) | Authentication & Protected Routes |
 | [FE-020](frontend/FE-020-theme-toggle.md) | Theme (Light/Dark Mode) |
 | [FE-021](frontend/FE-021-subscription-access-control.md) | Subscription Access Control |
+| [FE-022](frontend/FE-022-subscription-checkout.md) | Subscription Checkout (Making Payments) |
+| [FE-023](frontend/FE-023-subscription-management.md) | Subscription Management (Billing Portal) |
 
 ## Extension (`extension/`)
 | ID | Feature |

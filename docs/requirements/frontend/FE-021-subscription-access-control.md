@@ -7,8 +7,10 @@ reads the current league's `subscription_end_time` (from `GET /leagues/{id}` via
 `getLeague` accessor) and, when the subscription is expired or absent, replaces the page content
 with an inline "Subscription required" paywall while keeping the sidebar and header visible.
 The sidebar's former "Request a Feature" item is replaced with a "Manage Subscription" item that
-opens a (currently skeleton) subscription dialog — the real Clerk/Stripe billing UI is a later
-task. When the current league's subscription is active but lapses within
+opens the subscription dialog. This feature owns the dialog **shell** and the gating; the dialog's
+real billing content is provided by checkout ([FE-022](FE-022-subscription-checkout.md)) and the
+billing portal ([FE-023](FE-023-subscription-management.md)). When the current league's
+subscription is active but lapses within
 `SUBSCRIPTION_EXPIRY_WARNING_DAYS` (14) days, a red alert dot is overlaid on the item's icon as an
 early-renewal nudge. Backend enforcement is covered by
 [BE-014](../backend/BE-014-subscription-access-control.md).
@@ -38,7 +40,9 @@ handling.
 - **Demo mode:** the guard bypasses entirely (no subscription concept in demo).
 - **No league connected:** behaves like the rest of the app when cookies are empty (the
   guard does not crash on a missing league).
-- **Manage Subscription dialog:** opens/closes; content is a placeholder skeleton for now.
+- **Manage Subscription dialog:** opens/closes; its billing content (Subscribe / Manage billing)
+  is defined by [FE-022](FE-022-subscription-checkout.md) and
+  [FE-023](FE-023-subscription-management.md).
 - **Expiring-soon dot:** shown only when the subscription is active *and* `subscription_end_time`
   is within `SUBSCRIPTION_EXPIRY_WARNING_DAYS` (14) days. An expired subscription shows the paywall
   (not the dot); a subscription expiring further out shows neither.
