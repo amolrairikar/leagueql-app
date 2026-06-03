@@ -16,9 +16,10 @@ is an interim, spoofable stopgap that BE-015 supersedes and removes.
 - Helper: `require_active_subscription(canonical_league_id)` (`src/api/helpers.py`) — reads the
   `METADATA` item via `get_league_metadata` and raises `402 Subscription required` when
   `subscription_end_time` is absent or `<= now` (UTC).
-- Write helper: `update_subscription_end_time(canonical_league_id, end_time)`
-  (`src/api/helpers.py`) — the sole write path for `subscription_end_time`, called by the
-  Stripe billing webhook ([BE-015](BE-015-stripe-billing.md)).
+- Write path: `common.subscription` (`record_active_subscription` / `expire_subscription`,
+  `src/common/subscription.py`) — the sole writer of `subscription_end_time`, called by the
+  Stripe billing webhook ([BE-015](BE-015-stripe-billing.md)). (This replaced the earlier
+  `update_subscription_end_time` helper, which is removed.)
 - **Gated** endpoints (`src/api/routes.py`): `GET /leagues/{id}/query`,
   `POST /leagues/{id}/migrate`, `POST /leagues/{id}/espn_members`, and `POST /leagues`
   **only on the REFRESH path for an already-onboarded league**.
@@ -51,6 +52,7 @@ is an interim, spoofable stopgap that BE-015 supersedes and removes.
       [BE-015](BE-015-stripe-billing.md), which is that feature's Lambda, not this one's.)
 
 ## Sources
-`src/api/helpers.py` (`require_active_subscription`, `update_subscription_end_time`),
+`src/api/helpers.py` (`require_active_subscription`),
+`src/common/subscription.py` (`record_active_subscription`, `expire_subscription`),
 `src/api/routes.py`, `docs/db/dynamodb_spec.md` (METADATA `subscription_end_time`),
 `docs/api/openapi_spec.yaml`.

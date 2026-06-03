@@ -101,7 +101,10 @@ the league will not appear as onboarded and a retry will re-run the full onboard
 | `onboarded_at` | String | Yes | ISO 8601 timestamp of when the league was onboarded |
 | `last_refresh_at` | String | No | ISO 8601 timestamp of when the most recent refresh completed successfully. Used to enforce the per-league refresh cooldown. |
 | `league_name` | String | No | League name from the most recent season's settings |
-| `subscription_end_time` | String | No | ISO 8601 (UTC) timestamp marking when the league's subscription/trial lapses. Access is granted while `now < subscription_end_time`; an **absent** value is treated as expired (no access). Written at onboarding when supplied by the billing provider (Clerk/Stripe). |
+| `subscription_end_time` | String | No | ISO 8601 (UTC) timestamp marking when the league's subscription/trial lapses. Access is granted while `now < subscription_end_time`; an **absent** value is treated as expired (no access). Written **only** by the Stripe billing webhook (BE-015). |
+| `stripe_subscription_id` | String | No | The Stripe subscription backing this league's access. Claimed by the webhook (BE-015) and used to scope cancellation/terminal writes and duplicate-subscription reconciliation. |
+| `pending_checkout` | Map | No | In-flight checkout marker `{ token, expires_at }` claimed by `POST /leagues/{id}/checkout-session` to block a concurrent second checkout; cleared by the webhook on success and self-heals after `expires_at` (BE-015). |
+| `trial_used` | Boolean | No | Set the first time a trial is granted for this league; once present, future subscriptions for the league are created without a trial (BE-015). |
 
 **Example:**
 ```json
@@ -110,6 +113,51 @@ the league will not appear as onboarded and a retry will re-run the full onboard
   "SK": "METADATA",
   "platform": "ESPN",
   "onboarded_at": "2024-09-01T00:00:00Z"
+}
+```
+</details>
+
+<details>
+<summary><b>USER</b></summary>
+
+Maps a Clerk user to their Stripe customer so a single payer can hold multiple
+per-league subscriptions (BE-015). Created lazily on the user's first checkout.
+
+| Attribute | Type | Required | Description |
+|---|---|---|---|
+| `PK` | String | Yes | `USER#{clerk_user_id}` |
+| `SK` | String | Yes | `USER` |
+| `stripe_customer_id` | String | Yes | The Stripe customer ID for this user |
+
+**Example:**
+```json
+{
+  "PK": "USER#user_2abc123",
+  "SK": "USER",
+  "stripe_customer_id": "cus_ABC123"
+}
+```
+</details>
+
+<details>
+<summary><b>WEBHOOK_EVENT</b></summary>
+
+Idempotency marker recording that a Stripe webhook event has been processed, so
+Stripe's at-least-once redelivery is not applied twice (BE-015). Written **after**
+the event is processed successfully; carries a TTL so old markers self-clean.
+
+| Attribute | Type | Required | Description |
+|---|---|---|---|
+| `PK` | String | Yes | `WEBHOOK_EVENT#{stripe_event_id}` |
+| `SK` | String | Yes | `WEBHOOK_EVENT` |
+| `ttl` | Number | Yes | Unix epoch seconds at which DynamoDB TTL reaps the marker (7 days after processing) |
+
+**Example:**
+```json
+{
+  "PK": "WEBHOOK_EVENT#evt_1abc",
+  "SK": "WEBHOOK_EVENT",
+  "ttl": 1893456000
 }
 ```
 </details>

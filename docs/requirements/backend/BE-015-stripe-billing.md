@@ -28,19 +28,19 @@ event-driven webhook.
 - **Webhook endpoint / Lambda** (no Clerk auth; `Stripe-Signature` verified): `POST
   /stripe/webhook` — on `checkout.session.completed`,
   `customer.subscription.created|updated`, and `invoice.paid`, calls
-  `update_subscription_end_time(canonical_league_id, trial_end | current_period_end)`; on
-  `customer.subscription.deleted` or terminal payment failure, sets `subscription_end_time`
-  to the past (gate flips to expired live).
+  `common.subscription.record_active_subscription(...)`; on `customer.subscription.deleted`
+  or terminal payment failure, calls `common.subscription.expire_subscription(...)` which sets
+  `subscription_end_time` to the past (gate flips to expired live).
 - **Billing portal endpoint** (Clerk-authed): `POST /billing-portal-session` — returns a
   Stripe Billing Portal URL for the user's Customer (update card / cancel). Cancellation is
   configured to take effect **immediately** (not at period end). Backs the frontend "Manage
   Subscription" dialog ([FE-021](../frontend/FE-021-subscription-access-control.md)).
-- **Mapping (planned schema):** `stripe_customer_id` stored once per user (a
-  `USER#{clerk_user_id}` item); on the league `METADATA` item — `stripe_subscription_id`,
-  `pending_checkout` (in-flight checkout marker `{session_id, expires_at}` with a short TTL,
-  cleared by the webhook on success), and `trial_used` (set when the league's first trial is
-  granted, never cleared); and `canonical_league_id` in the Stripe subscription metadata. To
-  be added to `docs/db/dynamodb_spec.md` when implemented.
+- **Mapping (schema):** `stripe_customer_id` stored once per user (a `USER#{clerk_user_id}`
+  item); on the league `METADATA` item — `stripe_subscription_id`, `pending_checkout`
+  (in-flight checkout marker `{token, expires_at}` with a short TTL, cleared by the webhook on
+  success), and `trial_used` (set when the league's first trial is granted, never cleared); and
+  `canonical_league_id` in the Stripe subscription metadata. Documented in
+  `docs/db/dynamodb_spec.md`.
 - **Secrets & environment mode:** Stripe secret key + webhook signing secret in SSM/Secrets
   Manager, injected to the API and webhook Lambdas (new Terraform). Never committed or logged.
   **DEV uses Stripe sandbox (test) mode and PROD uses live mode** — each environment is
@@ -48,11 +48,11 @@ event-driven webhook.
   `whsec_…` webhook signing secret) and its own mode-specific Price/Product IDs. Test- and
   live-mode objects (Customers, Subscriptions, Prices, webhook endpoints) are fully isolated
   by Stripe, so no resource is shared across environments.
-- **Reuses** BE-014's `require_active_subscription` (enforcement) **unchanged**.
-  `update_subscription_end_time` remains the sole write path but is **extended** from its
-  current unconditional single-attribute `SET` into a **conditional, multi-attribute** update
-  (monotonic guard on `subscription_end_time`, conditional claim of `stripe_subscription_id`,
-  and clearing of `pending_checkout`) — see Idempotency Layer 3.
+- **Reuses** BE-014's `require_active_subscription` (enforcement) **unchanged**. The sole
+  write path is `common.subscription` (`record_active_subscription` / `expire_subscription`) —
+  shared, conditional, multi-attribute writes vendored into both the API and webhook Lambda
+  zips (the webhook is a separate Lambda and cannot import `src/api/helpers.py`). See
+  Idempotency Layer 3.
 
 ## Idempotency
 Stripe delivers webhooks **at-least-once** and may **reorder** them, and the checkout
@@ -93,9 +93,10 @@ provisioning, not duplicate charging.)
     marker **only after** processing succeeds. Recording after success (rather than claiming
     the marker up front) avoids a lost update if the handler fails mid-processing — the
     redelivery is then reprocessed, and Layer-3 convergence makes reprocessing safe.
-- **Layer 3 — state convergence (handles out-of-order):** the write is the extended,
-  conditional `update_subscription_end_time` — a single multi-attribute `UpdateItem` that
-  applies the monotonic guard, claims `stripe_subscription_id`, and clears `pending_checkout`.
+- **Layer 3 — state convergence (handles out-of-order):** the write is
+  `common.subscription.record_active_subscription` — a single conditional, multi-attribute
+  `UpdateItem` that applies the monotonic guard, claims `stripe_subscription_id`, and clears
+  `pending_checkout`.
   - Derive `subscription_end_time` from the subscription's **authoritative current state**
     (refetch via `Subscription.retrieve`) rather than the event payload's delta, so a stale
     event simply re-writes the current value.
@@ -185,21 +186,26 @@ provisioning, not duplicate charging.)
       configured with live mode; neither environment carries the other's keys.
 
 ## Implementation Notes
-- **Extending `update_subscription_end_time` is a breaking change to its current contract.**
-  It goes from an unconditional single-attribute `SET subscription_end_time = :s` to a
-  conditional, multi-attribute `UpdateItem` (monotonic guard, conditional `stripe_subscription_id`
-  claim, `pending_checkout` clear). Its **existing BE-014 unit tests must be updated** to cover
-  the new conditional behavior (advance vs. no-op on stale/regressive writes, the
-  cancellation/terminal-status exception, and the duplicate-subscription claim race). Update the
-  helper, its callers, and its tests together when this lands.
+- **The subscription write moved out of `src/api/helpers.py` into `common/subscription.py`.**
+  The webhook is a separate Lambda and cannot import the API package, so the BE-014
+  `update_subscription_end_time` helper (an unconditional single-attribute `SET`) was removed
+  and replaced by `common.subscription.record_active_subscription` / `expire_subscription`
+  (conditional, multi-attribute writes), vendored into both Lambda zips. The old
+  `TestUpdateSubscriptionEndTime` was removed; coverage now lives in
+  `tests/unit/common/test_subscription.py`.
+- **Deferred to a follow-up infra pass** (per the chosen scope): the Terraform for the new
+  Stripe webhook Lambda + its API Gateway route, the Secrets Manager wiring for the
+  sandbox/live keys, and the `POST /stripe/webhook` path in `openapi_spec.yaml` (it needs a
+  separate webhook-Lambda ARN var, so it was not added to the templated spec yet). The two
+  authenticated endpoints route to the existing API Lambda and are wired in the spec.
 
 ## Sources
-*(Planned — not yet implemented.)*
-`src/api/routes.py` (checkout + billing-portal endpoints), new Stripe webhook Lambda,
-`src/api/helpers.py` (`update_subscription_end_time` — extended to a conditional,
-multi-attribute write; `require_active_subscription` — reused unchanged), `infrastructure/`
-(Stripe secrets, webhook route/Lambda),
-`docs/api/openapi_spec.yaml`, `docs/db/dynamodb_spec.md` (planned `stripe_subscription_id`,
-`pending_checkout`, and `trial_used` on METADATA, `USER` item with `stripe_customer_id`,
-`WEBHOOK_EVENT` dedup item),
+*(Backend implemented; Terraform/CI infra deferred — see Implementation Notes.)*
+`src/api/routes.py` (`create_checkout_session`, `create_billing_portal_session`,
+`get_authenticated_user`), `src/api/helpers.py` (`get_or_create_stripe_customer`,
+`get_stripe_customer_id`, `claim_pending_checkout`; `require_active_subscription` — reused
+unchanged), `src/api/main.py` (Stripe config + `main.stripe`), `src/common/subscription.py`
+(`record_active_subscription`, `expire_subscription`), `src/stripe_webhook/handler.py`,
+`docs/api/openapi_spec.yaml`, `docs/db/dynamodb_spec.md` (`stripe_subscription_id`,
+`pending_checkout`, `trial_used` on METADATA; `USER` item; `WEBHOOK_EVENT` dedup item),
 [BE-014](BE-014-subscription-access-control.md), [BE-001](BE-001-league-onboarding.md).

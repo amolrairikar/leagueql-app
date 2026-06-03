@@ -7,7 +7,7 @@ SNS failure alerting lives in the shared ``common.sns`` module.
 """
 
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from functools import partial
 from typing import Any
@@ -482,20 +482,121 @@ def require_active_subscription(
     )
 
 
-def update_subscription_end_time(canonical_league_id: str, end_time: str) -> None:
+def _is_conditional_check_failure(exc: botocore.exceptions.ClientError) -> bool:
+    """True when a DynamoDB ClientError is a failed ConditionExpression."""
+    return (
+        exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException"
+    )
+
+
+def get_stripe_customer_id(clerk_user_id: str) -> str | None:
+    """Return the Stripe customer ID mapped to a Clerk user, or None if unmapped.
+
+    Reads the ``USER#{clerk_user_id}`` item (BE-015).
     """
-    Sets the subscription end time on a league's METADATA item.
+    try:
+        response = main.table.get_item(
+            Key={"PK": f"USER#{clerk_user_id}", "SK": "USER"}
+        )
+    except botocore.exceptions.ClientError as e:
+        logger.error("Boto error reading user mapping: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to look up billing account",
+        )
+    return response.get("Item", {}).get("stripe_customer_id")
+
+
+def get_or_create_stripe_customer(clerk_user_id: str) -> str:
+    """Resolve (or lazily create) the Stripe customer for a Clerk user.
+
+    Looks up the stored ``USER#{clerk_user_id}`` mapping first; when absent,
+    creates a Stripe Customer with an idempotency key derived from the Clerk user
+    ID (so concurrent first-checkout requests resolve to the *same* customer) and
+    persists the mapping with a conditional write. If a concurrent request wins
+    the write, the existing mapping is re-read and returned (BE-015 Idempotency
+    Layer 1).
+
+    Args:
+        clerk_user_id: The authenticated Clerk user ID (JWT ``sub``).
+
+    Returns:
+        The Stripe customer ID.
+    """
+    existing = get_stripe_customer_id(clerk_user_id)
+    if existing:
+        return existing
+
+    customer = main.stripe.Customer.create(
+        metadata={"clerk_user_id": clerk_user_id},
+        idempotency_key=f"customer:{clerk_user_id}",
+    )
+    customer_id = customer["id"]
+
+    try:
+        main.table.put_item(
+            Item={
+                "PK": f"USER#{clerk_user_id}",
+                "SK": "USER",
+                "stripe_customer_id": customer_id,
+            },
+            ConditionExpression="attribute_not_exists(PK)",
+        )
+        return customer_id
+    except botocore.exceptions.ClientError as e:
+        if not _is_conditional_check_failure(e):
+            logger.error("Boto error writing user mapping: %s", e)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to set up billing account",
+            )
+        # A concurrent request created the mapping first. Because the customer
+        # create used a clerk-user-scoped idempotency key, both calls resolved to
+        # the same Stripe customer, so the stored value matches ours.
+        return get_stripe_customer_id(clerk_user_id) or customer_id
+
+
+def claim_pending_checkout(canonical_league_id: str, token: str) -> bool:
+    """Atomically claim the in-flight checkout slot for a league (BE-015 Layer 1).
+
+    Writes a ``pending_checkout`` marker on the league's METADATA only when the
+    league has no recorded subscription and no *unexpired* in-flight checkout.
+    DynamoDB serializes concurrent attempts, so exactly one wins; the marker's
+    ``expires_at`` lets an abandoned checkout self-heal.
 
     Args:
         canonical_league_id: The canonical league ID.
-        end_time: ISO 8601 (UTC) timestamp when the subscription/trial lapses.
+        token: A per-attempt nonce (also used as the Stripe idempotency key).
+
+    Returns:
+        ``True`` when the slot was claimed; ``False`` when the league already has
+        a subscription or an unexpired in-flight checkout.
     """
-    # TODO(billing): no public/authenticated route exposes this yet. For now the
-    # value is set at onboarding (from the request payload) or manually. A
-    # Clerk/Stripe webhook backed by this helper is the follow-up.
-    main.table.update_item(
-        Key={"PK": f"LEAGUE#{canonical_league_id}", "SK": "METADATA"},
-        UpdateExpression="SET subscription_end_time = :s",
-        ConditionExpression="attribute_exists(PK)",
-        ExpressionAttributeValues={":s": end_time},
-    )
+    now = datetime.now(timezone.utc)
+    expires_at = (
+        now + timedelta(minutes=main.CHECKOUT_PENDING_TTL_MINUTES)
+    ).isoformat()
+    try:
+        main.table.update_item(
+            Key={"PK": f"LEAGUE#{canonical_league_id}", "SK": "METADATA"},
+            UpdateExpression="SET pending_checkout = :pc",
+            ConditionExpression=(
+                "attribute_exists(PK) "
+                "AND attribute_not_exists(stripe_subscription_id) "
+                "AND (attribute_not_exists(pending_checkout) "
+                "OR pending_checkout.expires_at < :now)"
+            ),
+            ExpressionAttributeValues={
+                ":pc": {"token": token, "expires_at": expires_at},
+                ":now": now.isoformat(),
+            },
+        )
+        return True
+    except botocore.exceptions.ClientError as e:
+        if _is_conditional_check_failure(e):
+            return False
+        logger.error("Boto error claiming pending checkout: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to start checkout",
+        )

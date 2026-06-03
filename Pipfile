@@ -16,6 +16,7 @@ newrelic = "*"
 pandas = "*"
 requests = "*"
 uvicorn = "*"
+stripe = "*"
 
 [dev-packages]
 behave = "*"

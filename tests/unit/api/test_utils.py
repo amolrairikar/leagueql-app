@@ -5,11 +5,27 @@ JSON logging (``JsonFormatter`` / ``setup_logger``) is shared code now exercised
 """
 
 from decimal import Decimal
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import botocore.exceptions
 import pytest
 from fastapi import HTTPException
+
+
+def _conditional_error() -> botocore.exceptions.ClientError:
+    """A DynamoDB ClientError representing a failed ConditionExpression."""
+    return botocore.exceptions.ClientError(
+        {"Error": {"Code": "ConditionalCheckFailedException", "Message": "x"}},
+        "UpdateItem",
+    )
+
+
+def _boto_error() -> botocore.exceptions.ClientError:
+    """A generic (non-conditional) DynamoDB ClientError."""
+    return botocore.exceptions.ClientError(
+        {"Error": {"Code": "ProvisionedThroughputExceededException", "Message": "x"}},
+        "UpdateItem",
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -176,17 +192,104 @@ class TestUpdateLeagueCount:
         )
 
 
-class TestUpdateSubscriptionEndTime:
-    def test_sets_end_time_on_metadata_item(self, mock_table):
-        from main import update_subscription_end_time
+class TestGetStripeCustomerId:
+    def test_returns_id_when_mapped(self, mock_table):
+        from main import get_stripe_customer_id
 
-        update_subscription_end_time("canonical-abc", "2026-07-01T00:00:00+00:00")
-        mock_table.update_item.assert_called_once_with(
-            Key={"PK": "LEAGUE#canonical-abc", "SK": "METADATA"},
-            UpdateExpression="SET subscription_end_time = :s",
-            ConditionExpression="attribute_exists(PK)",
-            ExpressionAttributeValues={":s": "2026-07-01T00:00:00+00:00"},
-        )
+        mock_table.get_item.return_value = {
+            "Item": {"PK": "USER#u1", "SK": "USER", "stripe_customer_id": "cus_1"}
+        }
+        assert get_stripe_customer_id("u1") == "cus_1"
+
+    def test_returns_none_when_unmapped(self, mock_table):
+        from main import get_stripe_customer_id
+
+        mock_table.get_item.return_value = {}
+        assert get_stripe_customer_id("u1") is None
+
+    def test_raises_500_on_boto_error(self, mock_table):
+        from main import get_stripe_customer_id
+
+        mock_table.get_item.side_effect = _boto_error()
+        with pytest.raises(HTTPException) as exc:
+            get_stripe_customer_id("u1")
+        assert exc.value.status_code == 500
+
+
+class TestGetOrCreateStripeCustomer:
+    def test_returns_existing_without_creating(self, mock_table):
+        from main import get_or_create_stripe_customer
+
+        mock_table.get_item.return_value = {"Item": {"stripe_customer_id": "cus_1"}}
+        with patch("main.stripe") as mock_stripe:
+            assert get_or_create_stripe_customer("u1") == "cus_1"
+            mock_stripe.Customer.create.assert_not_called()
+
+    def test_creates_and_persists_when_absent(self, mock_table):
+        from main import get_or_create_stripe_customer
+
+        mock_table.get_item.return_value = {}
+        with patch("main.stripe") as mock_stripe:
+            mock_stripe.Customer.create.return_value = {"id": "cus_new"}
+            assert get_or_create_stripe_customer("u1") == "cus_new"
+        _, create_kwargs = mock_stripe.Customer.create.call_args
+        assert create_kwargs["idempotency_key"] == "customer:u1"
+        _, put_kwargs = mock_table.put_item.call_args
+        assert put_kwargs["ConditionExpression"] == "attribute_not_exists(PK)"
+        assert put_kwargs["Item"]["stripe_customer_id"] == "cus_new"
+
+    def test_race_returns_existing_mapping(self, mock_table):
+        from main import get_or_create_stripe_customer
+
+        # First read: unmapped. Second read (after the conditional put loses the
+        # race): the mapping a concurrent request wrote.
+        mock_table.get_item.side_effect = [
+            {},
+            {"Item": {"stripe_customer_id": "cus_winner"}},
+        ]
+        mock_table.put_item.side_effect = _conditional_error()
+        with patch("main.stripe") as mock_stripe:
+            mock_stripe.Customer.create.return_value = {"id": "cus_mine"}
+            assert get_or_create_stripe_customer("u1") == "cus_winner"
+
+    def test_raises_500_on_put_boto_error(self, mock_table):
+        from main import get_or_create_stripe_customer
+
+        mock_table.get_item.return_value = {}
+        mock_table.put_item.side_effect = _boto_error()
+        with patch("main.stripe") as mock_stripe:
+            mock_stripe.Customer.create.return_value = {"id": "cus_new"}
+            with pytest.raises(HTTPException) as exc:
+                get_or_create_stripe_customer("u1")
+        assert exc.value.status_code == 500
+
+
+class TestClaimPendingCheckout:
+    def test_claims_slot_returns_true(self, mock_table):
+        from main import claim_pending_checkout
+
+        assert claim_pending_checkout("canonical-abc", "tok123") is True
+        _, kwargs = mock_table.update_item.call_args
+        cond = kwargs["ConditionExpression"]
+        assert "attribute_not_exists(stripe_subscription_id)" in cond
+        assert "pending_checkout.expires_at < :now" in cond
+        pc = kwargs["ExpressionAttributeValues"][":pc"]
+        assert pc["token"] == "tok123"
+        assert "expires_at" in pc
+
+    def test_returns_false_when_slot_taken(self, mock_table):
+        from main import claim_pending_checkout
+
+        mock_table.update_item.side_effect = _conditional_error()
+        assert claim_pending_checkout("canonical-abc", "tok123") is False
+
+    def test_raises_500_on_boto_error(self, mock_table):
+        from main import claim_pending_checkout
+
+        mock_table.update_item.side_effect = _boto_error()
+        with pytest.raises(HTTPException) as exc:
+            claim_pending_checkout("canonical-abc", "tok123")
+        assert exc.value.status_code == 500
 
 
 class TestRequireActiveSubscription:

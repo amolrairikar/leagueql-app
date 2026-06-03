@@ -356,6 +356,77 @@ paths:
         uri: "arn:aws:apigateway:${aws_region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations"
         payloadFormatVersion: "2.0"   # use 2.0 for HTTP API (v2)
 
+  /leagues/{leagueId}/checkout-session:
+    post:
+      summary: Create a Stripe Checkout Session to subscribe a league
+      description: >
+        Creates a subscription-mode Stripe Checkout Session for the league and
+        returns its URL (BE-015). Resolves/creates the caller's Stripe customer and
+        claims a synchronous in-flight checkout marker; the trial is included only
+        on the league's first subscription. Returns 409 when the league already has
+        a subscription or an unexpired in-flight checkout.
+      operationId: createCheckoutSession
+      parameters:
+        - name: leagueId
+          in: path
+          required: true
+          description: The ID of the fantasy league
+          schema:
+            type: string
+            pattern: '^\d+$'
+            example: "12345678"
+        - name: platform
+          in: query
+          required: true
+          description: The platform the league is on
+          schema:
+            type: string
+            enum: [ESPN, SLEEPER]
+            example: "SLEEPER"
+      responses:
+        "200":
+          $ref: "#/components/responses/BillingSessionResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "404":
+          $ref: "#/components/responses/LeagueNotFoundError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      security:
+        - ClerkJWT: []
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        httpMethod: POST
+        uri: "arn:aws:apigateway:${aws_region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations"
+        payloadFormatVersion: "2.0"
+
+  /billing-portal-session:
+    post:
+      summary: Create a Stripe Billing Portal session
+      description: >
+        Returns a Stripe Billing Portal URL for the authenticated user so they can
+        manage their card or cancel (cancellation takes effect immediately). Returns
+        404 when the caller has no Stripe customer yet (BE-015).
+      operationId: createBillingPortalSession
+      responses:
+        "200":
+          $ref: "#/components/responses/BillingSessionResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "404":
+          $ref: "#/components/responses/NoBillingAccountError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      security:
+        - ClerkJWT: []
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        httpMethod: POST
+        uri: "arn:aws:apigateway:${aws_region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations"
+        payloadFormatVersion: "2.0"
+
 components:
 
   securitySchemes:
@@ -730,3 +801,42 @@ components:
           example:
             error: "Internal server error"
             message: "An unexpected error occurred. Please try again later."
+
+    BillingSessionResponse:
+      description: Stripe session created; the URL to redirect the user to is returned
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: "#/components/schemas/APIResponse"
+              - type: object
+                properties:
+                  data:
+                    type: object
+                    required: [url]
+                    properties:
+                      url:
+                        type: string
+                        format: uri
+                        description: The Stripe-hosted URL to redirect the user to.
+                        example: "https://checkout.stripe.com/c/pay/cs_test_abc123"
+
+    UnauthorizedError:
+      description: No authenticated user (missing or invalid Clerk session)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error: "Unauthorized"
+            message: "Authentication required"
+
+    NoBillingAccountError:
+      description: The caller has no Stripe customer yet
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error: "Not found"
+            message: "No billing account found"
