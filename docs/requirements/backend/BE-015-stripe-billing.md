@@ -37,8 +37,9 @@ event-driven webhook.
   Subscription" dialog ([FE-021](../frontend/FE-021-subscription-access-control.md)).
 - **Mapping (schema):** `stripe_customer_id` stored once per user (a `USER#{clerk_user_id}`
   item); on the league `METADATA` item — `stripe_subscription_id`, `pending_checkout`
-  (in-flight checkout marker `{token, expires_at}` with a short TTL, cleared by the webhook on
-  success), and `trial_used` (set when the league's first trial is granted, never cleared); and
+  (in-flight checkout marker `{token, expires_at, user_id}` with a short TTL, cleared by the
+  webhook on success), and `trial_used` (set when the league's first trial is granted, never
+  cleared); and
   `canonical_league_id` in the Stripe subscription metadata. Documented in
   `docs/db/dynamodb_spec.md`.
 - **Secrets & environment mode:** the Stripe secret key and webhook signing secret are
@@ -79,9 +80,11 @@ provisioning, not duplicate charging.)
     alone is a stale projection, so the check is reinforced by:
     - **Synchronous `pending_checkout` marker:** claim it with a conditional write —
       `attribute_not_exists(stripe_subscription_id) AND (attribute_not_exists(pending_checkout)
-      OR pending_checkout.expires_at < :now)`. DynamoDB serializes concurrent attempts so only
-      one wins; the loser gets `409` and creates no session. The `expires_at` TTL lets an
-      abandoned checkout self-heal so the league is never permanently blocked.
+      OR pending_checkout.expires_at < :now OR pending_checkout.user_id = :uid)`. DynamoDB
+      serializes concurrent attempts so only one wins; a *different* user gets `409` and creates
+      no session, while the **initiating user can re-claim immediately** (so abandoning one's own
+      checkout doesn't block retrying it). The `expires_at` TTL lets a marker held by another
+      user self-heal, and reconciliation backstops any true duplicate subscription.
     - **Authoritative Stripe check (optional belt-and-suspenders):** for the residual window
       where a very late webhook lands after the marker expires, query
       `Subscription.list(customer, status active|trialing)` filtered by
@@ -169,11 +172,14 @@ provisioning, not duplicate charging.)
       `subscription_end_time`.
 - [ ] A single user can hold active subscriptions for multiple leagues simultaneously, each
       gated independently by BE-014.
-- [ ] A second checkout attempt for a league with an active subscription **or** an unexpired
-      `pending_checkout` marker returns `409` and creates no Stripe Checkout Session.
+- [ ] A second checkout attempt for a league with an active subscription, **or** with an
+      unexpired `pending_checkout` marker held by a **different** user, returns `409` and creates
+      no Stripe Checkout Session.
+- [ ] The user who started a checkout can re-attempt immediately (re-claiming their own
+      `pending_checkout` marker) without a `409`.
 - [ ] The `pending_checkout` marker is claimed via a conditional write (only one of two
-      concurrent attempts wins) and is cleared by the webhook once the subscription is
-      recorded; an expired marker no longer blocks a new checkout.
+      concurrent attempts by *different* users wins) and is cleared by the webhook once the
+      subscription is recorded; an expired marker no longer blocks a new checkout.
 - [ ] If a duplicate subscription is ever created for a league, the webhook reconciles to a
       single active subscription by canceling the extra, leaving exactly one
       `stripe_subscription_id` on `METADATA`.

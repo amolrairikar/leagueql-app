@@ -149,7 +149,7 @@ def create_checkout_session(
     customer_id = get_or_create_stripe_customer(clerk_user_id)
 
     token = uuid.uuid4().hex
-    if not claim_pending_checkout(canonical_league_id, token):
+    if not claim_pending_checkout(canonical_league_id, token, clerk_user_id):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="A subscription or checkout is already active for this league",

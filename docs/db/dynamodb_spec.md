@@ -103,7 +103,7 @@ the league will not appear as onboarded and a retry will re-run the full onboard
 | `league_name` | String | No | League name from the most recent season's settings |
 | `subscription_end_time` | String | No | ISO 8601 (UTC) timestamp marking when the league's subscription/trial lapses. Access is granted while `now < subscription_end_time`; an **absent** value is treated as expired (no access). Written **only** by the Stripe billing webhook (BE-015). |
 | `stripe_subscription_id` | String | No | The Stripe subscription backing this league's access. Claimed by the webhook (BE-015) and used to scope cancellation/terminal writes and duplicate-subscription reconciliation. |
-| `pending_checkout` | Map | No | In-flight checkout marker `{ token, expires_at }` claimed by `POST /leagues/{id}/checkout-session` to block a concurrent second checkout; cleared by the webhook on success and self-heals after `expires_at` (BE-015). |
+| `pending_checkout` | Map | No | In-flight checkout marker `{ token, expires_at, user_id }` claimed by `POST /leagues/{id}/checkout-session` to block a concurrent second checkout by a *different* user; the initiating `user_id` may re-claim it immediately. Cleared by the webhook on success and self-heals after `expires_at` (BE-015). |
 | `trial_used` | Boolean | No | Set the first time a trial is granted for this league; once present, future subscriptions for the league are created without a trial (BE-015). |
 
 **Example:**

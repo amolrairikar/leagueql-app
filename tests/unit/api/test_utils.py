@@ -268,27 +268,32 @@ class TestClaimPendingCheckout:
     def test_claims_slot_returns_true(self, mock_table):
         from main import claim_pending_checkout
 
-        assert claim_pending_checkout("canonical-abc", "tok123") is True
+        assert claim_pending_checkout("canonical-abc", "tok123", "user-1") is True
         _, kwargs = mock_table.update_item.call_args
         cond = kwargs["ConditionExpression"]
         assert "attribute_not_exists(stripe_subscription_id)" in cond
         assert "pending_checkout.expires_at < :now" in cond
-        pc = kwargs["ExpressionAttributeValues"][":pc"]
+        # Same-user re-claim: the initiating user can overwrite their own marker.
+        assert "pending_checkout.user_id = :uid" in cond
+        values = kwargs["ExpressionAttributeValues"]
+        assert values[":uid"] == "user-1"
+        pc = values[":pc"]
         assert pc["token"] == "tok123"
+        assert pc["user_id"] == "user-1"
         assert "expires_at" in pc
 
     def test_returns_false_when_slot_taken(self, mock_table):
         from main import claim_pending_checkout
 
         mock_table.update_item.side_effect = _conditional_error()
-        assert claim_pending_checkout("canonical-abc", "tok123") is False
+        assert claim_pending_checkout("canonical-abc", "tok123", "user-1") is False
 
     def test_raises_500_on_boto_error(self, mock_table):
         from main import claim_pending_checkout
 
         mock_table.update_item.side_effect = _boto_error()
         with pytest.raises(HTTPException) as exc:
-            claim_pending_checkout("canonical-abc", "tok123")
+            claim_pending_checkout("canonical-abc", "tok123", "user-1")
         assert exc.value.status_code == 500
 
 

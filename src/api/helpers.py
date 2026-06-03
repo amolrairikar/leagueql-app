@@ -556,21 +556,28 @@ def get_or_create_stripe_customer(clerk_user_id: str) -> str:
         return get_stripe_customer_id(clerk_user_id) or customer_id
 
 
-def claim_pending_checkout(canonical_league_id: str, token: str) -> bool:
+def claim_pending_checkout(
+    canonical_league_id: str, token: str, clerk_user_id: str
+) -> bool:
     """Atomically claim the in-flight checkout slot for a league (BE-015 Layer 1).
 
     Writes a ``pending_checkout`` marker on the league's METADATA only when the
-    league has no recorded subscription and no *unexpired* in-flight checkout.
-    DynamoDB serializes concurrent attempts, so exactly one wins; the marker's
-    ``expires_at`` lets an abandoned checkout self-heal.
+    league has no recorded subscription and either has no in-flight checkout, the
+    existing one has expired, **or** the existing one belongs to the same user
+    (so a user who abandoned their own checkout can retry immediately). DynamoDB
+    serializes concurrent attempts, so exactly one wins; the marker's
+    ``expires_at`` lets an abandoned checkout self-heal for *other* users, and
+    reconciliation backstops any true duplicate subscription.
 
     Args:
         canonical_league_id: The canonical league ID.
         token: A per-attempt nonce (also used as the Stripe idempotency key).
+        clerk_user_id: The authenticated user starting the checkout; recorded on
+            the marker so the same user can re-claim it.
 
     Returns:
         ``True`` when the slot was claimed; ``False`` when the league already has
-        a subscription or an unexpired in-flight checkout.
+        a subscription or another user holds an unexpired in-flight checkout.
     """
     now = datetime.now(timezone.utc)
     expires_at = (
@@ -584,11 +591,17 @@ def claim_pending_checkout(canonical_league_id: str, token: str) -> bool:
                 "attribute_exists(PK) "
                 "AND attribute_not_exists(stripe_subscription_id) "
                 "AND (attribute_not_exists(pending_checkout) "
-                "OR pending_checkout.expires_at < :now)"
+                "OR pending_checkout.expires_at < :now "
+                "OR pending_checkout.user_id = :uid)"
             ),
             ExpressionAttributeValues={
-                ":pc": {"token": token, "expires_at": expires_at},
+                ":pc": {
+                    "token": token,
+                    "expires_at": expires_at,
+                    "user_id": clerk_user_id,
+                },
                 ":now": now.isoformat(),
+                ":uid": clerk_user_id,
             },
         )
         return True
