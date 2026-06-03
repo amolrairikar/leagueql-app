@@ -8,16 +8,22 @@ import { useSubscription } from '@/features/subscription/use-subscription';
  * Reads the current league's subscription state via {@link useSubscription},
  * which bypasses demo mode and the "no league connected" case (reporting active)
  * and treats a failed `getLeague` as active so the page still renders (the API
- * gate applies independently). While the status loads it shows a spinner;
+ * gate applies independently). While the status loads — or while a subscription
+ * is activating after returning from Checkout (FE-022) — it shows a spinner;
  * otherwise it shows the inline paywall when the subscription is expired/absent.
  */
 export function SubscriptionGuard({ children }: { children: React.ReactNode }) {
-  const { loading, isActive } = useSubscription();
+  const { loading, isActive, activating } = useSubscription();
 
-  if (loading)
+  if (loading || activating)
     return (
-      <div className="flex min-h-[70vh] items-center justify-center">
+      <div className="flex min-h-[70vh] flex-col items-center justify-center gap-3">
         <Spinner className="size-6 text-muted-foreground" />
+        {activating && (
+          <p className="text-muted-foreground text-sm">
+            Activating your subscription…
+          </p>
+        )}
       </div>
     );
 

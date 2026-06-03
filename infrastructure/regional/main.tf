@@ -113,6 +113,10 @@ module "api_lambda" {
     STRIPE_CHECKOUT_SUCCESS_URL      = local.app_base_url
     STRIPE_CHECKOUT_CANCEL_URL       = local.app_base_url
     STRIPE_BILLING_PORTAL_RETURN_URL = local.app_base_url
+
+    # Abandoned-checkout self-heal window (BE-015 Layer 1). Shorter in dev for
+    # faster manual-testing retries.
+    CHECKOUT_PENDING_TTL_MINUTES = var.environment == "prod" ? "30" : "5"
   }
 
   tags = {

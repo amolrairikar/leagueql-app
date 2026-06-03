@@ -204,6 +204,10 @@ provisioning, not duplicate charging.)
   Lambdas as environment variables; the checkout return URLs are derived from `environment`
   (prod → `https://leagueql.com`, dev → `http://localhost:5173`). CI builds/zips the new Lambda
   and passes the Stripe secrets as `TF_VAR_*` (mode-selected by environment).
+- **`pending_checkout` self-heal window is configurable** via the `CHECKOUT_PENDING_TTL_MINUTES`
+  env var (`main.py`, default 30); Terraform sets **5 in dev / 30 in prod** so abandoned-checkout
+  retries unblock quickly in dev. Until it lapses (or the webhook records the subscription), a
+  repeat checkout returns `409`.
 - **One-time operational setup** (cannot be Terraformed — the webhook signing secret only exists
   after the endpoint is registered in Stripe): see the runbook
   [`docs/deploy/stripe-webhook-setup.md`](../../deploy/stripe-webhook-setup.md).

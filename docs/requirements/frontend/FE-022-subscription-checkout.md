@@ -32,10 +32,12 @@ the app therefore refreshes subscription state with the cache bypassed and shows
 ## Edge Cases
 - **Demo mode:** no checkout — the Subscribe action is hidden / bypassed (no subscription concept).
 - **No league connected:** the Subscribe action is not shown (nothing to subscribe).
-- **409 (already subscribed / in-flight checkout):** surface an "already active" message and
-  refresh subscription state instead of redirecting again.
-- **Network / 5xx creating the session:** surfaced via the shared `ApiError` handling
-  (`src/lib/api-client.ts`); the button returns to idle so the user can retry.
+- **409 (already subscribed / in-flight checkout):** the backend message is surfaced by the
+  shared `ApiErrorAlert` (mounted in `AppLayout`), the cache is busted to refresh subscription
+  state, and the button returns to idle instead of redirecting again. The 409 self-heals once
+  the `pending_checkout` window lapses ([BE-015](../backend/BE-015-stripe-billing.md)).
+- **Network / 5xx creating the session:** surfaced via the same `ApiErrorAlert`
+  (`src/lib/api-client.ts` records the error); the button returns to idle so the user can retry.
 - **Webhook lag on return:** the subscription may not read active immediately; show an
   "activating subscription" state and poll `getLeague` (cache-busted) for a bounded interval
   before falling back to the paywall.

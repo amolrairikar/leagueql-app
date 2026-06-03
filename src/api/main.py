@@ -151,8 +151,9 @@ STRIPE_BILLING_PORTAL_RETURN_URL = os.environ.get(
 )
 
 # How long a claimed in-flight checkout marker blocks a second checkout before it
-# self-heals (BE-015 Idempotency Layer 1).
-CHECKOUT_PENDING_TTL_MINUTES = 30
+# self-heals (BE-015 Idempotency Layer 1). Configurable per environment
+# (Terraform sets a shorter window in dev); defaults to 30 minutes.
+CHECKOUT_PENDING_TTL_MINUTES = int(os.environ.get("CHECKOUT_PENDING_TTL_MINUTES", "30"))
 
 
 # Re-export helpers so ``main.<helper>`` stays the public surface. Imported after

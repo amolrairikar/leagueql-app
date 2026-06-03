@@ -28,7 +28,8 @@ handling.
 - Guard: `frontend/src/features/subscription/subscription-guard.tsx` wraps `AppLayout` children
   in `src/app/app.tsx`. Consumes `useSubscription`.
 - Paywall: `frontend/src/features/subscription/subscription-required.tsx` (inline, rendered
-  inside the app layout) with a button that opens the manage dialog.
+  inside the app layout) with a single primary **Subscribe** button that starts checkout
+  ([FE-022](FE-022-subscription-checkout.md)).
 - Dialog: `frontend/src/features/subscription/manage-subscription-dialog.tsx` (skeleton).
 - Sidebar: `frontend/src/features/sidebar/app-sidebar.tsx` — "Manage Subscription" item plus the
   expiring-soon alert dot.

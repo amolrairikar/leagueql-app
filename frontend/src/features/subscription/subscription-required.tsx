@@ -1,16 +1,19 @@
 import { Lock } from 'lucide-react';
-import { useState } from 'react';
 
+import { Spinner } from '@/components/spinner';
 import { Button } from '@/components/ui/button';
-import { ManageSubscriptionDialog } from '@/features/subscription/manage-subscription-dialog';
+import { useStripeBilling } from '@/features/subscription/use-stripe-billing';
+import { getLeagueCookies } from '@/lib/cookie-handler';
 
 /**
  * Inline paywall shown in place of an analytics page when the current league's
  * subscription is expired or absent. Rendered inside the app layout so the
- * sidebar and header stay visible.
+ * sidebar and header stay visible. The single primary action starts Stripe
+ * Checkout (FE-022).
  */
 export function SubscriptionRequired() {
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const { startCheckout, checkoutLoading } = useStripeBilling();
+  const { leagueId, platform } = getLeagueCookies();
 
   return (
     <div className="flex min-h-[70vh] flex-col items-center justify-center gap-4 p-8 text-center">
@@ -19,16 +22,17 @@ export function SubscriptionRequired() {
       </div>
       <h1 className="text-2xl font-bold">Subscription required</h1>
       <p className="text-muted-foreground max-w-md">
-        This league&apos;s subscription has expired. Manage your subscription to
-        regain access to your league&apos;s analytics.
+        This league&apos;s subscription has expired. Subscribe to regain access
+        to your league&apos;s analytics.
       </p>
-      <Button className="cursor-pointer" onClick={() => setDialogOpen(true)}>
-        Manage Subscription
+      <Button
+        className="cursor-pointer"
+        disabled={checkoutLoading || !leagueId}
+        onClick={() => void startCheckout(leagueId, platform)}
+      >
+        {checkoutLoading && <Spinner className="size-4" />}
+        Subscribe
       </Button>
-      <ManageSubscriptionDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-      />
     </div>
   );
 }

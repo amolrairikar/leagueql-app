@@ -67,3 +67,12 @@ export interface GetLeagueResponse {
     subscription_end_time?: string;
   };
 }
+
+/** Response from the Stripe checkout / billing-portal endpoints (BE-015 / FE-022 / FE-023). */
+export interface BillingSessionResponse {
+  detail: string;
+  data: {
+    /** Stripe-hosted URL to redirect the user to. */
+    url: string;
+  };
+}

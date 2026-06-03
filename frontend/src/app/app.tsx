@@ -30,11 +30,12 @@ import Matchups from '@/features/matchups/matchups';
 import MigrateLeague from '@/features/migrate_league/migrate-league';
 import PlayerRecords from '@/features/player_records/player-records';
 import PlayoffBracket from '@/features/playoff_bracket/playoff-bracket';
-import PrivacyPage from '@/features/privacy/privacy-page';
 import ExtensionPrivacyPage from '@/features/privacy/extension-privacy-page';
+import PrivacyPage from '@/features/privacy/privacy-page';
 import SeasonStandings from '@/features/season_standings/season-standings';
 import { AppSidebar } from '@/features/sidebar/app-sidebar';
 import { SubscriptionGuard } from '@/features/subscription/subscription-guard';
+import { ApiErrorAlert } from '@/lib/api-error-alert';
 import { isDemoMode } from '@/lib/cookie-handler';
 
 function AppLayout({ children }: { children: React.ReactNode }) {
@@ -67,6 +68,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
               </div>
             </div>
           </header>
+          <ApiErrorAlert />
           <ErrorBoundary>
             <SubscriptionGuard>{children}</SubscriptionGuard>
           </ErrorBoundary>
