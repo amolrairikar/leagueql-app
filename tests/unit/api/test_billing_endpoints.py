@@ -63,6 +63,7 @@ class TestCheckoutSessionEndpoint:
         mock_table.get_item.side_effect = [
             {"Item": league_lookup_item},  # lookup_league
             {"Item": league_metadata_item},  # get_league_metadata
+            {},  # trial_used_for_league (no durable marker)
             {"Item": {"stripe_customer_id": "cus_1"}},  # existing customer
         ]
         with patch("main.stripe") as mock_stripe:
@@ -72,13 +73,42 @@ class TestCheckoutSessionEndpoint:
         assert resp.json()["data"]["url"] == "https://c"
         _, kwargs = mock_stripe.checkout.Session.create.call_args
         assert kwargs["subscription_data"]["trial_period_days"] == 14
-        assert (
-            kwargs["subscription_data"]["metadata"]["canonical_league_id"]
-            == "canonical-abc"
-        )
+        metadata = kwargs["subscription_data"]["metadata"]
+        assert metadata["canonical_league_id"] == "canonical-abc"
+        assert metadata["platform"] == "SLEEPER"
+        assert metadata["native_league_id"] == "123"
         assert kwargs["mode"] == "subscription"
         assert kwargs["allow_promotion_codes"] is True
         assert kwargs["managed_payments"] == {"enabled": True}
+
+    def test_omits_trial_when_durable_marker_present(
+        self,
+        client,
+        mock_table,
+        league_lookup_item,
+        league_metadata_item,
+        override_user,
+    ):
+        # No METADATA trial_used, but a durable (platform, league_id) record exists
+        # from a prior trial before this league was deleted and re-onboarded.
+        league_metadata_item.pop("trial_used", None)
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},  # lookup_league
+            {"Item": league_metadata_item},  # get_league_metadata
+            {  # trial_used_for_league: durable marker present
+                "Item": {
+                    "PK": "LEAGUE#123#PLATFORM#SLEEPER",
+                    "SK": "TRIAL_USED",
+                }
+            },
+            {"Item": {"stripe_customer_id": "cus_1"}},  # existing customer
+        ]
+        with patch("main.stripe") as mock_stripe:
+            mock_stripe.checkout.Session.create.return_value = {"url": "https://c"}
+            resp = client.post("/leagues/123/checkout-session?platform=SLEEPER")
+        assert resp.status_code == 200
+        _, kwargs = mock_stripe.checkout.Session.create.call_args
+        assert "trial_period_days" not in kwargs["subscription_data"]
 
     def test_omits_trial_when_already_used(
         self,
@@ -109,9 +139,11 @@ class TestCheckoutSessionEndpoint:
         league_metadata_item,
         override_user,
     ):
+        league_metadata_item.pop("trial_used", None)
         mock_table.get_item.side_effect = [
             {"Item": league_lookup_item},
             {"Item": league_metadata_item},
+            {},  # trial_used_for_league (no durable marker)
             {"Item": {"stripe_customer_id": "cus_1"}},
         ]
         mock_table.update_item.side_effect = _conditional_error()  # claim loses

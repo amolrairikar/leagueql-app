@@ -88,6 +88,31 @@ Mapping allowing for lookup of a ESPN/SLEEPER league ID to its canonical league 
 </details>
 
 <details>
+<summary><b>TRIAL_USED</b></summary>
+
+Durable marker that a given platform league has already consumed its free trial. Keyed by the **platform-native** identity (`platform` + `league_id`), which survives a delete/re-onboard cycle — unlike the league's `canonical_league_id`, which is regenerated on re-onboarding. Written by the Stripe billing webhook when a *trialing* subscription is recorded; read by checkout to omit the trial on re-subscribe (BE-015). It shares the `LEAGUE_LOOKUP` PK but **deliberately omits `canonical_league_id`** so the BE-007 delete sweep (which finds items by `PK = LEAGUE#{canonical_league_id}` and by a GSI1 query on `canonical_league_id`) never matches it — the marker outlives league deletion.
+
+| Attribute | Type | Required | Description |
+|---|---|---|---|
+| `PK` | String | Yes | `LEAGUE#{league_id}#PLATFORM#{platform}` (the native league ID + platform) |
+| `SK` | String | Yes | `TRIAL_USED` |
+| `platform` | String | Yes | The platform the league belongs to (e.g., "ESPN", "SLEEPER") |
+| `league_id` | String | Yes | The native league ID for the platform |
+| `trial_used_at` | String | No | ISO 8601 (UTC) timestamp when the trial was first granted |
+
+**Example:**
+```json
+{
+  "PK": "LEAGUE#12345678#PLATFORM#ESPN",
+  "SK": "TRIAL_USED",
+  "platform": "ESPN",
+  "league_id": "12345678",
+  "trial_used_at": "2026-06-03T00:00:00Z"
+}
+```
+</details>
+
+<details>
 <summary><b>METADATA</b></summary>
 
 Represents a successfully onboarded league. If onboarding fails before this item is written,

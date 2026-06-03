@@ -43,6 +43,7 @@ from main import (
     logger,
 )
 from helpers import (
+    cancel_league_subscription,
     claim_pending_checkout,
     convert_decimals,
     create_job_status,
@@ -58,6 +59,7 @@ from helpers import (
     lookup_league,
     require_active_subscription,
     set_active_job,
+    trial_used_for_league,
     update_league_count,
 )
 
@@ -144,7 +146,12 @@ def create_checkout_session(
     """
     canonical_league_id = lookup_league(league_id=leagueId, platform=platform)
     metadata = get_league_metadata(canonical_league_id=canonical_league_id)
-    trial_used = bool(metadata.get("trial_used"))
+    # The league is ineligible for a trial if either the current METADATA marker
+    # or the durable (platform, native_league_id) record says it was already used
+    # — the latter survives a delete/re-onboard cycle (BE-015).
+    trial_used = bool(metadata.get("trial_used")) or trial_used_for_league(
+        leagueId, platform
+    )
 
     customer_id = get_or_create_stripe_customer(clerk_user_id)
 
@@ -156,7 +163,12 @@ def create_checkout_session(
         )
 
     subscription_data: dict[str, Any] = {
-        "metadata": {"canonical_league_id": canonical_league_id},
+        "metadata": {
+            "canonical_league_id": canonical_league_id,
+            # Native identity for the durable trial marker written by the webhook.
+            "platform": platform.value,
+            "native_league_id": leagueId,
+        },
     }
     if not trial_used:
         subscription_data["trial_period_days"] = main.STRIPE_TRIAL_PERIOD_DAYS
@@ -541,6 +553,10 @@ def delete_league(
 ) -> APIResponse:
     """Deletes an onboarded league."""
     canonical_league_id = lookup_league(league_id=leagueId, platform=platform)
+    # Cancel the league's Stripe subscription before touching any data, so a failed
+    # cancellation aborts the delete with the league intact (BE-007 / BE-015).
+    metadata = get_league_metadata(canonical_league_id=canonical_league_id)
+    cancel_league_subscription(metadata.get("stripe_subscription_id"))
     logger.info(
         "Proceeding with delete for canonical_league_id: %s", canonical_league_id
     )

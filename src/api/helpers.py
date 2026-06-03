@@ -14,6 +14,7 @@ from typing import Any
 
 import botocore.exceptions
 import requests as http_requests
+import stripe
 from boto3.dynamodb.conditions import Key
 from fastapi import HTTPException, status
 
@@ -507,6 +508,26 @@ def get_stripe_customer_id(clerk_user_id: str) -> str | None:
     return response.get("Item", {}).get("stripe_customer_id")
 
 
+def trial_used_for_league(native_league_id: str, platform) -> bool:
+    """Return True if this platform league has ever consumed its free trial (BE-015).
+
+    Reads the durable ``TRIAL_USED`` marker keyed by the platform-native identity
+    ``(platform, native_league_id)``. Unlike the ``METADATA`` ``trial_used`` flag,
+    this marker survives league deletion, so a deleted-then-re-onboarded league is
+    not granted a second trial.
+    """
+    pk = f"LEAGUE#{native_league_id}#PLATFORM#{platform.value}"
+    try:
+        response = main.table.get_item(Key={"PK": pk, "SK": "TRIAL_USED"})
+    except botocore.exceptions.ClientError as e:
+        logger.error("Boto error reading trial-used marker: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to look up trial eligibility",
+        )
+    return "Item" in response
+
+
 def get_or_create_stripe_customer(clerk_user_id: str) -> str:
     """Resolve (or lazily create) the Stripe customer for a Clerk user.
 
@@ -554,6 +575,46 @@ def get_or_create_stripe_customer(clerk_user_id: str) -> str:
         # create used a clerk-user-scoped idempotency key, both calls resolved to
         # the same Stripe customer, so the stored value matches ours.
         return get_stripe_customer_id(clerk_user_id) or customer_id
+
+
+def cancel_league_subscription(stripe_subscription_id: str | None) -> None:
+    """Immediately cancel a league's Stripe subscription on delete (BE-007 / BE-015).
+
+    Called by ``delete_league`` **before** any league data is removed, so a failed
+    cancellation aborts the delete with the league (and its ``stripe_subscription_id``)
+    intact for retry — the data is never destroyed while a live subscription still
+    points at it. Cancellation is immediate, consistent with BE-015's policy.
+
+    Idempotent: a missing id (league never subscribed) is a no-op, and an
+    already-canceled / no-longer-existent subscription (Stripe ``InvalidRequestError``)
+    is treated as success. Any other Stripe error raises ``HTTPException(500)`` so the
+    caller leaves the league's data in place.
+
+    Args:
+        stripe_subscription_id: The league's recorded subscription, or ``None`` when
+            the league has no subscription to cancel.
+    """
+    if not stripe_subscription_id:
+        return
+    try:
+        main.stripe.Subscription.cancel(
+            stripe_subscription_id,
+            idempotency_key=f"delete-league-sub:{stripe_subscription_id}",
+        )
+        logger.info("Canceled subscription %s on league delete", stripe_subscription_id)
+    except stripe.error.InvalidRequestError as e:
+        # Already canceled or no longer exists in Stripe — nothing to do.
+        logger.info(
+            "Subscription %s already canceled/absent; treating as success: %s",
+            stripe_subscription_id,
+            e,
+        )
+    except stripe.error.StripeError as e:
+        logger.error("Failed to cancel subscription %s: %s", stripe_subscription_id, e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to cancel subscription",
+        )
 
 
 def claim_pending_checkout(

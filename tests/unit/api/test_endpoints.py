@@ -508,6 +508,90 @@ class TestDeleteLeagueEndpoint:
         response = client.delete("/leagues/999?platform=SLEEPER")
         assert response.status_code == 404
 
+    def test_cancels_subscription_before_deleting(
+        self, client, mock_table, mock_s3_client, league_lookup_item
+    ):
+        self._setup_delete_mocks(mock_table, league_lookup_item, mock_s3_client)
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},  # lookup_league
+            {  # get_league_metadata
+                "Item": {
+                    "PK": "LEAGUE#canonical-abc",
+                    "SK": "METADATA",
+                    "stripe_subscription_id": "sub_123",
+                }
+            },
+        ]
+        with patch("main.stripe") as mock_stripe:
+            response = client.delete("/leagues/123?platform=SLEEPER")
+        assert response.status_code == 200
+        mock_stripe.Subscription.cancel.assert_called_once()
+        args, _ = mock_stripe.Subscription.cancel.call_args
+        assert args[0] == "sub_123"
+
+    def test_skips_cancel_when_no_subscription(
+        self, client, mock_table, mock_s3_client, league_lookup_item
+    ):
+        self._setup_delete_mocks(mock_table, league_lookup_item, mock_s3_client)
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": {"PK": "LEAGUE#canonical-abc", "SK": "METADATA"}},
+        ]
+        with patch("main.stripe") as mock_stripe:
+            response = client.delete("/leagues/123?platform=SLEEPER")
+        assert response.status_code == 200
+        mock_stripe.Subscription.cancel.assert_not_called()
+
+    def test_already_canceled_subscription_proceeds(
+        self, client, mock_table, mock_s3_client, league_lookup_item
+    ):
+        import stripe
+
+        self._setup_delete_mocks(mock_table, league_lookup_item, mock_s3_client)
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {
+                "Item": {
+                    "PK": "LEAGUE#canonical-abc",
+                    "SK": "METADATA",
+                    "stripe_subscription_id": "sub_123",
+                }
+            },
+        ]
+        with patch("main.stripe") as mock_stripe:
+            mock_stripe.Subscription.cancel.side_effect = (
+                stripe.error.InvalidRequestError("No such subscription", None)
+            )
+            response = client.delete("/leagues/123?platform=SLEEPER")
+        # Idempotent: already-canceled is success, and deletion still proceeds.
+        assert response.status_code == 200
+
+    def test_stripe_cancel_failure_aborts_delete_with_500(
+        self, client, mock_table, mock_s3_client, league_lookup_item
+    ):
+        import stripe
+
+        self._setup_delete_mocks(mock_table, league_lookup_item, mock_s3_client)
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {
+                "Item": {
+                    "PK": "LEAGUE#canonical-abc",
+                    "SK": "METADATA",
+                    "stripe_subscription_id": "sub_123",
+                }
+            },
+        ]
+        with patch("main.stripe") as mock_stripe:
+            mock_stripe.Subscription.cancel.side_effect = (
+                stripe.error.APIConnectionError("network down")
+            )
+            response = client.delete("/leagues/123?platform=SLEEPER")
+        assert response.status_code == 500
+        # Data is left intact for retry: no deletion was attempted.
+        mock_table.batch_writer.assert_not_called()
+        mock_table.query.assert_not_called()
+
     def test_deletes_gsi_lookup_items(
         self, client, mock_table, mock_s3_client, league_lookup_item, mock_time_sleep
     ):

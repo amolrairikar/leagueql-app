@@ -87,6 +87,67 @@ class TestRecordActiveSubscription:
                 "canonical-abc", "2026-07-01T00:00:00+00:00", "sub_new"
             )
 
+    def test_writes_durable_trial_marker_with_native_identity(self, mock_ddb):
+        cs.record_active_subscription(
+            "canonical-abc",
+            "2026-07-01T00:00:00+00:00",
+            "sub_1",
+            mark_trial_used=True,
+            platform="SLEEPER",
+            native_league_id="123",
+        )
+        mock_ddb.put_item.assert_called_once()
+        _, kwargs = mock_ddb.put_item.call_args
+        assert kwargs["Item"]["PK"] == {"S": "LEAGUE#123#PLATFORM#SLEEPER"}
+        assert kwargs["Item"]["SK"] == {"S": "TRIAL_USED"}
+        assert kwargs["Item"]["platform"] == {"S": "SLEEPER"}
+        assert kwargs["Item"]["league_id"] == {"S": "123"}
+        assert "trial_used_at" in kwargs["Item"]
+        assert kwargs["ConditionExpression"] == "attribute_not_exists(PK)"
+        # Deliberately no canonical_league_id (so the BE-007 delete sweep misses it).
+        assert "canonical_league_id" not in kwargs["Item"]
+
+    def test_durable_trial_marker_skipped_without_native_identity(self, mock_ddb):
+        cs.record_active_subscription(
+            "canonical-abc",
+            "2026-07-01T00:00:00+00:00",
+            "sub_1",
+            mark_trial_used=True,
+        )
+        mock_ddb.put_item.assert_not_called()
+
+    def test_durable_trial_marker_idempotent(self, mock_ddb):
+        # A redelivered trialing event re-puts the marker; the conditional write
+        # fails and is swallowed (the first-grant record is preserved).
+        mock_ddb.put_item.side_effect = _ConditionalCheckFailed()
+        assert (
+            cs.record_active_subscription(
+                "canonical-abc",
+                "2026-07-01T00:00:00+00:00",
+                "sub_1",
+                mark_trial_used=True,
+                platform="SLEEPER",
+                native_league_id="123",
+            )
+            is True
+        )
+
+    def test_no_durable_marker_on_duplicate_subscription(self, mock_ddb):
+        mock_ddb.update_item.side_effect = _ConditionalCheckFailed()
+        mock_ddb.get_item.return_value = {
+            "Item": {"stripe_subscription_id": {"S": "sub_existing"}}
+        }
+        with pytest.raises(cs.DuplicateSubscription):
+            cs.record_active_subscription(
+                "canonical-abc",
+                "2026-07-01T00:00:00+00:00",
+                "sub_new",
+                mark_trial_used=True,
+                platform="SLEEPER",
+                native_league_id="123",
+            )
+        mock_ddb.put_item.assert_not_called()
+
 
 class TestExpireSubscription:
     def test_expires_and_returns_true(self, mock_ddb):

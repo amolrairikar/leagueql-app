@@ -21,9 +21,13 @@ event-driven webhook.
 - **Checkout endpoint** (Clerk-authed): `POST /leagues/{id}/checkout-session` — resolves or
   creates the user's Stripe Customer, claims a synchronous `pending_checkout` marker on the
   league `METADATA` (conditional write — see Idempotency Layer 1), creates a Stripe Checkout
-  Session in `subscription` mode with `subscription_data.metadata.canonical_league_id` and
-  `subscription_data.trial_period_days` (included only when the league has no `trial_used`
-  marker — see the trial edge case), sets `allow_promotion_codes=True` so the Stripe-hosted
+  Session in `subscription` mode with `subscription_data.metadata` carrying
+  `canonical_league_id` **plus the native `platform` and `native_league_id`** (so the webhook
+  can write the durable trial record without a reverse lookup — see the trial edge case) and
+  `subscription_data.trial_period_days` (included only when the league has no recorded
+  `trial_used` — checked against **both** the `METADATA` marker and the durable
+  `(platform, native_league_id)` record; see the trial edge case), sets
+  `allow_promotion_codes=True` so the Stripe-hosted
   page renders an "Add promotion code" field, and returns the session URL. Customers redeem a
   **promotion code** (a customer-facing code mapped to a Stripe coupon — e.g. the founders
   100%-off coupon), not a bare coupon, which has no redeemable code. The session also sets
@@ -38,7 +42,9 @@ event-driven webhook.
   `customer.subscription.created|updated`, and `invoice.paid`, calls
   `common.subscription.record_active_subscription(...)`; on `customer.subscription.deleted`
   or terminal payment failure, calls `common.subscription.expire_subscription(...)` which sets
-  `subscription_end_time` to the past (gate flips to expired live).
+  `subscription_end_time` to the past (gate flips to expired live). When the recorded
+  subscription is *trialing*, it also writes the durable `TRIAL_USED` record keyed by the
+  `(platform, native_league_id)` read from the subscription metadata (see the trial edge case).
 - **Billing portal endpoint** (Clerk-authed): `POST /billing-portal-session` — returns a
   Stripe Billing Portal URL for the user's Customer (update card / cancel). Cancellation is
   configured to take effect **immediately** (not at period end). Backs the frontend "Manage
@@ -47,9 +53,11 @@ event-driven webhook.
   item); on the league `METADATA` item — `stripe_subscription_id`, `pending_checkout`
   (in-flight checkout marker `{token, expires_at, user_id}` with a short TTL, cleared by the
   webhook on success), and `trial_used` (set when the league's first trial is granted, never
-  cleared); and
-  `canonical_league_id` in the Stripe subscription metadata. Documented in
-  `docs/db/dynamodb_spec.md`.
+  cleared); a durable **`TRIAL_USED` item** keyed by
+  `PK = LEAGUE#{native_league_id}#PLATFORM#{platform}`, `SK = TRIAL_USED` (no
+  `canonical_league_id` attribute, so it outlives league deletion — see the trial edge case);
+  and `canonical_league_id`, `platform`, and `native_league_id` in the Stripe subscription
+  metadata. Documented in `docs/db/dynamodb_spec.md`.
 - **Secrets & environment mode:** the Stripe secret key and webhook signing secret are
   supplied as **sensitive Terraform variables** (from CI secrets, following the existing Clerk
   pattern — the repo uses no SSM/Secrets Manager) and injected as Lambda environment variables
@@ -140,9 +148,32 @@ provisioning, not duplicate charging.)
 - **Per-league trial, once only (no reuse):** a league is eligible for the trial **only on
   its first-ever subscription**. Re-subscribing a league that previously had any subscription
   is created with **no trial** (`trial_period_days` omitted). This is enforced by a
-  `trial_used` marker on the league `METADATA`, set when the first trial is granted and never
-  cleared; checkout omits the trial whenever `trial_used` is present. (Trials remain
-  independent *across different* leagues — each league gets its single trial.)
+  `trial_used` marker, set when the first trial is granted and never cleared; checkout omits
+  the trial whenever it is present. (Trials remain independent *across different* leagues —
+  each league gets its single trial.)
+- **Trial usage survives league deletion (durable record):** the `METADATA` `trial_used`
+  marker is destroyed when a league is deleted ([BE-007](BE-007-delete-league-api.md)), and a
+  re-onboarded league is minted with a **new** `canonical_league_id` — so a marker keyed by
+  canonical ID could not block trial reuse after delete + re-onboard. To prevent trial
+  farming, trial usage is **also** recorded in a durable item keyed by the platform-native
+  identity that *does* survive — `(platform, native_league_id)` — written when the trial is
+  granted and **never** removed by league deletion:
+  - **Key (no `canonical_league_id` attribute):** `PK = LEAGUE#{native_league_id}#PLATFORM#{platform}`,
+    `SK = TRIAL_USED` — the same PK as the league's `LEAGUE_LOOKUP` item. It deliberately
+    carries **no** `canonical_league_id` attribute so the BE-007 delete sweep (which finds
+    items by `PK = LEAGUE#{canonical_league_id}` and by a GSI1 query on `canonical_league_id`)
+    never matches it.
+  - **Writer (webhook):** when recording a *trialing* subscription, the webhook writes this
+    item in addition to the `METADATA` `trial_used`. To avoid a reverse GSI lookup, the native
+    `platform` and `native_league_id` are carried in the Stripe **subscription metadata**
+    (added at checkout, alongside `canonical_league_id`) so the webhook has them directly from
+    the event payload.
+  - **Reader (checkout):** checkout already has `(platform, leagueId)` as request params, so it
+    reads this item directly and treats the trial as used when **either** the `METADATA`
+    `trial_used` **or** the durable `(platform, native_league_id)` record is present.
+  - **Scope note:** this is **per league regardless of account** — deleting and re-onboarding
+    the same league under a *different* user still finds the durable record, so the trial does
+    not reset. The retained record contains only a platform + league ID (no personal data).
 - **One user, many leagues:** a single Customer holds multiple Subscriptions; each webhook
   event routes by `metadata.canonical_league_id` and each league is gated independently.
 - **Customer first use / concurrency:** the Clerk user ↔ Stripe Customer mapping is created
@@ -176,6 +207,11 @@ provisioning, not duplicate charging.)
       end) and `subscription_end_time` is set to the past, revoking access on the next request.
 - [ ] A league's first subscription includes the trial; any subsequent subscription for that
       league (after `trial_used` is set) is created with no trial.
+- [ ] Trial usage is recorded in a durable `(platform, native_league_id)` item that is **not**
+      removed when the league is deleted, and a league deleted then re-onboarded (even under a
+      different account) is created with **no trial**.
+- [ ] The durable `TRIAL_USED` item carries no `canonical_league_id` attribute and is not
+      removed by the BE-007 delete sweep.
 - [ ] Webhook processing is idempotent — duplicate or out-of-order deliveries never regress
       `subscription_end_time`.
 - [ ] A single user can hold active subscriptions for multiple leagues simultaneously, each
