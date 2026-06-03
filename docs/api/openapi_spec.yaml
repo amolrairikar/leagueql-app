@@ -34,8 +34,9 @@ paths:
       summary: Get league metadata
       description: >
         Checks whether a league has been onboarded. If the league exists,
-        returns the league name and the list of seasons the league has been
-        active for. Returns 404 if the league has not been onboarded yet.
+        returns the league name, the list of seasons the league has been
+        active for, and its subscription_end_time. Returns 404 if the league
+        has not been onboarded yet. This endpoint is never subscription-gated.
       operationId: getLeague
       parameters:
         - name: leagueId
@@ -137,6 +138,8 @@ paths:
       responses:
         "201":
           $ref: "#/components/responses/OnboardSuccessResponse"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequiredError"
         "422":
           $ref: "#/components/responses/ValidationError"
         "500":
@@ -193,6 +196,8 @@ paths:
           $ref: "#/components/responses/QuerySuccessResponse"
         "400":
           $ref: "#/components/responses/BadRequestError"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequiredError"
         "404":
           $ref: "#/components/responses/LeagueNotFoundError"
         "500":
@@ -253,6 +258,8 @@ paths:
       responses:
         "200":
           $ref: "#/components/responses/EspnMembersResponse"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequiredError"
         "404":
           $ref: "#/components/responses/LeagueNotFoundError"
         "502":
@@ -301,6 +308,8 @@ paths:
       responses:
         "202":
           $ref: "#/components/responses/MigrateSuccessResponse"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequiredError"
         "404":
           $ref: "#/components/responses/LeagueNotFoundError"
         "409":
@@ -379,6 +388,15 @@ components:
           type: string
           description: Display name of the fantasy league.
           example: "The Gridiron Gang"
+        subscription_end_time:
+          type: string
+          format: date-time
+          nullable: true
+          description: >
+            ISO 8601 (UTC) timestamp marking when the league's subscription/trial
+            lapses. Access is granted while now < subscription_end_time; absent or
+            past means expired. Null/omitted when no billing value has been written.
+          example: "2026-07-01T00:00:00+00:00"
 
     APIResponse:
       type: object
@@ -424,6 +442,14 @@ components:
             This value is only passed to the application for onboarding and is
             never logged or stored in our database.
           example: "{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}"
+        subscriptionEndTime:
+          type: string
+          format: date-time
+          description: >
+            ISO 8601 (UTC) subscription/trial end time supplied by the billing
+            provider. When present, persisted on the league's METADATA item as
+            subscription_end_time. Optional.
+          example: "2026-07-01T00:00:00+00:00"
 
     EspnMembersRequest:
       type: object
@@ -674,6 +700,16 @@ components:
           example:
             error: "Conflict"
             message: "An operation is already in progress for this league"
+
+    SubscriptionRequiredError:
+      description: League subscription is expired or absent — access blocked
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error: "Payment required"
+            message: "Subscription required"
 
     BadGatewayError:
       description: Upstream ESPN API request failed

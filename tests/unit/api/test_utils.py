@@ -176,17 +176,75 @@ class TestUpdateLeagueCount:
         )
 
 
-class TestUpdateSubscriptionStatus:
-    def test_sets_status_on_metadata_item(self, mock_table):
-        from main import SubscriptionStatus, update_subscription_status
+class TestUpdateSubscriptionEndTime:
+    def test_sets_end_time_on_metadata_item(self, mock_table):
+        from main import update_subscription_end_time
 
-        update_subscription_status("canonical-abc", SubscriptionStatus.PAST_DUE)
+        update_subscription_end_time("canonical-abc", "2026-07-01T00:00:00+00:00")
         mock_table.update_item.assert_called_once_with(
             Key={"PK": "LEAGUE#canonical-abc", "SK": "METADATA"},
-            UpdateExpression="SET subscription_status = :s",
+            UpdateExpression="SET subscription_end_time = :s",
             ConditionExpression="attribute_exists(PK)",
-            ExpressionAttributeValues={":s": "PAST_DUE"},
+            ExpressionAttributeValues={":s": "2026-07-01T00:00:00+00:00"},
         )
+
+
+class TestRequireActiveSubscription:
+    def _meta(self, end_time):
+        item = {"PK": "LEAGUE#canonical-abc", "SK": "METADATA"}
+        if end_time is not None:
+            item["subscription_end_time"] = end_time
+        return item
+
+    def test_future_end_time_passes(self, mock_table):
+        from main import require_active_subscription
+
+        mock_table.get_item.return_value = {
+            "Item": self._meta("2999-01-01T00:00:00+00:00")
+        }
+        # Should not raise.
+        require_active_subscription("canonical-abc")
+
+    def test_past_end_time_raises_402(self, mock_table):
+        from fastapi import HTTPException
+
+        from main import require_active_subscription
+
+        mock_table.get_item.return_value = {
+            "Item": self._meta("2000-01-01T00:00:00+00:00")
+        }
+        with pytest.raises(HTTPException) as exc:
+            require_active_subscription("canonical-abc")
+        assert exc.value.status_code == 402
+
+    def test_absent_end_time_raises_402(self, mock_table):
+        from fastapi import HTTPException
+
+        from main import require_active_subscription
+
+        mock_table.get_item.return_value = {"Item": self._meta(None)}
+        with pytest.raises(HTTPException) as exc:
+            require_active_subscription("canonical-abc")
+        assert exc.value.status_code == 402
+
+    def test_unparseable_end_time_raises_402(self, mock_table):
+        from fastapi import HTTPException
+
+        from main import require_active_subscription
+
+        mock_table.get_item.return_value = {"Item": self._meta("not-a-date")}
+        with pytest.raises(HTTPException) as exc:
+            require_active_subscription("canonical-abc")
+        assert exc.value.status_code == 402
+
+    def test_uses_provided_metadata_without_fetching(self, mock_table):
+        from main import require_active_subscription
+
+        # Pre-fetched metadata short-circuits the DynamoDB read.
+        require_active_subscription(
+            "canonical-abc", metadata=self._meta("2999-01-01T00:00:00+00:00")
+        )
+        mock_table.get_item.assert_not_called()
 
 
 class TestDeleteLeagueHelpers:

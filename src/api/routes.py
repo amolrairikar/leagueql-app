@@ -19,7 +19,6 @@ from fastapi import APIRouter, HTTPException, Path, Query, Response, status
 import main
 from common.onboarder_invoke import invoke_onboarder
 from main import (
-    DEFAULT_SUBSCRIPTION_STATUS,
     QUERY_TYPE_TO_SK_BASE,
     REFRESH_COOLDOWN_MINUTES,
     S3_BUCKET,
@@ -45,6 +44,7 @@ from helpers import (
     get_nfl_state,
     is_job_in_progress,
     lookup_league,
+    require_active_subscription,
     set_active_job,
     update_league_count,
 )
@@ -82,9 +82,7 @@ def get_league(
         data={
             "seasons": seasons,
             "league_name": metadata.get("league_name"),
-            "subscription_status": metadata.get(
-                "subscription_status", DEFAULT_SUBSCRIPTION_STATUS.value
-            ),
+            "subscription_end_time": metadata.get("subscription_end_time"),
         },
     )
 
@@ -169,6 +167,7 @@ def onboard_league(
 
     if requestType == RequestType.REFRESH and canonical_league_id:
         league_metadata = get_league_metadata(canonical_league_id)
+        require_active_subscription(canonical_league_id, metadata=league_metadata)
         if is_job_in_progress(league_metadata):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -254,7 +253,8 @@ def get_espn_members(
     payload: EspnMembersPayload,
 ) -> APIResponse:
     """Proxy ESPN Fantasy API to fetch league members server-side (avoids browser CORS)."""
-    lookup_league(league_id=leagueId, platform=platform)
+    canonical_league_id = lookup_league(league_id=leagueId, platform=platform)
+    require_active_subscription(canonical_league_id)
 
     espn_url = (
         f"https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl"
@@ -318,6 +318,7 @@ def migrate_league(
     )
 
     league_metadata = get_league_metadata(canonical_league_id)
+    require_active_subscription(canonical_league_id, metadata=league_metadata)
     if is_job_in_progress(league_metadata):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -484,6 +485,7 @@ def query_league(
     sk = f"{sk_base}#{suffix}" if suffix is not None else f"{sk_base}#"
 
     canonical_league_id = lookup_league(league_id=leagueId, platform=platform)
+    require_active_subscription(canonical_league_id)
     pk = f"LEAGUE#{canonical_league_id}"
 
     try:

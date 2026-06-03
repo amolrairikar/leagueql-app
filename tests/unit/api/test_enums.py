@@ -69,30 +69,3 @@ class TestQueryTypeEnum:
 
         assert QueryType("teams") == QueryType.TEAMS
         assert QueryType("matchups") == QueryType.MATCHUPS
-
-
-class TestSubscriptionStatusEnum:
-    @pytest.mark.parametrize(
-        "value",
-        ["FREE", "ACTIVE", "PAST_DUE", "CANCELED"],
-    )
-    def test_valid_values(self, value):
-        from main import SubscriptionStatus
-
-        assert SubscriptionStatus(value).value == value
-
-    def test_case_insensitive(self):
-        from main import SubscriptionStatus
-
-        assert SubscriptionStatus("active") == SubscriptionStatus.ACTIVE
-        assert SubscriptionStatus("past_due") == SubscriptionStatus.PAST_DUE
-
-    def test_invalid_value_returns_none(self):
-        from main import SubscriptionStatus
-
-        assert SubscriptionStatus._missing_("PREMIUM") is None
-
-    def test_default_is_active(self):
-        from main import DEFAULT_SUBSCRIPTION_STATUS, SubscriptionStatus
-
-        assert DEFAULT_SUBSCRIPTION_STATUS == SubscriptionStatus.ACTIVE

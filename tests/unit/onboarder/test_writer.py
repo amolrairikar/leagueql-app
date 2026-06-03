@@ -102,7 +102,27 @@ class TestWriteLeagueRecords:
         items = mock_ddb.transact_write_items.call_args[1]["TransactItems"]
         assert len(items) == 2
 
-    def test_onboard_sets_active_subscription_status(
+    def test_onboard_writes_subscription_end_time_when_provided(
+        self, onboarder_writer, monkeypatch
+    ):
+        monkeypatch.setenv("DYNAMODB_TABLE_NAME", "test-table")
+        mock_ddb = MagicMock()
+        with patch.object(onboarder_writer, "_dynamodb", mock_ddb):
+            onboarder_writer.write_league_records(
+                league_id="123",
+                platform="SLEEPER",
+                canonical_league_id="canonical-abc",
+                seasons=["2024"],
+                request_type="ONBOARD",
+                subscription_end_time="2026-07-01T00:00:00+00:00",
+            )
+        items = mock_ddb.transact_write_items.call_args[1]["TransactItems"]
+        metadata_item = items[0]["Put"]["Item"]
+        assert metadata_item["subscription_end_time"] == {
+            "S": "2026-07-01T00:00:00+00:00"
+        }
+
+    def test_onboard_omits_subscription_end_time_when_absent(
         self, onboarder_writer, monkeypatch
     ):
         monkeypatch.setenv("DYNAMODB_TABLE_NAME", "test-table")
@@ -117,9 +137,9 @@ class TestWriteLeagueRecords:
             )
         items = mock_ddb.transact_write_items.call_args[1]["TransactItems"]
         metadata_item = items[0]["Put"]["Item"]
-        assert metadata_item["subscription_status"] == {"S": "ACTIVE"}
+        assert "subscription_end_time" not in metadata_item
 
-    def test_refresh_does_not_touch_subscription_status(
+    def test_refresh_does_not_touch_subscription_end_time(
         self, onboarder_writer, monkeypatch
     ):
         monkeypatch.setenv("DYNAMODB_TABLE_NAME", "test-table")
@@ -135,7 +155,7 @@ class TestWriteLeagueRecords:
             )
         items = mock_ddb.transact_write_items.call_args[1]["TransactItems"]
         metadata_update = items[0]["Update"]
-        assert "subscription_status" not in metadata_update["UpdateExpression"]
+        assert "subscription_end_time" not in metadata_update["UpdateExpression"]
 
     def test_migrate_writes_only_lookup_no_metadata(
         self, onboarder_writer, monkeypatch

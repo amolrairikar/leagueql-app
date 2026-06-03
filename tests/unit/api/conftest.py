@@ -112,11 +112,16 @@ def client(aws_env_vars):
 
 @pytest.fixture
 def league_lookup_item():
+    # A far-future subscription_end_time is included so the subscription gate
+    # passes in tests that stub a single generic get_item return_value (where the
+    # gate's METADATA read resolves to this same item). Harmless to lookup_league,
+    # which only reads canonical_league_id.
     return {
         "PK": "LEAGUE#123#PLATFORM#SLEEPER",
         "SK": "LEAGUE_LOOKUP",
         "canonical_league_id": "canonical-abc",
         "seasons": {"2023", "2024"},
+        "subscription_end_time": "2999-01-01T00:00:00+00:00",
     }
 
 
@@ -125,10 +130,13 @@ def league_metadata_item():
     # Status no longer lives on METADATA — it is tracked in the JOB_STATUS item.
     # By default there is no in-flight job (no active_job_id), so the concurrency
     # guard lets requests through; guard tests add active_job_id explicitly.
+    # A far-future subscription_end_time keeps gated endpoints reachable by
+    # default; subscription tests override or drop it to exercise the 402 gate.
     return {
         "PK": "LEAGUE#canonical-abc",
         "SK": "METADATA",
         "league_name": "Test League",
+        "subscription_end_time": "2999-01-01T00:00:00+00:00",
     }
 
 

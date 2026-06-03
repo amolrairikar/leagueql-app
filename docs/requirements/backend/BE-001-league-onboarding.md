@@ -17,7 +17,7 @@ and an incremented `LEAGUE_COUNT`.
 - Onboarder Lambda: `src/onboarder/` (`handler.py`, `onboarding_service.py`,
   `espn_client.py`, `sleeper_client.py`, `writer.py`).
 - Request body: `OnboardRequest` (`leagueId`, `platform`, `season` (ESPN only),
-  `s2`/`swid` (private ESPN only)).
+  `s2`/`swid` (private ESPN only), `subscriptionEndTime` (optional)).
 
 ## Edge Cases
 - **League already onboarded:** `ONBOARD` on an existing canonical league returns `200`
@@ -37,6 +37,10 @@ and an incremented `LEAGUE_COUNT`.
 - **Auction vs. snake drafts:** both ESPN and Sleeper auction drafts must be handled
   (`bid_amount`, `nominating_team_id` populated for auction picks).
 - **Invalid `leagueId` format:** must match `^\d+$`; otherwise `422`.
+- **Subscription end time:** when `subscriptionEndTime` is supplied (from the billing
+  provider), it is persisted on the `METADATA` item as `subscription_end_time`; when absent,
+  no subscription attribute is written (the league reads as expired until billing sets one —
+  see [BE-014](BE-014-subscription-access-control.md)).
 
 ## Acceptance Criteria
 - [ ] `POST /leagues?requestType=ONBOARD` with a valid, not-yet-onboarded league returns
@@ -47,6 +51,8 @@ and an incremented `LEAGUE_COUNT`.
 - [ ] `s2` / `swid` cookie values never appear in logs or persisted DynamoDB/S3 items.
 - [ ] On success: a canonical league UUID, `METADATA`, per-platform `LEAGUE_LOOKUP`, and
       all precomputed view items exist; `LEAGUE_COUNT` is incremented by 1.
+- [ ] When `subscriptionEndTime` is supplied, the `METADATA` item carries
+      `subscription_end_time`; when absent, no subscription attribute is written.
 - [ ] Raw platform API payloads are written to S3 under `raw-api-data/{canonical_league_id}/`.
 - [ ] On any failure a `JOB_STATUS` item is written with `status=FAILED` and a
       `failure_code` / `failure_reason` that the frontend can surface.

@@ -105,7 +105,7 @@ the league will not appear as onboarded and a retry will re-run the full onboard
 | `refresh_status` | String | No | Current refresh status for league. Enum: `IN_PROGRESS`, `COMPLETED`, `FAILED` |
 | `last_refresh_at` | String | No | ISO 8601 timestamp of when the most recent refresh completed successfully. Used to enforce the per-league refresh cooldown. |
 | `league_name` | String | No | League name from the most recent season's settings |
-| `subscription_status` | String | No | Per-league subscription state. Enum: `FREE`, `ACTIVE`, `PAST_DUE`, `CANCELED`. Set to `ACTIVE` at onboarding; reads default to `ACTIVE` when absent. |
+| `subscription_end_time` | String | No | ISO 8601 (UTC) timestamp marking when the league's subscription/trial lapses. Access is granted while `now < subscription_end_time`; an **absent** value is treated as expired (no access). Written at onboarding when supplied by the billing provider (Clerk/Stripe). |
 
 **Example:**
 ```json

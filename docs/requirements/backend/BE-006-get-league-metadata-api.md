@@ -2,17 +2,21 @@
 
 ## Description
 Returns whether a league has been onboarded and, if so, its display name, the list of
-onboarded seasons, and its subscription status. `GET /leagues/{leagueId}` resolves the
+onboarded seasons, and its subscription end time. `GET /leagues/{leagueId}` resolves the
 platform league ID to a canonical league ID, reads the `METADATA` item, and lists seasons.
-Used by the frontend to gate access (onboarded vs. not) and to populate season selectors.
+Used by the frontend to gate access (onboarded vs. not, subscription active vs. expired) and
+to populate season selectors. This endpoint is **never** subscription-gated — the frontend
+must be able to read `subscription_end_time` even when the subscription has lapsed
+([BE-014](BE-014-subscription-access-control.md)).
 
 ## Scope
 - Endpoint: `GET /leagues/{leagueId}?platform=` (`src/api/routes.py::get_league`).
-- Returns: `{ seasons: string[], league_name, subscription_status }`.
+- Returns: `{ seasons: string[], league_name, subscription_end_time }`.
 
 ## Edge Cases
 - **League not onboarded:** lookup miss returns `404` with an onboarding hint.
-- **Subscription status absent:** reads default to `DEFAULT_SUBSCRIPTION_STATUS` (`ACTIVE`).
+- **`subscription_end_time` absent:** returned as null/omitted (older items, or no billing
+  value written yet); the frontend treats absent as expired.
 - **`league_name` absent:** may be null/omitted (older items); frontend must tolerate it.
 - **Seasons ordering:** seasons returned sorted (ascending).
 - **Migrated league:** seasons span all platforms under one canonical league ID.
@@ -20,12 +24,12 @@ Used by the frontend to gate access (onboarded vs. not) and to populate season s
 
 ## Acceptance Criteria
 - [ ] `GET /leagues/{leagueId}` for an onboarded league returns `200` with `seasons`,
-      `league_name`, and `subscription_status`.
+      `league_name`, and `subscription_end_time`.
 - [ ] An un-onboarded league returns `404`.
-- [ ] `subscription_status` defaults to `ACTIVE` when the attribute is absent.
+- [ ] `subscription_end_time` is null/omitted when the attribute is absent.
+- [ ] This endpoint is not subscription-gated (always reachable for onboarded leagues).
 - [ ] Response sets `Cache-Control: no-store`.
 - [ ] `seasons` is the unified, sorted list across all platforms for migrated leagues.
 
 ## Sources
-`src/api/routes.py::get_league`, `src/api/main.py` (`DEFAULT_SUBSCRIPTION_STATUS`),
-`docs/db/dynamodb_spec.md` (METADATA).
+`src/api/routes.py::get_league`, `docs/db/dynamodb_spec.md` (METADATA).

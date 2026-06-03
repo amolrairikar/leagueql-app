@@ -48,6 +48,7 @@ class OnboardingPayload(BaseModel):
     season: Optional[str] = Field(default=None, max_length=100)
     s2: Optional[str] = Field(default=None)
     swid: Optional[str] = Field(default=None, max_length=100)
+    subscriptionEndTime: Optional[str] = Field(default=None, max_length=100)
 
 
 class CaseInsensitiveEnum(str, Enum):
@@ -70,16 +71,6 @@ class RequestType(CaseInsensitiveEnum):
     ONBOARD = "ONBOARD"
     REFRESH = "REFRESH"
     MIGRATE = "MIGRATE"
-
-
-class SubscriptionStatus(CaseInsensitiveEnum):
-    FREE = "FREE"
-    ACTIVE = "ACTIVE"
-    PAST_DUE = "PAST_DUE"
-    CANCELED = "CANCELED"
-
-
-DEFAULT_SUBSCRIPTION_STATUS = SubscriptionStatus.ACTIVE
 
 
 class QueryType(CaseInsensitiveEnum):
@@ -158,9 +149,10 @@ from helpers import (  # noqa: E402, F401
     is_job_in_progress,
     lookup_league,
     publish_failure,
+    require_active_subscription,
     set_active_job,
     update_league_count,
-    update_subscription_status,
+    update_subscription_end_time,
 )
 
 # ``delete_league`` is re-exported because external scripts/integration tests

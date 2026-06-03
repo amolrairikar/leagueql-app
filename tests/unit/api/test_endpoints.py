@@ -33,9 +33,10 @@ class TestGetLeagueEndpoint:
         assert "2023" in data["seasons"]
         assert "2024" in data["seasons"]
 
-    def test_subscription_status_defaults_to_active_when_absent(
+    def test_subscription_end_time_null_when_absent(
         self, client, mock_table, league_lookup_item, league_metadata_item
     ):
+        del league_metadata_item["subscription_end_time"]
         mock_table.get_item.side_effect = [
             {"Item": league_lookup_item},
             {"Item": league_metadata_item},
@@ -44,12 +45,12 @@ class TestGetLeagueEndpoint:
             "Items": [{"seasons": {"2024"}, "canonical_league_id": "canonical-abc"}]
         }
         response = client.get("/leagues/123?platform=SLEEPER")
-        assert response.json()["data"]["subscription_status"] == "ACTIVE"
+        assert response.json()["data"]["subscription_end_time"] is None
 
-    def test_returns_subscription_status_when_present(
+    def test_returns_subscription_end_time_when_present(
         self, client, mock_table, league_lookup_item, league_metadata_item
     ):
-        league_metadata_item["subscription_status"] = "PAST_DUE"
+        league_metadata_item["subscription_end_time"] = "2026-07-01T00:00:00+00:00"
         mock_table.get_item.side_effect = [
             {"Item": league_lookup_item},
             {"Item": league_metadata_item},
@@ -58,7 +59,10 @@ class TestGetLeagueEndpoint:
             "Items": [{"seasons": {"2024"}, "canonical_league_id": "canonical-abc"}]
         }
         response = client.get("/leagues/123?platform=SLEEPER")
-        assert response.json()["data"]["subscription_status"] == "PAST_DUE"
+        assert (
+            response.json()["data"]["subscription_end_time"]
+            == "2026-07-01T00:00:00+00:00"
+        )
 
     def test_returns_404_for_unknown_league(self, client, mock_table):
         mock_table.get_item.return_value = {}
@@ -613,10 +617,11 @@ class TestDeleteLeagueEndpoint:
 
 class TestQueryLeagueEndpoint:
     def test_query_with_suffix_returns_item(
-        self, client, mock_table, league_lookup_item
+        self, client, mock_table, league_lookup_item, league_metadata_item
     ):
         mock_table.get_item.side_effect = [
             {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
             {
                 "Item": {
                     "PK": "LEAGUE#canonical-abc",
@@ -678,10 +683,11 @@ class TestQueryLeagueEndpoint:
         assert response.status_code == 404
 
     def test_query_returns_404_when_item_missing(
-        self, client, mock_table, league_lookup_item
+        self, client, mock_table, league_lookup_item, league_metadata_item
     ):
         mock_table.get_item.side_effect = [
             {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
             {},
         ]
         response = client.get(
@@ -704,9 +710,12 @@ class TestQueryLeagueEndpoint:
         response = client.get("/leagues/123/query?platform=SLEEPER&queryType=MATCHUPS")
         assert response.headers["cache-control"] == "private, max-age=300"
 
-    def test_boto_error_returns_500(self, client, mock_table, league_lookup_item):
+    def test_boto_error_returns_500(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
         mock_table.get_item.side_effect = [
             {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
             botocore.exceptions.ClientError(
                 {"Error": {"Code": "InternalError", "Message": "fail"}}, "GetItem"
             ),
@@ -1041,3 +1050,96 @@ class TestEspnMembersEndpoint:
             response = client.post(self._URL, json=self._PAYLOAD)
         assert response.status_code == 502
         assert "parse ESPN API response" in response.json()["detail"]
+
+
+class TestSubscriptionGate:
+    """Gated endpoints return 402 when the league's subscription is expired/absent."""
+
+    @pytest.fixture
+    def expired_metadata_item(self):
+        # No subscription_end_time → treated as expired by the gate.
+        return {
+            "PK": "LEAGUE#canonical-abc",
+            "SK": "METADATA",
+            "league_name": "Test League",
+        }
+
+    def test_query_blocked_when_expired(
+        self, client, mock_table, league_lookup_item, expired_metadata_item
+    ):
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": expired_metadata_item},
+        ]
+        response = client.get("/leagues/123/query?platform=SLEEPER&queryType=MATCHUPS")
+        assert response.status_code == 402
+        assert response.json()["detail"] == "Subscription required"
+
+    def test_espn_members_blocked_when_expired(
+        self, client, mock_table, league_lookup_item, expired_metadata_item
+    ):
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": expired_metadata_item},
+        ]
+        response = client.post(
+            "/leagues/123/espn_members?platform=ESPN&espnLeagueId=99&season=2024",
+            json={"swid": "{abc}", "s2": "s2-token"},
+        )
+        assert response.status_code == 402
+
+    def test_migrate_blocked_when_expired(
+        self, client, mock_table, league_lookup_item, expired_metadata_item
+    ):
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": expired_metadata_item},
+        ]
+        response = client.post(
+            "/leagues/123/migrate?platform=SLEEPER",
+            json={
+                "newPlatformLeagueId": "456",
+                "newPlatform": "ESPN",
+                "season": "2024",
+                "managerMapping": [],
+            },
+        )
+        assert response.status_code == 402
+
+    def test_refresh_blocked_when_expired(
+        self, client, mock_table, league_lookup_item, expired_metadata_item
+    ):
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": expired_metadata_item},
+        ]
+        response = client.post(
+            "/leagues?requestType=REFRESH",
+            json={"leagueId": "123", "platform": "SLEEPER"},
+        )
+        assert response.status_code == 402
+
+    def test_new_onboard_not_blocked(self, client, mock_table, mock_lambda_client):
+        # New-league onboarding has no existing subscription to check.
+        mock_table.get_item.return_value = {}
+        mock_lambda_client.invoke.return_value = {}
+        response = client.post(
+            "/leagues",
+            json={"leagueId": "123", "platform": "SLEEPER", "season": "2024"},
+        )
+        assert response.status_code == 201
+
+    def test_get_league_not_blocked_when_expired(
+        self, client, mock_table, league_lookup_item, expired_metadata_item
+    ):
+        # Status endpoint stays reachable so the frontend can read it.
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": expired_metadata_item},
+        ]
+        mock_table.query.return_value = {
+            "Items": [{"seasons": {"2024"}, "canonical_league_id": "canonical-abc"}]
+        }
+        response = client.get("/leagues/123?platform=SLEEPER")
+        assert response.status_code == 200
+        assert response.json()["data"]["subscription_end_time"] is None

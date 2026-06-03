@@ -22,7 +22,6 @@ from common.job_status import JOB_TTL_SECONDS
 from common.sns import publish_failure as _publish_failure
 from main import (
     SLEEPER_STATE_URL,
-    SubscriptionStatus,
     logger,
 )
 
@@ -444,23 +443,59 @@ def update_league_count(delta: int) -> None:
     )
 
 
-def update_subscription_status(
-    canonical_league_id: str, new_status: SubscriptionStatus
+def require_active_subscription(
+    canonical_league_id: str, metadata: dict | None = None
 ) -> None:
     """
-    Sets the subscription state on a league's METADATA item.
+    Gate access to a league based on its subscription.
+
+    A league's subscription is active while ``now < subscription_end_time``.
+    An absent or past ``subscription_end_time`` is treated as expired and raises
+    ``402 Payment Required`` so the caller (frontend) can surface a paywall.
 
     Args:
         canonical_league_id: The canonical league ID.
-        new_status: The subscription state to set.
+        metadata: Optional pre-fetched METADATA item; when omitted it is read
+            from DynamoDB. Pass it to avoid a redundant read when the caller has
+            already loaded the league's metadata.
+
+    Raises:
+        HTTPException: 402 when the subscription is expired or absent.
     """
-    # TODO(billing): no public/authenticated route exposes this yet. For now
-    # subscription state is changed manually (script/console). A guarded endpoint
-    # or payment-provider webhook backed by this helper is the enforcement-phase
-    # follow-up.
+    if metadata is None:
+        metadata = get_league_metadata(canonical_league_id)
+    subscription_end_time = metadata.get("subscription_end_time")
+    if subscription_end_time:
+        try:
+            end_dt = datetime.fromisoformat(subscription_end_time)
+            if end_dt > datetime.now(timezone.utc):
+                return
+        except ValueError:
+            logger.warning(
+                "Unparseable subscription_end_time %r for league %s; treating as expired",
+                subscription_end_time,
+                canonical_league_id,
+            )
+    raise HTTPException(
+        status_code=status.HTTP_402_PAYMENT_REQUIRED,
+        detail="Subscription required",
+    )
+
+
+def update_subscription_end_time(canonical_league_id: str, end_time: str) -> None:
+    """
+    Sets the subscription end time on a league's METADATA item.
+
+    Args:
+        canonical_league_id: The canonical league ID.
+        end_time: ISO 8601 (UTC) timestamp when the subscription/trial lapses.
+    """
+    # TODO(billing): no public/authenticated route exposes this yet. For now the
+    # value is set at onboarding (from the request payload) or manually. A
+    # Clerk/Stripe webhook backed by this helper is the follow-up.
     main.table.update_item(
         Key={"PK": f"LEAGUE#{canonical_league_id}", "SK": "METADATA"},
-        UpdateExpression="SET subscription_status = :s",
+        UpdateExpression="SET subscription_end_time = :s",
         ConditionExpression="attribute_exists(PK)",
-        ExpressionAttributeValues={":s": new_status.value},
+        ExpressionAttributeValues={":s": end_time},
     )
