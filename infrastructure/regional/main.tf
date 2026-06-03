@@ -107,12 +107,15 @@ module "api_lambda" {
     SNS_TOPIC_ARN         = var.environment == "prod" ? aws_sns_topic.lambda_alerts[0].arn : ""
 
     # Stripe billing (BE-015) — checkout + billing-portal endpoints.
-    STRIPE_SECRET_KEY                = var.stripe_secret_key
-    STRIPE_PRICE_ID                  = var.stripe_price_id
-    STRIPE_TRIAL_PERIOD_DAYS         = tostring(var.stripe_trial_period_days)
-    STRIPE_CHECKOUT_SUCCESS_URL      = local.app_base_url
+    STRIPE_SECRET_KEY        = var.stripe_secret_key
+    STRIPE_PRICE_ID          = var.stripe_price_id
+    STRIPE_TRIAL_PERIOD_DAYS = tostring(var.stripe_trial_period_days)
+    # Checkout success and the Billing Portal "Return to LeagueQL" button both land
+    # on the in-app dashboard home (under the SubscriptionGuard, where the
+    # activation poll runs); an abandoned checkout's cancel goes to the app root.
+    STRIPE_CHECKOUT_SUCCESS_URL      = "${local.app_base_url}/home"
     STRIPE_CHECKOUT_CANCEL_URL       = local.app_base_url
-    STRIPE_BILLING_PORTAL_RETURN_URL = local.app_base_url
+    STRIPE_BILLING_PORTAL_RETURN_URL = "${local.app_base_url}/home"
 
     # Abandoned-checkout self-heal window (BE-015 Layer 1). Shorter in dev for
     # faster manual-testing retries.

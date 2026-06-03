@@ -213,9 +213,11 @@ provisioning, not duplicate charging.)
   templated OpenAPI spec via a `${stripe_webhook_lambda_arn}` var and is **unauthenticated**
   (no Clerk security scheme — Stripe signature verification is the auth); API Gateway is granted
   invoke permission on the webhook Lambda in `regional/main.tf`. Stripe config reaches both
-  Lambdas as environment variables; the checkout return URLs are derived from `environment`
-  (prod → `https://leagueql.com`, dev → `http://localhost:5173`). CI builds/zips the new Lambda
-  and passes the Stripe secrets as `TF_VAR_*` (mode-selected by environment).
+  Lambdas as environment variables; the return URLs are derived from `environment` (prod →
+  `https://leagueql.com`, dev → `http://localhost:5173`). Checkout **success** and the Billing
+  Portal **return** both target the in-app dashboard home (`…/home`, under the SubscriptionGuard
+  where the activation poll runs); checkout **cancel** targets the app root. CI builds/zips the
+  new Lambda and passes the Stripe secrets as `TF_VAR_*` (mode-selected by environment).
 - **`pending_checkout` self-heal window is configurable** via the `CHECKOUT_PENDING_TTL_MINUTES`
   env var (`main.py`, default 30); Terraform sets **5 in dev / 30 in prod** so abandoned-checkout
   retries unblock quickly in dev. Until it lapses (or the webhook records the subscription), a

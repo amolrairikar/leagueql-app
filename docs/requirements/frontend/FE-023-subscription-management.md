@@ -21,6 +21,8 @@ cancellation surfaces the paywall right away.
   `useSubscription` and the appropriate primary action — **Manage billing** (portal) when a Stripe
   customer exists, otherwise **Subscribe** ([FE-022]).
 - **Manage trigger:** on "Manage billing" → call the accessor → `window.location.assign(url)`.
+- **Return destination:** the portal's "Return to LeagueQL" button (`return_url`) lands the user
+  on the in-app **dashboard home** (`/home`).
 - **Return handling:** refresh subscription state on return (`clearApiCache()`), so an immediate
   cancellation flips gated pages to the paywall.
 - **No-customer routing:** a `404` from the portal endpoint (no Stripe customer yet) presents the

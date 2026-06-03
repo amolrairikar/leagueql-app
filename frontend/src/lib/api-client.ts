@@ -71,7 +71,19 @@ function getSessionToken(): string | null {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
-async function _doFetch<T>(path: string, init?: RequestInit): Promise<T> {
+// Per-request options. `suppressErrorStatuses` lets a caller keep an *expected*
+// error (e.g. a 404 from a best-effort query) out of the global error alert; the
+// promise still rejects so the caller's own handling applies.
+interface FetchOpts {
+  skipCache?: boolean;
+  suppressErrorStatuses?: number[];
+}
+
+async function _doFetch<T>(
+  path: string,
+  init?: RequestInit,
+  opts?: FetchOpts,
+): Promise<T> {
   const token = getSessionToken();
   const response = await fetch(`${API_BASE_URL}${path}`, {
     headers: {
@@ -96,7 +108,9 @@ async function _doFetch<T>(path: string, init?: RequestInit): Promise<T> {
       message = response.statusText;
     }
     const error = new ApiError(response.status, response.statusText, message);
-    _setApiError(error);
+    if (!opts?.suppressErrorStatuses?.includes(response.status)) {
+      _setApiError(error);
+    }
     throw error;
   }
 
@@ -113,14 +127,14 @@ const _cache = new Map<string, { data: unknown; expires: number }>();
 function apiFetch<T>(
   path: string,
   init?: RequestInit,
-  opts?: { skipCache?: boolean },
+  opts?: FetchOpts,
 ): Promise<T> {
   const method = (init?.method ?? 'GET').toUpperCase();
-  if (method !== 'GET') return _doFetch<T>(path, init);
+  if (method !== 'GET') return _doFetch<T>(path, init, opts);
 
   // Polling endpoints (e.g. job status) must read fresh each time, so skip both
   // the settled-response cache and in-flight dedup.
-  if (opts?.skipCache) return _doFetch<T>(path, init);
+  if (opts?.skipCache) return _doFetch<T>(path, init, opts);
 
   const cached = _cache.get(path);
   if (cached && Date.now() < cached.expires)
@@ -129,7 +143,7 @@ function apiFetch<T>(
   const existing = _inflight.get(path);
   if (existing) return existing as Promise<T>;
 
-  const promise = _doFetch<T>(path, init).then(
+  const promise = _doFetch<T>(path, init, opts).then(
     (data) => {
       _cache.set(path, { data, expires: Date.now() + CACHE_TTL_MS });
       _inflight.delete(path);
@@ -155,7 +169,7 @@ export const apiClient = {
   get<T>(
     path: string,
     init?: Omit<RequestInit, 'method'>,
-    opts?: { skipCache?: boolean },
+    opts?: FetchOpts,
   ): Promise<T> {
     return apiFetch<T>(path, { ...init, method: 'GET' }, opts);
   },

@@ -21,6 +21,8 @@ the app therefore refreshes subscription state with the cache bypassed and shows
 - **Subscribe trigger:** a "Subscribe" button in `subscription-required.tsx` (paywall) and in the
   Manage Subscription dialog when the subscription is not active. On click → call the accessor →
   `window.location.assign(url)`.
+- **Return destination:** Stripe `success_url` lands the user on the in-app **dashboard home**
+  (`/home`), which is under the `SubscriptionGuard` so the activation poll runs there.
 - **Return handling:** on landing back in the app, refresh subscription state — `clearApiCache()`
   (or read `getLeague` with `skipCache`) so the webhook-written `subscription_end_time` is read,
   with a short bounded poll / "activating" state to absorb webhook lag. If the poll window

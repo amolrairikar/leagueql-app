@@ -16,10 +16,15 @@ export function queryLeague<T>(
   leagueId: string,
   platform: Platform,
   queryType: string,
+  opts?: { suppressErrorStatuses?: number[] },
 ): Promise<{ data: T[] }> {
   if (isDemoMode()) return queryDemoLeague<T>(queryType);
   const params = new URLSearchParams({ platform, queryType });
-  return apiClient.get<{ data: T[] }>(`/leagues/${leagueId}/query?${params}`);
+  return apiClient.get<{ data: T[] }>(
+    `/leagues/${leagueId}/query?${params}`,
+    undefined,
+    opts,
+  );
 }
 
 export interface PlatformMigrationEntry {
@@ -41,6 +46,9 @@ export async function getMigrationMapping(
     leagueId,
     platform,
     'PLATFORM_MIGRATION',
+    // A league with no migration history legitimately 404s here; this is a
+    // best-effort enrichment query, so keep that out of the global error alert.
+    { suppressErrorStatuses: [404] },
   )
     .then((r) => r.data)
     .catch(() => [] as PlatformMigrationEntry[]);
