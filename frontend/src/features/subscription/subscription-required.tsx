@@ -5,6 +5,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { useStripeBilling } from '@/features/subscription/use-stripe-billing';
 import { getLeagueCookies } from '@/lib/cookie-handler';
+import { ErrorAlert } from '@/lib/error-alert';
 
 /**
  * Inline paywall shown in place of an analytics page when the current league's
@@ -21,7 +22,7 @@ export function SubscriptionRequired({
 }: {
   activationFailed?: boolean;
 }) {
-  const { startCheckout, checkoutLoading } = useStripeBilling();
+  const { startCheckout, checkoutLoading, error } = useStripeBilling();
   const { leagueId, platform } = getLeagueCookies();
 
   return (
@@ -51,6 +52,7 @@ export function SubscriptionRequired({
         {checkoutLoading && <Spinner className="size-4" />}
         Subscribe
       </Button>
+      {error && <ErrorAlert message={error} className="max-w-md text-left" />}
     </div>
   );
 }

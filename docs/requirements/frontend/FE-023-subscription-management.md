@@ -36,8 +36,9 @@ cancellation surfaces the paywall right away.
   the sidebar alert dot ([FE-021]).
 - **In-flight state:** the Manage billing button shows a loading state while the portal session is
   created and is disabled meanwhile.
-- **Error creating the portal session:** surfaced via the shared `ApiError` handling; the button
-  returns to idle.
+- **Error creating the portal session:** the error message from the rejected request is held in
+  `useStripeBilling` and shown inline (an `ErrorAlert`) inside the dialog; the button returns to
+  idle. A `404` is the exception — it triggers the Subscribe fallback rather than showing an error.
 - **Return after immediate cancellation:** the refreshed state reads expired, so gated pages show
   the paywall on the next render.
 
@@ -49,11 +50,14 @@ cancellation surfaces the paywall right away.
 - [ ] A `404` (no billing account) shows the Subscribe action ([FE-022]) instead of Manage billing.
 - [ ] On return from the portal, subscription state is refreshed so an immediate cancellation
       surfaces the paywall.
-- [ ] The Manage billing button shows a loading state and returns to idle on error.
+- [ ] The Manage billing button shows a loading state and returns to idle on error, with a
+      non-404 failure shown inline (an `ErrorAlert`) in the dialog.
 - [ ] Demo mode shows a non-billing placeholder.
 
 ## Sources
 `src/components/api/billing.ts` (new), `src/features/subscription/manage-subscription-dialog.tsx`,
-`src/features/subscription/use-subscription.ts`, `src/features/sidebar/app-sidebar.tsx`,
-`src/lib/api-client.ts`, [BE-015](../backend/BE-015-stripe-billing.md),
+`src/features/subscription/use-subscription.ts`,
+`src/features/subscription/use-stripe-billing.ts`, `src/features/sidebar/app-sidebar.tsx`,
+`src/lib/error-alert.tsx`, `src/lib/api-client.ts`,
+[BE-015](../backend/BE-015-stripe-billing.md),
 [FE-021](FE-021-subscription-access-control.md), [FE-022](FE-022-subscription-checkout.md).

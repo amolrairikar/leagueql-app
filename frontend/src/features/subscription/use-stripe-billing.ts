@@ -10,20 +10,22 @@ import { ApiError, clearApiCache } from '@/lib/api-client';
 /**
  * Drives the Stripe Checkout (FE-022) and Billing Portal (FE-023) redirects.
  *
- * Errors are surfaced by the global API error alert (mounted in `AppLayout`); this
- * hook only manages the per-action loading flags and the checkout-return marker.
- * On success the browser is redirected to Stripe, so the loading flag intentionally
- * stays set until navigation.
+ * Owns the per-action loading flags and a shared `error` message that callers
+ * render inline (e.g. via `ErrorAlert`) near the Subscribe / Manage billing
+ * button. On success the browser is redirected to Stripe, so the loading flag
+ * intentionally stays set until navigation.
  */
 export function useStripeBilling() {
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [portalLoading, setPortalLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function startCheckout(
     leagueId: string,
     platform: Platform,
   ): Promise<void> {
     if (checkoutLoading) return;
+    setError(null);
     setCheckoutLoading(true);
     try {
       const res = await createCheckoutSession(leagueId, platform);
@@ -32,28 +34,45 @@ export function useStripeBilling() {
       window.location.assign(res.data.url);
     } catch (err) {
       // A 409 means the league already has a subscription / in-flight checkout;
-      // bust the cache so the next subscription read reflects reality. The error
-      // (incl. the 409) is shown by the global ApiErrorAlert.
+      // bust the cache so the next subscription read reflects reality.
       if (err instanceof ApiError && err.status === 409) clearApiCache();
+      setError(
+        err instanceof ApiError ? err.message : 'Failed to start checkout.',
+      );
       setCheckoutLoading(false);
     }
   }
 
   /**
    * Opens the Stripe Billing Portal. Rethrows so the caller can fall back to
-   * Checkout on a 404 (no Stripe customer yet — FE-023).
+   * Checkout on a 404 (no Stripe customer yet — FE-023); the 404 itself is not
+   * recorded as an error since it triggers that fallback.
    */
   async function openBillingPortal(): Promise<void> {
     if (portalLoading) return;
+    setError(null);
     setPortalLoading(true);
     try {
       const res = await createBillingPortalSession();
       window.location.assign(res.data.url);
     } catch (err) {
       setPortalLoading(false);
+      if (!(err instanceof ApiError && err.status === 404)) {
+        setError(
+          err instanceof ApiError
+            ? err.message
+            : 'Failed to open billing portal.',
+        );
+      }
       throw err;
     }
   }
 
-  return { startCheckout, openBillingPortal, checkoutLoading, portalLoading };
+  return {
+    startCheckout,
+    openBillingPortal,
+    checkoutLoading,
+    portalLoading,
+    error,
+  };
 }

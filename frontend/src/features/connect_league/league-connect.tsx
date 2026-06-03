@@ -46,7 +46,7 @@ import {
   onEspnExtensionReady,
   requestEspnCookies,
 } from '@/lib/espn-extension';
-import { ApiError, clearApiError } from '@/lib/api-client';
+import { ApiError } from '@/lib/api-client';
 
 const API_PLATFORM = { espn: 'ESPN', sleeper: 'SLEEPER' } as const;
 
@@ -250,9 +250,13 @@ export default function LeagueConnect() {
       requestType = 'REFRESH';
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) {
-        clearApiError();
         requestType = 'ONBOARD';
       } else {
+        // A non-404 lookup failure (network / 5xx) isn't an "onboard vs refresh"
+        // signal — surface the generic failure message inline (the backend detail
+        // is rarely actionable here) rather than silently aborting.
+        setFailureReason(null);
+        setPollStatus('failed');
         return;
       }
     }
@@ -284,6 +288,10 @@ export default function LeagueConnect() {
       }
     }
     if (!onboardSucceeded) {
+      // Retries exhausted on a network / 5xx failure — surface it inline.
+      setLastRequestType(requestType);
+      setFailureReason(null);
+      setPollStatus('failed');
       return;
     }
 

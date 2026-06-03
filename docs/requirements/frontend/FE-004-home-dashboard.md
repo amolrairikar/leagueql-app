@@ -23,6 +23,9 @@ is counted consistently over time.
 - **Missing logos:** fall back to a generated team avatar / owner-stable color.
 - **No champion yet (season in progress):** unique-champion and championship counts handle
   the absence of a completed title.
+- **Data load fails:** all summary sections derive from a single league-data request; on failure
+  the dashboard shows one inline error (an `ErrorAlert`) in place of the stats/champions/standings/
+  chart, rather than silently rendering empty tables. There is no global error banner.
 
 ## Acceptance Criteria
 - [ ] `/home` shows all-time regular-season standings and playoff standings with
@@ -31,6 +34,8 @@ is counted consistently over time.
 - [ ] Headline stats show total matchups, total members, and unique champions.
 - [ ] Owner identities are correct across migrated platforms.
 - [ ] The dashboard renders correctly for a one-season league and an in-progress season.
+- [ ] If the league-data request fails, an inline error is shown in place of the summary sections
+      (no global error banner).
 
 ## Sources
-`src/features/home_page/home-page.tsx`.
+`src/features/home_page/home-page.tsx`, `src/lib/error-alert.tsx`, `src/lib/result.ts`.

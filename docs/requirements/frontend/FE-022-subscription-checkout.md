@@ -41,13 +41,14 @@ the app therefore refreshes subscription state with the cache bypassed and shows
 - **Demo mode:** no checkout — the Subscribe action is hidden / bypassed (no subscription concept).
 - **No league connected:** the Subscribe action is not shown (nothing to subscribe).
 - **409 (already subscribed / another user's in-flight checkout):** the backend message is
-  surfaced by the shared `ApiErrorAlert` (mounted in `AppLayout`), the cache is busted to refresh
-  subscription state, and the button returns to idle instead of redirecting again. The same user
-  re-attempting their *own* checkout does **not** 409 (they re-claim their marker); a 409 from a
-  *different* user's marker self-heals once its window lapses
-  ([BE-015](../backend/BE-015-stripe-billing.md)).
-- **Network / 5xx creating the session:** surfaced via the same `ApiErrorAlert`
-  (`src/lib/api-client.ts` records the error); the button returns to idle so the user can retry.
+  surfaced by an inline `ErrorAlert` rendered next to the Subscribe button (the `useStripeBilling`
+  hook exposes the error message), the cache is busted to refresh subscription state, and the
+  button returns to idle instead of redirecting again. The same user re-attempting their *own*
+  checkout does **not** 409 (they re-claim their marker); a 409 from a *different* user's marker
+  self-heals once its window lapses ([BE-015](../backend/BE-015-stripe-billing.md)).
+- **Network / 5xx creating the session:** the error message from the rejected request is held in
+  `useStripeBilling` and shown inline next to the Subscribe button; the button returns to idle so
+  the user can retry.
 - **Webhook lag on return:** the subscription may not read active immediately; show an
   "activating subscription" state and poll `getLeague` (cache-busted) for a bounded interval
   before falling back to the paywall.
@@ -68,12 +69,15 @@ the app therefore refreshes subscription state with the cache bypassed and shows
       activating state until the subscription reads active, then renders the page.
 - [ ] If activation does not complete within the poll window, the paywall shows a
       "couldn't confirm your subscription" notice instead of reverting silently.
-- [ ] Errors creating the session surface through the standard API error UI.
+- [ ] Errors creating the session are shown inline (an `ErrorAlert`) next to the Subscribe button
+      in the paywall / dialog — there is no global error banner.
 
 ## Sources
 `src/components/api/billing.ts` (new), `src/components/api/types.ts`,
 `src/features/subscription/subscription-required.tsx`,
 `src/features/subscription/manage-subscription-dialog.tsx`,
-`src/features/subscription/use-subscription.ts`, `src/lib/api-client.ts`,
+`src/features/subscription/use-subscription.ts`,
+`src/features/subscription/use-stripe-billing.ts`, `src/lib/error-alert.tsx`,
+`src/lib/api-client.ts`,
 [BE-015](../backend/BE-015-stripe-billing.md), [FE-021](FE-021-subscription-access-control.md),
 [FE-023](FE-023-subscription-management.md).

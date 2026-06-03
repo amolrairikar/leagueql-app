@@ -16,6 +16,8 @@ import type { ManagerStandingsItem } from '@/features/manager_history/api-calls'
 import type { MatchupItem } from '@/features/matchups/api-calls';
 import { getLeagueCookies } from '@/lib/cookie-handler';
 import { getLeague } from '@/components/api/leagues';
+import { ErrorAlert } from '@/lib/error-alert';
+import { toResult, type Result } from '@/lib/result';
 
 type StatItem = { label: string; value: string; sub?: string };
 
@@ -164,14 +166,12 @@ function buildChartData(
 }
 
 function StandingsChart({
-  promise,
+  standings,
+  migrationMapping,
 }: {
-  promise: Promise<{
-    standings: ManagerStandingsItem[];
-    migrationMapping: Map<string, string>;
-  }>;
+  standings: ManagerStandingsItem[];
+  migrationMapping: Map<string, string>;
 }) {
-  const { standings, migrationMapping } = use(promise);
   const [selectedOwnerId, setSelectedOwnerId] = useState<string | null>(null);
 
   const { owners, colorMap, chartData, chartConfig, maxRank } = useMemo(
@@ -384,11 +384,10 @@ function buildAllTimeStandings(
 }
 
 function AllTimeStandingsTable({
-  promise,
-}: {
-  promise: Promise<AllTimeStandingsData>;
-}) {
-  const { standings, matchups, migrationMapping } = use(promise);
+  standings,
+  matchups,
+  migrationMapping,
+}: AllTimeStandingsData) {
   const [showPlayoffs, setShowPlayoffs] = useState(false);
 
   // Owner-stable colors (alphabetical), matching the standings chart below
@@ -588,8 +587,7 @@ function AllTimeStandingsTable({
   );
 }
 
-function ChampionsGrid({ promise }: { promise: Promise<ChampionItem[]> }) {
-  const champions = use(promise);
+function ChampionsGrid({ champions }: { champions: ChampionItem[] }) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 mb-6">
       {champions.map((champ) => (
@@ -617,19 +615,15 @@ function ChampionsGrid({ promise }: { promise: Promise<ChampionItem[]> }) {
 
 function StatsWithTotalGames({
   stats,
-  totalGamesPromise,
-  championsPromise,
-  totalMembersPromise,
+  totalGames,
+  champions,
+  totalMembers,
 }: {
   stats: StatItem[];
-  totalGamesPromise: Promise<number>;
-  championsPromise: Promise<ChampionItem[]>;
-  totalMembersPromise: Promise<number>;
+  totalGames: number;
+  champions: ChampionItem[];
+  totalMembers: number;
 }) {
-  const totalGames = use(totalGamesPromise);
-  const champions = use(championsPromise);
-  const totalMembers = use(totalMembersPromise);
-
   const uniqueChampions = new Set(
     champions.filter((c) => c.owner !== '—').map((c) => c.owner),
   ).size;
@@ -671,6 +665,129 @@ function StatsWithTotalGames({
   );
 }
 
+function computeChampions(
+  standings: ManagerStandingsItem[],
+  seasons: string[],
+): ChampionItem[] {
+  if (seasons.length === 0) return [];
+  const bySeasonMap = new Map<string, ManagerStandingsItem[]>();
+  for (const row of standings) {
+    if (!bySeasonMap.has(row.season)) bySeasonMap.set(row.season, []);
+    bySeasonMap.get(row.season)!.push(row);
+  }
+  return seasons.map((season) => {
+    const champion = bySeasonMap.get(season)?.find((s) => s.champion === 'Yes');
+    if (champion) {
+      return {
+        season,
+        name: champion.team_name || `Team ${champion.owner_username}`,
+        owner: champion.owner_username,
+        record: champion.record,
+        pfGame: champion.avg_pf.toFixed(1),
+      };
+    }
+    return {
+      season,
+      name: 'TBD',
+      owner: '—',
+      record: '—',
+      pfGame: '—',
+      highlight: true,
+    };
+  });
+}
+
+function computeTotalGames(matchups: MatchupItem[], seasons: string[]): number {
+  const countBySeason = new Map<string, number>();
+  for (const m of matchups) {
+    countBySeason.set(m.season, (countBySeason.get(m.season) ?? 0) + 1);
+  }
+  return seasons.reduce(
+    (sum, season) => sum + (countBySeason.get(season) ?? 0),
+    0,
+  );
+}
+
+// A member must appear in matchups, counted on the same remapped owner_id key
+// the all-time standings table uses, so the two stay consistent.
+function computeTotalMembers(
+  matchups: MatchupItem[],
+  migrationMapping: Map<string, string>,
+): number {
+  const remapOwner = (id: string) => migrationMapping.get(id) ?? id;
+  const owners = new Set<string>();
+  for (const m of matchups) {
+    owners.add(remapOwner(m.team_a_primary_owner_id));
+    owners.add(remapOwner(m.team_b_primary_owner_id));
+  }
+  return owners.size;
+}
+
+// Stacked skeletons matching the summary layout, shown while the single data
+// call resolves.
+function SummarySkeleton() {
+  return (
+    <>
+      <StatsSkeleton />
+      <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-2.5">
+        Champions
+      </p>
+      <ChampionsSkeleton />
+      <AllTimeStandingsSkeleton />
+      <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-2.5">
+        Final Standings Position by Season
+      </p>
+      <Skeleton className="h-56 w-full" />
+    </>
+  );
+}
+
+// Consumes the single league-data call. All summary sections derive from this
+// one request, so on failure we surface a single inline error in place of the
+// (otherwise empty) tables and chart rather than silently rendering blanks.
+function LeagueSummary({
+  promise,
+  stats,
+  seasons,
+}: {
+  promise: Promise<Result<AllTimeStandingsData>>;
+  stats: StatItem[];
+  seasons: string[];
+}) {
+  const result = use(promise);
+  if (!result.ok) {
+    return <ErrorAlert message={result.error} className="my-6" />;
+  }
+  const { standings, matchups, migrationMapping } = result.data;
+  const champions = computeChampions(standings, seasons);
+  return (
+    <>
+      <StatsWithTotalGames
+        stats={stats}
+        totalGames={computeTotalGames(matchups, seasons)}
+        champions={champions}
+        totalMembers={computeTotalMembers(matchups, migrationMapping)}
+      />
+      <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-2.5">
+        Champions
+      </p>
+      <ChampionsGrid champions={champions} />
+      <AllTimeStandingsTable
+        standings={standings}
+        matchups={matchups}
+        migrationMapping={migrationMapping}
+      />
+      <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-2.5">
+        Final Standings Position by Season
+      </p>
+      <StandingsChart
+        standings={standings}
+        migrationMapping={migrationMapping}
+      />
+    </>
+  );
+}
+
 export default function HomePage() {
   const { leagueId, platform, seasons } = useMemo(() => getLeagueCookies(), []);
 
@@ -699,109 +816,21 @@ export default function HomePage() {
     return [];
   }, [seasons]);
 
-  // Single API call for all data (getManagerHistoryData already uses optimized single queries)
-  const allDataPromise = useMemo(
-    (): Promise<{
-      standings: ManagerStandingsItem[];
-      matchups: MatchupItem[];
-      migrationMapping: Map<string, string>;
-    }> =>
+  // Single API call for all data (getManagerHistoryData already uses optimized
+  // single queries). Wrapped in toResult so a failure surfaces inline via
+  // LeagueSummary instead of rejecting / showing empty tables.
+  const dataResultPromise = useMemo(
+    (): Promise<Result<AllTimeStandingsData>> =>
       leagueId && seasons.length > 0
-        ? getManagerHistoryData(leagueId, platform, seasons)
-            // Intentional empty-state fallback — apiClient surfaces the error to the global store before throwing
-            .catch(() => ({
-              standings: [],
-              matchups: [],
-              migrationMapping: new Map(),
-            }))
+        ? toResult(
+            getManagerHistoryData(leagueId, platform, seasons),
+            'Failed to load league data.',
+          )
         : Promise.resolve({
-            standings: [],
-            matchups: [],
-            migrationMapping: new Map(),
+            ok: true as const,
+            data: { standings: [], matchups: [], migrationMapping: new Map() },
           }),
     [leagueId, platform, seasons],
-  );
-
-  // Derive champions from the single data call
-  const championsPromise = useMemo(
-    (): Promise<ChampionItem[]> =>
-      allDataPromise.then(({ standings }) => {
-        if (seasons.length === 0) return [];
-        const bySeasonMap = new Map<string, ManagerStandingsItem[]>();
-        for (const row of standings) {
-          if (!bySeasonMap.has(row.season)) bySeasonMap.set(row.season, []);
-          bySeasonMap.get(row.season)!.push(row);
-        }
-        return seasons.map((season) => {
-          const champion = bySeasonMap
-            .get(season)
-            ?.find((s) => s.champion === 'Yes');
-          if (champion) {
-            return {
-              season,
-              name: champion.team_name || `Team ${champion.owner_username}`,
-              owner: champion.owner_username,
-              record: champion.record,
-              pfGame: champion.avg_pf.toFixed(1),
-            };
-          }
-          return {
-            season,
-            name: 'TBD',
-            owner: '—',
-            record: '—',
-            pfGame: '—',
-            highlight: true,
-          };
-        });
-      }),
-    [allDataPromise, seasons],
-  );
-
-  // Derive total games from the single data call
-  const totalGamesPromise = useMemo(
-    (): Promise<number> =>
-      allDataPromise.then(({ matchups }) => {
-        const countBySeason = new Map<string, number>();
-        for (const m of matchups) {
-          countBySeason.set(m.season, (countBySeason.get(m.season) ?? 0) + 1);
-        }
-        return seasons.reduce(
-          (sum, season) => sum + (countBySeason.get(season) ?? 0),
-          0,
-        );
-      }),
-    [allDataPromise, seasons],
-  );
-
-  // Derive total members from the single data call.
-  // A member must appear in matchups, counted on the same remapped owner_id
-  // key the all-time standings table uses, so the two stay consistent.
-  const totalMembersPromise = useMemo(
-    (): Promise<number> =>
-      allDataPromise.then(({ matchups, migrationMapping }) => {
-        const remapOwner = (id: string) => migrationMapping.get(id) ?? id;
-        const owners = new Set<string>();
-        for (const m of matchups) {
-          owners.add(remapOwner(m.team_a_primary_owner_id));
-          owners.add(remapOwner(m.team_b_primary_owner_id));
-        }
-        return owners.size;
-      }),
-    [allDataPromise],
-  );
-
-  // Use standings from the single data call for chart
-  const standingsPromise = useMemo(
-    (): Promise<{
-      standings: ManagerStandingsItem[];
-      migrationMapping: Map<string, string>;
-    }> =>
-      allDataPromise.then(({ standings, migrationMapping }) => ({
-        standings,
-        migrationMapping,
-      })),
-    [allDataPromise],
   );
 
   return (
@@ -820,35 +849,13 @@ export default function HomePage() {
           <LeagueNameHeader promise={leagueNamePromise} />
         </Suspense>
 
-        {/* Stats Grid */}
-        <Suspense fallback={<StatsSkeleton />}>
-          <StatsWithTotalGames
+        {/* Stats, champions, all-time standings and chart all derive from one call */}
+        <Suspense fallback={<SummarySkeleton />}>
+          <LeagueSummary
+            promise={dataResultPromise}
             stats={stats}
-            totalGamesPromise={totalGamesPromise}
-            championsPromise={championsPromise}
-            totalMembersPromise={totalMembersPromise}
+            seasons={seasons}
           />
-        </Suspense>
-
-        {/* Champions */}
-        <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-2.5">
-          Champions
-        </p>
-        <Suspense fallback={<ChampionsSkeleton />}>
-          <ChampionsGrid promise={championsPromise} />
-        </Suspense>
-
-        {/* All-time standings */}
-        <Suspense fallback={<AllTimeStandingsSkeleton />}>
-          <AllTimeStandingsTable promise={allDataPromise} />
-        </Suspense>
-
-        {/* Chart */}
-        <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-2.5">
-          Final Standings Position by Season
-        </p>
-        <Suspense fallback={<Skeleton className="h-56 w-full" />}>
-          <StandingsChart promise={standingsPromise} />
         </Suspense>
       </div>
     </div>

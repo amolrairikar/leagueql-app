@@ -12,6 +12,7 @@ import { useStripeBilling } from '@/features/subscription/use-stripe-billing';
 import { useSubscription } from '@/features/subscription/use-subscription';
 import { ApiError } from '@/lib/api-client';
 import { getLeagueCookies, isDemoMode } from '@/lib/cookie-handler';
+import { ErrorAlert } from '@/lib/error-alert';
 
 interface ManageSubscriptionDialogProps {
   open: boolean;
@@ -43,8 +44,13 @@ export function ManageSubscriptionDialog({
   const demoMode = isDemoMode();
   const { leagueId, platform } = getLeagueCookies();
   const { isActive, expiringSoon, endTime } = useSubscription();
-  const { startCheckout, openBillingPortal, checkoutLoading, portalLoading } =
-    useStripeBilling();
+  const {
+    startCheckout,
+    openBillingPortal,
+    checkoutLoading,
+    portalLoading,
+    error,
+  } = useStripeBilling();
 
   // Evidence of an existing Stripe customer: a subscription_end_time has been
   // written for this league at some point. A 404 from the portal corrects this.
@@ -122,6 +128,8 @@ export function ManageSubscriptionDialog({
             </DialogFooter>
           </>
         )}
+
+        {error && <ErrorAlert message={error} />}
       </DialogContent>
     </Dialog>
   );
