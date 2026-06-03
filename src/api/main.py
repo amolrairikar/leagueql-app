@@ -141,10 +141,10 @@ stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
 STRIPE_PRICE_ID = os.environ.get("STRIPE_PRICE_ID", "")
 STRIPE_TRIAL_PERIOD_DAYS = int(os.environ.get("STRIPE_TRIAL_PERIOD_DAYS", "14"))
 STRIPE_CHECKOUT_SUCCESS_URL = os.environ.get(
-    "STRIPE_CHECKOUT_SUCCESS_URL", "https://leagueql.com/home"
+    "STRIPE_CHECKOUT_SUCCESS_URL", "https://leagueql.com/home?checkout=success"
 )
 STRIPE_CHECKOUT_CANCEL_URL = os.environ.get(
-    "STRIPE_CHECKOUT_CANCEL_URL", "https://leagueql.com"
+    "STRIPE_CHECKOUT_CANCEL_URL", "https://leagueql.com/home"
 )
 STRIPE_BILLING_PORTAL_RETURN_URL = os.environ.get(
     "STRIPE_BILLING_PORTAL_RETURN_URL", "https://leagueql.com/home"

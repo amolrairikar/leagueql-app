@@ -1,11 +1,7 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { SubscriptionState } from '../use-subscription';
-import {
-  deriveState,
-  markCheckoutPending,
-  pollUntilActive,
-} from '../use-subscription';
+import { deriveState, pollUntilActive } from '../use-subscription';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -96,16 +92,5 @@ describe('pollUntilActive', () => {
     });
     expect(res.isActive).toBe(false);
     expect(fetchState).toHaveBeenCalledTimes(3);
-  });
-});
-
-describe('markCheckoutPending', () => {
-  afterEach(() => sessionStorage.clear());
-
-  it('records the league id for the return-from-checkout poll', () => {
-    markCheckoutPending('league-9');
-    expect(sessionStorage.getItem('leagueql:checkout-pending')).toBe(
-      'league-9',
-    );
   });
 });

@@ -1,7 +1,5 @@
 import { useState } from 'react';
 
-import { markCheckoutPending } from './use-subscription';
-
 import {
   createBillingPortalSession,
   createCheckoutSession,
@@ -29,8 +27,8 @@ export function useStripeBilling() {
     setCheckoutLoading(true);
     try {
       const res = await createCheckoutSession(leagueId, platform);
-      // Record the pending checkout so the return mount polls for activation.
-      markCheckoutPending(leagueId);
+      // On return, Stripe's success_url carries `?checkout=success`, which drives
+      // the activation poll in useSubscription.
       window.location.assign(res.data.url);
     } catch (err) {
       // A 409 means the league already has a subscription / in-flight checkout;

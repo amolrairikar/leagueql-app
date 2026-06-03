@@ -110,11 +110,12 @@ module "api_lambda" {
     STRIPE_SECRET_KEY        = var.stripe_secret_key
     STRIPE_PRICE_ID          = var.stripe_price_id
     STRIPE_TRIAL_PERIOD_DAYS = tostring(var.stripe_trial_period_days)
-    # Checkout success and the Billing Portal "Return to LeagueQL" button both land
-    # on the in-app dashboard home (under the SubscriptionGuard, where the
-    # activation poll runs); an abandoned checkout's cancel goes to the app root.
-    STRIPE_CHECKOUT_SUCCESS_URL      = "${local.app_base_url}/home"
-    STRIPE_CHECKOUT_CANCEL_URL       = local.app_base_url
+    # Checkout success, cancel, and the Billing Portal "Return to LeagueQL" button
+    # all land on the in-app dashboard home. Success carries `?checkout=success`,
+    # which drives the activation poll in useSubscription; cancel has no param so it
+    # never polls.
+    STRIPE_CHECKOUT_SUCCESS_URL      = "${local.app_base_url}/home?checkout=success"
+    STRIPE_CHECKOUT_CANCEL_URL       = "${local.app_base_url}/home"
     STRIPE_BILLING_PORTAL_RETURN_URL = "${local.app_base_url}/home"
 
     # Abandoned-checkout self-heal window (BE-015 Layer 1). Shorter in dev for

@@ -11,9 +11,9 @@ export const SUBSCRIPTION_EXPIRY_WARNING_DAYS = 14;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 // Checkout return handling (FE-022): the backend records access asynchronously via
-// the Stripe webhook, so after returning from Checkout we poll (cache-busted) for a
-// bounded window before falling back to the paywall.
-const CHECKOUT_PENDING_KEY = 'leagueql:checkout-pending';
+// the Stripe webhook, so after a *successful* Checkout (Stripe `success_url` carries
+// `?checkout=success`) we poll (cache-busted) for a bounded window before falling
+// back to the paywall. A cancel returns without the param, so it never polls.
 const ACTIVATION_POLL_ATTEMPTS = 5;
 const ACTIVATION_POLL_INTERVAL_MS = 2000;
 
@@ -55,27 +55,26 @@ const ACTIVATING: SubscriptionState = {
   activating: true,
 };
 
-/** Marks that a Checkout was just started for `leagueId`, so the next mount polls. */
-export function markCheckoutPending(leagueId: string): void {
+/**
+ * True when this mount is a return from a *successful* Checkout (the Stripe
+ * `success_url` carries `?checkout=success`). Consumes the param via
+ * `history.replaceState` so a refresh doesn't re-trigger the activation poll.
+ */
+function consumeCheckoutSuccess(): boolean {
   try {
-    sessionStorage.setItem(CHECKOUT_PENDING_KEY, leagueId);
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('checkout') !== 'success') return false;
+    params.delete('checkout');
+    const query = params.toString();
+    const url =
+      window.location.pathname +
+      (query ? `?${query}` : '') +
+      window.location.hash;
+    window.history.replaceState(null, '', url);
+    return true;
   } catch {
-    // sessionStorage unavailable (e.g. privacy mode) — return polling is a
-    // best-effort nicety, so silently skip.
+    return false;
   }
-}
-
-/** Returns true (and clears the flag) when this mount is a return from `leagueId`'s checkout. */
-function readAndClearCheckoutPending(leagueId: string): boolean {
-  try {
-    if (sessionStorage.getItem(CHECKOUT_PENDING_KEY) === leagueId) {
-      sessionStorage.removeItem(CHECKOUT_PENDING_KEY);
-      return true;
-    }
-  } catch {
-    // ignore
-  }
-  return false;
 }
 
 export function deriveState(endTime?: string): SubscriptionState {
@@ -148,7 +147,7 @@ export function useSubscription(): SubscriptionState {
         .then((res) => deriveState(res.data.subscription_end_time))
         .catch(() => ACTIVE);
 
-    const returning = readAndClearCheckoutPending(leagueId);
+    const returning = consumeCheckoutSuccess();
 
     async function run() {
       if (returning) {
