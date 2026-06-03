@@ -26,8 +26,13 @@ event-driven webhook.
   marker — see the trial edge case), sets `allow_promotion_codes=True` so the Stripe-hosted
   page renders an "Add promotion code" field, and returns the session URL. Customers redeem a
   **promotion code** (a customer-facing code mapped to a Stripe coupon — e.g. the founders
-  100%-off coupon), not a bare coupon, which has no redeemable code. Returns `409` when the
-  league already has an active subscription or an unexpired in-flight checkout.
+  100%-off coupon), not a bare coupon, which has no redeemable code. The session also sets
+  `managed_payments={"enabled": True}` so Stripe acts as **merchant of record** (Managed
+  Payments) — handling indirect-tax compliance, fraud, disputes, and buyer support. Managed
+  Payments must be activated at the account level and the product must carry an eligible tax
+  code (the LeagueQL subscription uses `txcd_10000000`, Electronically Supplied Services); it
+  applies only to new subscriptions opened through a Managed Payments session. Returns `409`
+  when the league already has an active subscription or an unexpired in-flight checkout.
 - **Webhook endpoint / Lambda** (no Clerk auth; `Stripe-Signature` verified): `POST
   /stripe/webhook` — on `checkout.session.completed`,
   `customer.subscription.created|updated`, and `invoice.paid`, calls
