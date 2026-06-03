@@ -166,6 +166,7 @@ def create_checkout_session(
         customer=customer_id,
         line_items=[{"price": main.STRIPE_PRICE_ID, "quantity": 1}],
         subscription_data=subscription_data,
+        allow_promotion_codes=True,
         success_url=main.STRIPE_CHECKOUT_SUCCESS_URL,
         cancel_url=main.STRIPE_CHECKOUT_CANCEL_URL,
         idempotency_key=token,
