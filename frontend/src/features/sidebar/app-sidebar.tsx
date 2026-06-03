@@ -1,10 +1,10 @@
 import { UserButton } from '@clerk/react';
 import {
   ArrowLeftRight,
+  CreditCard,
   GraduationCap,
   History,
   Home,
-  Lightbulb,
   LogIn,
   LogOut,
   RefreshCw,
@@ -44,14 +44,16 @@ import {
   SidebarSeparator,
   useSidebar,
 } from '@/components/ui/sidebar';
+import { deleteLeague } from '@/features/sidebar/api-calls';
+import { ManageSubscriptionDialog } from '@/features/subscription/manage-subscription-dialog';
+import { useSubscription } from '@/features/subscription/use-subscription';
+import { clearApiCache } from '@/lib/api-client';
 import {
   clearAllLeagueCookies,
   clearLeagueCookies,
   getLeagueCookies,
   isDemoMode,
 } from '@/lib/cookie-handler';
-import { clearApiCache } from '@/lib/api-client';
-import { deleteLeague } from '@/features/sidebar/api-calls';
 
 const navItems = [
   { title: 'Home', url: '/home', icon: Home },
@@ -77,6 +79,9 @@ export function AppSidebar() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [subscriptionDialogOpen, setSubscriptionDialogOpen] = useState(false);
+
+  const { expiringSoon } = useSubscription();
 
   const demoMode = isDemoMode();
 
@@ -202,18 +207,32 @@ export function AppSidebar() {
                   </SidebarMenuItem>
                   <SidebarMenuItem>
                     <SidebarMenuButton
-                      asChild
-                      tooltip="Request a Feature"
+                      tooltip={
+                        expiringSoon
+                          ? 'Manage Subscription — expiring soon'
+                          : 'Manage Subscription'
+                      }
                       className="cursor-pointer"
+                      onClick={() => {
+                        closeMobileSidebar();
+                        setSubscriptionDialogOpen(true);
+                      }}
                     >
-                      <a
-                        href="https://leagueql.supahub.com/en/b/feature-requests"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        <Lightbulb />
-                        <span>Request a Feature</span>
-                      </a>
+                      <span className="relative flex shrink-0 items-center justify-center">
+                        <CreditCard />
+                        {expiringSoon && (
+                          <span
+                            aria-hidden="true"
+                            className="absolute -top-1 -right-1 size-2 rounded-full bg-destructive ring-2 ring-sidebar"
+                          />
+                        )}
+                      </span>
+                      <span>
+                        Manage Subscription
+                        {expiringSoon && (
+                          <span className="sr-only"> (expiring soon)</span>
+                        )}
+                      </span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                   <SidebarMenuItem>
@@ -272,6 +291,10 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+        <ManageSubscriptionDialog
+          open={subscriptionDialogOpen}
+          onOpenChange={setSubscriptionDialogOpen}
+        />
       </SidebarContent>
       <SidebarFooter className="p-3">
         {demoMode ? (

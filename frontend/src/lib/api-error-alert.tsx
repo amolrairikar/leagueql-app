@@ -9,7 +9,7 @@ export function ApiErrorAlert() {
   const error = useApiError();
   if (!error) return null;
   return (
-    <Alert variant="destructive">
+    <Alert variant="destructive" className="m-4 w-auto">
       <RiErrorWarningLine />
       <AlertTitle>
         {error.status ? `Error ${error.status}` : 'Request failed'}

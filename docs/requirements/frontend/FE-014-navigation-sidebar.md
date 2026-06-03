@@ -2,8 +2,8 @@
 
 ## Description
 The collapsible app sidebar and surrounding layout shared by all in-app pages. Provides
-navigation to every analytics feature, a refresh entry point for the current league, links
-to docs/changelog/feature requests, and the demo-mode banner. The header shows the LeagueQL
+navigation to every analytics feature, a refresh entry point for the current league, a
+"Manage Subscription" entry point, and the demo-mode banner. The header shows the LeagueQL
 wordmark and theme toggle.
 
 ## Scope
@@ -11,7 +11,8 @@ wordmark and theme toggle.
   API in `src/features/sidebar/api-calls.ts`.
 - Nav items: Home, Standings, Matchups, Playoff Bracket, Manager Comparison, Manager
   History, Draft Recap, Draft Grades, Player Records, Matchup Records.
-- External: feature requests (`leagueql.supahub.com`).
+- Settings items include "Manage Subscription", which opens the subscription dialog
+  ([FE-021](FE-021-subscription-access-control.md)).
 
 ## Edge Cases
 - **Refresh from sidebar:** the refresh form is pre-filled and locked to the league the user
@@ -26,6 +27,7 @@ wordmark and theme toggle.
 - [ ] The sidebar links to all ten analytics pages and they route correctly.
 - [ ] The sidebar exposes a refresh action pre-filled and locked to the current league, and
       surfaces cooldown/up-to-date/in-progress responses.
+- [ ] The sidebar exposes a "Manage Subscription" item that opens the subscription dialog.
 - [ ] The layout is responsive: the sidebar collapses and toggles on mobile.
 - [ ] The demo banner appears in demo mode.
 - [ ] The header wordmark links home and the theme toggle is present.

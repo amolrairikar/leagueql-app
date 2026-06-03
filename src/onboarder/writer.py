@@ -13,9 +13,6 @@ _retry_config = botocore.config.Config(retries={"mode": "standard"})
 _s3 = boto3.client("s3", config=_retry_config)
 _dynamodb = boto3.client("dynamodb", config=_retry_config)
 
-# Default subscription state assigned to a league's METADATA item at onboarding.
-DEFAULT_SUBSCRIPTION_STATUS = "ACTIVE"
-
 
 def upload_results_to_s3(
     results: list[dict[str, Any]],
@@ -102,6 +99,7 @@ def write_league_records(
     seasons: list[str],
     request_type: str,
     is_new_season_refresh: bool = False,
+    subscription_end_time: str | None = None,
 ) -> None:
     """
     Writes the league's METADATA (on first onboard) and LEAGUE_LOOKUP records.
@@ -118,6 +116,8 @@ def write_league_records(
         request_type: The type of onboarding request (e.g., "ONBOARD" or "REFRESH")
         is_new_season_refresh: If True, league_id is a new season's ID not yet in LEAGUE_LOOKUP;
             a new LEAGUE_LOOKUP item is created via Put instead of updating an existing one.
+        subscription_end_time: Optional ISO 8601 (UTC) subscription/trial end time supplied by
+            the billing provider; written onto the METADATA item on first onboard when present.
     """
     try:
         table_name = os.environ["DYNAMODB_TABLE_NAME"]
@@ -177,17 +177,19 @@ def write_league_records(
             # the refresh's only DynamoDB write here is the LEAGUE_LOOKUP update.
             transact_items = [league_lookup_operation]
         else:
+            metadata_item = {
+                "PK": {"S": f"LEAGUE#{canonical_league_id}"},
+                "SK": {"S": "METADATA"},
+                "platform": {"S": platform},
+                "onboarded_at": {"S": now_iso},
+            }
+            if subscription_end_time:
+                metadata_item["subscription_end_time"] = {"S": subscription_end_time}
             transact_items = [
                 {
                     "Put": {
                         "TableName": table_name,
-                        "Item": {
-                            "PK": {"S": f"LEAGUE#{canonical_league_id}"},
-                            "SK": {"S": "METADATA"},
-                            "platform": {"S": platform},
-                            "onboarded_at": {"S": now_iso},
-                            "subscription_status": {"S": DEFAULT_SUBSCRIPTION_STATUS},
-                        },
+                        "Item": metadata_item,
                     }
                 },
                 {

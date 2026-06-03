@@ -58,13 +58,21 @@ export interface SeasonStandingsItem {
   champion: string;
 }
 
-export type SubscriptionStatus = 'FREE' | 'ACTIVE' | 'PAST_DUE' | 'CANCELED';
-
 export interface GetLeagueResponse {
   detail: string;
   data: {
     seasons: string[];
     league_name?: string;
-    subscription_status?: SubscriptionStatus;
+    /** ISO 8601 (UTC) timestamp when the subscription/trial lapses. Absent = expired. */
+    subscription_end_time?: string;
+  };
+}
+
+/** Response from the Stripe checkout / billing-portal endpoints (BE-015 / FE-022 / FE-023). */
+export interface BillingSessionResponse {
+  detail: string;
+  data: {
+    /** Stripe-hosted URL to redirect the user to. */
+    url: string;
   };
 }

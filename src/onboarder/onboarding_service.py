@@ -43,12 +43,14 @@ class OnboardingService:
         swid_cookie: str | None = None,
         canonical_league_id: str | None = None,
         is_new_season_refresh: bool = False,
+        subscription_end_time: str | None = None,
     ):
         """Constructor."""
         self.league_id = league_id
         self.platform = platform
         self.request_type = request_type
         self.is_new_season_refresh = is_new_season_refresh
+        self.subscription_end_time = subscription_end_time
         self.latest_season = str(latest_season) if latest_season else None
         self.client = self._build_client(
             league_id=league_id,
@@ -79,6 +81,7 @@ class OnboardingService:
             seasons=seasons,
             request_type=self.request_type,
             is_new_season_refresh=self.is_new_season_refresh,
+            subscription_end_time=self.subscription_end_time,
         )
         logger.info("Wrote job onboarding status to DynamoDB")
         logger.info(

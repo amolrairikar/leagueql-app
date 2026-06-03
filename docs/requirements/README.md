@@ -29,6 +29,8 @@ criteria. Frontend, backend, and extension features are kept separate.
 | [BE-011](backend/BE-011-sleeper-player-stats-refresher.md) | Sleeper Player Stats Refresher |
 | [BE-012](backend/BE-012-scheduled-sleeper-auto-refresh.md) | Scheduled Sleeper Auto-Refresh |
 | [BE-013](backend/BE-013-app-stats-league-count.md) | App Stats / League Count |
+| [BE-014](backend/BE-014-subscription-access-control.md) | Subscription Access Control |
+| [BE-015](backend/BE-015-stripe-billing.md) | Stripe Billing — Checkout, Webhook & Subscription Lifecycle |
 
 ## Frontend (`frontend/`)
 | ID | Feature |
@@ -53,6 +55,9 @@ criteria. Frontend, backend, and extension features are kept separate.
 | [FE-018](frontend/FE-018-privacy-pages.md) | Privacy Pages |
 | [FE-019](frontend/FE-019-authentication.md) | Authentication & Protected Routes |
 | [FE-020](frontend/FE-020-theme-toggle.md) | Theme (Light/Dark Mode) |
+| [FE-021](frontend/FE-021-subscription-access-control.md) | Subscription Access Control |
+| [FE-022](frontend/FE-022-subscription-checkout.md) | Subscription Checkout (Making Payments) |
+| [FE-023](frontend/FE-023-subscription-management.md) | Subscription Management (Billing Portal) |
 
 ## Extension (`extension/`)
 | ID | Feature |

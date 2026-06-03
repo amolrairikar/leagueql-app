@@ -5,11 +5,27 @@ JSON logging (``JsonFormatter`` / ``setup_logger``) is shared code now exercised
 """
 
 from decimal import Decimal
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import botocore.exceptions
 import pytest
 from fastapi import HTTPException
+
+
+def _conditional_error() -> botocore.exceptions.ClientError:
+    """A DynamoDB ClientError representing a failed ConditionExpression."""
+    return botocore.exceptions.ClientError(
+        {"Error": {"Code": "ConditionalCheckFailedException", "Message": "x"}},
+        "UpdateItem",
+    )
+
+
+def _boto_error() -> botocore.exceptions.ClientError:
+    """A generic (non-conditional) DynamoDB ClientError."""
+    return botocore.exceptions.ClientError(
+        {"Error": {"Code": "ProvisionedThroughputExceededException", "Message": "x"}},
+        "UpdateItem",
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -176,17 +192,167 @@ class TestUpdateLeagueCount:
         )
 
 
-class TestUpdateSubscriptionStatus:
-    def test_sets_status_on_metadata_item(self, mock_table):
-        from main import SubscriptionStatus, update_subscription_status
+class TestGetStripeCustomerId:
+    def test_returns_id_when_mapped(self, mock_table):
+        from main import get_stripe_customer_id
 
-        update_subscription_status("canonical-abc", SubscriptionStatus.PAST_DUE)
-        mock_table.update_item.assert_called_once_with(
-            Key={"PK": "LEAGUE#canonical-abc", "SK": "METADATA"},
-            UpdateExpression="SET subscription_status = :s",
-            ConditionExpression="attribute_exists(PK)",
-            ExpressionAttributeValues={":s": "PAST_DUE"},
+        mock_table.get_item.return_value = {
+            "Item": {"PK": "USER#u1", "SK": "USER", "stripe_customer_id": "cus_1"}
+        }
+        assert get_stripe_customer_id("u1") == "cus_1"
+
+    def test_returns_none_when_unmapped(self, mock_table):
+        from main import get_stripe_customer_id
+
+        mock_table.get_item.return_value = {}
+        assert get_stripe_customer_id("u1") is None
+
+    def test_raises_500_on_boto_error(self, mock_table):
+        from main import get_stripe_customer_id
+
+        mock_table.get_item.side_effect = _boto_error()
+        with pytest.raises(HTTPException) as exc:
+            get_stripe_customer_id("u1")
+        assert exc.value.status_code == 500
+
+
+class TestGetOrCreateStripeCustomer:
+    def test_returns_existing_without_creating(self, mock_table):
+        from main import get_or_create_stripe_customer
+
+        mock_table.get_item.return_value = {"Item": {"stripe_customer_id": "cus_1"}}
+        with patch("main.stripe") as mock_stripe:
+            assert get_or_create_stripe_customer("u1") == "cus_1"
+            mock_stripe.Customer.create.assert_not_called()
+
+    def test_creates_and_persists_when_absent(self, mock_table):
+        from main import get_or_create_stripe_customer
+
+        mock_table.get_item.return_value = {}
+        with patch("main.stripe") as mock_stripe:
+            mock_stripe.Customer.create.return_value = {"id": "cus_new"}
+            assert get_or_create_stripe_customer("u1") == "cus_new"
+        _, create_kwargs = mock_stripe.Customer.create.call_args
+        assert create_kwargs["idempotency_key"] == "customer:u1"
+        _, put_kwargs = mock_table.put_item.call_args
+        assert put_kwargs["ConditionExpression"] == "attribute_not_exists(PK)"
+        assert put_kwargs["Item"]["stripe_customer_id"] == "cus_new"
+
+    def test_race_returns_existing_mapping(self, mock_table):
+        from main import get_or_create_stripe_customer
+
+        # First read: unmapped. Second read (after the conditional put loses the
+        # race): the mapping a concurrent request wrote.
+        mock_table.get_item.side_effect = [
+            {},
+            {"Item": {"stripe_customer_id": "cus_winner"}},
+        ]
+        mock_table.put_item.side_effect = _conditional_error()
+        with patch("main.stripe") as mock_stripe:
+            mock_stripe.Customer.create.return_value = {"id": "cus_mine"}
+            assert get_or_create_stripe_customer("u1") == "cus_winner"
+
+    def test_raises_500_on_put_boto_error(self, mock_table):
+        from main import get_or_create_stripe_customer
+
+        mock_table.get_item.return_value = {}
+        mock_table.put_item.side_effect = _boto_error()
+        with patch("main.stripe") as mock_stripe:
+            mock_stripe.Customer.create.return_value = {"id": "cus_new"}
+            with pytest.raises(HTTPException) as exc:
+                get_or_create_stripe_customer("u1")
+        assert exc.value.status_code == 500
+
+
+class TestClaimPendingCheckout:
+    def test_claims_slot_returns_true(self, mock_table):
+        from main import claim_pending_checkout
+
+        assert claim_pending_checkout("canonical-abc", "tok123", "user-1") is True
+        _, kwargs = mock_table.update_item.call_args
+        cond = kwargs["ConditionExpression"]
+        assert "attribute_not_exists(stripe_subscription_id)" in cond
+        assert "pending_checkout.expires_at < :now" in cond
+        # Same-user re-claim: the initiating user can overwrite their own marker.
+        assert "pending_checkout.user_id = :uid" in cond
+        values = kwargs["ExpressionAttributeValues"]
+        assert values[":uid"] == "user-1"
+        pc = values[":pc"]
+        assert pc["token"] == "tok123"
+        assert pc["user_id"] == "user-1"
+        assert "expires_at" in pc
+
+    def test_returns_false_when_slot_taken(self, mock_table):
+        from main import claim_pending_checkout
+
+        mock_table.update_item.side_effect = _conditional_error()
+        assert claim_pending_checkout("canonical-abc", "tok123", "user-1") is False
+
+    def test_raises_500_on_boto_error(self, mock_table):
+        from main import claim_pending_checkout
+
+        mock_table.update_item.side_effect = _boto_error()
+        with pytest.raises(HTTPException) as exc:
+            claim_pending_checkout("canonical-abc", "tok123", "user-1")
+        assert exc.value.status_code == 500
+
+
+class TestRequireActiveSubscription:
+    def _meta(self, end_time):
+        item = {"PK": "LEAGUE#canonical-abc", "SK": "METADATA"}
+        if end_time is not None:
+            item["subscription_end_time"] = end_time
+        return item
+
+    def test_future_end_time_passes(self, mock_table):
+        from main import require_active_subscription
+
+        mock_table.get_item.return_value = {
+            "Item": self._meta("2999-01-01T00:00:00+00:00")
+        }
+        # Should not raise.
+        require_active_subscription("canonical-abc")
+
+    def test_past_end_time_raises_402(self, mock_table):
+        from fastapi import HTTPException
+
+        from main import require_active_subscription
+
+        mock_table.get_item.return_value = {
+            "Item": self._meta("2000-01-01T00:00:00+00:00")
+        }
+        with pytest.raises(HTTPException) as exc:
+            require_active_subscription("canonical-abc")
+        assert exc.value.status_code == 402
+
+    def test_absent_end_time_raises_402(self, mock_table):
+        from fastapi import HTTPException
+
+        from main import require_active_subscription
+
+        mock_table.get_item.return_value = {"Item": self._meta(None)}
+        with pytest.raises(HTTPException) as exc:
+            require_active_subscription("canonical-abc")
+        assert exc.value.status_code == 402
+
+    def test_unparseable_end_time_raises_402(self, mock_table):
+        from fastapi import HTTPException
+
+        from main import require_active_subscription
+
+        mock_table.get_item.return_value = {"Item": self._meta("not-a-date")}
+        with pytest.raises(HTTPException) as exc:
+            require_active_subscription("canonical-abc")
+        assert exc.value.status_code == 402
+
+    def test_uses_provided_metadata_without_fetching(self, mock_table):
+        from main import require_active_subscription
+
+        # Pre-fetched metadata short-circuits the DynamoDB read.
+        require_active_subscription(
+            "canonical-abc", metadata=self._meta("2999-01-01T00:00:00+00:00")
         )
+        mock_table.get_item.assert_not_called()
 
 
 class TestDeleteLeagueHelpers:

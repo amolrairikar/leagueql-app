@@ -14,12 +14,20 @@ from typing import Annotated, Any
 import botocore.exceptions
 import requests as http_requests
 from boto3.dynamodb.conditions import Key
-from fastapi import APIRouter, HTTPException, Path, Query, Response, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Path,
+    Query,
+    Request,
+    Response,
+    status,
+)
 
 import main
 from common.onboarder_invoke import invoke_onboarder
 from main import (
-    DEFAULT_SUBSCRIPTION_STATUS,
     QUERY_TYPE_TO_SK_BASE,
     REFRESH_COOLDOWN_MINUTES,
     S3_BUCKET,
@@ -35,6 +43,7 @@ from main import (
     logger,
 )
 from helpers import (
+    claim_pending_checkout,
     convert_decimals,
     create_job_status,
     delete_all_league_items,
@@ -43,8 +52,11 @@ from helpers import (
     get_league_metadata,
     get_league_seasons,
     get_nfl_state,
+    get_or_create_stripe_customer,
+    get_stripe_customer_id,
     is_job_in_progress,
     lookup_league,
+    require_active_subscription,
     set_active_job,
     update_league_count,
 )
@@ -82,10 +94,111 @@ def get_league(
         data={
             "seasons": seasons,
             "league_name": metadata.get("league_name"),
-            "subscription_status": metadata.get(
-                "subscription_status", DEFAULT_SUBSCRIPTION_STATUS.value
-            ),
+            "subscription_end_time": metadata.get("subscription_end_time"),
         },
+    )
+
+
+def get_authenticated_user(request: Request) -> str:
+    """Return the authenticated Clerk user ID from the API Gateway JWT authorizer.
+
+    The Clerk JWT is validated by the API Gateway authorizer; its verified claims
+    are surfaced to the Lambda under the original event, which Mangum exposes at
+    ``request.scope["aws.event"]``. Used as a FastAPI dependency for billing
+    endpoints that must map the caller to a Stripe customer (BE-015).
+
+    Raises:
+        HTTPException: 401 when no authenticated user (``sub`` claim) is present.
+    """
+    event = request.scope.get("aws.event", {}) or {}
+    claims = (
+        (event.get("requestContext", {}).get("authorizer", {}) or {})
+        .get("jwt", {})
+        .get("claims", {})
+    )
+    sub = claims.get("sub")
+    if not sub:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+        )
+    return sub
+
+
+@router.post("/leagues/{leagueId}/checkout-session", status_code=status.HTTP_200_OK)
+def create_checkout_session(
+    leagueId: Annotated[
+        str, Path(description="The ID of the fantasy league", pattern=r"^\d+$")
+    ],
+    platform: Annotated[Platform, Query(description="The platform the league is on")],
+    clerk_user_id: Annotated[str, Depends(get_authenticated_user)],
+) -> APIResponse:
+    """Create a Stripe Checkout Session to subscribe a league (BE-015).
+
+    Resolves/creates the caller's Stripe customer, claims a synchronous
+    ``pending_checkout`` marker (one winner under concurrency), and opens a
+    subscription-mode Checkout Session whose subscription carries the league's
+    canonical ID. The trial is included only on the league's first subscription.
+    Returns 409 when the league already has a subscription or an unexpired
+    in-flight checkout.
+    """
+    canonical_league_id = lookup_league(league_id=leagueId, platform=platform)
+    metadata = get_league_metadata(canonical_league_id=canonical_league_id)
+    trial_used = bool(metadata.get("trial_used"))
+
+    customer_id = get_or_create_stripe_customer(clerk_user_id)
+
+    token = uuid.uuid4().hex
+    if not claim_pending_checkout(canonical_league_id, token, clerk_user_id):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A subscription or checkout is already active for this league",
+        )
+
+    subscription_data: dict[str, Any] = {
+        "metadata": {"canonical_league_id": canonical_league_id},
+    }
+    if not trial_used:
+        subscription_data["trial_period_days"] = main.STRIPE_TRIAL_PERIOD_DAYS
+
+    session = main.stripe.checkout.Session.create(
+        mode="subscription",
+        customer=customer_id,
+        line_items=[{"price": main.STRIPE_PRICE_ID, "quantity": 1}],
+        subscription_data=subscription_data,
+        success_url=main.STRIPE_CHECKOUT_SUCCESS_URL,
+        cancel_url=main.STRIPE_CHECKOUT_CANCEL_URL,
+        idempotency_key=token,
+    )
+    logger.info(
+        "Created checkout session for league %s (trial=%s)",
+        canonical_league_id,
+        not trial_used,
+    )
+    return APIResponse(detail="Checkout session created", data={"url": session["url"]})
+
+
+@router.post("/billing-portal-session", status_code=status.HTTP_200_OK)
+def create_billing_portal_session(
+    clerk_user_id: Annotated[str, Depends(get_authenticated_user)],
+) -> APIResponse:
+    """Create a Stripe Billing Portal session for the caller (BE-015).
+
+    Lets the user manage their card or cancel (cancellation takes effect
+    immediately). Returns 404 when the caller has no Stripe customer yet.
+    """
+    customer_id = get_stripe_customer_id(clerk_user_id)
+    if not customer_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No billing account found",
+        )
+    session = main.stripe.billing_portal.Session.create(
+        customer=customer_id,
+        return_url=main.STRIPE_BILLING_PORTAL_RETURN_URL,
+    )
+    return APIResponse(
+        detail="Billing portal session created", data={"url": session["url"]}
     )
 
 
@@ -169,6 +282,7 @@ def onboard_league(
 
     if requestType == RequestType.REFRESH and canonical_league_id:
         league_metadata = get_league_metadata(canonical_league_id)
+        require_active_subscription(canonical_league_id, metadata=league_metadata)
         if is_job_in_progress(league_metadata):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -254,7 +368,8 @@ def get_espn_members(
     payload: EspnMembersPayload,
 ) -> APIResponse:
     """Proxy ESPN Fantasy API to fetch league members server-side (avoids browser CORS)."""
-    lookup_league(league_id=leagueId, platform=platform)
+    canonical_league_id = lookup_league(league_id=leagueId, platform=platform)
+    require_active_subscription(canonical_league_id)
 
     espn_url = (
         f"https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl"
@@ -318,6 +433,7 @@ def migrate_league(
     )
 
     league_metadata = get_league_metadata(canonical_league_id)
+    require_active_subscription(canonical_league_id, metadata=league_metadata)
     if is_job_in_progress(league_metadata):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -484,6 +600,7 @@ def query_league(
     sk = f"{sk_base}#{suffix}" if suffix is not None else f"{sk_base}#"
 
     canonical_league_id = lookup_league(league_id=leagueId, platform=platform)
+    require_active_subscription(canonical_league_id)
     pk = f"LEAGUE#{canonical_league_id}"
 
     try:

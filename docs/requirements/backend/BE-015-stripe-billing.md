@@ -1,0 +1,243 @@
+# BE-015: Stripe Billing — Checkout, Webhook & Subscription Lifecycle
+
+## Description
+Establishes and maintains each league's paid subscription through **Stripe**, making the
+`subscription_end_time` consumed by [BE-014](BE-014-subscription-access-control.md) an
+**authoritative, server-derived** value rather than a client-supplied one. The model is
+**per league**:
+
+- **One Stripe Customer per Clerk user** — a single card/payer that can hold many
+  subscriptions.
+- **One Stripe Subscription per league** — each has its own independent trial clock and
+  billing cycle. The subscription carries `metadata.canonical_league_id` so webhook events
+  route back to the correct league.
+
+A **Stripe webhook is the single writer** of `subscription_end_time` (= `trial_end` while
+`status: trialing`, then `current_period_end` once paying). Access enforcement stays live
+and per-request in BE-014 — this feature introduces **no scheduled job or polling**, only an
+event-driven webhook.
+
+## Scope
+- **Checkout endpoint** (Clerk-authed): `POST /leagues/{id}/checkout-session` — resolves or
+  creates the user's Stripe Customer, claims a synchronous `pending_checkout` marker on the
+  league `METADATA` (conditional write — see Idempotency Layer 1), creates a Stripe Checkout
+  Session in `subscription` mode with `subscription_data.metadata.canonical_league_id` and
+  `subscription_data.trial_period_days` (included only when the league has no `trial_used`
+  marker — see the trial edge case), and returns the session URL. Returns `409` when the
+  league already has an active subscription or an unexpired in-flight checkout.
+- **Webhook endpoint / Lambda** (no Clerk auth; `Stripe-Signature` verified): `POST
+  /stripe/webhook` — on `checkout.session.completed`,
+  `customer.subscription.created|updated`, and `invoice.paid`, calls
+  `common.subscription.record_active_subscription(...)`; on `customer.subscription.deleted`
+  or terminal payment failure, calls `common.subscription.expire_subscription(...)` which sets
+  `subscription_end_time` to the past (gate flips to expired live).
+- **Billing portal endpoint** (Clerk-authed): `POST /billing-portal-session` — returns a
+  Stripe Billing Portal URL for the user's Customer (update card / cancel). Cancellation is
+  configured to take effect **immediately** (not at period end). Backs the frontend "Manage
+  Subscription" dialog ([FE-021](../frontend/FE-021-subscription-access-control.md)).
+- **Mapping (schema):** `stripe_customer_id` stored once per user (a `USER#{clerk_user_id}`
+  item); on the league `METADATA` item — `stripe_subscription_id`, `pending_checkout`
+  (in-flight checkout marker `{token, expires_at, user_id}` with a short TTL, cleared by the
+  webhook on success), and `trial_used` (set when the league's first trial is granted, never
+  cleared); and
+  `canonical_league_id` in the Stripe subscription metadata. Documented in
+  `docs/db/dynamodb_spec.md`.
+- **Secrets & environment mode:** the Stripe secret key and webhook signing secret are
+  supplied as **sensitive Terraform variables** (from CI secrets, following the existing Clerk
+  pattern — the repo uses no SSM/Secrets Manager) and injected as Lambda environment variables
+  on the API and webhook Lambdas. Never committed or logged.
+  **DEV uses Stripe sandbox (test) mode and PROD uses live mode** — each environment is
+  configured with its own mode-specific credentials (`sk_test_…`/`sk_live_…`, the matching
+  `whsec_…` webhook signing secret) and its own mode-specific Price/Product IDs. Test- and
+  live-mode objects (Customers, Subscriptions, Prices, webhook endpoints) are fully isolated
+  by Stripe, so no resource is shared across environments.
+- **Reuses** BE-014's `require_active_subscription` (enforcement) **unchanged**. The sole
+  write path is `common.subscription` (`record_active_subscription` / `expire_subscription`) —
+  shared, conditional, multi-attribute writes vendored into both the API and webhook Lambda
+  zips (the webhook is a separate Lambda and cannot import `src/api/helpers.py`). See
+  Idempotency Layer 3.
+
+## Idempotency
+Stripe delivers webhooks **at-least-once** and may **reorder** them, and the checkout
+endpoint may be retried. Idempotency is enforced in three layers — *don't duplicate
+provisioning/billing*, and *converge to correct state regardless of arrival order*. (Stripe
+owns charge-level idempotency; we never create charges directly, so our concern is duplicate
+provisioning, not duplicate charging.)
+
+- **Layer 1 — outbound API calls (no duplicate Customers/subscriptions):**
+  - Send a Stripe `Idempotency-Key` on every mutating call — keyed by `clerk_user_id` for
+    Customer creation, and by the `pending_checkout.session_id` (a per-attempt nonce) for the
+    Checkout Session — so a network retry returns the original result. The key is scoped
+    per-attempt, **not** by `canonical_league_id` alone: concurrency is handled by the
+    `pending_checkout` marker below, and a coarse league-level key (valid ~24h in Stripe)
+    would wrongly return a stale session for a legitimate later or re-subscribe checkout.
+  - Get-or-create the Customer via the stored `stripe_customer_id` (`USER#{clerk_user_id}`);
+    create only when absent. This plus the idempotency key closes the concurrent
+    first-checkout race.
+  - **Pre-check** that the league has no active `stripe_subscription_id` before opening a
+    Checkout Session — the one duplicate that would actually double-bill the user. Because
+    `stripe_subscription_id` is written only by the (async, possibly late) webhook, this read
+    alone is a stale projection, so the check is reinforced by:
+    - **Synchronous `pending_checkout` marker:** claim it with a conditional write —
+      `attribute_not_exists(stripe_subscription_id) AND (attribute_not_exists(pending_checkout)
+      OR pending_checkout.expires_at < :now OR pending_checkout.user_id = :uid)`. DynamoDB
+      serializes concurrent attempts so only one wins; a *different* user gets `409` and creates
+      no session, while the **initiating user can re-claim immediately** (so abandoning one's own
+      checkout doesn't block retrying it). The `expires_at` TTL lets a marker held by another
+      user self-heal, and reconciliation backstops any true duplicate subscription.
+    - **Authoritative Stripe check (optional belt-and-suspenders):** for the residual window
+      where a very late webhook lands after the marker expires, query
+      `Subscription.list(customer, status active|trialing)` filtered by
+      `metadata.canonical_league_id` and refuse if one already exists — the source of truth,
+      not the lagging projection.
+- **Layer 2 — inbound webhook dedup (exactly-once application):**
+  - Verify `Stripe-Signature` first (reject `400`); no processing on unverified payloads.
+  - Dedup on `event.id` with a `WEBHOOK_EVENT#{evt_id}` item (+ TTL), mirroring the existing
+    `correlation_id`-keyed item pattern. **Check then process then record:** look the marker up
+    first (found → redelivery → ack `200` and skip); otherwise process the event and write the
+    marker **only after** processing succeeds. Recording after success (rather than claiming
+    the marker up front) avoids a lost update if the handler fails mid-processing — the
+    redelivery is then reprocessed, and Layer-3 convergence makes reprocessing safe.
+- **Layer 3 — state convergence (handles out-of-order):** the write is
+  `common.subscription.record_active_subscription` — a single conditional, multi-attribute
+  `UpdateItem` that applies the monotonic guard, claims `stripe_subscription_id`, and clears
+  `pending_checkout`.
+  - Derive `subscription_end_time` from the subscription's **authoritative current state**
+    (refetch via `Subscription.retrieve`) rather than the event payload's delta, so a stale
+    event simply re-writes the current value.
+  - Guard the write to only **advance** `subscription_end_time` (conditional `:new >
+    existing`); a late stale event cannot regress access.
+  - **Cancellation is the deliberate exception** to the monotonic rule: a terminal
+    `status` (`customer.subscription.deleted` / terminal payment failure) sets the value to
+    the past, keyed on event type + status, not a timestamp comparison.
+  - **Duplicate-subscription reconciliation (backstop):** the first `customer.subscription.created`
+    to arrive claims `stripe_subscription_id` with a **conditional write**
+    (`attribute_not_exists(stripe_subscription_id)`), making a single deterministic winner.
+    A second `created` for a *different* subscription on the same league fails that condition
+    → it recognizes itself as the duplicate and `Subscription.cancel`s **its own** subscription
+    (never the recorded winner), so concurrent events cannot cancel each other. The winning
+    write clears the `pending_checkout` marker. A duplicate caught during the trial cancels
+    before any invoice, so no charge occurs.
+
+## Edge Cases
+- **Invalid `Stripe-Signature`:** webhook returns `400` with no state change.
+- **Onboarded but never subscribed:** no subscription → `subscription_end_time` absent →
+  BE-014 paywalls the league. Onboarding itself stays ungated.
+- **Cancellation is immediate:** canceling (via the Billing Portal or API) cancels the Stripe
+  subscription **now**, not at period end — `customer.subscription.deleted` fires immediately,
+  the webhook sets `subscription_end_time` to the past, and BE-014 revokes access on the next
+  request (live evaluation, no job). No remaining-period access is granted.
+- **Payment failure / dunning:** access remains until `current_period_end`; a terminal
+  failure (subscription deleted) sets `subscription_end_time` to the past.
+- **Per-league trial, once only (no reuse):** a league is eligible for the trial **only on
+  its first-ever subscription**. Re-subscribing a league that previously had any subscription
+  is created with **no trial** (`trial_period_days` omitted). This is enforced by a
+  `trial_used` marker on the league `METADATA`, set when the first trial is granted and never
+  cleared; checkout omits the trial whenever `trial_used` is present. (Trials remain
+  independent *across different* leagues — each league gets its single trial.)
+- **One user, many leagues:** a single Customer holds multiple Subscriptions; each webhook
+  event routes by `metadata.canonical_league_id` and each league is gated independently.
+- **Customer first use / concurrency:** the Clerk user ↔ Stripe Customer mapping is created
+  on demand; concurrent first-checkout requests must not create duplicate Customers (look up
+  by `clerk_user_id` and/or use a Stripe idempotency key).
+- **Late webhook + second checkout (duplicate-subscription race):** a subscription exists in
+  Stripe but its `created` webhook is delayed, so `stripe_subscription_id` is not yet on
+  `METADATA`. A second checkout attempt in that window must not open a second subscription.
+  The synchronous `pending_checkout` marker (Layer 1) blocks the concurrent/short-window case
+  with a `409`; the optional Stripe `Subscription.list` check covers the residual late-webhook
+  window; and webhook reconciliation (Layer 3) cancels any duplicate that still slips through.
+- **Refund / chargeback:** reflected via `customer.subscription.updated|deleted` →
+  `subscription_end_time` updated accordingly.
+- **Environment mode mismatch:** a live-mode webhook signature cannot be verified with the
+  test-mode signing secret (and vice versa), so a misconfigured environment fails closed at
+  signature verification (`400`) rather than silently writing state. DEV must never be wired
+  with live-mode keys, nor PROD with test-mode keys.
+
+## Acceptance Criteria
+- [ ] `POST /leagues/{id}/checkout-session` returns a Stripe Checkout URL for the
+      authenticated user, with the league's `canonical_league_id` in the subscription
+      metadata and the configured trial applied.
+- [ ] After checkout completes, the league `METADATA` `subscription_end_time` equals the
+      subscription's `trial_end` (trialing) or `current_period_end` (active), and is written
+      **only** by the webhook.
+- [ ] `POST /stripe/webhook` rejects an invalid `Stripe-Signature` with `400` and makes no
+      state change.
+- [ ] `invoice.paid` renewal advances `subscription_end_time` to the new
+      `current_period_end`; `customer.subscription.deleted` sets it to the past.
+- [ ] Cancellation takes effect immediately: the subscription is canceled now (not at period
+      end) and `subscription_end_time` is set to the past, revoking access on the next request.
+- [ ] A league's first subscription includes the trial; any subsequent subscription for that
+      league (after `trial_used` is set) is created with no trial.
+- [ ] Webhook processing is idempotent — duplicate or out-of-order deliveries never regress
+      `subscription_end_time`.
+- [ ] A single user can hold active subscriptions for multiple leagues simultaneously, each
+      gated independently by BE-014.
+- [ ] A second checkout attempt for a league with an active subscription, **or** with an
+      unexpired `pending_checkout` marker held by a **different** user, returns `409` and creates
+      no Stripe Checkout Session.
+- [ ] The user who started a checkout can re-attempt immediately (re-claiming their own
+      `pending_checkout` marker) without a `409`.
+- [ ] The `pending_checkout` marker is claimed via a conditional write (only one of two
+      concurrent attempts by *different* users wins) and is cleared by the webhook once the
+      subscription is recorded; an expired marker no longer blocks a new checkout.
+- [ ] If a duplicate subscription is ever created for a league, the webhook reconciles to a
+      single active subscription by canceling the extra, leaving exactly one
+      `stripe_subscription_id` on `METADATA`.
+- [ ] `POST /billing-portal-session` returns a Stripe Billing Portal URL for the user's
+      Customer.
+- [ ] The client-supplied `subscriptionEndTime` onboarding input is removed;
+      `subscription_end_time` is set only server-side via this flow (supersedes the
+      [BE-001](BE-001-league-onboarding.md) interim behavior).
+- [ ] Stripe secret key and webhook signing secret are sourced from sensitive Terraform
+      variables (CI secrets) and never committed or logged.
+- [ ] DEV is configured with Stripe sandbox (test) mode credentials and Price IDs; PROD is
+      configured with live mode; neither environment carries the other's keys.
+
+## Implementation Notes
+- **Stripe SDK access gotcha (v15):** stripe-python resource objects (e.g. `Subscription`,
+  `Event`) are **not** `dict` subclasses and have **no `.get()`** — `obj.get(...)` raises
+  `AttributeError: get`. The webhook handler reads Stripe-object fields via a subscript-based
+  `_get(obj, key, default)` helper (`obj[key]` with `KeyError`/`TypeError` fallback), which works
+  on both real Stripe objects and the plain-dict test fixtures. The checkout/portal paths already
+  use subscript (`session["url"]`, `customer["id"]`), so they were unaffected.
+- **The subscription write moved out of `src/api/helpers.py` into `common/subscription.py`.**
+  The webhook is a separate Lambda and cannot import the API package, so the BE-014
+  `update_subscription_end_time` helper (an unconditional single-attribute `SET`) was removed
+  and replaced by `common.subscription.record_active_subscription` / `expire_subscription`
+  (conditional, multi-attribute writes), vendored into both Lambda zips. The old
+  `TestUpdateSubscriptionEndTime` was removed; coverage now lives in
+  `tests/unit/common/test_subscription.py`.
+- **Infrastructure (now implemented).** The `stripe_webhook` Lambda is deployed per-region
+  (like the API Lambda) with its own IAM role (logs + DynamoDB `GetItem`/`PutItem`/`UpdateItem`
+  on the primary + replica tables). The `POST /stripe/webhook` route is declared in the
+  templated OpenAPI spec via a `${stripe_webhook_lambda_arn}` var and is **unauthenticated**
+  (no Clerk security scheme — Stripe signature verification is the auth); API Gateway is granted
+  invoke permission on the webhook Lambda in `regional/main.tf`. Stripe config reaches both
+  Lambdas as environment variables; the return URLs are derived from `environment` (prod →
+  `https://leagueql.com`, dev → `http://localhost:5173`). Checkout **success**, **cancel**, and
+  the Billing Portal **return** all target the in-app dashboard home (`…/home`, under the
+  SubscriptionGuard). Success carries `?checkout=success`, which drives the activation poll in
+  `useSubscription` ([FE-022](../frontend/FE-022-subscription-checkout.md)); cancel has no param,
+  so it never polls. CI builds/zips the new Lambda and passes the Stripe secrets as `TF_VAR_*`
+  (mode-selected by environment).
+- **`pending_checkout` self-heal window is configurable** via the `CHECKOUT_PENDING_TTL_MINUTES`
+  env var (`main.py`, default 30); Terraform sets **5 in dev / 30 in prod** so abandoned-checkout
+  retries unblock quickly in dev. Until it lapses (or the webhook records the subscription), a
+  repeat checkout returns `409`.
+- **One-time operational setup** (cannot be Terraformed — the webhook signing secret only exists
+  after the endpoint is registered in Stripe): see the runbook
+  [`docs/deploy/stripe-webhook-setup.md`](../../deploy/stripe-webhook-setup.md).
+
+## Sources
+`src/api/routes.py` (`create_checkout_session`, `create_billing_portal_session`,
+`get_authenticated_user`), `src/api/helpers.py` (`get_or_create_stripe_customer`,
+`get_stripe_customer_id`, `claim_pending_checkout`; `require_active_subscription` — reused
+unchanged), `src/api/main.py` (Stripe config + `main.stripe`), `src/common/subscription.py`
+(`record_active_subscription`, `expire_subscription`), `src/stripe_webhook/handler.py`,
+`docs/api/openapi_spec.yaml` (checkout, billing-portal, `POST /stripe/webhook`),
+`docs/db/dynamodb_spec.md` (`stripe_subscription_id`, `pending_checkout`, `trial_used` on
+METADATA; `USER` item; `WEBHOOK_EVENT` dedup item),
+`infrastructure/regional/main.tf` + `vars.tf` (webhook Lambda, invoke permission, Stripe vars,
+alarm), `infrastructure/global/{dev,prod}/main.tf` (webhook IAM role),
+`.github/workflows/build.yaml` (build + `TF_VAR_*` wiring),
+[BE-014](BE-014-subscription-access-control.md), [BE-001](BE-001-league-onboarding.md).
