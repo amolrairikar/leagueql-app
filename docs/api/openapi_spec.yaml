@@ -427,6 +427,41 @@ paths:
         uri: "arn:aws:apigateway:${aws_region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations"
         payloadFormatVersion: "2.0"
 
+  /stripe/webhook:
+    post:
+      summary: Stripe billing webhook
+      description: >
+        Receives Stripe webhook events (subscription lifecycle, invoice paid) and
+        converges each league's subscription state (BE-015). The request is
+        authenticated by Stripe signature verification inside the Lambda — not the
+        Clerk authorizer — so this route has no security scheme. It routes to the
+        dedicated `stripe_webhook` Lambda, separate from the API Lambda.
+      operationId: stripeWebhook
+      responses:
+        "200":
+          description: Event accepted (processed, deduplicated, or ignored)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/APIResponse"
+        "400":
+          description: Missing or unverifiable Stripe signature
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/APIResponse"
+        "500":
+          description: Processing failure; Stripe will redeliver
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/APIResponse"
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        httpMethod: POST
+        uri: "arn:aws:apigateway:${aws_region}:lambda:path/2015-03-31/functions/${stripe_webhook_lambda_arn}/invocations"
+        payloadFormatVersion: "2.0"
+
 components:
 
   securitySchemes:

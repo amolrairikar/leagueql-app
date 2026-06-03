@@ -34,7 +34,7 @@ module "dynamodb" {
   hash_key        = "PK"
   range_key       = "SK"
   replica_regions = ["us-west-2"]
-  
+
   tags = {
     environment = var.environment
     project     = "leagueql"
@@ -44,8 +44,8 @@ module "dynamodb" {
 }
 
 module "s3-replication-role" {
-  source = "../../modules/iam-role"
-  role_name = "leagueql-s3-${var.environment}-replication-role"
+  source           = "../../modules/iam-role"
+  role_name        = "leagueql-s3-${var.environment}-replication-role"
   role_description = "IAM role for replicating objects between east & west Fantasy Football Recap project dev S3 buckets."
   trust_policy_json = jsonencode({
     Version = "2012-10-17"
@@ -153,8 +153,8 @@ module "s3-bidirectional-replication" {
 }
 
 module "onboarding-lambda-role" {
-  source = "../../modules/iam-role"
-  role_name = "leagueql-${var.environment}-onboarder-role"
+  source           = "../../modules/iam-role"
+  role_name        = "leagueql-${var.environment}-onboarder-role"
   role_description = "Execution role for onboarding lambda."
   trust_policy_json = jsonencode({
     Version = "2012-10-17"
@@ -248,8 +248,8 @@ module "onboarding-lambda-role" {
 }
 
 module "processing-lambda-role" {
-  source = "../../modules/iam-role"
-  role_name = "leagueql-${var.environment}-onboarding-processor-role"
+  source           = "../../modules/iam-role"
+  role_name        = "leagueql-${var.environment}-onboarding-processor-role"
   role_description = "Execution role for data processing lambda."
   trust_policy_json = jsonencode({
     Version = "2012-10-17"
@@ -354,8 +354,8 @@ module "processing-lambda-role" {
 }
 
 module "player-metadata-lambda-role" {
-  source = "../../modules/iam-role"
-  role_name = "leagueql-${var.environment}-sleeper-player-metadata-fetcher-role"
+  source           = "../../modules/iam-role"
+  role_name        = "leagueql-${var.environment}-sleeper-player-metadata-fetcher-role"
   role_description = "Execution role for Sleeper player data fetcher lambda."
   trust_policy_json = jsonencode({
     Version = "2012-10-17"
@@ -416,8 +416,8 @@ module "player-metadata-lambda-role" {
 }
 
 module "api-lambda-role" {
-  source = "../../modules/iam-role"
-  role_name = "leagueql-${var.environment}-api-role"
+  source           = "../../modules/iam-role"
+  role_name        = "leagueql-${var.environment}-api-role"
   role_description = "Execution role for API lambda."
   trust_policy_json = jsonencode({
     Version = "2012-10-17"
@@ -516,9 +516,75 @@ module "api-lambda-role" {
   }
 }
 
+module "stripe-webhook-lambda-role" {
+  source           = "../../modules/iam-role"
+  role_name        = "leagueql-${var.environment}-stripe-webhook-role"
+  role_description = "Execution role for the Stripe billing webhook lambda."
+  trust_policy_json = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+      }
+    ]
+  })
+  role_policy_json = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "CreateLogGroups"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup"
+        ]
+        Resource = [
+          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/lambda/leagueql-stripe-webhook-${var.environment}-east",
+          "arn:aws:logs:us-west-2:${var.account_id}:log-group:/aws/lambda/leagueql-stripe-webhook-${var.environment}-west"
+        ]
+      },
+      {
+        Sid    = "CreateLogEvents"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = [
+          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/lambda/leagueql-stripe-webhook-${var.environment}-east:*",
+          "arn:aws:logs:us-west-2:${var.account_id}:log-group:/aws/lambda/leagueql-stripe-webhook-${var.environment}-west:*"
+        ]
+      },
+      {
+        Sid    = "ReadWriteDynamoDB"
+        Effect = "Allow"
+        Action = [
+          "dynamodb:GetItem",
+          "dynamodb:PutItem",
+          "dynamodb:UpdateItem"
+        ]
+        Resource = [
+          module.dynamodb.primary_table_arn,
+          module.dynamodb.replica_table_arn
+        ]
+      }
+    ]
+  })
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    component   = "api"
+    managed-by  = "terraform"
+  }
+}
+
 module "api-gateway-role" {
-  source = "../../modules/iam-role"
-  role_name = "leagueql-api-gateway-${var.environment}-role"
+  source           = "../../modules/iam-role"
+  role_name        = "leagueql-api-gateway-${var.environment}-role"
   role_description = "Role for API Gateway to write logs to Cloudwatch."
   trust_policy_json = jsonencode({
     Version = "2012-10-17"
@@ -574,8 +640,8 @@ module "api-gateway-role" {
 }
 
 module "sleeper-player-stats-refresher-lambda-role" {
-  source = "../../modules/iam-role"
-  role_name = "leagueql-${var.environment}-sleeper-player-stats-refresher-role"
+  source           = "../../modules/iam-role"
+  role_name        = "leagueql-${var.environment}-sleeper-player-stats-refresher-role"
   role_description = "Execution role for Sleeper player stats refresher lambda."
   trust_policy_json = jsonencode({
     Version = "2012-10-17"
@@ -645,8 +711,8 @@ module "sleeper-player-stats-refresher-lambda-role" {
 }
 
 module "sleeper-refresh-lambda-role" {
-  source = "../../modules/iam-role"
-  role_name = "leagueql-${var.environment}-sleeper-league-refresh-role"
+  source           = "../../modules/iam-role"
+  role_name        = "leagueql-${var.environment}-sleeper-league-refresh-role"
   role_description = "Execution role for Sleeper refresh lambda."
   trust_policy_json = jsonencode({
     Version = "2012-10-17"

@@ -1,14 +1,14 @@
 terraform {
   required_providers {
     aws = {
-      source  = "hashicorp/aws"
-      configuration_aliases = [ aws.primary, aws.replica ]
+      source                = "hashicorp/aws"
+      configuration_aliases = [aws.primary, aws.replica]
     }
   }
 }
 
 locals {
-  primary_region = element(split("-", var.primary_aws_region), 1)
+  primary_region   = element(split("-", var.primary_aws_region), 1)
   secondary_region = element(split("-", var.secondary_aws_region), 1)
 
   primary_lambda_names = distinct([
@@ -201,9 +201,9 @@ resource "aws_s3_bucket_lifecycle_configuration" "secondary" {
 }
 
 resource "aws_s3_bucket_replication_configuration" "primary_to_secondary" {
-  provider   = aws.primary
-  role       = var.replication_role_arn
-  bucket     = aws_s3_bucket.primary.id
+  provider = aws.primary
+  role     = var.replication_role_arn
+  bucket   = aws_s3_bucket.primary.id
 
   depends_on = [
     aws_s3_bucket_versioning.primary,
@@ -230,9 +230,9 @@ resource "aws_s3_bucket_replication_configuration" "primary_to_secondary" {
 }
 
 resource "aws_s3_bucket_replication_configuration" "secondary_to_primary" {
-  provider   = aws.replica
-  role       = var.replication_role_arn
-  bucket     = aws_s3_bucket.secondary.id
+  provider = aws.replica
+  role     = var.replication_role_arn
+  bucket   = aws_s3_bucket.secondary.id
 
   depends_on = [
     aws_s3_bucket_versioning.primary,

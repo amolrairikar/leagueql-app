@@ -41,8 +41,10 @@ event-driven webhook.
   success), and `trial_used` (set when the league's first trial is granted, never cleared); and
   `canonical_league_id` in the Stripe subscription metadata. Documented in
   `docs/db/dynamodb_spec.md`.
-- **Secrets & environment mode:** Stripe secret key + webhook signing secret in SSM/Secrets
-  Manager, injected to the API and webhook Lambdas (new Terraform). Never committed or logged.
+- **Secrets & environment mode:** the Stripe secret key and webhook signing secret are
+  supplied as **sensitive Terraform variables** (from CI secrets, following the existing Clerk
+  pattern — the repo uses no SSM/Secrets Manager) and injected as Lambda environment variables
+  on the API and webhook Lambdas. Never committed or logged.
   **DEV uses Stripe sandbox (test) mode and PROD uses live mode** — each environment is
   configured with its own mode-specific credentials (`sk_test_…`/`sk_live_…`, the matching
   `whsec_…` webhook signing secret) and its own mode-specific Price/Product IDs. Test- and
@@ -180,8 +182,8 @@ provisioning, not duplicate charging.)
 - [ ] The client-supplied `subscriptionEndTime` onboarding input is removed;
       `subscription_end_time` is set only server-side via this flow (supersedes the
       [BE-001](BE-001-league-onboarding.md) interim behavior).
-- [ ] Stripe secret key and webhook signing secret are sourced from SSM/Secrets Manager and
-      never committed or logged.
+- [ ] Stripe secret key and webhook signing secret are sourced from sensitive Terraform
+      variables (CI secrets) and never committed or logged.
 - [ ] DEV is configured with Stripe sandbox (test) mode credentials and Price IDs; PROD is
       configured with live mode; neither environment carries the other's keys.
 
@@ -193,19 +195,29 @@ provisioning, not duplicate charging.)
   (conditional, multi-attribute writes), vendored into both Lambda zips. The old
   `TestUpdateSubscriptionEndTime` was removed; coverage now lives in
   `tests/unit/common/test_subscription.py`.
-- **Deferred to a follow-up infra pass** (per the chosen scope): the Terraform for the new
-  Stripe webhook Lambda + its API Gateway route, the Secrets Manager wiring for the
-  sandbox/live keys, and the `POST /stripe/webhook` path in `openapi_spec.yaml` (it needs a
-  separate webhook-Lambda ARN var, so it was not added to the templated spec yet). The two
-  authenticated endpoints route to the existing API Lambda and are wired in the spec.
+- **Infrastructure (now implemented).** The `stripe_webhook` Lambda is deployed per-region
+  (like the API Lambda) with its own IAM role (logs + DynamoDB `GetItem`/`PutItem`/`UpdateItem`
+  on the primary + replica tables). The `POST /stripe/webhook` route is declared in the
+  templated OpenAPI spec via a `${stripe_webhook_lambda_arn}` var and is **unauthenticated**
+  (no Clerk security scheme — Stripe signature verification is the auth); API Gateway is granted
+  invoke permission on the webhook Lambda in `regional/main.tf`. Stripe config reaches both
+  Lambdas as environment variables; the checkout return URLs are derived from `environment`
+  (prod → `https://leagueql.com`, dev → `http://localhost:5173`). CI builds/zips the new Lambda
+  and passes the Stripe secrets as `TF_VAR_*` (mode-selected by environment).
+- **One-time operational setup** (cannot be Terraformed — the webhook signing secret only exists
+  after the endpoint is registered in Stripe): see the runbook
+  [`docs/deploy/stripe-webhook-setup.md`](../../deploy/stripe-webhook-setup.md).
 
 ## Sources
-*(Backend implemented; Terraform/CI infra deferred — see Implementation Notes.)*
 `src/api/routes.py` (`create_checkout_session`, `create_billing_portal_session`,
 `get_authenticated_user`), `src/api/helpers.py` (`get_or_create_stripe_customer`,
 `get_stripe_customer_id`, `claim_pending_checkout`; `require_active_subscription` — reused
 unchanged), `src/api/main.py` (Stripe config + `main.stripe`), `src/common/subscription.py`
 (`record_active_subscription`, `expire_subscription`), `src/stripe_webhook/handler.py`,
-`docs/api/openapi_spec.yaml`, `docs/db/dynamodb_spec.md` (`stripe_subscription_id`,
-`pending_checkout`, `trial_used` on METADATA; `USER` item; `WEBHOOK_EVENT` dedup item),
+`docs/api/openapi_spec.yaml` (checkout, billing-portal, `POST /stripe/webhook`),
+`docs/db/dynamodb_spec.md` (`stripe_subscription_id`, `pending_checkout`, `trial_used` on
+METADATA; `USER` item; `WEBHOOK_EVENT` dedup item),
+`infrastructure/regional/main.tf` + `vars.tf` (webhook Lambda, invoke permission, Stripe vars,
+alarm), `infrastructure/global/{dev,prod}/main.tf` (webhook IAM role),
+`.github/workflows/build.yaml` (build + `TF_VAR_*` wiring),
 [BE-014](BE-014-subscription-access-control.md), [BE-001](BE-001-league-onboarding.md).

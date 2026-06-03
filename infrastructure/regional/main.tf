@@ -16,14 +16,19 @@ data "aws_caller_identity" "current" {}
 locals {
   region     = element(split("-", var.aws_region), 1)
   account_id = data.aws_caller_identity.current.account_id
-  
+
   # Role ARNs constructed from global role names
-  onboarder_role_arn = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-onboarder-role"
-  processor_role_arn = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-onboarding-processor-role"
-  api_role_arn = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-api-role"
-  player_metadata_role_arn = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-sleeper-player-metadata-fetcher-role"
-  sleeper_refresh_role_arn = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-sleeper-league-refresh-role"
+  onboarder_role_arn                      = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-onboarder-role"
+  processor_role_arn                      = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-onboarding-processor-role"
+  api_role_arn                            = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-api-role"
+  player_metadata_role_arn                = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-sleeper-player-metadata-fetcher-role"
+  sleeper_refresh_role_arn                = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-sleeper-league-refresh-role"
   sleeper_player_stats_refresher_role_arn = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-sleeper-player-stats-refresher-role"
+  stripe_webhook_role_arn                 = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-stripe-webhook-role"
+
+  # Base URL the user's browser returns to after Stripe Checkout / Billing Portal.
+  # Prod is the live site; dev (Stripe test mode) uses the local dev server.
+  app_base_url = var.environment == "prod" ? "https://leagueql.com" : "http://localhost:5173"
 }
 
 module "onboarder_lambda" {
@@ -100,6 +105,14 @@ module "api_lambda" {
     ONBOARDER_LAMBDA_NAME = "leagueql-onboarder-${var.environment}"
     S3_BUCKET_NAME        = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
     SNS_TOPIC_ARN         = var.environment == "prod" ? aws_sns_topic.lambda_alerts[0].arn : ""
+
+    # Stripe billing (BE-015) — checkout + billing-portal endpoints.
+    STRIPE_SECRET_KEY                = var.stripe_secret_key
+    STRIPE_PRICE_ID                  = var.stripe_price_id
+    STRIPE_TRIAL_PERIOD_DAYS         = tostring(var.stripe_trial_period_days)
+    STRIPE_CHECKOUT_SUCCESS_URL      = local.app_base_url
+    STRIPE_CHECKOUT_CANCEL_URL       = local.app_base_url
+    STRIPE_BILLING_PORTAL_RETURN_URL = local.app_base_url
   }
 
   tags = {
@@ -108,6 +121,44 @@ module "api_lambda" {
     component   = "api"
     managed-by  = "terraform"
   }
+}
+
+module "stripe_webhook_lambda" {
+  source = "../modules/lambda"
+
+  function_name        = "leagueql-stripe-webhook-${var.environment}-${local.region}"
+  function_description = "Lambda handling Stripe billing webhooks for subscription lifecycle"
+  role_arn             = local.stripe_webhook_role_arn
+  handler              = "handler.lambda_handler"
+  memory_size          = 512
+  timeout              = 15
+  log_retention        = 7
+  s3_bucket            = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
+  s3_key               = "lambda-code-artifacts/stripe_webhook-lambda.zip"
+
+  environment_variables = {
+    DYNAMODB_TABLE_NAME   = "leagueql-table-${var.environment}"
+    STRIPE_SECRET_KEY     = var.stripe_secret_key
+    STRIPE_WEBHOOK_SECRET = var.stripe_webhook_secret
+  }
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    component   = "api"
+    managed-by  = "terraform"
+  }
+}
+
+# Allow this region's API Gateway to invoke the Stripe webhook Lambda. The route
+# itself is declared in the OpenAPI spec (POST /stripe/webhook) and targets this
+# function's ARN via the openapi_vars below.
+resource "aws_lambda_permission" "api_gateway_stripe_webhook" {
+  statement_id  = "AllowAPIGatewayInvokeStripeWebhook"
+  action        = "lambda:InvokeFunction"
+  function_name = split(":", module.stripe_webhook_lambda.lambda_arn)[6]
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${module.backend_api.execution_arn}/*/*"
 }
 
 module "player_metadata_lambda" {
@@ -232,13 +283,14 @@ module "backend_api" {
   lambda_function_name = split(":", module.api_lambda.lambda_arn)[6]
   log_retention_days   = 7
   clerk_issuer_url     = var.clerk_issuer_url
-  clerk_jwt_audience   = var.clerk_jwt_audience 
-  
+  clerk_jwt_audience   = var.clerk_jwt_audience
+
   openapi_vars = {
-    aws_region         = var.aws_region
-    lambda_arn         = module.api_lambda.lambda_arn
-    clerk_issuer_url   = var.clerk_issuer_url
-    clerk_jwt_audience = var.clerk_jwt_audience
+    aws_region                = var.aws_region
+    lambda_arn                = module.api_lambda.lambda_arn
+    stripe_webhook_lambda_arn = module.stripe_webhook_lambda.lambda_arn
+    clerk_issuer_url          = var.clerk_issuer_url
+    clerk_jwt_audience        = var.clerk_jwt_audience
   }
 
   tags = {
@@ -446,6 +498,33 @@ resource "aws_cloudwatch_metric_alarm" "api_lambda_errors" {
 
   dimensions = {
     FunctionName = "leagueql-api-${var.environment}-${local.region}"
+  }
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    component   = "monitoring"
+    managed-by  = "terraform"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "stripe_webhook_errors" {
+  count               = var.environment == "prod" ? 1 : 0
+  alarm_name          = "leagueql-stripe-webhook-${var.environment}-${local.region}-errors"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods  = 1
+  metric_name         = "Errors"
+  namespace           = "AWS/Lambda"
+  period              = 300
+  statistic           = "Sum"
+  threshold           = 1
+  alarm_description   = "Stripe webhook Lambda error detected"
+  alarm_actions       = [aws_sns_topic.lambda_alerts[0].arn]
+  ok_actions          = [aws_sns_topic.lambda_alerts[0].arn]
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    FunctionName = "leagueql-stripe-webhook-${var.environment}-${local.region}"
   }
 
   tags = {
