@@ -78,6 +78,7 @@ class TestCheckoutSessionEndpoint:
         )
         assert kwargs["mode"] == "subscription"
         assert kwargs["allow_promotion_codes"] is True
+        assert kwargs["managed_payments"] == {"enabled": True}
 
     def test_omits_trial_when_already_used(
         self,
