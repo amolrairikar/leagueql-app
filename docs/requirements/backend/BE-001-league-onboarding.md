@@ -17,7 +17,8 @@ and an incremented `LEAGUE_COUNT`.
 - Onboarder Lambda: `src/onboarder/` (`handler.py`, `onboarding_service.py`,
   `espn_client.py`, `sleeper_client.py`, `writer.py`).
 - Request body: `OnboardRequest` (`leagueId`, `platform`, `season` (ESPN only),
-  `s2`/`swid` (private ESPN only), `subscriptionEndTime` (optional)).
+  `s2`/`swid` (private ESPN only), `subscriptionEndTime` (optional, interim — see
+  [BE-015](BE-015-stripe-billing.md))).
 
 ## Edge Cases
 - **League already onboarded:** `ONBOARD` on an existing canonical league returns `200`
@@ -37,10 +38,12 @@ and an incremented `LEAGUE_COUNT`.
 - **Auction vs. snake drafts:** both ESPN and Sleeper auction drafts must be handled
   (`bid_amount`, `nominating_team_id` populated for auction picks).
 - **Invalid `leagueId` format:** must match `^\d+$`; otherwise `422`.
-- **Subscription end time:** when `subscriptionEndTime` is supplied (from the billing
-  provider), it is persisted on the `METADATA` item as `subscription_end_time`; when absent,
-  no subscription attribute is written (the league reads as expired until billing sets one —
-  see [BE-014](BE-014-subscription-access-control.md)).
+- **Subscription end time (interim):** when `subscriptionEndTime` is supplied, it is
+  persisted on the `METADATA` item as `subscription_end_time`; when absent, no subscription
+  attribute is written (the league reads as expired until billing sets one — see
+  [BE-014](BE-014-subscription-access-control.md)). This is a **client-supplied, spoofable
+  stopgap**: the authoritative value is set server-side by the Stripe billing webhook, and
+  this onboarding input is removed once [BE-015](BE-015-stripe-billing.md) lands.
 
 ## Acceptance Criteria
 - [ ] `POST /leagues?requestType=ONBOARD` with a valid, not-yet-onboarded league returns

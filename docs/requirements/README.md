@@ -30,6 +30,7 @@ criteria. Frontend, backend, and extension features are kept separate.
 | [BE-012](backend/BE-012-scheduled-sleeper-auto-refresh.md) | Scheduled Sleeper Auto-Refresh |
 | [BE-013](backend/BE-013-app-stats-league-count.md) | App Stats / League Count |
 | [BE-014](backend/BE-014-subscription-access-control.md) | Subscription Access Control |
+| [BE-015](backend/BE-015-stripe-billing.md) | Stripe Billing — Checkout, Webhook & Subscription Lifecycle |
 
 ## Frontend (`frontend/`)
 | ID | Feature |

@@ -7,15 +7,18 @@ Enforces a per-league subscription on the backend API. Each league's `METADATA` 
 Expired leagues are blocked from the data and write endpoints (HTTP `402`), while the metadata
 and delete endpoints stay reachable so the frontend can read status and users can remove a
 league. State is evaluated live on each request — there is no stored status flag and no
-scheduled job. The actual `subscription_end_time` value originates from the billing provider
-(Clerk/Stripe) and is written at onboarding (or via a future billing webhook).
+scheduled job. The actual `subscription_end_time` value is written **server-side by the Stripe
+billing webhook** ([BE-015](BE-015-stripe-billing.md)); this gate only *reads* it. The
+client-supplied `subscriptionEndTime` accepted at onboarding ([BE-001](BE-001-league-onboarding.md))
+is an interim, spoofable stopgap that BE-015 supersedes and removes.
 
 ## Scope
 - Helper: `require_active_subscription(canonical_league_id)` (`src/api/helpers.py`) — reads the
   `METADATA` item via `get_league_metadata` and raises `402 Subscription required` when
   `subscription_end_time` is absent or `<= now` (UTC).
 - Write helper: `update_subscription_end_time(canonical_league_id, end_time)`
-  (`src/api/helpers.py`) — the target for the future billing webhook/manual update.
+  (`src/api/helpers.py`) — the sole write path for `subscription_end_time`, called by the
+  Stripe billing webhook ([BE-015](BE-015-stripe-billing.md)).
 - **Gated** endpoints (`src/api/routes.py`): `GET /leagues/{id}/query`,
   `POST /leagues/{id}/migrate`, `POST /leagues/{id}/espn_members`, and `POST /leagues`
   **only on the REFRESH path for an already-onboarded league**.
@@ -25,8 +28,11 @@ scheduled job. The actual `subscription_end_time` value originates from the bill
 ## Edge Cases
 - **`subscription_end_time` absent:** treated as expired → `402`.
 - **Timestamp exactly equal to now:** treated as expired (`<= now` blocks).
-- **New onboarding:** allowed regardless (the league/subscription does not exist yet); the
-  onboarder writes `subscription_end_time` when the request supplies it ([BE-001](BE-001-league-onboarding.md)).
+- **New onboarding:** allowed regardless (the league/subscription does not exist yet). The
+  onboarder still writes a client-supplied `subscription_end_time` as an interim stopgap
+  ([BE-001](BE-001-league-onboarding.md)); once [BE-015](BE-015-stripe-billing.md) lands, the
+  value is set only by the Stripe webhook and a freshly onboarded, unsubscribed league reads
+  as expired until checkout completes.
 - **Reading status while expired:** `GET /leagues/{id}` is never gated, so the frontend can
   always read `subscription_end_time` to render its paywall ([FE-021](../frontend/FE-021-subscription-access-control.md)).
 - **Delete while expired:** allowed, so users can clean up lapsed leagues.
@@ -39,7 +45,10 @@ scheduled job. The actual `subscription_end_time` value originates from the bill
 - [ ] `GET /leagues/{id}` and `DELETE /leagues/{id}` succeed regardless of subscription state.
 - [ ] New-league `ONBOARD` is never blocked by the gate.
 - [ ] REFRESH of an already-onboarded, expired league returns `402`.
-- [ ] No scheduled job, EventBridge rule, or extra Lambda is introduced.
+- [ ] **Enforcement** introduces no scheduled job, EventBridge rule, or polling — state is
+      evaluated live per request, and this gate adds no infrastructure of its own. (The
+      `subscription_end_time` value is written by the event-driven Stripe webhook in
+      [BE-015](BE-015-stripe-billing.md), which is that feature's Lambda, not this one's.)
 
 ## Sources
 `src/api/helpers.py` (`require_active_subscription`, `update_subscription_end_time`),
