@@ -26,6 +26,8 @@ export interface SubscriptionState {
   expiringSoon: boolean;
   /** Returning from Checkout and waiting for the webhook to record access. */
   activating: boolean;
+  /** Returned from Checkout but the subscription never activated within the poll window. */
+  activationFailed?: boolean;
   /** The raw `subscription_end_time`, when present (for status display). */
   endTime?: string;
 }
@@ -161,7 +163,12 @@ export function useSubscription(): SubscriptionState {
             intervalMs: ACTIVATION_POLL_INTERVAL_MS,
           },
         );
-        if (!cancelled) setState(result);
+        // Returned from Checkout but never activated within the window — surface
+        // it so the user isn't left at a silent paywall after paying.
+        if (!cancelled)
+          setState(
+            result.isActive ? result : { ...result, activationFailed: true },
+          );
       } else {
         const result = await fetchState();
         if (!cancelled) setState(result);

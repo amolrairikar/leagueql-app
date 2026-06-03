@@ -13,7 +13,7 @@ import { useSubscription } from '@/features/subscription/use-subscription';
  * otherwise it shows the inline paywall when the subscription is expired/absent.
  */
 export function SubscriptionGuard({ children }: { children: React.ReactNode }) {
-  const { loading, isActive, activating } = useSubscription();
+  const { loading, isActive, activating, activationFailed } = useSubscription();
 
   if (loading || activating)
     return (
@@ -27,7 +27,8 @@ export function SubscriptionGuard({ children }: { children: React.ReactNode }) {
       </div>
     );
 
-  if (!isActive) return <SubscriptionRequired />;
+  if (!isActive)
+    return <SubscriptionRequired activationFailed={activationFailed} />;
 
   return <>{children}</>;
 }

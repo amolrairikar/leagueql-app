@@ -23,7 +23,9 @@ the app therefore refreshes subscription state with the cache bypassed and shows
   `window.location.assign(url)`.
 - **Return handling:** on landing back in the app, refresh subscription state — `clearApiCache()`
   (or read `getLeague` with `skipCache`) so the webhook-written `subscription_end_time` is read,
-  with a short bounded poll / "activating" state to absorb webhook lag.
+  with a short bounded poll / "activating" state to absorb webhook lag. If the poll window
+  elapses without the subscription activating (`activationFailed`), the paywall shows a
+  "couldn't confirm your subscription" notice rather than reverting silently.
 - **In-flight state:** the Subscribe button shows a loading state and is disabled while the
   session is being created.
 - **Types:** a `BillingSessionResponse` (`{ detail, data: { url } }`) in
@@ -58,6 +60,8 @@ the app therefore refreshes subscription state with the cache bypassed and shows
       of redirecting.
 - [ ] On return from Checkout, the app refreshes subscription state (cache-busted) and shows an
       activating state until the subscription reads active, then renders the page.
+- [ ] If activation does not complete within the poll window, the paywall shows a
+      "couldn't confirm your subscription" notice instead of reverting silently.
 - [ ] Errors creating the session surface through the standard API error UI.
 
 ## Sources

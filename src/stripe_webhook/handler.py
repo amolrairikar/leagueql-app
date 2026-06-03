@@ -100,34 +100,49 @@ def _iso(unix_ts: int) -> str:
     ).isoformat()
 
 
-def _current_period_end(subscription: dict) -> int | None:
+def _get(obj, key, default=None):
+    """Safe key access for Stripe objects and plain dicts.
+
+    stripe-python (v15) resource objects are **not** ``dict`` subclasses and have
+    no ``.get()`` — they support ``obj[key]`` (raising ``KeyError`` when missing).
+    Plain dicts (used in tests) behave the same way, so subscript-with-fallback
+    works for both. Using ``.get()`` directly on a real Stripe object raises
+    ``AttributeError: get``.
+    """
+    try:
+        return obj[key]
+    except (KeyError, TypeError):
+        return default
+
+
+def _current_period_end(subscription) -> int | None:
     """Return ``current_period_end``, tolerating its move to the item level."""
-    end = subscription.get("current_period_end")
+    end = _get(subscription, "current_period_end")
     if end:
         return end
-    items = (subscription.get("items") or {}).get("data") or []
-    if items and items[0].get("current_period_end"):
-        return items[0]["current_period_end"]
+    items = _get(_get(subscription, "items") or {}, "data") or []
+    if items and _get(items[0], "current_period_end"):
+        return _get(items[0], "current_period_end")
     return None
 
 
-def _subscription_end_time(subscription: dict) -> str | None:
+def _subscription_end_time(subscription) -> str | None:
     """Map a subscription to its access-end timestamp (trial vs. paid period)."""
-    if subscription.get("status") == "trialing" and subscription.get("trial_end"):
-        return _iso(subscription["trial_end"])
+    if _get(subscription, "status") == "trialing" and _get(subscription, "trial_end"):
+        return _iso(_get(subscription, "trial_end"))
     period_end = _current_period_end(subscription)
     return _iso(period_end) if period_end else None
 
 
-def _subscription_id_from_event(event_type: str, obj: dict) -> str | None:
+def _subscription_id_from_event(event_type: str, obj) -> str | None:
     if event_type in (
         "customer.subscription.created",
         "customer.subscription.updated",
         "customer.subscription.deleted",
     ):
-        return obj.get("id")
+        return _get(obj, "id")
     # ``checkout.session.completed`` and ``invoice.paid`` reference the subscription.
-    return obj.get("subscription")
+    return _get(obj, "subscription")
 
 
 def _process_event(stripe_event: dict) -> None:
@@ -138,11 +153,11 @@ def _process_event(stripe_event: dict) -> None:
     # ``deleted`` carries the (now-canceled) subscription object directly; there
     # is nothing to re-fetch, so expire access scoped to that subscription.
     if event_type == "customer.subscription.deleted":
-        canonical_league_id = (obj.get("metadata") or {}).get("canonical_league_id")
+        canonical_league_id = _get(_get(obj, "metadata") or {}, "canonical_league_id")
         if not canonical_league_id:
             logger.warning("subscription.deleted without canonical_league_id; skipping")
             return
-        expire_subscription(canonical_league_id, obj["id"])
+        expire_subscription(canonical_league_id, _get(obj, "id"))
         return
 
     if event_type not in _ACTIVATING_EVENTS:
@@ -157,8 +172,8 @@ def _process_event(stripe_event: dict) -> None:
     # Convergence: act on the subscription's authoritative current state rather
     # than the (possibly stale / out-of-order) event payload.
     subscription = stripe.Subscription.retrieve(subscription_id)
-    canonical_league_id = (subscription.get("metadata") or {}).get(
-        "canonical_league_id"
+    canonical_league_id = _get(
+        _get(subscription, "metadata") or {}, "canonical_league_id"
     )
     if not canonical_league_id:
         logger.warning(
@@ -166,7 +181,7 @@ def _process_event(stripe_event: dict) -> None:
         )
         return
 
-    sub_status = subscription.get("status")
+    sub_status = _get(subscription, "status")
     if sub_status in ("active", "trialing"):
         end_time = _subscription_end_time(subscription)
         if not end_time:

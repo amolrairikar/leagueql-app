@@ -194,6 +194,12 @@ provisioning, not duplicate charging.)
       configured with live mode; neither environment carries the other's keys.
 
 ## Implementation Notes
+- **Stripe SDK access gotcha (v15):** stripe-python resource objects (e.g. `Subscription`,
+  `Event`) are **not** `dict` subclasses and have **no `.get()`** — `obj.get(...)` raises
+  `AttributeError: get`. The webhook handler reads Stripe-object fields via a subscript-based
+  `_get(obj, key, default)` helper (`obj[key]` with `KeyError`/`TypeError` fallback), which works
+  on both real Stripe objects and the plain-dict test fixtures. The checkout/portal paths already
+  use subscript (`session["url"]`, `customer["id"]`), so they were unaffected.
 - **The subscription write moved out of `src/api/helpers.py` into `common/subscription.py`.**
   The webhook is a separate Lambda and cannot import the API package, so the BE-014
   `update_subscription_end_time` helper (an unconditional single-attribute `SET`) was removed
