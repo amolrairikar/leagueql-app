@@ -160,6 +160,7 @@ CHECKOUT_PENDING_TTL_MINUTES = int(os.environ.get("CHECKOUT_PENDING_TTL_MINUTES"
 # the infrastructure above so helpers can resolve ``main`` attributes at call time.
 from helpers import (  # noqa: E402, F401
     _query_all_keys,
+    cancel_league_subscription,
     claim_pending_checkout,
     collect_league_keys,
     convert_decimals,
@@ -177,6 +178,7 @@ from helpers import (  # noqa: E402, F401
     publish_failure,
     require_active_subscription,
     set_active_job,
+    trial_used_for_league,
     update_league_count,
 )
 

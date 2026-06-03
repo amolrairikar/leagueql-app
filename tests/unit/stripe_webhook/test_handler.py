@@ -110,11 +110,33 @@ class TestActivatingEvents:
         patched.stripe.Subscription.retrieve.return_value = {
             "status": "trialing",
             "trial_end": _FUTURE_TS,
-            "metadata": {"canonical_league_id": "cid"},
+            "metadata": {
+                "canonical_league_id": "cid",
+                "platform": "SLEEPER",
+                "native_league_id": "123",
+            },
         }
         patched.wh.lambda_handler(_event(), None)
         _, kwargs = patched.record.call_args
         assert kwargs["mark_trial_used"] is True
+        # Native identity is forwarded for the durable trial marker.
+        assert kwargs["platform"] == "SLEEPER"
+        assert kwargs["native_league_id"] == "123"
+
+    def test_passes_none_native_identity_when_metadata_absent(self, patched):
+        # Older subscriptions created before native IDs were added to metadata.
+        patched.stripe.Webhook.construct_event.return_value = _stripe_event(
+            "customer.subscription.created", {"id": "sub_1"}
+        )
+        patched.stripe.Subscription.retrieve.return_value = {
+            "status": "trialing",
+            "trial_end": _FUTURE_TS,
+            "metadata": {"canonical_league_id": "cid"},
+        }
+        patched.wh.lambda_handler(_event(), None)
+        _, kwargs = patched.record.call_args
+        assert kwargs["platform"] is None
+        assert kwargs["native_league_id"] is None
 
     def test_invoice_paid_uses_current_period_end(self, patched):
         patched.stripe.Webhook.construct_event.return_value = _stripe_event(

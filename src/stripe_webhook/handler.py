@@ -172,14 +172,17 @@ def _process_event(stripe_event: dict) -> None:
     # Convergence: act on the subscription's authoritative current state rather
     # than the (possibly stale / out-of-order) event payload.
     subscription = stripe.Subscription.retrieve(subscription_id)
-    canonical_league_id = _get(
-        _get(subscription, "metadata") or {}, "canonical_league_id"
-    )
+    sub_metadata = _get(subscription, "metadata") or {}
+    canonical_league_id = _get(sub_metadata, "canonical_league_id")
     if not canonical_league_id:
         logger.warning(
             "Subscription %s missing canonical_league_id; skipping", subscription_id
         )
         return
+    # Native identity (carried in the subscription metadata at checkout) keys the
+    # durable, delete-surviving trial marker (BE-015).
+    native_platform = _get(sub_metadata, "platform")
+    native_league_id = _get(sub_metadata, "native_league_id")
 
     sub_status = _get(subscription, "status")
     if sub_status in ("active", "trialing"):
@@ -193,6 +196,8 @@ def _process_event(stripe_event: dict) -> None:
                 end_time,
                 subscription_id,
                 mark_trial_used=(sub_status == "trialing"),
+                platform=native_platform,
+                native_league_id=native_league_id,
             )
         except DuplicateSubscription:
             # A different subscription is already recorded for this league; this

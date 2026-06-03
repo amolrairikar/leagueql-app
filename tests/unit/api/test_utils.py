@@ -99,6 +99,37 @@ class TestLookupLeague:
         assert exc_info.value.status_code == 500
 
 
+class TestTrialUsedForLeague:
+    def test_true_when_durable_marker_present(self, mock_table):
+        from main import Platform, trial_used_for_league
+
+        mock_table.get_item.return_value = {
+            "Item": {"PK": "LEAGUE#123#PLATFORM#SLEEPER", "SK": "TRIAL_USED"}
+        }
+        assert trial_used_for_league("123", Platform.SLEEPER) is True
+        _, kwargs = mock_table.get_item.call_args
+        assert kwargs["Key"] == {
+            "PK": "LEAGUE#123#PLATFORM#SLEEPER",
+            "SK": "TRIAL_USED",
+        }
+
+    def test_false_when_marker_absent(self, mock_table):
+        from main import Platform, trial_used_for_league
+
+        mock_table.get_item.return_value = {}
+        assert trial_used_for_league("123", Platform.SLEEPER) is False
+
+    def test_raises_500_on_boto_error(self, mock_table):
+        from main import Platform, trial_used_for_league
+
+        mock_table.get_item.side_effect = botocore.exceptions.ClientError(
+            {"Error": {"Code": "InternalError", "Message": "fail"}}, "GetItem"
+        )
+        with pytest.raises(HTTPException) as exc_info:
+            trial_used_for_league("123", Platform.SLEEPER)
+        assert exc_info.value.status_code == 500
+
+
 class TestGetLeagueMetadata:
     def test_returns_item(self, mock_table, league_metadata_item):
         from main import get_league_metadata

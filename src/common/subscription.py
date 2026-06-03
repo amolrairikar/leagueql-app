@@ -23,6 +23,7 @@ See ``docs/requirements/backend/BE-015-stripe-billing.md`` (Idempotency Layer 3)
 """
 
 import os
+from datetime import datetime, timezone
 
 import boto3
 import botocore.config
@@ -52,6 +53,40 @@ def _metadata_key(canonical_league_id: str) -> dict[str, dict[str, str]]:
     }
 
 
+def _record_trial_used(table_name: str, platform: str, native_league_id: str) -> None:
+    """Write the durable, delete-surviving trial-used marker (BE-015).
+
+    Keyed by the platform-native identity ``(platform, native_league_id)`` — which
+    survives a delete/re-onboard cycle, unlike ``canonical_league_id`` — and
+    deliberately carries **no** ``canonical_league_id`` attribute so the BE-007
+    delete sweep never matches it. The conditional write preserves the first-grant
+    timestamp and makes redelivered trialing events idempotent.
+    """
+    try:
+        _dynamodb.put_item(
+            TableName=table_name,
+            Item={
+                "PK": {"S": f"LEAGUE#{native_league_id}#PLATFORM#{platform}"},
+                "SK": {"S": "TRIAL_USED"},
+                "platform": {"S": platform},
+                "league_id": {"S": native_league_id},
+                "trial_used_at": {"S": datetime.now(timezone.utc).isoformat()},
+            },
+            ConditionExpression="attribute_not_exists(PK)",
+        )
+        logger.info(
+            "Recorded durable trial-used marker: platform=%s league=%s",
+            platform,
+            native_league_id,
+        )
+    except _dynamodb.exceptions.ConditionalCheckFailedException:
+        logger.info(
+            "Durable trial-used marker already present: platform=%s league=%s",
+            platform,
+            native_league_id,
+        )
+
+
 def _recorded_subscription_id(table_name: str, canonical_league_id: str) -> str | None:
     """Return the ``stripe_subscription_id`` currently stored on the league, if any."""
     resp = _dynamodb.get_item(
@@ -68,6 +103,8 @@ def record_active_subscription(
     stripe_subscription_id: str,
     *,
     mark_trial_used: bool = False,
+    platform: str | None = None,
+    native_league_id: str | None = None,
 ) -> bool:
     """Monotonically record an active/trialing subscription's end time.
 
@@ -75,7 +112,10 @@ def record_active_subscription(
     ``subscription_end_time`` (never regresses on a stale/out-of-order event),
     (b) claims ``stripe_subscription_id`` for the league, and (c) clears any
     ``pending_checkout`` marker. When ``mark_trial_used`` is set, ``trial_used``
-    is recorded so the league never receives a second trial (BE-015: trial once).
+    is recorded so the league never receives a second trial (BE-015: trial once),
+    and — when the native identity is supplied — a durable ``TRIAL_USED`` marker
+    keyed by ``(platform, native_league_id)`` is written so the league cannot
+    reclaim a trial by deleting and re-onboarding (BE-007).
 
     Args:
         canonical_league_id: The canonical league ID.
@@ -84,6 +124,9 @@ def record_active_subscription(
         stripe_subscription_id: The Stripe subscription this state came from.
         mark_trial_used: Set ``trial_used`` on the league (when recording a
             trialing subscription).
+        platform: Native platform (e.g. ``"ESPN"``) for the durable trial marker;
+            read from the subscription metadata by the webhook.
+        native_league_id: Native (platform) league ID for the durable trial marker.
 
     Returns:
         ``True`` when the write applied; ``False`` when it was a no-op (the stored
@@ -123,7 +166,7 @@ def record_active_subscription(
             stripe_subscription_id,
             subscription_end_time,
         )
-        return True
+        applied = True
     except _dynamodb.exceptions.ConditionalCheckFailedException:
         # The condition guards three things at once. Re-read to tell a genuine
         # duplicate (a *different* subscription already recorded) apart from a
@@ -139,7 +182,16 @@ def record_active_subscription(
             canonical_league_id,
             stripe_subscription_id,
         )
-        return False
+        applied = False
+
+    # The trial was genuinely granted by Stripe (status=trialing), so record the
+    # durable marker regardless of whether the monotonic METADATA write advanced —
+    # the conditional put is idempotent. Skipped on the DuplicateSubscription path
+    # above (which raises before reaching here).
+    if mark_trial_used and platform and native_league_id:
+        _record_trial_used(table_name, platform, native_league_id)
+
+    return applied
 
 
 def expire_subscription(canonical_league_id: str, stripe_subscription_id: str) -> bool:
