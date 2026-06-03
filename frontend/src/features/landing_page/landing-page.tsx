@@ -21,7 +21,7 @@ import { onboardLeague } from '@/features/connect_league/api-calls';
 import { pollForCompletion } from '@/features/connect_league/league-connect';
 import { FEATURES } from '@/features/landing_page/constants';
 import type { Feature } from '@/features/landing_page/types';
-import { ApiError, clearApiError } from '@/lib/api-client';
+import { ApiError } from '@/lib/api-client';
 import { setDemoMode, setLeagueCookies } from '@/lib/cookie-handler';
 import { DEMO_SEASONS } from '@/lib/demo-constants';
 
@@ -157,7 +157,6 @@ export default function LeagueQLLanding() {
       void navigate('/home');
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) {
-        clearApiError();
         if (platform === 'SLEEPER') {
           try {
             const onboardResult = await onboardLeague('ONBOARD', {
@@ -202,11 +201,21 @@ export default function LeagueQLLanding() {
           );
         }
       } else {
-        const message =
-          err instanceof ApiError
-            ? err.message
-            : 'Failed to find league. Please check your league ID and platform.';
-        setError(message);
+        // A non-404 lookup failure (network / 5xx) is infrastructure trouble, not
+        // a bad league ID — show a generic message (matching the connect-league
+        // form) rather than the rarely-actionable backend detail.
+        setError(
+          <>
+            Something went wrong connecting your league. Please try again or{' '}
+            <a
+              href="mailto:support@leagueql.com"
+              className="underline underline-offset-4"
+            >
+              contact support
+            </a>{' '}
+            if the error persists.
+          </>,
+        );
       }
     } finally {
       setLoading(false);

@@ -27,6 +27,11 @@ app.
   observe `COMPLETED` rather than falsely timing out.
 - **Job failure:** display the backend `failure_reason` (e.g. expired ESPN cookies) and
   allow retry.
+- **Lookup / submit failure:** a non-404 failure of the initial `getLeague` lookup, or an
+  exhausted-retry failure of the `POST /leagues` submit (network / 5xx), is surfaced inline in
+  the form's failed-state alert rather than silently aborting. (A 404 from the lookup is the
+  normal "not onboarded yet" signal and routes to onboarding, not an error.) There is no global
+  error banner.
 - **Already onboarded:** backend may return "already onboarded"; route the user in rather
   than erroring.
 - **Validation:** league ID must be numeric; ESPN requires a season.

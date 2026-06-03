@@ -35,7 +35,6 @@ import PrivacyPage from '@/features/privacy/privacy-page';
 import SeasonStandings from '@/features/season_standings/season-standings';
 import { AppSidebar } from '@/features/sidebar/app-sidebar';
 import { SubscriptionGuard } from '@/features/subscription/subscription-guard';
-import { ApiErrorAlert } from '@/lib/api-error-alert';
 import { isDemoMode } from '@/lib/cookie-handler';
 
 function AppLayout({ children }: { children: React.ReactNode }) {
@@ -68,7 +67,6 @@ function AppLayout({ children }: { children: React.ReactNode }) {
               </div>
             </div>
           </header>
-          <ApiErrorAlert />
           <ErrorBoundary>
             <SubscriptionGuard>{children}</SubscriptionGuard>
           </ErrorBoundary>

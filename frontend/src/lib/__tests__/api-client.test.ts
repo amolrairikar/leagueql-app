@@ -1,12 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  ApiError,
-  _getErrorSnapshot,
-  _subscribeToErrors,
-  apiClient,
-  clearApiError,
-} from '../api-client';
+import { ApiError, apiClient } from '../api-client';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -54,65 +48,19 @@ describe('ApiError', () => {
   });
 });
 
-// ── Error store ───────────────────────────────────────────────────────────────
+// ── Failed requests ─────────────────────────────────────────────────────────
 
-describe('error store', () => {
-  beforeEach(() => {
-    clearApiError();
-  });
-
+describe('failed requests', () => {
   afterEach(() => {
-    clearApiError();
     vi.unstubAllGlobals();
   });
 
-  it('_getErrorSnapshot returns null initially', () => {
-    expect(_getErrorSnapshot()).toBeNull();
-  });
-
-  it('failed fetch sets the error snapshot', async () => {
+  it('rejects with an ApiError carrying the response status', async () => {
     mockFetchError(500);
-    await expect(apiClient.post('/store-set', {})).rejects.toThrow(ApiError);
-    expect(_getErrorSnapshot()?.status).toBe(500);
-  });
-
-  it('clearApiError resets snapshot to null', async () => {
-    mockFetchError(500);
-    await expect(apiClient.post('/store-clear', {})).rejects.toThrow();
-    clearApiError();
-    expect(_getErrorSnapshot()).toBeNull();
-  });
-
-  it('successful fetch clears an existing error from the snapshot', async () => {
-    mockFetchError(500);
-    await expect(apiClient.post('/store-clear-fail', {})).rejects.toThrow();
-    expect(_getErrorSnapshot()).not.toBeNull();
-
-    mockFetchOk({ ok: true });
-    await apiClient.post('/store-clear-ok', {});
-    expect(_getErrorSnapshot()).toBeNull();
-  });
-
-  it('_subscribeToErrors listener fires when an error is set', async () => {
-    const listener = vi.fn();
-    const unsub = _subscribeToErrors(listener);
-
-    mockFetchError(400, { message: 'bad input' });
-    await expect(apiClient.post('/sub-set', {})).rejects.toThrow();
-    expect(listener).toHaveBeenCalledWith(
-      expect.objectContaining({ status: 400 }),
-    );
-    unsub();
-  });
-
-  it('unsubscribed listener is no longer called', async () => {
-    const listener = vi.fn();
-    const unsub = _subscribeToErrors(listener);
-    unsub();
-
-    mockFetchError(400, { message: 'bad input' });
-    await expect(apiClient.post('/sub-unsub', {})).rejects.toThrow();
-    expect(listener).not.toHaveBeenCalled();
+    await expect(apiClient.post('/fail', {})).rejects.toThrow(ApiError);
+    await expect(apiClient.post('/fail', {})).rejects.toMatchObject({
+      status: 500,
+    });
   });
 });
 
@@ -120,7 +68,6 @@ describe('error store', () => {
 
 describe('session token', () => {
   beforeEach(() => {
-    clearApiError();
     document.cookie = '__session=; max-age=0; path=/';
   });
 
@@ -153,7 +100,6 @@ describe('session token', () => {
 
 describe('error response parsing', () => {
   afterEach(() => {
-    clearApiError();
     vi.unstubAllGlobals();
   });
 
@@ -186,7 +132,6 @@ describe('error response parsing', () => {
 
 describe('GET caching', () => {
   afterEach(() => {
-    clearApiError();
     vi.unstubAllGlobals();
     vi.useRealTimers();
   });
@@ -245,7 +190,6 @@ describe('GET caching', () => {
 
 describe('non-GET methods', () => {
   afterEach(() => {
-    clearApiError();
     vi.unstubAllGlobals();
   });
 

@@ -1,5 +1,3 @@
-import { useSyncExternalStore } from 'react';
-
 // ── Base URL ──────────────────────────────────────────────────────────────────
 // Override at any time via VITE_API_URL (e.g. http://127.0.0.1:8000 for local).
 // Without an override: production build → api.leagueql.com, dev build → AWS API GW.
@@ -32,38 +30,6 @@ export class ApiError extends Error {
   }
 }
 
-// ── Error store ───────────────────────────────────────────────────────────────
-// Plain module-level store so components can subscribe without a context provider.
-
-type ErrorListener = (error: ApiError | null) => void;
-
-const _listeners = new Set<ErrorListener>();
-let _currentError: ApiError | null = null;
-
-export function _subscribeToErrors(listener: ErrorListener): () => void {
-  _listeners.add(listener);
-  return () => _listeners.delete(listener);
-}
-
-export function _getErrorSnapshot(): ApiError | null {
-  return _currentError;
-}
-
-function _setApiError(error: ApiError | null): void {
-  _currentError = error;
-  for (const listener of _listeners) listener(error);
-}
-
-export function clearApiError(): void {
-  _setApiError(null);
-}
-
-// ── React hook ────────────────────────────────────────────────────────────────
-
-export function useApiError(): ApiError | null {
-  return useSyncExternalStore(_subscribeToErrors, _getErrorSnapshot);
-}
-
 // ── Fetch core ────────────────────────────────────────────────────────────────
 
 function getSessionToken(): string | null {
@@ -71,19 +37,13 @@ function getSessionToken(): string | null {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
-// Per-request options. `suppressErrorStatuses` lets a caller keep an *expected*
-// error (e.g. a 404 from a best-effort query) out of the global error alert; the
-// promise still rejects so the caller's own handling applies.
+// Per-request options. Errors always reject the returned promise so each caller
+// (feature) surfaces them locally; there is no global error sink.
 interface FetchOpts {
   skipCache?: boolean;
-  suppressErrorStatuses?: number[];
 }
 
-async function _doFetch<T>(
-  path: string,
-  init?: RequestInit,
-  opts?: FetchOpts,
-): Promise<T> {
+async function _doFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const token = getSessionToken();
   const response = await fetch(`${API_BASE_URL}${path}`, {
     headers: {
@@ -107,15 +67,10 @@ async function _doFetch<T>(
     } catch {
       message = response.statusText;
     }
-    const error = new ApiError(response.status, response.statusText, message);
-    if (!opts?.suppressErrorStatuses?.includes(response.status)) {
-      _setApiError(error);
-    }
-    throw error;
+    throw new ApiError(response.status, response.statusText, message);
   }
 
   const data: unknown = await response.json();
-  clearApiError();
   return data as T;
 }
 
@@ -130,11 +85,11 @@ function apiFetch<T>(
   opts?: FetchOpts,
 ): Promise<T> {
   const method = (init?.method ?? 'GET').toUpperCase();
-  if (method !== 'GET') return _doFetch<T>(path, init, opts);
+  if (method !== 'GET') return _doFetch<T>(path, init);
 
   // Polling endpoints (e.g. job status) must read fresh each time, so skip both
   // the settled-response cache and in-flight dedup.
-  if (opts?.skipCache) return _doFetch<T>(path, init, opts);
+  if (opts?.skipCache) return _doFetch<T>(path, init);
 
   const cached = _cache.get(path);
   if (cached && Date.now() < cached.expires)
@@ -143,7 +98,7 @@ function apiFetch<T>(
   const existing = _inflight.get(path);
   if (existing) return existing as Promise<T>;
 
-  const promise = _doFetch<T>(path, init, opts).then(
+  const promise = _doFetch<T>(path, init).then(
     (data) => {
       _cache.set(path, { data, expires: Date.now() + CACHE_TTL_MS });
       _inflight.delete(path);
