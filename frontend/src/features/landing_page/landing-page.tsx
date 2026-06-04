@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { getLeague } from '@/components/api/leagues';
+import Footer from '@/components/footer';
 import { Spinner } from '@/components/spinner';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -16,9 +17,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import Footer from '@/components/footer';
 import { onboardLeague } from '@/features/connect_league/api-calls';
-import { pollForCompletion } from '@/features/connect_league/league-connect';
+import { pollForCompletion } from '@/features/connect_league/poll';
 import { FEATURES } from '@/features/landing_page/constants';
 import type { Feature } from '@/features/landing_page/types';
 import { ApiError } from '@/lib/api-client';

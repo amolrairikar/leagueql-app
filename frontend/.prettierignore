@@ -1,2 +1,5 @@
 # shadcn/ui generated components
 src/components/ui/
+
+# Gherkin feature files (component tests) — Prettier has no parser for them
+*.feature

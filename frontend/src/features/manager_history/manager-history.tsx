@@ -15,7 +15,6 @@ import {
   type BoxScoreSide,
   type PlayerStat,
 } from '@/components/box-score-card';
-import { avatarColor } from '@/components/team-avatar';
 import {
   ChartContainer,
   ChartTooltip,
@@ -40,6 +39,7 @@ import {
   type ManagerStandingsItem,
   type MatchupItem,
 } from '@/features/manager_history/api-calls';
+import { avatarColor } from '@/lib/color-constants';
 import {
   NEMESIS_COLORS,
   POSITION_COLORS,

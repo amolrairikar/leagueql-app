@@ -9,6 +9,7 @@ import {
 } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 
+import { getLeague } from '@/components/api/leagues';
 import { Spinner } from '@/components/spinner';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -16,22 +17,20 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
-import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { getLeague } from '@/components/api/leagues';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import {
   type OnboardRequest,
-  getJobStatus,
   onboardLeague,
 } from '@/features/connect_league/api-calls';
 import {
@@ -39,6 +38,8 @@ import {
   type LeagueConnectFormValues,
   leagueConnectSchema,
 } from '@/features/connect_league/league-connect-schema';
+import { pollForCompletion, sleep } from '@/features/connect_league/poll';
+import { ApiError } from '@/lib/api-client';
 import { clearEspnCookies, setLeagueCookies } from '@/lib/cookie-handler';
 import {
   EspnExtensionError,
@@ -46,53 +47,12 @@ import {
   onEspnExtensionReady,
   requestEspnCookies,
 } from '@/lib/espn-extension';
-import { ApiError } from '@/lib/api-client';
 
 const API_PLATFORM = { espn: 'ESPN', sleeper: 'SLEEPER' } as const;
 
-const sleep = (ms: number): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, ms));
-
 const MAX_ONBOARD_ATTEMPTS = 3;
-const MAX_CONSECUTIVE_ERRORS = 3;
 const ONBOARD_RETRY_DELAY_MS = 2000;
 const POLL_INITIAL_DELAY_MS = 5000;
-const POLL_INTERVAL_MS = 1000;
-// The backend can take a while end-to-end (the processor alone runs up to 120s on
-// large leagues), so poll long enough to actually observe COMPLETED rather than
-// giving up early and showing a false failure.
-const POLL_TIMEOUT_MS = 150000;
-
-export interface PollResult {
-  status: 'success' | 'failed';
-  failureReason?: string;
-}
-
-export async function pollForCompletion(jobId: string): Promise<PollResult> {
-  const deadline = Date.now() + POLL_TIMEOUT_MS;
-  let consecutiveErrors = 0;
-
-  while (Date.now() < deadline) {
-    await sleep(POLL_INTERVAL_MS);
-    try {
-      const statusData = await getJobStatus(jobId);
-      const { status, failure_reason } = statusData.data;
-      consecutiveErrors = 0;
-      if (status === 'COMPLETED') {
-        return { status: 'success' };
-      }
-      if (status === 'FAILED') {
-        return { status: 'failed', failureReason: failure_reason ?? undefined };
-      }
-    } catch {
-      consecutiveErrors += 1;
-      if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
-        return { status: 'failed' };
-      }
-    }
-  }
-  return { status: 'failed' };
-}
 
 function CopyOperationId({ operationId }: { operationId: string }) {
   const [copied, setCopied] = useState(false);

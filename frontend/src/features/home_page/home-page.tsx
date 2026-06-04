@@ -1,8 +1,9 @@
 import { Trophy } from 'lucide-react';
-import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
 import { Suspense, use, useMemo, useState } from 'react';
+import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
 
-import { TeamAvatar, avatarColor } from '@/components/team-avatar';
+import { getLeague } from '@/components/api/leagues';
+import { TeamAvatar } from '@/components/team-avatar';
 import {
   ChartContainer,
   ChartTooltip,
@@ -14,21 +15,25 @@ import { Switch } from '@/components/ui/switch';
 import { getManagerHistoryData } from '@/features/manager_history/api-calls';
 import type { ManagerStandingsItem } from '@/features/manager_history/api-calls';
 import type { MatchupItem } from '@/features/matchups/api-calls';
+import { avatarColor } from '@/lib/color-constants';
 import { getLeagueCookies } from '@/lib/cookie-handler';
-import { getLeague } from '@/components/api/leagues';
 import { ErrorAlert } from '@/lib/error-alert';
 import { toResult, type Result } from '@/lib/result';
 
-type StatItem = { label: string; value: string; sub?: string };
+interface StatItem {
+  label: string;
+  value: string;
+  sub?: string;
+}
 
-type ChampionItem = {
+interface ChampionItem {
   season: string;
   name: string;
   owner: string;
   record: string;
   pfGame: string;
   highlight?: boolean;
-};
+}
 
 function StatsSkeleton() {
   return (
@@ -97,19 +102,19 @@ function LeagueNameHeader({
   return (
     <div className="mb-6">
       <h1 className="text-2xl font-bold text-foreground">
-        {leagueName || 'League Name'}
+        {leagueName ?? 'League Name'}
       </h1>
     </div>
   );
 }
 
-type ChartDataResult = {
+interface ChartDataResult {
   owners: { ownerId: string; username: string }[];
   colorMap: Map<string, string>;
   chartData: Record<string, string | number | null>[];
   chartConfig: ChartConfig;
   maxRank: number;
-};
+}
 
 function buildChartData(
   standings: ManagerStandingsItem[],
@@ -215,7 +220,7 @@ function StandingsChart({
               axisLine={false}
               width={28}
               tick={{ fontSize: 11 }}
-              tickFormatter={(v) => v.toFixed(0)}
+              tickFormatter={(v: number) => v.toFixed(0)}
             />
             <ChartTooltip
               content={
@@ -278,13 +283,13 @@ function StandingsChart({
   );
 }
 
-type AllTimeStandingsData = {
+interface AllTimeStandingsData {
   standings: ManagerStandingsItem[];
   matchups: MatchupItem[];
   migrationMapping: Map<string, string>;
-};
+}
 
-type AllTimeRow = {
+interface AllTimeRow {
   ownerId: string;
   username: string;
   teamName: string;
@@ -295,7 +300,7 @@ type AllTimeRow = {
   pf: number;
   pa: number;
   games: number;
-};
+}
 
 function buildAllTimeStandings(
   standings: ManagerStandingsItem[],

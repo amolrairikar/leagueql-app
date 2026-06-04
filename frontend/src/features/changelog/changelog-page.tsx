@@ -1,6 +1,7 @@
+import { ArrowLeft } from 'lucide-react';
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+
 import { Button } from '@/components/ui/button';
 
 const releases = [
@@ -32,7 +33,7 @@ export default function ChangelogPage() {
     <div className="container mx-auto max-w-3xl pt-16 pb-8 px-4">
       <Button
         variant="ghost"
-        onClick={() => navigate(-1)}
+        onClick={() => void navigate(-1)}
         className="mb-6 cursor-pointer"
       >
         <ArrowLeft className="mr-2 h-4 w-4" />

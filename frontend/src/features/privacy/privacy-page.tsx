@@ -1,6 +1,7 @@
+import { ArrowLeft } from 'lucide-react';
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+
 import { Button } from '@/components/ui/button';
 
 const sections = [
@@ -30,7 +31,7 @@ export default function PrivacyPage() {
     <div className="container mx-auto max-w-6xl pt-16 pb-8 px-4">
       <Button
         variant="ghost"
-        onClick={() => navigate(-1)}
+        onClick={() => void navigate(-1)}
         className="mb-6 cursor-pointer"
       >
         <ArrowLeft className="mr-2 h-4 w-4" />
@@ -64,10 +65,10 @@ export default function PrivacyPage() {
           <section id="overview" className="space-y-3">
             <h2 className="text-2xl font-semibold">1. Overview</h2>
             <p className="text-muted-foreground leading-relaxed">
-              LeagueQL ("we", "our", "us") is a tool that helps you analyze your
-              fantasy football league history from ESPN and Sleeper platforms.
-              We collect and process league data to provide you with different
-              insights.
+              LeagueQL (&quot;we&quot;, &quot;our&quot;, &quot;us&quot;) is a
+              tool that helps you analyze your fantasy football league history
+              from ESPN and Sleeper platforms. We collect and process league
+              data to provide you with different insights.
             </p>
           </section>
 
@@ -115,11 +116,11 @@ export default function PrivacyPage() {
                     league data and are not stored on our servers
                   </li>
                   <li>
-                    We offer an optional Chrome extension, "LeagueQL ESPN Cookie
-                    Helper," that auto-fills your ESPN cookies into our
-                    onboarding and refresh forms. The extension does not store
-                    or transmit your cookies to us; it only fills them into the
-                    form on your device. See the{' '}
+                    We offer an optional Chrome extension, &quot;LeagueQL ESPN
+                    Cookie Helper,&quot; that auto-fills your ESPN cookies into
+                    our onboarding and refresh forms. The extension does not
+                    store or transmit your cookies to us; it only fills them
+                    into the form on your device. See the{' '}
                     <a
                       href="/extension-privacy"
                       className="text-foreground underline underline-offset-4"
@@ -162,7 +163,7 @@ export default function PrivacyPage() {
             <ul className="list-disc pl-6 space-y-2 text-muted-foreground leading-relaxed">
               <li>
                 We do not sell your data. League data is only used to provide
-                the app's features.
+                the app&apos;s features.
               </li>
               <li>League data is retained until you request deletion</li>
               <li>You can request removal of your league data at any time</li>

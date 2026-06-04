@@ -9,12 +9,12 @@ import {
 } from 'react';
 
 import { BoxScoreCard, type BoxScoreSide } from '@/components/box-score-card';
-import { avatarColor } from '@/components/team-avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   getAllSeasonsMatchups,
   type MatchupItem,
 } from '@/features/manager_comparison/api-calls';
+import { avatarColor } from '@/lib/color-constants';
 import { getLeagueCookies } from '@/lib/cookie-handler';
 import { initials, pct } from '@/lib/utils';
 

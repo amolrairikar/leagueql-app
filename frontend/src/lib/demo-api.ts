@@ -10,8 +10,9 @@
  *   - queryType with a non-empty suffix after the first "#"   → exact key lookup
  */
 
-import type { GetLeagueResponse } from '@/components/api/types';
 import { DEMO_SEASONS } from './demo-constants';
+
+import type { GetLeagueResponse } from '@/components/api/types';
 
 // ── SK-base mapping (mirrors QUERY_TYPE_TO_SK_BASE in main.py) ────────────────
 

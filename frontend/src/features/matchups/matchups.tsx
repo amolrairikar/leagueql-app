@@ -1,7 +1,7 @@
 import { Suspense, use, useEffect, useMemo, useRef, useState } from 'react';
 
 import { BoxScoreCard, type BoxScoreSide } from '@/components/box-score-card';
-import { avatarColor, TeamAvatar } from '@/components/team-avatar';
+import { TeamAvatar } from '@/components/team-avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   getSeasonMatchups,
@@ -11,6 +11,7 @@ import {
   type WeeklyStandingItem,
 } from '@/features/matchups/api-calls';
 import SeasonSelect from '@/features/season_select/season-select';
+import { avatarColor } from '@/lib/color-constants';
 import { MATCHUP_STATUS_COLORS } from '@/lib/color-constants';
 import { getLeagueCookies } from '@/lib/cookie-handler';
 import { type Result, toResult } from '@/lib/result';

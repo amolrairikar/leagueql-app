@@ -1,6 +1,6 @@
 import { type ReactNode, Suspense, use, useMemo, useState } from 'react';
 
-import { avatarColor, TeamAvatar } from '@/components/team-avatar';
+import { TeamAvatar } from '@/components/team-avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import {
@@ -8,6 +8,7 @@ import {
   getDraftData,
 } from '@/features/draft_grades/api-calls';
 import SeasonSelect from '@/features/season_select/season-select';
+import { avatarColor } from '@/lib/color-constants';
 import { POSITION_COLORS } from '@/lib/color-constants';
 import { getLeagueCookies, isDemoMode } from '@/lib/cookie-handler';
 import { type Result, toResult } from '@/lib/result';
@@ -176,7 +177,7 @@ function DraftRecapContent({
 }: DraftRecapContentProps) {
   const result = use(promise);
 
-  const allPicks = result.ok ? result.data : [];
+  const allPicks = useMemo(() => (result.ok ? result.data : []), [result]);
 
   // Teams ordered by their draft slot. The team that made the earliest overall
   // pick owns the left-most column; in a snake draft the same team holds that
