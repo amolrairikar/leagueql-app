@@ -1,13 +1,5 @@
 import { ChevronDown, Gem, Info, X } from 'lucide-react';
-import {
-  Fragment,
-  Suspense,
-  use,
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-} from 'react';
+import { Fragment, Suspense, use, useCallback, useMemo, useState } from 'react';
 
 import { type DraftPickItem, getDraftData } from './api-calls';
 
@@ -127,7 +119,7 @@ function DraftGradesContent({
 }: DraftGradesContentProps) {
   const result = use(promise);
 
-  const allPicks = result.ok ? result.data : [];
+  const allPicks = useMemo(() => (result.ok ? result.data : []), [result]);
 
   // Auction vs. snake is driven entirely by the loaded dataset's flag. In demo
   // mode a Switch (below) chooses which dataset the parent fetches.
@@ -150,17 +142,16 @@ function DraftGradesContent({
     );
   }, [allPicks]);
 
-  const [selectedManager, setSelectedManager] = useState(managers[0]?.id ?? '');
+  const [rawSelectedManager, setSelectedManager] = useState(
+    managers[0]?.id ?? '',
+  );
   const [openBusts, setOpenBusts] = useState<Record<string, boolean>>({});
 
-  useEffect(() => {
-    if (
-      managers.length > 0 &&
-      !managers.find((m) => m.id === selectedManager)
-    ) {
-      setSelectedManager(managers[0].id);
-    }
-  }, [managers, selectedManager]);
+  // Derive the effective selection during render so a stale id (after the
+  // manager list changes) falls back to the first manager without an effect.
+  const selectedManager = managers.some((m) => m.id === rawSelectedManager)
+    ? rawSelectedManager
+    : (managers[0]?.id ?? '');
 
   const picks = useMemo(
     () => allPicks.filter((p) => p.team_id === selectedManager),
@@ -420,8 +411,8 @@ function DraftGradesContent({
                     <TooltipContent side="top">
                       Value Over Replacement Player: the points a player scored
                       above a replacement-level player at their position. For
-                      example, in a 10-team league with one starting QB, that's
-                      QB11.
+                      example, in a 10-team league with one starting QB,
+                      that&apos;s QB11.
                     </TooltipContent>
                   </Tooltip>
                 </span>

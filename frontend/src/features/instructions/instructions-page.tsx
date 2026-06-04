@@ -1,6 +1,7 @@
+import { ArrowLeft, TriangleAlert } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, TriangleAlert } from 'lucide-react';
+
 import { Button } from '@/components/ui/button';
 
 const TOC_ITEMS = [
@@ -19,12 +20,12 @@ const TOC_ITEMS = [
   { id: 'faq-and-troubleshooting', label: 'FAQ & Troubleshooting', level: 1 },
 ] as const;
 
-type FaqItem = {
+interface FaqItem {
   q: string;
   a?: React.ReactNode;
   steps?: string[];
   note?: string;
-};
+}
 
 const FAQ_ITEMS: FaqItem[] = [
   {
@@ -231,7 +232,7 @@ export default function InstructionsPage() {
     <div className="container mx-auto max-w-6xl pt-16 pb-8 px-4">
       <Button
         variant="ghost"
-        onClick={() => navigate(-1)}
+        onClick={() => void navigate(-1)}
         className="mb-6 cursor-pointer"
       >
         <ArrowLeft className="mr-2 h-4 w-4" />
@@ -329,7 +330,8 @@ export default function InstructionsPage() {
                     The app fetches or onboards your league automatically (no
                     credentials required as the underlying Sleeper API is
                     read-only). Onboarding typically takes ~45 seconds. On
-                    success you are redirected to your league's home dashboard.
+                    success you are redirected to your league&apos;s home
+                    dashboard.
                   </li>
                   <li>
                     <strong className="text-foreground">ESPN leagues:</strong>{' '}
@@ -358,7 +360,7 @@ export default function InstructionsPage() {
                       [
                         'SWID Cookie',
                         <>
-                          Found in your browser's DevTools under{' '}
+                          Found in your browser&apos;s DevTools under{' '}
                           <strong className="text-foreground">
                             Application → Cookies → fantasy.espn.com
                           </strong>
@@ -508,8 +510,8 @@ export default function InstructionsPage() {
                   <li>
                     <strong className="text-foreground">Map managers:</strong>{' '}
                     Match each manager to their account on the new platform.
-                    Managers who left can be marked as "Not returning" and their
-                    historical stats remain visible.
+                    Managers who left can be marked as &quot;Not returning&quot;
+                    and their historical stats remain visible.
                   </li>
                   <li>
                     <strong className="text-foreground">
@@ -539,7 +541,8 @@ export default function InstructionsPage() {
                 <p className="text-muted-foreground leading-relaxed">
                   Click <InlineCode>Delete League</InlineCode> at the bottom of
                   the sidebar. This permanently removes all stored data for the
-                  league from LeagueQL's backend. This action cannot be undone.
+                  league from LeagueQL&apos;s backend. This action cannot be
+                  undone.
                 </p>
               </div>
             </div>

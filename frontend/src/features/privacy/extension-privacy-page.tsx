@@ -1,6 +1,7 @@
+import { ArrowLeft } from 'lucide-react';
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+
 import { Button } from '@/components/ui/button';
 
 const sections = [
@@ -32,7 +33,7 @@ export default function ExtensionPrivacyPage() {
     <div className="container mx-auto max-w-6xl pt-16 pb-8 px-4">
       <Button
         variant="ghost"
-        onClick={() => navigate(-1)}
+        onClick={() => void navigate(-1)}
         className="mb-6 cursor-pointer"
       >
         <ArrowLeft className="mr-2 h-4 w-4" />
@@ -68,13 +69,13 @@ export default function ExtensionPrivacyPage() {
           <section id="overview" className="space-y-3">
             <h2 className="text-2xl font-semibold">1. Overview</h2>
             <p className="text-muted-foreground leading-relaxed">
-              This policy describes how the "LeagueQL ESPN Cookie Helper" Chrome
-              extension ("the extension") handles your data. The extension is
-              published by LeagueQL ("we", "our", "us") as a convenience for
-              connecting a private ESPN fantasy football league to LeagueQL.
-              This policy covers only the browser extension. Data handled by the
-              LeagueQL web application after it is received is governed by our
-              main{' '}
+              This policy describes how the &quot;LeagueQL ESPN Cookie
+              Helper&quot; Chrome extension (&quot;the extension&quot;) handles
+              your data. The extension is published by LeagueQL (&quot;we&quot;,
+              &quot;our&quot;, &quot;us&quot;) as a convenience for connecting a
+              private ESPN fantasy football league to LeagueQL. This policy
+              covers only the browser extension. Data handled by the LeagueQL
+              web application after it is received is governed by our main{' '}
               <a
                 href="/privacy"
                 className="text-foreground underline underline-offset-4"
@@ -125,8 +126,9 @@ export default function ExtensionPrivacyPage() {
             <h2 className="text-2xl font-semibold">4. How It Works</h2>
             <ul className="list-disc pl-6 space-y-2 text-muted-foreground leading-relaxed">
               <li>
-                When you click "Autofill from ESPN" on a LeagueQL page, the
-                extension reads your SWID and espn_s2 cookies from ESPN.
+                When you click &quot;Autofill from ESPN&quot; on a LeagueQL
+                page, the extension reads your SWID and espn_s2 cookies from
+                ESPN.
               </li>
               <li>
                 It passes those values directly to the LeagueQL page open in
@@ -135,7 +137,7 @@ export default function ExtensionPrivacyPage() {
               </li>
               <li>
                 The extension itself has no server and makes no network requests
-                of its own. It does not send your data to the extension's
+                of its own. It does not send your data to the extension&apos;s
                 developer or any third party.
               </li>
             </ul>
@@ -170,7 +172,7 @@ export default function ExtensionPrivacyPage() {
               </li>
               <li>
                 We do not sell your data, and we do not use or transfer it for
-                any purpose unrelated to the extension's single purpose.
+                any purpose unrelated to the extension&apos;s single purpose.
               </li>
               <li>
                 Once the cookies reach LeagueQL, they are used only to fetch
@@ -191,7 +193,7 @@ export default function ExtensionPrivacyPage() {
             <h2 className="text-2xl font-semibold">7. Security</h2>
             <p className="text-muted-foreground leading-relaxed">
               The extension limits cookie access to ESPN and only communicates
-              with LeagueQL pages over your browser's secure same-origin
+              with LeagueQL pages over your browser&apos;s secure same-origin
               messaging. It performs no remote code execution and loads no code
               from external servers.
             </p>

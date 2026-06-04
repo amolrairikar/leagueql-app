@@ -1,7 +1,6 @@
 import { Suspense, use, useEffect, useMemo, useRef, useState } from 'react';
 
 import { BoxScoreCard, type BoxScoreSide } from '@/components/box-score-card';
-import { avatarColor } from '@/components/team-avatar';
 import {
   Select,
   SelectContent,
@@ -14,6 +13,7 @@ import {
   getAllMatchups,
   type MatchupItem,
 } from '@/features/matchup_records/api-calls';
+import { avatarColor } from '@/lib/color-constants';
 import { RECORD_COLORS, UI_COLORS } from '@/lib/color-constants';
 import { getLeagueCookies } from '@/lib/cookie-handler';
 import { type Result, toResult } from '@/lib/result';

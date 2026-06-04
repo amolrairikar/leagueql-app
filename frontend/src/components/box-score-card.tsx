@@ -1,9 +1,9 @@
 import { X } from 'lucide-react';
 
-import type { PlayerStat } from '@/features/matchups/api-calls';
 import { TeamAvatar } from '@/components/team-avatar';
-import { FANTASY_POSITION_ORDER } from '@/lib/position-constants';
+import type { PlayerStat } from '@/features/matchups/api-calls';
 import { UI_COLORS } from '@/lib/color-constants';
+import { FANTASY_POSITION_ORDER } from '@/lib/position-constants';
 
 export type { PlayerStat };
 

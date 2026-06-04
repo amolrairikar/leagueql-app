@@ -2,6 +2,8 @@ import { AlertTriangle, HelpCircle } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { getLeague } from '@/components/api/leagues';
+import type { Platform } from '@/components/api/types';
 import { Spinner } from '@/components/spinner';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -21,7 +23,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { getLeague } from '@/components/api/leagues';
 import { getJobStatus } from '@/features/connect_league/api-calls';
 import {
   getEspnMembers,
@@ -40,7 +41,6 @@ import {
   onEspnExtensionReady,
   requestEspnCookies,
 } from '@/lib/espn-extension';
-import type { Platform } from '@/components/api/types';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -545,7 +545,7 @@ function Step3({
         <p className="text-[12px] text-muted-foreground">
           Match each current manager to their{' '}
           {newPlatform === 'ESPN' ? 'ESPN' : 'Sleeper'} account. Leave managers
-          who left the league as "Not returning".
+          who left the league as &quot;Not returning&quot;.
         </p>
       </div>
 

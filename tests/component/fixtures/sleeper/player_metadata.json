@@ -1,0 +1,6 @@
+{
+  "p1": { "first_name": "Pat", "last_name": "Quarterback", "position": "QB" },
+  "p2": { "first_name": "Run", "last_name": "Back", "position": "RB" },
+  "p3": { "first_name": "Wide", "last_name": "Receiver", "position": "WR" },
+  "p4": { "first_name": "Tight", "last_name": "End", "position": "TE" }
+}

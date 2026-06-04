@@ -5,8 +5,8 @@ import managerComparisonScreenshot from '@/assets/manager-comparison-screenshot.
 import managerHistoryScreenshot from '@/assets/manager-history-screenshot.png';
 import matchupRecordsScreenshot from '@/assets/matchup-records-screenshot.png';
 import matchupsScreenshot from '@/assets/matchups-screenshot.png';
-import playoffBracketScreenshot from '@/assets/playoff-bracket-screenshot.png';
 import playerRecordsScreenshot from '@/assets/player-records-screenshot.png';
+import playoffBracketScreenshot from '@/assets/playoff-bracket-screenshot.png';
 import standingsScreenshot from '@/assets/standings-screenshot.png';
 import type {
   NavLinkItem,

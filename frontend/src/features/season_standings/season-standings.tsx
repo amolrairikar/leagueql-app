@@ -2,7 +2,7 @@ import { Clover, Info } from 'lucide-react';
 import { Suspense, use, useMemo, useState } from 'react';
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
 
-import { avatarColor, TeamAvatar } from '@/components/team-avatar';
+import { TeamAvatar } from '@/components/team-avatar';
 import {
   ChartContainer,
   ChartTooltip,
@@ -25,6 +25,7 @@ import {
   type SeasonStandingsItem,
   getSeasonStandings,
 } from '@/features/season_standings/api-calls';
+import { avatarColor } from '@/lib/color-constants';
 import { POSITION_COLORS, UI_COLORS } from '@/lib/color-constants';
 import { getLeagueCookies } from '@/lib/cookie-handler';
 import { type Result, toResult } from '@/lib/result';
@@ -110,7 +111,7 @@ function WinsProgressionChart({ promise }: { promise: Promise<WeeklyResult> }) {
             content={
               <ChartTooltipContent
                 labelFormatter={(_val, payload) =>
-                  `Week ${payload?.[0]?.payload?.week ?? ''}`
+                  `Week ${(payload?.[0]?.payload as { week?: string } | undefined)?.week ?? ''}`
                 }
                 indicator="line"
               />

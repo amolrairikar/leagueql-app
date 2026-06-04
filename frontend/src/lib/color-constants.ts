@@ -50,6 +50,11 @@ export const AVATAR_COLORS = [
   '#6b4f9c',
 ] as const;
 
+/** Stable avatar color for a 0-based index, cycling through {@link AVATAR_COLORS}. */
+export function avatarColor(index: number): string {
+  return AVATAR_COLORS[index % AVATAR_COLORS.length];
+}
+
 // ── UI Status Colors ───────────────────────────────────────────────────────────
 
 export const UI_COLORS = {

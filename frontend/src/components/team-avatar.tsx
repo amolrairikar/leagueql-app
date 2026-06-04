@@ -1,13 +1,6 @@
 import { useCallback, useState } from 'react';
 
-import { AVATAR_COLORS } from '@/lib/color-constants';
 import { initials } from '@/lib/utils';
-
-export { AVATAR_COLORS };
-
-export function avatarColor(index: number): string {
-  return AVATAR_COLORS[index % AVATAR_COLORS.length];
-}
 
 export function TeamAvatar({
   teamLogo,

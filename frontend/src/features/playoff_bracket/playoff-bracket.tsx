@@ -1,12 +1,6 @@
+import { Trophy } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import { Trophy } from 'lucide-react';
-
-import { BoxScoreCard } from '@/components/box-score-card';
-import SeasonSelect from '@/features/season_select/season-select';
-import { getLeagueCookies } from '@/lib/cookie-handler';
-import { AVATAR_COLORS, UI_COLORS } from '@/lib/color-constants';
-import { logger } from '@/lib/logger';
 import {
   getPlayoffBracket,
   getMatchups,
@@ -14,6 +8,12 @@ import {
   type BracketMatch,
   type Matchup,
 } from './api-calls';
+
+import { BoxScoreCard } from '@/components/box-score-card';
+import SeasonSelect from '@/features/season_select/season-select';
+import { AVATAR_COLORS, UI_COLORS } from '@/lib/color-constants';
+import { getLeagueCookies } from '@/lib/cookie-handler';
+import { logger } from '@/lib/logger';
 
 interface Team {
   team_id: string;
@@ -171,7 +171,7 @@ function MatchupCard({
 
   return (
     <div
-      className={`bg-card border border-border/30 rounded-md overflow-hidden ${extraClass || ''} ${onClick ? 'cursor-pointer hover:border-border/60' : ''}`}
+      className={`bg-card border border-border/30 rounded-md overflow-hidden ${extraClass ?? ''} ${onClick ? 'cursor-pointer hover:border-border/60' : ''}`}
       style={extraStyle}
       onClick={onClick}
     >
@@ -272,9 +272,9 @@ export default function PlayoffBracket() {
       try {
         const [bracketResponse, matchupsResponse, standingsResponse] =
           await Promise.all([
-            getPlayoffBracket(leagueId!, platform, selectedSeason),
-            getMatchups(leagueId!, platform, selectedSeason),
-            getWeeklyStandings(leagueId!, platform, selectedSeason),
+            getPlayoffBracket(leagueId, platform, selectedSeason),
+            getMatchups(leagueId, platform, selectedSeason),
+            getWeeklyStandings(leagueId, platform, selectedSeason),
           ]);
 
         const bracketMatches = bracketResponse.data;
@@ -354,7 +354,7 @@ export default function PlayoffBracket() {
       }
     }
 
-    fetchBracketData();
+    void fetchBracketData();
   }, [leagueId, platform, selectedSeason]);
 
   // Parse matches from DynamoDB format
@@ -378,15 +378,15 @@ export default function PlayoffBracket() {
       byeTeamId = semi.team_1_id;
       // team_2_from should be like {"w": 1} or {"l": 1}
       if (semi.team_2_from) {
-        const from = JSON.parse(semi.team_2_from);
-        wildcardMatchId = from.w || from.l;
+        const from = JSON.parse(semi.team_2_from) as { w?: number; l?: number };
+        wildcardMatchId = from.w ?? from.l ?? null;
       }
     } else if (semi.team_2_from === null) {
       byeTeamId = semi.team_2_id;
       // team_1_from should be like {"w": 1} or {"l": 1}
       if (semi.team_1_from) {
-        const from = JSON.parse(semi.team_1_from);
-        wildcardMatchId = from.w || from.l;
+        const from = JSON.parse(semi.team_1_from) as { w?: number; l?: number };
+        wildcardMatchId = from.w ?? from.l ?? null;
       }
     }
 
@@ -443,7 +443,7 @@ export default function PlayoffBracket() {
             m.team_b_id === bracketMatch.team_2_id) ||
             (m.team_a_id === bracketMatch.team_2_id &&
               m.team_b_id === bracketMatch.team_1_id)),
-      ) || null
+      ) ?? null
     );
   };
 
