@@ -83,6 +83,32 @@ defineFeature(feature, (test) => {
     });
   });
 
+  test('A server error on checkout shows an inline error', ({
+    given,
+    when,
+    then,
+  }) => {
+    given('checkout fails with a server error', () => {
+      // The backend recovers from a deleted Stripe customer; any other failure
+      // returns a 502 with a JSON detail (BE-015), which must surface inline
+      // rather than leaving the button silently idle.
+      server.use(
+        postJson(
+          '/leagues/100/checkout-session',
+          { detail: "Couldn't start checkout. Please try again." },
+          502,
+        ),
+      );
+    });
+    when('I click Subscribe on the paywall', async () => {
+      await renderRoute(<SubscriptionRequired />, { league });
+      await userEvent.click(screen.getByRole('button', { name: /subscribe/i }));
+    });
+    then(/^I see an inline error "(.*)"$/, async (message) => {
+      expect(await screen.findByText(message)).toBeInTheDocument();
+    });
+  });
+
   test('Manage billing redirects to the Stripe portal', ({
     given,
     when,

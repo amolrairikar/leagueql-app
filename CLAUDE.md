@@ -56,6 +56,31 @@ npm run lint         # ESLint check (eslint .)
 Use `npm run format:check` (`prettier --check .`) when you only want to verify formatting
 without writing changes.
 
+## Tests come with the code
+
+**On every code change, evaluate whether new component tests are needed or existing ones must
+be updated** — and add/update them in the same change. A change is not complete until its tests
+reflect the new behavior.
+
+- **Frontend component tests** live beside each feature under `frontend/src/features/**/__tests__/`
+  as jest-cucumber pairs — a `*.feature` file (Gherkin scenarios) and its `*.steps.test.tsx`
+  step definitions, driven by MSW-mocked API responses. When you add or change a component's
+  behavior, user-visible state, or how it handles an API response (success, `4xx`, `5xx`,
+  loading, empty), add or update the corresponding scenario + steps. Run them with
+  `npx vitest run <path>` (or `npm run test`) from `frontend/`.
+- **Backend component tests** live under [`tests/component/`](tests/component/CLAUDE.md) as
+  Behave Gherkin pairs — `features/*.feature` + `steps/*.py` — exercising a whole component (the
+  FastAPI app, the Stripe webhook, the onboarder→processor chain, …) with every **external**
+  dependency (the platform API, Stripe, Lambda) mocked but real DynamoDB/S3 behavior via `moto`.
+  When you add or change an endpoint/handler's behavior or how components interact across a
+  DynamoDB/S3 boundary, add or update the matching scenario + steps. Run with
+  `pipenv run behave tests/component`.
+- **Backend unit tests** live under `tests/unit/`, mirroring `src/` (see
+  [`tests/CLAUDE.md`](tests/CLAUDE.md)). Keep coverage close to 100%, including error paths.
+- When a behavior spans tiers (e.g. a new backend error status the UI must surface, or a
+  recovery path crossing a DynamoDB boundary), update **all** the affected layers — backend
+  unit, backend component, and frontend component tests.
+
 ## Related references
 - API contract: [`docs/api/openapi_spec.yaml`](docs/api/openapi_spec.yaml) — keep in sync
   with backend API changes.

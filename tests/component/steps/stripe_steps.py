@@ -34,6 +34,96 @@ def step_subscribable_league(context, canonical, league_id, platform):
     context.stripe_platform = platform
 
 
+@given(
+    'a checkout-ready league "{canonical}" native "{league_id}" on "{platform}" '
+    'for user "{user_id}"'
+)
+def step_checkout_ready_league(context, canonical, league_id, platform, user_id):
+    # LEAGUE_LOOKUP (resolved by lookup_league) + METADATA with trial_used already
+    # set, so the endpoint reaches Session.create without the trial-eligibility read.
+    put_item(
+        context,
+        {
+            "PK": f"LEAGUE#{league_id}#PLATFORM#{platform}",
+            "SK": "LEAGUE_LOOKUP",
+            "canonical_league_id": canonical,
+        },
+    )
+    put_item(
+        context,
+        {
+            "PK": f"LEAGUE#{canonical}",
+            "SK": "METADATA",
+            "platform": platform,
+            "native_league_id": league_id,
+            "trial_used": True,
+        },
+    )
+
+
+@given(
+    'user "{user_id}" has a stored Stripe customer "{customer_id}" that was '
+    "deleted in Stripe"
+)
+def step_stored_deleted_customer(context, user_id, customer_id):
+    put_item(
+        context,
+        {"PK": f"USER#{user_id}", "SK": "USER", "stripe_customer_id": customer_id},
+    )
+
+
+@when('user "{user_id}" starts checkout for league "{league_id}" on "{platform}"')
+def step_start_checkout(context, user_id, league_id, platform):
+    import routes
+
+    # Authenticate as the given user for the duration of the request.
+    override = patch.dict(
+        context.main.app.dependency_overrides,
+        {routes.get_authenticated_user: lambda: user_id},
+    )
+    override.start()
+    context._patches.append(override)
+
+    # The stored customer no longer exists in Stripe: the first session create
+    # raises "No such customer"; after the customer is recreated, the retry wins.
+    create = patch.object(
+        context.main.stripe.checkout.Session,
+        "create",
+        MagicMock(
+            side_effect=[
+                stripe.error.InvalidRequestError("No such customer", "customer"),
+                {"url": "https://stripe.test/checkout/new"},
+            ]
+        ),
+    )
+    create.start()
+    context._patches.append(create)
+
+    recreate = patch.object(
+        context.main.stripe.Customer,
+        "create",
+        MagicMock(return_value={"id": "cus_new"}),
+    )
+    recreate.start()
+    context._patches.append(recreate)
+
+    context.response = context.api.post(
+        f"/leagues/{league_id}/checkout-session?platform={platform}"
+    )
+
+
+@then("the checkout endpoint responds 200 with a session URL")
+def step_checkout_ok(context):
+    assert context.response.status_code == 200, context.response.text
+    assert context.response.json()["data"]["url"], context.response.text
+
+
+@then('user "{user_id}" now maps to a freshly created Stripe customer')
+def step_new_customer_mapping(context, user_id):
+    item = get_item(context, f"USER#{user_id}", "USER")
+    assert item.get("stripe_customer_id") == "cus_new", item
+
+
 @given('league "{canonical}" already records subscription "{sub_id}"')
 def step_existing_subscription(context, canonical, sub_id):
     table = context.ddb_resource.Table(context.table_name)

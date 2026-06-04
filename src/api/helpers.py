@@ -7,6 +7,7 @@ SNS failure alerting lives in the shared ``common.sns`` module.
 """
 
 import time
+import uuid
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from functools import partial
@@ -575,6 +576,128 @@ def get_or_create_stripe_customer(clerk_user_id: str) -> str:
         # create used a clerk-user-scoped idempotency key, both calls resolved to
         # the same Stripe customer, so the stored value matches ours.
         return get_stripe_customer_id(clerk_user_id) or customer_id
+
+
+def _is_missing_customer_error(error: stripe.error.InvalidRequestError) -> bool:
+    """Return True when a Stripe error reports a missing/deleted customer (BE-015).
+
+    Stripe returns ``param == "customer"`` (with a "No such customer" message) when
+    a Checkout Session is opened against a customer that was deleted out-of-band in
+    the Stripe dashboard.
+    """
+    return getattr(error, "param", None) == "customer"
+
+
+def recreate_stripe_customer(clerk_user_id: str) -> str:
+    """Mint a fresh Stripe customer for a user whose stored customer was deleted.
+
+    Checkout recovery (BE-015): when the ``USER#{clerk_user_id}`` mapping points at
+    a customer that no longer exists in Stripe, create a new customer and overwrite
+    the stored mapping so subsequent billing calls resolve correctly. Unlike
+    ``get_or_create_stripe_customer`` (which keys the idempotency key on the user),
+    this uses a unique key so the create is **not** deduplicated back to the deleted
+    customer, and overwrites the mapping unconditionally (the old value is invalid).
+
+    Args:
+        clerk_user_id: The authenticated Clerk user ID (JWT ``sub``).
+
+    Returns:
+        The new Stripe customer ID.
+    """
+    customer = main.stripe.Customer.create(
+        metadata={"clerk_user_id": clerk_user_id},
+        idempotency_key=f"customer:{clerk_user_id}:{uuid.uuid4().hex}",
+    )
+    customer_id = customer["id"]
+    try:
+        main.table.put_item(
+            Item={
+                "PK": f"USER#{clerk_user_id}",
+                "SK": "USER",
+                "stripe_customer_id": customer_id,
+            }
+        )
+    except botocore.exceptions.ClientError as e:
+        logger.error("Boto error updating user mapping: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to set up billing account",
+        )
+    return customer_id
+
+
+def create_subscription_checkout_session(
+    customer_id: str,
+    clerk_user_id: str,
+    subscription_data: dict[str, Any],
+    token: str,
+) -> Any:
+    """Open a subscription-mode Checkout Session, recovering from a deleted customer.
+
+    BE-015: the stored Stripe customer can be deleted out-of-band, in which case
+    ``checkout.Session.create`` raises a "No such customer" ``InvalidRequestError``.
+    When that happens we mint a fresh customer (``recreate_stripe_customer``),
+    persist the new mapping, and retry the session **once** with a new idempotency
+    key. Any other Stripe error surfaces as a ``502`` (with a JSON ``detail`` and
+    CORS headers) so the frontend can show it inline — rather than an uncaught
+    ``500`` raised above the CORS middleware, which the browser cannot read.
+
+    Args:
+        customer_id: The caller's resolved Stripe customer ID.
+        clerk_user_id: The authenticated Clerk user ID, used to recreate a deleted
+            customer.
+        subscription_data: ``subscription_data`` for the Checkout Session (metadata
+            and optional trial).
+        token: The per-attempt nonce used as the Stripe idempotency key.
+
+    Returns:
+        The created Stripe Checkout Session object.
+    """
+
+    def _create(cust_id: str, idempotency_key: str) -> Any:
+        return main.stripe.checkout.Session.create(
+            mode="subscription",
+            customer=cust_id,
+            line_items=[{"price": main.STRIPE_PRICE_ID, "quantity": 1}],
+            subscription_data=subscription_data,
+            allow_promotion_codes=True,
+            managed_payments={"enabled": True},
+            success_url=main.STRIPE_CHECKOUT_SUCCESS_URL,
+            cancel_url=main.STRIPE_CHECKOUT_CANCEL_URL,
+            idempotency_key=idempotency_key,
+        )
+
+    try:
+        return _create(customer_id, token)
+    except stripe.error.InvalidRequestError as e:
+        if not _is_missing_customer_error(e):
+            logger.error("Stripe rejected checkout session create: %s", e)
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Couldn't start checkout. Please try again.",
+            )
+        logger.warning(
+            "Stripe customer %s no longer exists; recreating for user %s",
+            customer_id,
+            clerk_user_id,
+        )
+        new_customer_id = recreate_stripe_customer(clerk_user_id)
+        try:
+            return _create(new_customer_id, f"{token}-retry")
+        except stripe.error.StripeError as retry_error:
+            logger.error(
+                "Checkout retry after customer recreation failed: %s", retry_error
+            )
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Couldn't start checkout. Please try again.",
+            )
+    except stripe.error.StripeError as e:
+        logger.error("Stripe error creating checkout session: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Couldn't start checkout. Please try again.",
+        )
 
 
 def cancel_league_subscription(stripe_subscription_id: str | None) -> None:
