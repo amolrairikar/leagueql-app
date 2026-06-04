@@ -72,6 +72,9 @@ subscription is confirmed canceled (or absent / already canceled).
       already canceled does not return `500`.
 - [ ] All DynamoDB items (metadata, lookups, precomputed views) for the canonical league
       are removed.
+- [ ] The durable `TRIAL_USED` marker (keyed by `(platform, native_league_id)`, carrying
+      no `canonical_league_id`) is **not** removed by the delete sweep, so re-onboarding the
+      same league does not regrant a free trial (see [BE-015](BE-015-stripe-billing.md)).
 - [ ] All raw API payloads under the league's S3 prefix are deleted.
 - [ ] `LEAGUE_COUNT` is decremented by 1.
 - [ ] Deleting an un-onboarded league returns `404`.

@@ -24,7 +24,12 @@ NFL state, enumerates onboarded Sleeper leagues, and invokes the onboarder Lambd
 ## Acceptance Criteria
 - [ ] During the NFL season, the Lambda invokes the onboarder in `REFRESH` mode for each
       onboarded Sleeper league.
-- [ ] During the offseason or on indeterminate NFL state, no refreshes are triggered.
+- [ ] Leagues are selected by querying the Sleeper-platform partition of `GSI2`
+      (`platform = "SLEEPER"`) and de-duplicated to one invocation per canonical league
+      (the most recent season's `league_id`); ESPN leagues are therefore never selected.
+- [ ] During the offseason (`season_type == "off"`) **or** in week 1 (matchups not yet
+      settled), the run is skipped with status `skipped` and no onboarder invocations.
+- [ ] On indeterminate NFL state (state fetch fails), no refreshes are triggered.
 - [ ] A failure refreshing one league does not prevent refreshing the rest.
 - [ ] ESPN leagues are not auto-refreshed.
 
