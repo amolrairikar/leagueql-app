@@ -47,6 +47,7 @@ from helpers import (
     claim_pending_checkout,
     convert_decimals,
     create_job_status,
+    create_subscription_checkout_session,
     delete_all_league_items,
     get_job_status,
     get_latest_stored_matchup,
@@ -173,16 +174,11 @@ def create_checkout_session(
     if not trial_used:
         subscription_data["trial_period_days"] = main.STRIPE_TRIAL_PERIOD_DAYS
 
-    session = main.stripe.checkout.Session.create(
-        mode="subscription",
-        customer=customer_id,
-        line_items=[{"price": main.STRIPE_PRICE_ID, "quantity": 1}],
+    session = create_subscription_checkout_session(
+        customer_id=customer_id,
+        clerk_user_id=clerk_user_id,
         subscription_data=subscription_data,
-        allow_promotion_codes=True,
-        managed_payments={"enabled": True},
-        success_url=main.STRIPE_CHECKOUT_SUCCESS_URL,
-        cancel_url=main.STRIPE_CHECKOUT_CANCEL_URL,
-        idempotency_key=token,
+        token=token,
     )
     logger.info(
         "Created checkout session for league %s (trial=%s)",

@@ -179,6 +179,17 @@ provisioning, not duplicate charging.)
 - **Customer first use / concurrency:** the Clerk user ↔ Stripe Customer mapping is created
   on demand; concurrent first-checkout requests must not create duplicate Customers (look up
   by `clerk_user_id` and/or use a Stripe idempotency key).
+- **Stored Stripe Customer deleted out-of-band:** the `USER#{clerk_user_id}` mapping can point
+  at a Customer that was deleted from the Stripe dashboard; opening a Checkout Session against
+  it raises a `No such customer` `InvalidRequestError`. Checkout **recovers**: it mints a fresh
+  Customer (with a *unique* idempotency key so the create is not deduplicated back to the
+  deleted Customer), overwrites the stored mapping, and retries the session **once** (with a new
+  idempotency key), so the user can subscribe without manual intervention. Any **other** Stripe
+  error creating the session surfaces as a `502` with a JSON `detail` so
+  [FE-022](../frontend/FE-022-subscription-checkout.md) shows it inline next to the Subscribe
+  button — rather than an **uncaught `500`**, which (being raised above the CORS middleware)
+  ships without CORS headers and leaves the browser unable to read the response, so the UI shows
+  nothing.
 - **Late webhook + second checkout (duplicate-subscription race):** a subscription exists in
   Stripe but its `created` webhook is delayed, so `stripe_subscription_id` is not yet on
   `METADATA`. A second checkout attempt in that window must not open a second subscription.
@@ -196,6 +207,9 @@ provisioning, not duplicate charging.)
 - [ ] `POST /leagues/{id}/checkout-session` returns a Stripe Checkout URL for the
       authenticated user, with the league's `canonical_league_id` in the subscription
       metadata and the configured trial applied.
+- [ ] A Checkout Session opened against a **deleted** Stripe Customer recovers by minting a new
+      Customer, overwriting the stored `USER#{clerk_user_id}` mapping, and retrying once; any
+      other Stripe error returns a `502` with a JSON `detail` rather than an uncaught `500`.
 - [ ] After checkout completes, the league `METADATA` `subscription_end_time` equals the
       subscription's `trial_end` (trialing) or `current_period_end` (active), and is written
       **only** by the webhook.

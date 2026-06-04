@@ -1,7 +1,15 @@
-Feature: Stripe billing webhook lifecycle (BE-015)
-  The webhook is the single writer of subscription_end_time. It verifies the
+Feature: Stripe billing checkout and webhook lifecycle (BE-015)
+  Checkout resolves the caller's Stripe customer and opens a session; the webhook
+  is the single writer of subscription_end_time. The webhook verifies the
   signature, dedups on the Stripe event id, and converges subscription state via
   conditional DynamoDB writes — all idempotent under at-least-once delivery.
+
+  Scenario: Checkout recovers when the stored Stripe customer was deleted
+    Given a checkout-ready league "canon-1" native "100" on "SLEEPER" for user "user_1"
+    And user "user_1" has a stored Stripe customer "cus_old" that was deleted in Stripe
+    When user "user_1" starts checkout for league "100" on "SLEEPER"
+    Then the checkout endpoint responds 200 with a session URL
+    And user "user_1" now maps to a freshly created Stripe customer
 
   Scenario: A completed trial checkout records the subscription and durable trial marker
     Given a subscribable league "canon-1" native "100" on "SLEEPER"
