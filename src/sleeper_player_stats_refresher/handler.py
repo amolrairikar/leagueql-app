@@ -12,7 +12,7 @@ SLEEPER_NFL_STATE_URL = "https://api.sleeper.app/v1/state/nfl"
 SLEEPER_STATS_URL = "https://api.sleeper.com/stats/nfl/player/{player_id}?season_type=regular&season={season}"
 PLAYER_METADATA_S3_KEY = "player-metadata/sleeper_nfl_players.json"
 PLAYER_STATS_S3_KEY = "player-stats/sleeper_nfl_player_stats.json"
-TARGET_INTERVAL = 60 / 850  # ~0.0706s between requests to stay under 850 req/min
+TARGET_INTERVAL = 60 / 925  # ~0.0649s between requests to stay under 925 req/min
 
 
 def fetch_nfl_state() -> dict | None:
@@ -49,7 +49,16 @@ def lambda_handler(event, context) -> None:
     # runs) forces a refresh for that season and bypasses the live NFL-state
     # gating. The scheduled S3-triggered invocation carries no ``season``, so it
     # keeps the original behavior: skip during the off-season.
-    season_override = event.get("season") if isinstance(event, dict) else None
+    is_dict_event = isinstance(event, dict)
+    season_override = event.get("season") if is_dict_event else None
+    # ``max_players`` caps the fan-out and ``output_key`` redirects the write — both
+    # are test-only overrides so an integration run can validate the end-to-end path
+    # against a small subset without clobbering the production stats cache. The
+    # scheduled S3 invocation supplies neither, keeping full production behavior.
+    max_players = event.get("max_players") if is_dict_event else None
+    output_key = (
+        event.get("output_key") if is_dict_event else None
+    ) or PLAYER_STATS_S3_KEY
     if season_override:
         season = str(season_override)
         logger.info(
@@ -71,17 +80,26 @@ def lambda_handler(event, context) -> None:
     active_ids = [
         pid for pid, meta in players.items() if meta.get("status") == "Active"
     ]
+    if max_players:
+        active_ids = active_ids[: int(max_players)]
+        logger.info(
+            "max_players override — limiting run to first %d active players",
+            len(active_ids),
+        )
     logger.info("Processing %d active players for season %s", len(active_ids), season)
 
     all_stats = {}
-    for player_id in active_ids:
+    total = len(active_ids)
+    for index, player_id in enumerate(active_ids, start=1):
         stats = fetch_stats(player_id, season)
         if stats is not None:
             all_stats[player_id] = {season: stats}
+        if index % 500 == 0:
+            logger.info("Processed %d/%d players", index, total)
 
     s3_client.put_object(
         Bucket=bucket,
-        Key=PLAYER_STATS_S3_KEY,
+        Key=output_key,
         Body=json.dumps(all_stats),
         ContentType="application/json",
     )
@@ -89,5 +107,5 @@ def lambda_handler(event, context) -> None:
         "Wrote stats for %d players to s3://%s/%s",
         len(all_stats),
         bucket,
-        PLAYER_STATS_S3_KEY,
+        output_key,
     )

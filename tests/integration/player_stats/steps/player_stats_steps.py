@@ -5,6 +5,9 @@ from behave import given, then, when
 
 PLAYER_METADATA_S3_KEY = "player-metadata/sleeper_nfl_players.json"
 PLAYER_STATS_S3_KEY = "player-stats/sleeper_nfl_player_stats.json"
+# Isolated key so a capped test run never clobbers the production stats cache.
+TEST_OUTPUT_S3_KEY = "player-stats/integration-test/sleeper_nfl_player_stats.json"
+MAX_PLAYERS = 100
 
 
 def _most_recent_completed_season() -> str:
@@ -15,14 +18,33 @@ def _most_recent_completed_season() -> str:
     return str(today.year if today.month >= 9 else today.year - 1)
 
 
-@given("an S3 event notification for the player metadata object with a season override")
+def _production_cache_fingerprint(context) -> tuple | None:
+    # (ETag, ContentLength) of the live stats cache, or None if it does not
+    # exist. Used to prove the capped run leaves the production object untouched.
+    try:
+        head = context.s3_client.head_object(
+            Bucket=context.s3_bucket, Key=PLAYER_STATS_S3_KEY
+        )
+        return (head["ETag"], head["ContentLength"])
+    except context.s3_client.exceptions.ClientError:
+        return None
+
+
+@given(
+    "an S3 event notification for the player metadata object with season, player-cap, and output-key overrides"
+)
 def step_build_event(context):
     context.season = _most_recent_completed_season()
+    context.test_output_key = TEST_OUTPUT_S3_KEY
+    # Snapshot the production cache so we can assert it is untouched afterward.
+    context.prod_cache_fingerprint = _production_cache_fingerprint(context)
     # Mirror the S3 ObjectCreated event AWS delivers when the player metadata
-    # object is written, plus a ``season`` override that drives a deterministic
-    # full-season refresh regardless of the live (off-season) NFL state.
+    # object is written, plus overrides that drive a deterministic, capped
+    # refresh into an isolated test key regardless of the live NFL state.
     context.invoke_payload = {
         "season": context.season,
+        "max_players": MAX_PLAYERS,
+        "output_key": TEST_OUTPUT_S3_KEY,
         "Records": [
             {
                 "eventVersion": "2.1",
@@ -65,23 +87,36 @@ def step_assert_invoke_ok(context):
     )
 
 
-@then("player stats for that season are written to S3 for the active players")
+@then(
+    "player stats for that season are written to the isolated test key for the active players"
+)
 def step_assert_s3(context):
     obj = context.s3_client.get_object(
-        Bucket=context.s3_bucket, Key=PLAYER_STATS_S3_KEY
+        Bucket=context.s3_bucket, Key=context.test_output_key
     )
     stats_data = json.loads(obj["Body"].read())
     assert isinstance(stats_data, dict) and stats_data, (
-        "Expected a non-empty dict of player stats in S3"
+        "Expected a non-empty dict of player stats at the test key"
     )
-    # A full-season refresh should resolve stats for many players, not a handful.
-    assert len(stats_data) >= 100, (
-        f"Expected stats for many players, got {len(stats_data)}"
+    # A capped run resolves stats for at most MAX_PLAYERS, and some of the first
+    # N active players legitimately have no stats (404), so assert a sane range
+    # rather than an exact count.
+    assert 1 <= len(stats_data) <= MAX_PLAYERS, (
+        f"Expected between 1 and {MAX_PLAYERS} players, got {len(stats_data)}"
     )
-    for player_id, seasons in list(stats_data.items())[:10]:
+    for player_id, seasons in stats_data.items():
         assert context.season in seasons, (
             f"Player {player_id} missing season {context.season}: {seasons}"
         )
         assert isinstance(seasons[context.season], dict), (
             f"Player {player_id} season stats not a dict: {seasons[context.season]}"
         )
+
+
+@then("the production player stats cache is left untouched")
+def step_assert_prod_untouched(context):
+    after = _production_cache_fingerprint(context)
+    assert after == context.prod_cache_fingerprint, (
+        "Production stats cache changed during a capped test run: "
+        f"before={context.prod_cache_fingerprint} after={after}"
+    )
