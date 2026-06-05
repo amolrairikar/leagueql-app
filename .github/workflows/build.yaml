@@ -437,45 +437,10 @@ jobs:
         run: pipenv run behave tests/integration/stripe
 
   # TODO: Temporarily disabled — this API should only be called once per day,
-  # re-enable after go-live
-  # run-sleeper-player-metadata-integration-tests:
-  #   name: Run Sleeper Player Metadata Integration Tests
-  #   runs-on: ubuntu-latest
-  #   needs:
-  #     - set-env
-  #     - deploy-regional
-  #   if: github.event_name == 'pull_request'
-  #   env:
-  #     ENVIRONMENT: ${{ needs.set-env.outputs.environment }}
-
-  #   steps:
-  #     - name: Checkout code
-  #       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-
-  #     - name: Set up Python
-  #       uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
-  #       with:
-  #         python-version: "3.13"
-
-  #     - name: Install pipenv
-  #       run: python3.13 -m pip install pipenv
-
-  #     - name: Install dependencies
-  #       run: pipenv install --dev
-
-  #     - name: Make AWS credentials script executable
-  #       run: chmod +x scripts/deployment_scripts/configure_aws_credentials.sh
-
-  #     - name: Configure AWS credentials via OIDC
-  #       run: bash scripts/deployment_scripts/configure_aws_credentials.sh "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-${{ env.ENVIRONMENT }}-role" "us-east-1" "GitHubActions-${{ github.run_id }}"
-
-  #     - name: Verify AWS identity
-  #       run: aws sts get-caller-identity
-
-  #     - name: Run player metadata integration tests
-  #       env:
-  #         AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
-  #       run: pipenv run behave tests/integration/player_metadata
+  # The live Sleeper player-metadata canary (BE-010) lives in its own scheduled
+  # workflow — .github/workflows/player-metadata-canary.yaml — so the once-per-day
+  # Sleeper players endpoint is hit at most once a day on a cron, fully isolated
+  # from this commit-triggered pipeline (no risk of cron-triggered deploys).
 
   # TODO: Temporarily disabled — re-enable once the CI OIDC role has
   # lambda:InvokeFunction on leagueql-sleeper-player-stats-refresher-dev.
