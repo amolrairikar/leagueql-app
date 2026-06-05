@@ -45,6 +45,8 @@ STRIPE_WEBHOOK_SECRET_PARAM = "/leagueql/test/stripe/webhook_secret"
 _ENV = {
     "DYNAMODB_TABLE_NAME": TABLE_NAME,
     "S3_BUCKET_NAME": BUCKET_NAME,
+    # BE-010: player metadata refresher writes the Sleeper players cache here.
+    "PLAYER_METADATA_S3_KEY": "player-metadata/sleeper_nfl_players.json",
     "ONBOARDER_LAMBDA_NAME": "onboarder-test",
     "AWS_DEFAULT_REGION": REGION,
     "AWS_ACCESS_KEY_ID": "testing",
@@ -216,6 +218,17 @@ def _load_handlers(context) -> None:
     # --- stripe webhook ----------------------------------------------------
     context.stripe_handler = _load_module(
         "stripe_webhook.handler", _SRC / "stripe_webhook" / "handler.py"
+    )
+
+    # --- player metadata refresher (BE-010) --------------------------------
+    pm_pkg = types.ModuleType("player_metadata")
+    pm_pkg.__path__ = [str(_SRC / "player_metadata")]
+    sys.modules["player_metadata"] = pm_pkg
+    sys.modules["utils"] = _load_module(
+        "player_metadata.utils", _SRC / "player_metadata" / "utils.py"
+    )
+    context.player_metadata_handler = _load_module(
+        "player_metadata.handler", _SRC / "player_metadata" / "handler.py"
     )
 
 
