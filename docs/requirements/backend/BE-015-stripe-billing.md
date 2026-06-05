@@ -58,10 +58,16 @@ event-driven webhook.
   `canonical_league_id` attribute, so it outlives league deletion — see the trial edge case);
   and `canonical_league_id`, `platform`, and `native_league_id` in the Stripe subscription
   metadata. Documented in `docs/db/dynamodb_spec.md`.
-- **Secrets & environment mode:** the Stripe secret key and webhook signing secret are
-  supplied as **sensitive Terraform variables** (from CI secrets, following the existing Clerk
-  pattern — the repo uses no SSM/Secrets Manager) and injected as Lambda environment variables
-  on the API and webhook Lambdas. Never committed or logged.
+- **Secrets & environment mode:** the Stripe secret key and webhook signing secret are stored
+  as **SecureString SSM Parameter Store** parameters (`/leagueql/{env}/stripe/secret_key` and
+  `/leagueql/{env}/stripe/webhook_secret`) and fetched at Lambda **cold start** by parameter
+  *name* — the name is passed via the non-sensitive `STRIPE_SECRET_KEY_SSM_PARAM` /
+  `STRIPE_WEBHOOK_SECRET_SSM_PARAM` env vars (`src/common/secrets.py`). The secret **value**
+  never appears in Lambda environment variables, Terraform state, or CI. The values are set
+  out-of-band via the AWS CLI (per region); Terraform only grants the API and webhook Lambda
+  roles `ssm:GetParameter` on the specific parameter ARNs and never reads or writes the values.
+  The non-sensitive `stripe_price_id` remains an ordinary Terraform var / env var. Never
+  committed or logged.
   **DEV uses Stripe sandbox (test) mode and PROD uses live mode** — each environment is
   configured with its own mode-specific credentials (`sk_test_…`/`sk_live_…`, the matching
   `whsec_…` webhook signing secret) and its own mode-specific Price/Product IDs. Test- and
@@ -246,8 +252,9 @@ provisioning, not duplicate charging.)
 - [ ] The client-supplied `subscriptionEndTime` onboarding input is removed;
       `subscription_end_time` is set only server-side via this flow (supersedes the
       [BE-001](BE-001-league-onboarding.md) interim behavior).
-- [ ] Stripe secret key and webhook signing secret are sourced from sensitive Terraform
-      variables (CI secrets) and never committed or logged.
+- [ ] Stripe secret key and webhook signing secret are stored as SecureString SSM parameters
+      and fetched by the Lambdas at runtime; they are never injected as Lambda env vars,
+      written to Terraform state, present in CI, or committed/logged.
 - [ ] DEV is configured with Stripe sandbox (test) mode credentials and Price IDs; PROD is
       configured with live mode; neither environment carries the other's keys.
 
@@ -276,26 +283,33 @@ provisioning, not duplicate charging.)
   the Billing Portal **return** all target the in-app dashboard home (`…/home`, under the
   SubscriptionGuard). Success carries `?checkout=success`, which drives the activation poll in
   `useSubscription` ([FE-022](../frontend/FE-022-subscription-checkout.md)); cancel has no param,
-  so it never polls. CI builds/zips the new Lambda and passes the Stripe secrets as `TF_VAR_*`
-  (mode-selected by environment).
+  so it never polls. CI builds/zips the new Lambda and passes the non-sensitive `stripe_price_id`
+  as `TF_VAR_*` (mode-selected by environment); the secret key and webhook signing secret are
+  **no longer in CI** — they live in SSM Parameter Store (see *Secrets & environment mode* and
+  the one-time setup below) and are fetched at runtime via `src/common/secrets.py`.
 - **`pending_checkout` self-heal window is configurable** via the `CHECKOUT_PENDING_TTL_MINUTES`
   env var (`main.py`, default 30); Terraform sets **5 in dev / 30 in prod** so abandoned-checkout
   retries unblock quickly in dev. Until it lapses (or the webhook records the subscription), a
   repeat checkout returns `409`.
 - **One-time operational setup** (cannot be Terraformed — the webhook signing secret only exists
-  after the endpoint is registered in Stripe): see the runbook
-  [`docs/deploy/stripe-webhook-setup.md`](../../deploy/stripe-webhook-setup.md).
+  after the endpoint is registered in Stripe, and the secret values are set out-of-band so they
+  never enter Terraform state): set both SecureString SSM parameters **per region**
+  (`us-east-1` + `us-west-2`) via the AWS CLI — `aws ssm put-parameter --type SecureString` for
+  `/leagueql/{env}/stripe/secret_key` and `/leagueql/{env}/stripe/webhook_secret`. See the
+  runbook [`docs/deploy/stripe-webhook-setup.md`](../../deploy/stripe-webhook-setup.md).
 
 ## Sources
 `src/api/routes.py` (`create_checkout_session`, `create_billing_portal_session`,
 `get_authenticated_user`), `src/api/helpers.py` (`get_or_create_stripe_customer`,
 `get_stripe_customer_id`, `claim_pending_checkout`; `require_active_subscription` — reused
-unchanged), `src/api/main.py` (Stripe config + `main.stripe`), `src/common/subscription.py`
+unchanged), `src/api/main.py` (Stripe config + `main.stripe`), `src/common/secrets.py` (SSM parameter
+fetch), `src/common/subscription.py`
 (`record_active_subscription`, `expire_subscription`), `src/stripe_webhook/handler.py`,
 `docs/api/openapi_spec.yaml` (checkout, billing-portal, `POST /stripe/webhook`),
 `docs/db/dynamodb_spec.md` (`stripe_subscription_id`, `pending_checkout`, `trial_used` on
 METADATA; `USER` item; `WEBHOOK_EVENT` dedup item),
-`infrastructure/regional/main.tf` + `vars.tf` (webhook Lambda, invoke permission, Stripe vars,
-alarm), `infrastructure/global/{dev,prod}/main.tf` (webhook IAM role),
+`infrastructure/regional/main.tf` + `vars.tf` (webhook Lambda, invoke permission, `stripe_price_id`
++ SSM param-name env vars, alarm), `infrastructure/global/{dev,prod}/main.tf` (API + webhook IAM
+roles, incl. `ssm:GetParameter` on the Stripe parameter ARNs),
 `.github/workflows/build.yaml` (build + `TF_VAR_*` wiring),
 [BE-014](BE-014-subscription-access-control.md), [BE-001](BE-001-league-onboarding.md).

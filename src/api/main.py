@@ -27,6 +27,7 @@ from common.logging_utils import (  # noqa: F401
     logger,
     setup_logger,
 )
+from common.secrets import get_secret_from_env_param
 
 ORIGINS = [
     "http://localhost:5173",  # LOCAL/DEV
@@ -134,10 +135,13 @@ s3_client = boto3.client("s3", config=_retry_config)
 S3_BUCKET = os.environ["S3_BUCKET_NAME"]
 
 # Stripe billing (BE-015). Config is environment-specific: DEV is wired with
-# sandbox (test) mode credentials/Price IDs and PROD with live mode. Values are
-# read with ``.get`` so the module still imports in contexts where billing is not
-# configured (e.g. unit tests, which patch ``main.stripe``).
-stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
+# sandbox (test) mode credentials/Price IDs and PROD with live mode. The secret
+# key is a SecureString SSM parameter fetched at cold start by parameter *name*
+# (the value never lands in a Lambda env var / TF state / CI); the non-sensitive
+# Price ID and other config stay plain env vars. ``get_secret_from_env_param``
+# returns ``""`` when unconfigured so the module still imports in contexts where
+# billing is not set up (e.g. unit tests, which patch ``main.stripe``).
+stripe.api_key = get_secret_from_env_param("STRIPE_SECRET_KEY_SSM_PARAM")
 STRIPE_PRICE_ID = os.environ.get("STRIPE_PRICE_ID", "")
 STRIPE_TRIAL_PERIOD_DAYS = int(os.environ.get("STRIPE_TRIAL_PERIOD_DAYS", "14"))
 STRIPE_CHECKOUT_SUCCESS_URL = os.environ.get(

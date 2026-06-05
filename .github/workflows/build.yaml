@@ -246,10 +246,10 @@ jobs:
         env:
           TF_STATE_BUCKET: terraform-state-bucket-${{ matrix.region == 'us-east-1' && 'east' || 'west' }}-${{ secrets.AWS_ACCOUNT_ID }}
           # Stripe billing (BE-015): DEV → sandbox/test mode, PROD → live mode.
-          # Read by Terraform as TF_VAR_* (no -var flags, so secrets never hit the
-          # command line); GitHub masks the secret values in logs.
-          TF_VAR_stripe_secret_key: ${{ env.ENVIRONMENT == 'prod' && secrets.STRIPE_SECRET_KEY_PROD || secrets.STRIPE_SECRET_KEY_DEV }}
-          TF_VAR_stripe_webhook_secret: ${{ env.ENVIRONMENT == 'prod' && secrets.STRIPE_WEBHOOK_SECRET_PROD || secrets.STRIPE_WEBHOOK_SECRET_DEV }}
+          # The sensitive secret key + webhook signing secret are NOT in CI — they
+          # live as SecureString SSM parameters (/leagueql/{env}/stripe/*), set
+          # out-of-band and fetched by the Lambdas at runtime. Only the
+          # non-sensitive Price ID flows through Terraform (TF_VAR_*, no -var flag).
           TF_VAR_stripe_price_id: ${{ env.ENVIRONMENT == 'prod' && secrets.STRIPE_PRICE_ID_PROD || secrets.STRIPE_PRICE_ID_DEV }}
         run: |
           terraform init \
