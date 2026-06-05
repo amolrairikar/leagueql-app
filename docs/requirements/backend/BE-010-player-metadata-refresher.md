@@ -10,7 +10,9 @@ from the large, slow-changing Sleeper players endpoint.
 - Lambda: `src/player_metadata/` (`handler.py`, `utils.py`).
 - Source: `https://api.sleeper.app/v1/players/nfl`; NFL state from
   `https://api.sleeper.app/v1/state/nfl`.
-- Output: S3 key `player-metadata/sleeper_nfl_players.json`.
+- Output: S3 key `player-metadata/sleeper_nfl_players.json` (default; overridable via the
+  `PLAYER_METADATA_S3_KEY` env var so integration tests can write outside the bucket
+  notification filter and avoid triggering [BE-011](BE-011-sleeper-player-stats-refresher.md)).
 - Required fields per player: `first_name`, `last_name`, `position`.
 
 ## Edge Cases

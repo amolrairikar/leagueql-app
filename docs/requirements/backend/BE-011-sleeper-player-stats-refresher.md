@@ -14,6 +14,10 @@ rate-limited to stay within Sleeper's API limits.
 - Inputs: player IDs from `player-metadata/sleeper_nfl_players.json`.
 - Output: S3 key `player-stats/sleeper_nfl_player_stats.json`.
 - Rate limit: `TARGET_INTERVAL = 60 / 850` (~850 requests/min ceiling).
+- Event override: an explicit `season` field in the invocation event forces a refresh
+  for that season and bypasses the live NFL-state check (used for on-demand and
+  integration-test runs). The scheduled S3-triggered invocation carries no `season`, so it
+  retains the live-state behavior (including the off-season skip).
 
 ## Edge Cases
 - **NFL state fetch fails:** log a warning and continue.

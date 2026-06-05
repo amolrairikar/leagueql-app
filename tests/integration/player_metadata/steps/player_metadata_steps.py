@@ -1,9 +1,9 @@
 import json
+import os
 from unittest.mock import MagicMock, patch
 
 from behave import given, then, when
 
-PLAYER_METADATA_S3_KEY = "player-metadata/sleeper_nfl_players.json"
 REQUIRED_PLAYER_FIELDS = {"first_name", "last_name", "position"}
 
 
@@ -43,7 +43,7 @@ def step_assert_no_error(context):
 @then("player metadata is written to S3 with valid player records")
 def step_assert_s3_write(context):
     obj = context.s3_client.get_object(
-        Bucket=context.s3_bucket, Key=PLAYER_METADATA_S3_KEY
+        Bucket=context.s3_bucket, Key=os.environ["PLAYER_METADATA_S3_KEY"]
     )
     players_data = json.loads(obj["Body"].read())
     assert isinstance(players_data, dict) and players_data, (

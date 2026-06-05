@@ -322,10 +322,13 @@ module "sleeper_player_stats_refresher_lambda" {
   role_arn             = local.sleeper_player_stats_refresher_role_arn
   handler              = "handler.lambda_handler"
   memory_size          = 512
-  timeout              = 300
-  log_retention        = 7
-  s3_bucket            = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
-  s3_key               = "lambda-code-artifacts/sleeper_player_stats_refresher-lambda.zip"
+  # A full active-roster refresh is rate-limited (~850 req/min) and can run many
+  # minutes; allow up to the Lambda maximum so a full run completes (also makes a
+  # synchronous integration-test invocation viable).
+  timeout       = 900
+  log_retention = 7
+  s3_bucket     = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
+  s3_key        = "lambda-code-artifacts/sleeper_player_stats_refresher-lambda.zip"
 
   environment_variables = {
     S3_BUCKET_NAME = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
