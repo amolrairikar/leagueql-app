@@ -36,6 +36,10 @@ _API_SRC = _SRC / "api"
 TABLE_NAME = "leagueql-table-test"
 BUCKET_NAME = "leagueql-test-bucket"
 REGION = "us-east-1"
+# Stripe secrets are sourced from SecureString SSM params by name (BE-015); the
+# Lambdas fetch them at import, so the params must exist (in moto) before load.
+STRIPE_SECRET_KEY_PARAM = "/leagueql/test/stripe/secret_key"
+STRIPE_WEBHOOK_SECRET_PARAM = "/leagueql/test/stripe/webhook_secret"
 
 # Environment the modules read at import time. Set before any handler import.
 _ENV = {
@@ -47,8 +51,8 @@ _ENV = {
     "AWS_SECRET_ACCESS_KEY": "testing",
     "AWS_SECURITY_TOKEN": "testing",
     "AWS_SESSION_TOKEN": "testing",
-    "STRIPE_SECRET_KEY": "sk_test_dummy",
-    "STRIPE_WEBHOOK_SECRET": "whsec_dummy",
+    "STRIPE_SECRET_KEY_SSM_PARAM": STRIPE_SECRET_KEY_PARAM,
+    "STRIPE_WEBHOOK_SECRET_SSM_PARAM": STRIPE_WEBHOOK_SECRET_PARAM,
     "STRIPE_PRICE_ID": "price_test_dummy",
     "STRIPE_TRIAL_PERIOD_DAYS": "14",
 }
@@ -107,6 +111,18 @@ def _create_table() -> None:
                 "Projection": {"ProjectionType": "ALL"},
             },
         ],
+    )
+
+
+def _create_ssm_params() -> None:
+    # BE-015: the API + webhook Lambdas read the Stripe secret key / signing secret
+    # from these SecureString params at import. moto backs SSM like real AWS.
+    client = boto3.client("ssm", region_name=REGION)
+    client.put_parameter(
+        Name=STRIPE_SECRET_KEY_PARAM, Value="sk_test_dummy", Type="SecureString"
+    )
+    client.put_parameter(
+        Name=STRIPE_WEBHOOK_SECRET_PARAM, Value="whsec_dummy", Type="SecureString"
     )
 
 
@@ -215,6 +231,7 @@ def before_all(context):
     context._moto.start()
     _create_table()
     _create_bucket()
+    _create_ssm_params()
 
     context.region = REGION
     context.table_name = TABLE_NAME

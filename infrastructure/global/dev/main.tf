@@ -504,6 +504,20 @@ module "api-lambda-role" {
           "${local.primary_bucket_arn}/raw-api-data/*",
           "${local.secondary_bucket_arn}/raw-api-data/*"
         ]
+      },
+      {
+        # BE-015: the checkout / billing-portal endpoints need the Stripe secret
+        # key, stored as a SecureString SSM parameter (set out-of-band, never in
+        # TF state). The API does not read the webhook signing secret.
+        Sid    = "ReadStripeSsmParameters"
+        Effect = "Allow"
+        Action = [
+          "ssm:GetParameter"
+        ]
+        Resource = [
+          "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/stripe/secret_key",
+          "arn:aws:ssm:us-west-2:${var.account_id}:parameter/leagueql/${var.environment}/stripe/secret_key"
+        ]
       }
     ]
   })
@@ -569,6 +583,22 @@ module "stripe-webhook-lambda-role" {
         Resource = [
           module.dynamodb.primary_table_arn,
           module.dynamodb.replica_table_arn
+        ]
+      },
+      {
+        # BE-015: Stripe secret key + webhook signing secret live as SecureString
+        # SSM parameters (set out-of-band, never in TF state). Grant read on both
+        # regions' copies; the value is fetched by the Lambda at cold start.
+        Sid    = "ReadStripeSsmParameters"
+        Effect = "Allow"
+        Action = [
+          "ssm:GetParameter"
+        ]
+        Resource = [
+          "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/stripe/secret_key",
+          "arn:aws:ssm:us-west-2:${var.account_id}:parameter/leagueql/${var.environment}/stripe/secret_key",
+          "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/stripe/webhook_secret",
+          "arn:aws:ssm:us-west-2:${var.account_id}:parameter/leagueql/${var.environment}/stripe/webhook_secret"
         ]
       }
     ]

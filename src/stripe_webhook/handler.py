@@ -26,13 +26,18 @@ import botocore.config
 import stripe
 
 from common.logging_utils import logger
+from common.secrets import get_secret_from_env_param
 from common.subscription import (
     DuplicateSubscription,
     expire_subscription,
     record_active_subscription,
 )
 
-stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
+# Stripe credentials are SecureString SSM parameters fetched at cold start by
+# parameter *name* (the value never lands in a Lambda env var / TF state / CI).
+# See docs/requirements/backend/BE-015-stripe-billing.md.
+stripe.api_key = get_secret_from_env_param("STRIPE_SECRET_KEY_SSM_PARAM")
+_WEBHOOK_SECRET = get_secret_from_env_param("STRIPE_WEBHOOK_SECRET_SSM_PARAM")
 
 _retry_config = botocore.config.Config(retries={"mode": "standard"})
 _dynamodb = boto3.client("dynamodb", config=_retry_config)
@@ -227,10 +232,11 @@ def lambda_handler(event, context) -> dict[str, str | int]:
     """
     payload = _raw_body(event)
     signature = _signature_header(event)
-    secret = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 
     try:
-        stripe_event = stripe.Webhook.construct_event(payload, signature, secret)
+        stripe_event = stripe.Webhook.construct_event(
+            payload, signature, _WEBHOOK_SECRET
+        )
     except Exception as exc:
         # ``construct_event`` raises ValueError (bad payload) or
         # SignatureVerificationError (bad/mismatched signature, incl. a

@@ -19,21 +19,12 @@ variable "clerk_jwt_audience" {
   type        = string
 }
 
-# Stripe billing (BE-015). DEV is wired with sandbox (test) mode credentials/Price
-# IDs and PROD with live mode; the values are supplied per environment from CI
-# secrets (the secret key / webhook signing secret are sensitive).
-variable "stripe_secret_key" {
-  description = "Stripe secret API key (sk_test_… in dev, sk_live_… in prod)"
-  type        = string
-  sensitive   = true
-}
-
-variable "stripe_webhook_secret" {
-  description = "Stripe webhook signing secret (whsec_…) for the matching mode"
-  type        = string
-  sensitive   = true
-}
-
+# Stripe billing (BE-015). DEV is wired with sandbox (test) mode Price IDs and PROD
+# with live mode. The sensitive secret key / webhook signing secret are NOT
+# Terraform vars — they live as SecureString SSM parameters
+# (/leagueql/{env}/stripe/{secret_key,webhook_secret}) set out-of-band and fetched
+# by the Lambdas at runtime; the Lambda roles are granted ssm:GetParameter in
+# infrastructure/global/{dev,prod}/main.tf.
 variable "stripe_price_id" {
   description = "Stripe Price ID for the league subscription (mode-specific)"
   type        = string

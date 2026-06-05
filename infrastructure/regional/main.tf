@@ -106,10 +106,12 @@ module "api_lambda" {
     S3_BUCKET_NAME        = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
     SNS_TOPIC_ARN         = var.environment == "prod" ? aws_sns_topic.lambda_alerts[0].arn : ""
 
-    # Stripe billing (BE-015) — checkout + billing-portal endpoints.
-    STRIPE_SECRET_KEY        = var.stripe_secret_key
-    STRIPE_PRICE_ID          = var.stripe_price_id
-    STRIPE_TRIAL_PERIOD_DAYS = tostring(var.stripe_trial_period_days)
+    # Stripe billing (BE-015) — checkout + billing-portal endpoints. The secret
+    # key is fetched at runtime from SSM by *name*; only the non-sensitive name is
+    # an env var (the value never lands here / in TF state / in CI).
+    STRIPE_SECRET_KEY_SSM_PARAM = "/leagueql/${var.environment}/stripe/secret_key"
+    STRIPE_PRICE_ID             = var.stripe_price_id
+    STRIPE_TRIAL_PERIOD_DAYS    = tostring(var.stripe_trial_period_days)
     # Checkout success, cancel, and the Billing Portal "Return to LeagueQL" button
     # all land on the in-app dashboard home. Success carries `?checkout=success`,
     # which drives the activation poll in useSubscription; cancel has no param so it
@@ -145,9 +147,11 @@ module "stripe_webhook_lambda" {
   s3_key               = "lambda-code-artifacts/stripe_webhook-lambda.zip"
 
   environment_variables = {
-    DYNAMODB_TABLE_NAME   = "leagueql-table-${var.environment}"
-    STRIPE_SECRET_KEY     = var.stripe_secret_key
-    STRIPE_WEBHOOK_SECRET = var.stripe_webhook_secret
+    DYNAMODB_TABLE_NAME = "leagueql-table-${var.environment}"
+    # Stripe credentials fetched at runtime from SSM by *name* (BE-015); the
+    # values never land here / in TF state / in CI.
+    STRIPE_SECRET_KEY_SSM_PARAM     = "/leagueql/${var.environment}/stripe/secret_key"
+    STRIPE_WEBHOOK_SECRET_SSM_PARAM = "/leagueql/${var.environment}/stripe/webhook_secret"
   }
 
   tags = {
