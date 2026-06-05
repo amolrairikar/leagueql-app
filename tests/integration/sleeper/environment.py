@@ -1,6 +1,7 @@
 import importlib.util
 import os
 import sys
+import time
 import types
 from pathlib import Path
 
@@ -12,6 +13,13 @@ _SRC = Path(__file__).parents[3] / "src"
 _ONBOARDER_SRC = _SRC / "onboarder"
 _SLEEPER_REFRESH_SRC = _SRC / "sleeper_refresh"
 _API_SRC = _SRC / "api"
+
+# The dev API Lambda is freshly (re)deployed by the CI job that runs immediately
+# before these tests, so the first request can hit a cold container whose init
+# exceeds API Gateway's integration window (HTTP 5xx/504) or fails transiently.
+# Retry the cleanup DELETE with backoff so a cold start does not fail before_all.
+_CLEANUP_MAX_ATTEMPTS = 5
+_CLEANUP_BACKOFF_SECONDS = 3
 
 _REQUIRED_ENV_VARS = [
     "TEST_SLEEPER_LEAGUE_ID",
@@ -44,20 +52,39 @@ def _cleanup_test_league(context, test_league_id: str) -> None:
     token, so the cleanup exercises the real authorizer + Lambda path rather than
     calling the route handler in-process. A 404 means nothing was onboarded — that
     is tolerated, matching the previous in-process cleanup's behavior.
+
+    Retries transient cold-start failures (5xx / connection errors) with backoff;
+    a 4xx (e.g. auth failure) is surfaced immediately rather than retried.
     """
     jwt = mint_jwt(
         secret_key=context.clerk_secret_key,
         user_id=context.clerk_user_id,
         template=context.clerk_template,
     )
-    resp = requests.delete(
-        f"{context.api_base_url}/leagues/{test_league_id}",
-        params={"platform": "SLEEPER"},  # Platform enum is case-insensitive
-        headers={"Authorization": f"Bearer {jwt}"},
-        timeout=30,
-    )
-    if resp.status_code not in (200, 404):
-        resp.raise_for_status()
+    url = f"{context.api_base_url}/leagues/{test_league_id}"
+    headers = {"Authorization": f"Bearer {jwt}"}
+    last_error: Exception | None = None
+    for attempt in range(1, _CLEANUP_MAX_ATTEMPTS + 1):
+        try:
+            resp = requests.delete(
+                url,
+                params={"platform": "SLEEPER"},  # Platform enum is case-insensitive
+                headers=headers,
+                timeout=30,
+            )
+            if resp.status_code in (200, 404):
+                return
+            if resp.status_code < 500:
+                # Non-transient (auth/validation) — fail fast.
+                resp.raise_for_status()
+            last_error = requests.HTTPError(
+                f"{resp.status_code} Server Error for DELETE {url}", response=resp
+            )
+        except requests.exceptions.RequestException as e:
+            last_error = e
+        if attempt < _CLEANUP_MAX_ATTEMPTS:
+            time.sleep(_CLEANUP_BACKOFF_SECONDS * attempt)
+    raise last_error
 
 
 def before_all(context):
