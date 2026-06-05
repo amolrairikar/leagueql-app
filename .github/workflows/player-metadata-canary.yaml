@@ -1,0 +1,59 @@
+name: leagueql-player-metadata-canary
+
+# Live Sleeper player-metadata contract canary (BE-010). Kept in its own workflow
+# — separate from the commit-triggered build pipeline — so the once-per-day
+# Sleeper players endpoint is hit at most once a day on a cron, with no chance of
+# a scheduled run triggering the build pipeline's deploy jobs. Validates that
+# Sleeper's live response still parses and still carries first_name/last_name/
+# position. The per-commit logic + S3-wiring coverage lives in tests/unit and
+# tests/component; this job is the only path that touches the live endpoint.
+
+on:
+  schedule:
+    # 06:00 UTC daily — at most one live fetch per day, decoupled from commits.
+    - cron: "0 6 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  run-sleeper-player-metadata-integration-tests:
+    name: Run Sleeper Player Metadata Integration Tests
+    runs-on: ubuntu-latest
+    if: github.actor == 'amolrairikar'
+    # The test loads the handler in-process and writes to the dev bucket, so it
+    # needs AWS creds but no deploy. The dev bucket is where the integration
+    # environment writes (leagueql-dev-bucket-east-*), hence ENVIRONMENT=dev.
+    env:
+      ENVIRONMENT: dev
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
+        with:
+          python-version: "3.13"
+
+      - name: Install pipenv
+        run: python3.13 -m pip install pipenv
+
+      - name: Install dependencies
+        run: pipenv install --dev
+
+      - name: Make AWS credentials script executable
+        run: chmod +x scripts/deployment_scripts/configure_aws_credentials.sh
+
+      - name: Configure AWS credentials via OIDC
+        run: bash scripts/deployment_scripts/configure_aws_credentials.sh "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-${{ env.ENVIRONMENT }}-role" "us-east-1" "GitHubActions-${{ github.run_id }}"
+
+      - name: Verify AWS identity
+        run: aws sts get-caller-identity
+
+      - name: Run player metadata integration tests
+        env:
+          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+        run: pipenv run behave tests/integration/player_metadata
