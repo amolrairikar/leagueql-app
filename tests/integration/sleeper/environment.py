@@ -5,13 +5,21 @@ import types
 from pathlib import Path
 
 import boto3
+import requests
 
-_SRC = Path(__file__).parents[2] / "src"
+_HERE = Path(__file__).parent
+_SRC = Path(__file__).parents[3] / "src"
 _ONBOARDER_SRC = _SRC / "onboarder"
 _SLEEPER_REFRESH_SRC = _SRC / "sleeper_refresh"
 _API_SRC = _SRC / "api"
 
-_REQUIRED_ENV_VARS = ["TEST_SLEEPER_LEAGUE_ID", "AWS_ACCOUNT_ID"]
+_REQUIRED_ENV_VARS = [
+    "TEST_SLEEPER_LEAGUE_ID",
+    "AWS_ACCOUNT_ID",
+    "API_BASE_URL",
+    "CLERK_SECRET_KEY_SSM_PARAM",
+    "TEST_CLERK_USER_ID",
+]
 
 
 def _load_module(unique_name, path):
@@ -22,15 +30,34 @@ def _load_module(unique_name, path):
     return mod
 
 
-def _cleanup_test_league(test_league_id: str) -> None:
-    from fastapi import HTTPException
-    from main import Platform, delete_league
+# Loaded here (not as a bare import) so the helper resolves regardless of how
+# behave sets up sys.path. It only imports ``requests``, so it is safe at import.
+mint_jwt = _load_module(
+    "sleeper_integration.clerk_auth", _HERE / "clerk_auth.py"
+).mint_jwt
 
-    try:
-        delete_league(leagueId=test_league_id, platform=Platform.SLEEPER)
-    except HTTPException as e:
-        if e.status_code != 404:
-            raise
+
+def _cleanup_test_league(context, test_league_id: str) -> None:
+    """Delete any prior onboarded state for the test league via the deployed API.
+
+    Hits ``DELETE /leagues/{id}`` on the dev API Gateway with a Clerk-authed bearer
+    token, so the cleanup exercises the real authorizer + Lambda path rather than
+    calling the route handler in-process. A 404 means nothing was onboarded — that
+    is tolerated, matching the previous in-process cleanup's behavior.
+    """
+    jwt = mint_jwt(
+        secret_key=context.clerk_secret_key,
+        user_id=context.clerk_user_id,
+        template=context.clerk_template,
+    )
+    resp = requests.delete(
+        f"{context.api_base_url}/leagues/{test_league_id}",
+        params={"platform": "SLEEPER"},  # Platform enum is case-insensitive
+        headers={"Authorization": f"Bearer {jwt}"},
+        timeout=30,
+    )
+    if resp.status_code not in (200, 404):
+        resp.raise_for_status()
 
 
 def before_all(context):
@@ -53,7 +80,17 @@ def before_all(context):
         if str(path) not in sys.path:
             sys.path.insert(0, str(path))
 
-    _cleanup_test_league(test_league_id)
+    # Resolve Clerk auth config used to delete the test league through the API.
+    from common.secrets import get_ssm_parameter
+
+    context.clerk_secret_key = get_ssm_parameter(
+        os.environ["CLERK_SECRET_KEY_SSM_PARAM"]
+    )
+    context.clerk_user_id = os.environ["TEST_CLERK_USER_ID"]
+    context.clerk_template = os.environ.get("CLERK_JWT_TEMPLATE", "integration-tests")
+    context.api_base_url = os.environ["API_BASE_URL"].rstrip("/")
+
+    _cleanup_test_league(context, test_league_id)
 
     # Load onboarder modules first so bare-name imports resolve to onboarder's utils/writer/etc.
     onboarder_pkg = types.ModuleType("onboarder")
