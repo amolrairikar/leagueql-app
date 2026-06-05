@@ -36,12 +36,15 @@ def _create_subscription(context, *, payment_method, trial_period_days=None):
 
     Attaches the given test payment method — the API equivalent of the
     docs/testing/stripe-test-payments.md cards (``pm_card_visa`` for the
-    ``4242 4242 4242 4242`` success card, ``pm_card_chargeDeclined`` for the
-    ``4000 0000 0000 0002`` decline) — and carries the league's native identity in
-    the subscription metadata, exactly as the checkout endpoint does, so the
-    deployed webhook routes the event back to the league. With no trial the first
-    charge is attempted immediately (``allow_incomplete``), so a declined card
-    lands the subscription in ``incomplete`` rather than silently trialing.
+    ``4242 4242 4242 4242`` success card; ``pm_card_chargeCustomerFail`` for the
+    ``4000 0000 0000 0341`` card, which *attaches* fine but fails when charged —
+    the decline must surface at charge time, not attach time, since the bare
+    decline card ``pm_card_chargeDeclined`` is rejected on attach) — and carries
+    the league's native identity in the subscription metadata, exactly as the
+    checkout endpoint does, so the deployed webhook routes the event back to the
+    league. With no trial the first charge is attempted immediately
+    (``allow_incomplete``), so a charge-failing card lands the subscription in
+    ``incomplete`` rather than silently trialing.
     """
     s = _stripe(context)
     customer = s.Customer.create(
@@ -134,7 +137,10 @@ def step_cancel_subscription(context):
 
 @when("a no-trial subscription is created for the league with a declined card")
 def step_create_declined_subscription(context):
-    _create_subscription(context, payment_method="pm_card_chargeDeclined")
+    # pm_card_chargeCustomerFail attaches successfully but fails when charged, so
+    # the decline surfaces on the subscription's first invoice (status incomplete)
+    # rather than at attach time.
+    _create_subscription(context, payment_method="pm_card_chargeCustomerFail")
 
 
 @then("subscription_end_time on the league converges to the subscription trial_end")
