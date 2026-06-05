@@ -1,3 +1,5 @@
+from urllib.parse import urlparse
+
 import requests
 from behave import given, then, when
 
@@ -35,8 +37,15 @@ def _assert_stripe_url(context):
     resp = context.response
     assert resp.status_code == 200, f"expected 200, got {resp.status_code}: {resp.text}"
     url = resp.json()["data"]["url"]
-    assert url.startswith("https://"), f"unexpected URL scheme: {url}"
-    assert "stripe.com" in url, f"not a Stripe-hosted URL: {url}"
+    parsed = urlparse(url)
+    assert parsed.scheme == "https", f"unexpected URL scheme: {url}"
+    # Check the parsed host (not a substring of the whole URL) so a hostile host
+    # like ``stripe.com.evil.com`` or ``evil.com/stripe.com`` cannot pass — the
+    # Stripe-hosted pages live on stripe.com subdomains (checkout./billing.).
+    host = parsed.hostname or ""
+    assert host == "stripe.com" or host.endswith(".stripe.com"), (
+        f"not a Stripe-hosted URL: {url}"
+    )
 
 
 @given("a Sleeper league exists in DynamoDB")
