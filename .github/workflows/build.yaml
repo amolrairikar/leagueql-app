@@ -318,6 +318,64 @@ jobs:
           CLERK_JWT_TEMPLATE: integration-tests
         run: pipenv run behave tests/integration/sleeper
 
+  run-espn-integration-tests:
+    name: Run ESPN Integration Tests
+    runs-on: ubuntu-latest
+    needs:
+      - set-env
+      - deploy-regional
+    if: github.event_name == 'pull_request'
+    env:
+      ENVIRONMENT: ${{ needs.set-env.outputs.environment }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
+        with:
+          python-version: "3.13"
+
+      - name: Install pipenv
+        run: python3.13 -m pip install pipenv
+
+      - name: Install dependencies
+        run: pipenv install --dev
+
+      - name: Make AWS credentials script executable
+        run: chmod +x scripts/deployment_scripts/configure_aws_credentials.sh
+
+      - name: Configure AWS credentials via OIDC
+        run: bash scripts/deployment_scripts/configure_aws_credentials.sh "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-${{ env.ENVIRONMENT }}-role" "us-east-1" "GitHubActions-${{ github.run_id }}"
+
+      - name: Verify AWS identity
+        run: aws sts get-caller-identity
+
+      - name: Resolve dev API base URL
+        run: |
+          API_BASE_URL=$(aws apigatewayv2 get-apis \
+            --query "Items[?Name=='leagueql-api-${ENVIRONMENT}-us-east-1'].ApiEndpoint" \
+            --output text)
+          if [ -z "$API_BASE_URL" ]; then
+            echo "Could not resolve API endpoint for leagueql-api-${ENVIRONMENT}-us-east-1" >&2
+            exit 1
+          fi
+          echo "API_BASE_URL=$API_BASE_URL" >> "$GITHUB_ENV"
+
+      - name: Run ESPN integration tests
+        env:
+          TEST_ESPN_LEAGUE_ID: ${{ secrets.TEST_ESPN_LEAGUE_ID }}
+          TEST_ESPN_SEASON: "2025"
+          ESPN_S2_SSM_PARAM: /leagueql/${{ env.ENVIRONMENT }}/espn/s2
+          ESPN_SWID_SSM_PARAM: /leagueql/${{ env.ENVIRONMENT }}/espn/swid
+          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+          API_BASE_URL: ${{ env.API_BASE_URL }}
+          CLERK_SECRET_KEY_SSM_PARAM: /leagueql/${{ env.ENVIRONMENT }}/clerk/secret_key
+          TEST_CLERK_USER_ID: ${{ secrets.TEST_CLERK_USER_ID_DEV }}
+          CLERK_JWT_TEMPLATE: integration-tests
+        run: pipenv run behave tests/integration/espn
+
   run-player-metadata-integration-tests:
     name: Run Player Metadata Integration Tests
     runs-on: ubuntu-latest
