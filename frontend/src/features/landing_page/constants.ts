@@ -74,12 +74,12 @@ export const FEATURES: Feature[] = [
   {
     icon: '📜',
     title: 'Complete History',
-    desc: 'Every season, every week, every score — pulled automatically from ESPN or Sleeper and organized chronologically.',
+    desc: 'Every season, every week, every score. Currently supported integrations include ESPN and Sleeper.',
   },
   {
     icon: '⚔️',
     title: 'Rivalry Tracker',
-    desc: 'See your all-time head-to-head record against every manager, including playoff matchups and average scoring.',
+    desc: 'See your all-time head-to-head record against every manager, from the guaranteed win to the manager who always has your number.',
   },
   {
     icon: '🏆',
@@ -89,17 +89,17 @@ export const FEATURES: Feature[] = [
   {
     icon: '📈',
     title: 'Team Trends',
-    desc: 'Chart how your team rankings have fluctuated throughout the years.',
+    desc: 'Chart how your team rankings have fluctuated throughout the years. Drill into your matchups for a particular season.',
   },
   {
     icon: '🔖',
     title: 'League Records',
-    desc: 'Single-week high scores, biggest blowouts, most unlucky losses — every record tracked and ranked automatically.',
+    desc: 'Every record tracked and ranked automatically: single-week high scores, biggest blowouts, most unlucky losses.',
   },
   {
     icon: '🔀',
     title: 'Platform Migration',
-    desc: 'Switched from ESPN to Sleeper (or vice versa)? Migrate your league and preserve your full all-time history across platforms.',
+    desc: 'Switched fantasy platforms? Follow our migration wizard to preserve your full all-time history across platforms.',
   },
 ];
 

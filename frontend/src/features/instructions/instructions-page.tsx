@@ -59,7 +59,7 @@ const FAQ_ITEMS: FaqItem[] = [
   },
   {
     q: 'Why is there a subscription for the app?',
-    a: 'The subscription helps cover the cost of hosting the app and the time spent developing and maintaining it.',
+    a: "The subscription helps cover the cost of hosting the app and the time spent developing and maintaining it. It's billed per league, not per person. For a 10-person league it works out to about $0.39 per person per year.",
   },
   {
     q: 'Can I connect more than one league?',
