@@ -237,6 +237,89 @@ class TestLambdaHandlerRefresher:
         written = json.loads(mock_s3.put_object.call_args[1]["Body"])
         assert "2025" in written["p1"]
 
+    def test_max_players_caps_the_fan_out(self, stats_refresher_handler):
+        """``max_players`` limits the run to the first N active players."""
+        players = self._make_players(count=10, active=8)
+        player_json = json.dumps(players).encode()
+        mock_body = MagicMock()
+        mock_body.read.return_value = player_json
+        mock_s3 = MagicMock()
+        mock_s3.get_object.return_value = {"Body": mock_body}
+
+        with (
+            patch.object(
+                stats_refresher_handler,
+                "fetch_nfl_state",
+                return_value={"season_type": "regular", "season": "2024"},
+            ),
+            patch.object(stats_refresher_handler, "s3_client", mock_s3),
+            patch.object(
+                stats_refresher_handler, "fetch_stats", return_value={"pass_yd": 100}
+            ) as mock_fetch,
+        ):
+            stats_refresher_handler.lambda_handler({"max_players": 3}, MagicMock())
+
+        # Only the first 3 active players are fetched and written.
+        assert mock_fetch.call_count == 3
+        written = json.loads(mock_s3.put_object.call_args[1]["Body"])
+        assert len(written) == 3
+
+    def test_output_key_override_redirects_write(self, stats_refresher_handler):
+        """``output_key`` writes to the override key, not the production cache."""
+        players = {"p1": {"status": "Active"}}
+        player_json = json.dumps(players).encode()
+        mock_body = MagicMock()
+        mock_body.read.return_value = player_json
+        mock_s3 = MagicMock()
+        mock_s3.get_object.return_value = {"Body": mock_body}
+
+        with (
+            patch.object(
+                stats_refresher_handler,
+                "fetch_nfl_state",
+                return_value={"season_type": "regular", "season": "2024"},
+            ),
+            patch.object(stats_refresher_handler, "s3_client", mock_s3),
+            patch.object(
+                stats_refresher_handler, "fetch_stats", return_value={"pass_yd": 100}
+            ),
+        ):
+            stats_refresher_handler.lambda_handler(
+                {"output_key": "player-stats/integration-test/run.json"}, MagicMock()
+            )
+
+        assert (
+            mock_s3.put_object.call_args[1]["Key"]
+            == "player-stats/integration-test/run.json"
+        )
+
+    def test_defaults_to_production_key_without_override(self, stats_refresher_handler):
+        """Without ``output_key`` the canonical production key is used."""
+        players = {"p1": {"status": "Active"}}
+        player_json = json.dumps(players).encode()
+        mock_body = MagicMock()
+        mock_body.read.return_value = player_json
+        mock_s3 = MagicMock()
+        mock_s3.get_object.return_value = {"Body": mock_body}
+
+        with (
+            patch.object(
+                stats_refresher_handler,
+                "fetch_nfl_state",
+                return_value={"season_type": "regular", "season": "2024"},
+            ),
+            patch.object(stats_refresher_handler, "s3_client", mock_s3),
+            patch.object(
+                stats_refresher_handler, "fetch_stats", return_value={"pass_yd": 100}
+            ),
+        ):
+            stats_refresher_handler.lambda_handler({}, MagicMock())
+
+        assert (
+            mock_s3.put_object.call_args[1]["Key"]
+            == "player-stats/sleeper_nfl_player_stats.json"
+        )
+
     def test_stats_keyed_by_player_and_season(self, stats_refresher_handler):
         players = {"p1": {"status": "Active"}}
         player_json = json.dumps(players).encode()

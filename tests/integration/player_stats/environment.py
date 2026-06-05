@@ -31,3 +31,15 @@ def before_all(context):
         "lambda", region_name="us-east-1", config=lambda_config
     )
     context.s3_client = boto3.client("s3", region_name="us-east-1")
+
+
+def after_scenario(context, scenario):
+    # Remove the isolated test object the run wrote so the bucket is not left
+    # littered with per-run integration artifacts.
+    test_key = getattr(context, "test_output_key", None)
+    if test_key:
+        try:
+            context.s3_client.delete_object(Bucket=context.s3_bucket, Key=test_key)
+        except Exception:
+            # Best-effort cleanup — never fail the suite on teardown.
+            pass
