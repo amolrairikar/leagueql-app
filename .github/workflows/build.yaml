@@ -300,10 +300,10 @@ jobs:
       - name: Resolve dev API base URL
         run: |
           API_BASE_URL=$(aws apigatewayv2 get-apis \
-            --query "Items[?Name=='leagueql-api-${ENVIRONMENT}-us-east-1'].ApiEndpoint" \
+            --query "Items[?Name=='leagueql-api-${ENVIRONMENT}-east'].ApiEndpoint" \
             --output text)
           if [ -z "$API_BASE_URL" ]; then
-            echo "Could not resolve API endpoint for leagueql-api-${ENVIRONMENT}-us-east-1" >&2
+            echo "Could not resolve API endpoint for leagueql-api-${ENVIRONMENT}-east" >&2
             exit 1
           fi
           echo "API_BASE_URL=$API_BASE_URL" >> "$GITHUB_ENV"
@@ -355,10 +355,10 @@ jobs:
       - name: Resolve dev API base URL
         run: |
           API_BASE_URL=$(aws apigatewayv2 get-apis \
-            --query "Items[?Name=='leagueql-api-${ENVIRONMENT}-us-east-1'].ApiEndpoint" \
+            --query "Items[?Name=='leagueql-api-${ENVIRONMENT}-east'].ApiEndpoint" \
             --output text)
           if [ -z "$API_BASE_URL" ]; then
-            echo "Could not resolve API endpoint for leagueql-api-${ENVIRONMENT}-us-east-1" >&2
+            echo "Could not resolve API endpoint for leagueql-api-${ENVIRONMENT}-east" >&2
             exit 1
           fi
           echo "API_BASE_URL=$API_BASE_URL" >> "$GITHUB_ENV"
@@ -376,12 +376,15 @@ jobs:
           CLERK_JWT_TEMPLATE: integration-tests
         run: pipenv run behave tests/integration/espn
 
-  run-sleeper-player-metadata-integration-tests:
-    name: Run Sleeper Player Metadata Integration Tests
+  run-stripe-billing-integration-tests:
+    name: Run Stripe Billing Integration Tests
     runs-on: ubuntu-latest
     needs:
       - set-env
       - deploy-regional
+      # Runs after Sleeper onboarding so the test league already exists in
+      # DynamoDB for the checkout / billing-portal scenarios to read.
+      - run-sleeper-onboarding-integration-tests
     if: github.event_name == 'pull_request'
     env:
       ENVIRONMENT: ${{ needs.set-env.outputs.environment }}
@@ -410,46 +413,107 @@ jobs:
       - name: Verify AWS identity
         run: aws sts get-caller-identity
 
-      - name: Run player metadata integration tests
+      - name: Resolve dev API base URL
+        run: |
+          API_BASE_URL=$(aws apigatewayv2 get-apis \
+            --query "Items[?Name=='leagueql-api-${ENVIRONMENT}-east'].ApiEndpoint" \
+            --output text)
+          if [ -z "$API_BASE_URL" ]; then
+            echo "Could not resolve API endpoint for leagueql-api-${ENVIRONMENT}-east" >&2
+            exit 1
+          fi
+          echo "API_BASE_URL=$API_BASE_URL" >> "$GITHUB_ENV"
+
+      - name: Run Stripe billing integration tests
         env:
+          TEST_SLEEPER_LEAGUE_ID: ${{ secrets.TEST_SLEEPER_LEAGUE_ID }}
           AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
-        run: pipenv run behave tests/integration/player_metadata
+          API_BASE_URL: ${{ env.API_BASE_URL }}
+          CLERK_SECRET_KEY_SSM_PARAM: /leagueql/${{ env.ENVIRONMENT }}/clerk/secret_key
+          TEST_CLERK_USER_ID: ${{ secrets.TEST_CLERK_USER_ID_DEV }}
+          CLERK_JWT_TEMPLATE: integration-tests
+          STRIPE_SECRET_KEY_SSM_PARAM: /leagueql/${{ env.ENVIRONMENT }}/stripe/secret_key
+          STRIPE_PRICE_ID: ${{ secrets.STRIPE_PRICE_ID_DEV }}
+        run: pipenv run behave tests/integration/stripe
 
-  run-sleeper-player-stats-integration-tests:
-    name: Run Sleeper Player Stats Integration Tests
-    runs-on: ubuntu-latest
-    needs:
-      - set-env
-      - deploy-regional
-    if: github.event_name == 'pull_request'
-    env:
-      ENVIRONMENT: ${{ needs.set-env.outputs.environment }}
+  # TODO: Temporarily disabled — this API should only be called once per day,
+  # re-enable after go-live
+  # run-sleeper-player-metadata-integration-tests:
+  #   name: Run Sleeper Player Metadata Integration Tests
+  #   runs-on: ubuntu-latest
+  #   needs:
+  #     - set-env
+  #     - deploy-regional
+  #   if: github.event_name == 'pull_request'
+  #   env:
+  #     ENVIRONMENT: ${{ needs.set-env.outputs.environment }}
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
 
-      - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
-        with:
-          python-version: "3.13"
+  #     - name: Set up Python
+  #       uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
+  #       with:
+  #         python-version: "3.13"
 
-      - name: Install pipenv
-        run: python3.13 -m pip install pipenv
+  #     - name: Install pipenv
+  #       run: python3.13 -m pip install pipenv
 
-      - name: Install dependencies
-        run: pipenv install --dev
+  #     - name: Install dependencies
+  #       run: pipenv install --dev
 
-      - name: Make AWS credentials script executable
-        run: chmod +x scripts/deployment_scripts/configure_aws_credentials.sh
+  #     - name: Make AWS credentials script executable
+  #       run: chmod +x scripts/deployment_scripts/configure_aws_credentials.sh
 
-      - name: Configure AWS credentials via OIDC
-        run: bash scripts/deployment_scripts/configure_aws_credentials.sh "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-${{ env.ENVIRONMENT }}-role" "us-east-1" "GitHubActions-${{ github.run_id }}"
+  #     - name: Configure AWS credentials via OIDC
+  #       run: bash scripts/deployment_scripts/configure_aws_credentials.sh "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-${{ env.ENVIRONMENT }}-role" "us-east-1" "GitHubActions-${{ github.run_id }}"
 
-      - name: Verify AWS identity
-        run: aws sts get-caller-identity
+  #     - name: Verify AWS identity
+  #       run: aws sts get-caller-identity
 
-      - name: Run player stats integration tests
-        env:
-          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
-        run: pipenv run behave tests/integration/player_stats
+  #     - name: Run player metadata integration tests
+  #       env:
+  #         AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+  #       run: pipenv run behave tests/integration/player_metadata
+
+  # TODO: Temporarily disabled — re-enable once the CI OIDC role has
+  # lambda:InvokeFunction on leagueql-sleeper-player-stats-refresher-dev.
+  # run-sleeper-player-stats-integration-tests:
+  #   name: Run Sleeper Player Stats Integration Tests
+  #   runs-on: ubuntu-latest
+  #   needs:
+  #     - set-env
+  #     - deploy-regional
+  #   if: github.event_name == 'pull_request'
+  #   env:
+  #     ENVIRONMENT: ${{ needs.set-env.outputs.environment }}
+  #
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+  #
+  #     - name: Set up Python
+  #       uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
+  #       with:
+  #         python-version: "3.13"
+  #
+  #     - name: Install pipenv
+  #       run: python3.13 -m pip install pipenv
+  #
+  #     - name: Install dependencies
+  #       run: pipenv install --dev
+  #
+  #     - name: Make AWS credentials script executable
+  #       run: chmod +x scripts/deployment_scripts/configure_aws_credentials.sh
+  #
+  #     - name: Configure AWS credentials via OIDC
+  #       run: bash scripts/deployment_scripts/configure_aws_credentials.sh "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-${{ env.ENVIRONMENT }}-role" "us-east-1" "GitHubActions-${{ github.run_id }}"
+  #
+  #     - name: Verify AWS identity
+  #       run: aws sts get-caller-identity
+  #
+  #     - name: Run player stats integration tests
+  #       env:
+  #         AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+  #       run: pipenv run behave tests/integration/player_stats
