@@ -187,6 +187,56 @@ class TestLambdaHandlerRefresher:
         written = json.loads(mock_s3.put_object.call_args[1]["Body"])
         assert written == {}
 
+    def test_season_override_bypasses_nfl_state(self, stats_refresher_handler):
+        """An explicit ``season`` in the event forces a refresh and skips the
+        live NFL-state check entirely."""
+        players = {"p1": {"status": "Active"}}
+        player_json = json.dumps(players).encode()
+        mock_body = MagicMock()
+        mock_body.read.return_value = player_json
+        mock_s3 = MagicMock()
+        mock_s3.get_object.return_value = {"Body": mock_body}
+        mock_state = MagicMock()
+
+        with (
+            patch.object(stats_refresher_handler, "fetch_nfl_state", mock_state),
+            patch.object(stats_refresher_handler, "s3_client", mock_s3),
+            patch.object(
+                stats_refresher_handler, "fetch_stats", return_value={"pass_yd": 250}
+            ),
+        ):
+            stats_refresher_handler.lambda_handler({"season": "2025"}, MagicMock())
+
+        mock_state.assert_not_called()
+        written = json.loads(mock_s3.put_object.call_args[1]["Body"])
+        assert written == {"p1": {"2025": {"pass_yd": 250}}}
+
+    def test_season_override_refreshes_during_off_season(self, stats_refresher_handler):
+        """The override still runs even when the live state would report off-season."""
+        players = {"p1": {"status": "Active"}}
+        player_json = json.dumps(players).encode()
+        mock_body = MagicMock()
+        mock_body.read.return_value = player_json
+        mock_s3 = MagicMock()
+        mock_s3.get_object.return_value = {"Body": mock_body}
+
+        with (
+            patch.object(
+                stats_refresher_handler,
+                "fetch_nfl_state",
+                return_value={"season_type": "off", "season": "2026"},
+            ),
+            patch.object(stats_refresher_handler, "s3_client", mock_s3),
+            patch.object(
+                stats_refresher_handler, "fetch_stats", return_value={"pass_yd": 10}
+            ),
+        ):
+            stats_refresher_handler.lambda_handler({"season": "2025"}, MagicMock())
+
+        mock_s3.put_object.assert_called_once()
+        written = json.loads(mock_s3.put_object.call_args[1]["Body"])
+        assert "2025" in written["p1"]
+
     def test_stats_keyed_by_player_and_season(self, stats_refresher_handler):
         players = {"p1": {"status": "Active"}}
         player_json = json.dumps(players).encode()

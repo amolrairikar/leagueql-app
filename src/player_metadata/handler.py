@@ -10,7 +10,9 @@ s3_client = boto3.client("s3")
 http_session = build_retry_session()
 SLEEPER_PLAYERS_URL = "https://api.sleeper.app/v1/players/nfl"
 SLEEPER_NFL_STATE_URL = "https://api.sleeper.app/v1/state/nfl"
-PLAYER_METADATA_S3_KEY = "player-metadata/sleeper_nfl_players.json"
+PLAYER_METADATA_S3_KEY = os.environ.get(
+    "PLAYER_METADATA_S3_KEY", "player-metadata/sleeper_nfl_players.json"
+)
 REQUIRED_PLAYER_FIELDS = {"first_name", "last_name", "position"}
 
 

@@ -45,15 +45,26 @@ def lambda_handler(event, context) -> None:
     logger.info("Event data: %s", event)
     bucket = os.environ["S3_BUCKET_NAME"]
 
-    nfl_state = fetch_nfl_state()
-    if not nfl_state:
-        logger.error("Could not fetch NFL state — aborting.")
-        raise RuntimeError("Failed to fetch NFL state")
-    if nfl_state.get("season_type") == "off":
-        logger.info("NFL season is off — skipping player stats refresh.")
-        return
-
-    season = str(nfl_state["season"])
+    # An explicit ``season`` in the event (used for on-demand / integration-test
+    # runs) forces a refresh for that season and bypasses the live NFL-state
+    # gating. The scheduled S3-triggered invocation carries no ``season``, so it
+    # keeps the original behavior: skip during the off-season.
+    season_override = event.get("season") if isinstance(event, dict) else None
+    if season_override:
+        season = str(season_override)
+        logger.info(
+            "Season override '%s' supplied in event — bypassing NFL state check.",
+            season,
+        )
+    else:
+        nfl_state = fetch_nfl_state()
+        if not nfl_state:
+            logger.error("Could not fetch NFL state — aborting.")
+            raise RuntimeError("Failed to fetch NFL state")
+        if nfl_state.get("season_type") == "off":
+            logger.info("NFL season is off — skipping player stats refresh.")
+            return
+        season = str(nfl_state["season"])
     response = s3_client.get_object(Bucket=bucket, Key=PLAYER_METADATA_S3_KEY)
     players = json.loads(response["Body"].read())
 

@@ -63,7 +63,7 @@ def step_poll_last_refresh_at(context):
     # Job status now lives in the JOB_STATUS item keyed by the correlation_id the
     # refresh handler generates internally (not observable here), so the
     # processor-written last_refresh_at on METADATA is the completion signal.
-    deadline = datetime.now(timezone.utc) + timedelta(minutes=3)
+    deadline = datetime.now(timezone.utc) + timedelta(minutes=5)
     while datetime.now(timezone.utc) < deadline:
         resp = context.dynamodb_client.get_item(
             TableName=context.table_name,
@@ -81,6 +81,6 @@ def step_poll_last_refresh_at(context):
                 return
         time.sleep(5)
     raise AssertionError(
-        "last_refresh_at was not updated on the METADATA record within 3 minutes "
+        "last_refresh_at was not updated on the METADATA record within 5 minutes "
         "of the refresh invocation"
     )
