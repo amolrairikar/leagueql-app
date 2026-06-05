@@ -35,6 +35,13 @@ and an incremented `LEAGUE_COUNT`.
   `JOB_STATUS` set to `FAILED` with an appropriate `failure_code`.
 - **Onboarding fails before `METADATA` is written:** league does not appear onboarded; a
   retry re-runs the full flow (METADATA write is the commit point).
+- **Onboarder async invocation exhausts retries:** the onboarder is invoked
+  fire-and-forget (`InvocationType="Event"`) by the API ([BE-002](BE-002-league-refresh.md),
+  [BE-003](BE-003-league-migration.md)) and the scheduled refresh
+  ([BE-012](BE-012-scheduled-sleeper-auto-refresh.md)). A poison/failing event that exhausts
+  Lambda's async retries is routed to an SQS dead-letter queue (`leagueql-onboarder-dlq-{env}`,
+  prod only) instead of being silently dropped, preserving the full payload (incl.
+  `correlation_id`) for inspection and replay. Any message in the DLQ raises a CloudWatch alarm.
 - **Auction vs. snake drafts:** both ESPN and Sleeper auction drafts must be handled
   (`bid_amount`, `nominating_team_id` populated for auction picks).
 - **Invalid `leagueId` format:** must match `^\d+$`; otherwise `422`.
@@ -61,6 +68,8 @@ and an incremented `LEAGUE_COUNT`.
       `failure_code` / `failure_reason` that the frontend can surface.
 - [ ] A `JOB_STATUS` item keyed by `correlation_id` is created so the frontend can poll
       [BE-008](BE-008-job-status-tracking.md).
+- [ ] When an async onboarder invocation exhausts its retries, the failed event is delivered
+      to the onboarder DLQ (not dropped) and a CloudWatch alarm fires on DLQ depth > 0.
 
 ## Sources
 `src/api/routes.py`, `src/onboarder/`, `docs/api/openapi_spec.yaml`, `docs/db/dynamodb_spec.md`.

@@ -267,6 +267,78 @@ class TestLambdaHandlerRecordsJobStatus:
         self._assert_failed(mock_wjs, "UPSTREAM")
 
 
+class TestLambdaHandlerSystemicAlerting:
+    """publish_failure (SNS alert) fires only for systemic failure codes, not for
+    expected user errors — recorded for the user but not paged on."""
+
+    def test_espn_auth_user_error_does_not_publish(self, onboarder_handler):
+        """An ESPN 403 -> ESPN_AUTH is the user's expired cookies; no alert."""
+        event = {
+            "requestType": "ONBOARD",
+            "correlation_id": "corr-1",
+            "body": {"leagueId": "123", "platform": "ESPN", "season": "2024"},
+        }
+        err = requests.exceptions.HTTPError("403")
+        err.response = MagicMock(status_code=403)
+        with (
+            patch.object(onboarder_handler, "OnboardingService", side_effect=err),
+            patch.object(onboarder_handler, "write_job_status"),
+            patch.object(onboarder_handler, "publish_failure") as mock_pub,
+        ):
+            onboarder_handler.lambda_handler(event, MagicMock())
+        mock_pub.assert_not_called()
+
+    def test_not_found_user_error_does_not_publish(self, onboarder_handler):
+        event = {
+            "requestType": "REFRESH",
+            "correlation_id": "corr-1",
+            "body": {"leagueId": "new-lg", "platform": "SLEEPER"},
+        }
+        with (
+            patch.object(
+                onboarder_handler,
+                "resolve_sleeper_canonical_league_id",
+                return_value=None,
+            ),
+            patch.object(onboarder_handler, "write_job_status"),
+            patch.object(onboarder_handler, "publish_failure") as mock_pub,
+        ):
+            onboarder_handler.lambda_handler(event, MagicMock())
+        mock_pub.assert_not_called()
+
+    def test_upstream_systemic_error_publishes(self, onboarder_handler):
+        """A RuntimeError during run -> UPSTREAM is our/the platform's problem; alert."""
+        event = {
+            "requestType": "ONBOARD",
+            "correlation_id": "corr-1",
+            "body": {"leagueId": "123", "platform": "SLEEPER"},
+        }
+        svc = MagicMock()
+        svc.canonical_league_id = "canonical-abc"
+        svc.run.side_effect = RuntimeError("S3 error")
+        with (
+            patch.object(onboarder_handler, "OnboardingService", return_value=svc),
+            patch.object(onboarder_handler, "write_job_status"),
+            patch.object(onboarder_handler, "publish_failure") as mock_pub,
+        ):
+            onboarder_handler.lambda_handler(event, MagicMock())
+        mock_pub.assert_called_once()
+        assert "S3 error" in mock_pub.call_args.args[0]
+
+    def test_record_failure_systemic_without_detail_uses_fallback(
+        self, onboarder_handler
+    ):
+        """Defensive: a systemic code with no error_detail still publishes a
+        meaningful message rather than None."""
+        with (
+            patch.object(onboarder_handler, "write_job_status"),
+            patch.object(onboarder_handler, "publish_failure") as mock_pub,
+        ):
+            onboarder_handler._record_failure("ONBOARD", "INTERNAL")
+        mock_pub.assert_called_once()
+        assert "INTERNAL" in mock_pub.call_args.args[0]
+
+
 class TestLambdaHandlerSuccess:
     def test_returns_200_with_canonical_id(self, onboarder_handler):
         event = {

@@ -361,6 +361,73 @@ resource "aws_sns_topic_subscription" "lambda_alerts_email" {
   endpoint  = "arairikar1@gmail.com"
 }
 
+# Dead-letter queue for onboarder async invocations. The API and the scheduled
+# Sleeper refresh invoke the onboarder with InvocationType="Event" (fire-and-forget);
+# when an event fails all of Lambda's async retries, AWS would otherwise drop it
+# silently. Routing it here preserves the full payload (incl. correlation_id) so a
+# poison/failed onboard or refresh can be inspected and replayed. 14-day retention
+# is the SQS maximum.
+resource "aws_sqs_queue" "onboarder_dlq" {
+  count                     = local.region == "east" && var.environment == "prod" ? 1 : 0
+  name                      = "leagueql-onboarder-dlq-${var.environment}"
+  message_retention_seconds = 1209600
+  sqs_managed_sse_enabled   = true
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    component   = "monitoring"
+    managed-by  = "terraform"
+  }
+}
+
+# Send onboarder async-invocation failures (after retries are exhausted) to the DLQ.
+resource "aws_lambda_function_event_invoke_config" "onboarder" {
+  count         = local.region == "east" && var.environment == "prod" ? 1 : 0
+  function_name = "leagueql-onboarder-${var.environment}"
+  # Lambda's default async retry count; transient failures still get retried twice
+  # before an event is treated as poison and routed to the DLQ.
+  maximum_retry_attempts = 2
+
+  destination_config {
+    on_failure {
+      destination = aws_sqs_queue.onboarder_dlq[0].arn
+    }
+  }
+
+  depends_on = [module.onboarder_lambda]
+}
+
+# Any message landing in the DLQ means an onboard/refresh was permanently dropped.
+# Messages persist (no consumer), so the alarm stays in ALARM until the queue is
+# drained, and clears (ok_actions) once the dropped events are handled/replayed.
+resource "aws_cloudwatch_metric_alarm" "onboarder_dlq_messages" {
+  count               = local.region == "east" && var.environment == "prod" ? 1 : 0
+  alarm_name          = "leagueql-onboarder-dlq-${var.environment}-messages"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "ApproximateNumberOfMessagesVisible"
+  namespace           = "AWS/SQS"
+  period              = 300
+  statistic           = "Maximum"
+  threshold           = 0
+  alarm_description   = "An onboarder async invocation was dropped to the DLQ after exhausting retries"
+  alarm_actions       = [aws_sns_topic.lambda_alerts[0].arn]
+  ok_actions          = [aws_sns_topic.lambda_alerts[0].arn]
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    QueueName = aws_sqs_queue.onboarder_dlq[0].name
+  }
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    component   = "monitoring"
+    managed-by  = "terraform"
+  }
+}
+
 resource "aws_cloudwatch_metric_alarm" "onboarder_errors" {
   count               = local.region == "east" && var.environment == "prod" ? 1 : 0
   alarm_name          = "leagueql-onboarder-${var.environment}-errors"
