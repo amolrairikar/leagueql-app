@@ -74,10 +74,13 @@ def lambda_handler(event, context) -> None:
     logger.info("Processing %d active players for season %s", len(active_ids), season)
 
     all_stats = {}
-    for player_id in active_ids:
+    total = len(active_ids)
+    for index, player_id in enumerate(active_ids, start=1):
         stats = fetch_stats(player_id, season)
         if stats is not None:
             all_stats[player_id] = {season: stats}
+        if index % 500 == 0:
+            logger.info("Processed %d/%d players", index, total)
 
     s3_client.put_object(
         Bucket=bucket,
