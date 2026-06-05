@@ -245,6 +245,18 @@ module "onboarding-lambda-role" {
         Resource = [
           "arn:aws:sns:us-east-1:${var.account_id}:leagueql-lambda-alerts-${var.environment}-east"
         ]
+      },
+      {
+        # Lambda's async on-failure destination requires the *execution role* to be
+        # able to send to the DLQ defined in infrastructure/regional/main.tf.
+        Sid    = "SendToOnboarderDLQ"
+        Effect = "Allow"
+        Action = [
+          "sqs:SendMessage"
+        ]
+        Resource = [
+          "arn:aws:sqs:us-east-1:${var.account_id}:leagueql-onboarder-dlq-${var.environment}"
+        ]
       }
     ]
   })

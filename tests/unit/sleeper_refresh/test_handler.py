@@ -3,6 +3,8 @@
 import json
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 
 class TestLambdaHandlerSleeperRefresh:
     def _make_context(self):
@@ -33,16 +35,20 @@ class TestLambdaHandlerSleeperRefresh:
         assert result["statusCode"] == 200
         assert json.loads(result["body"])["status"] == "skipped"
 
-    def test_returns_502_when_nfl_state_fails(self, sleeper_refresh_handler):
+    def test_raises_when_nfl_state_fails(self, sleeper_refresh_handler):
+        """A failed NFL-state fetch must raise so the Lambda Errors alarm fires,
+        rather than silently reporting a failed run as a 502."""
         with patch.object(
             sleeper_refresh_handler,
             "get_nfl_state",
             side_effect=Exception("network error"),
         ):
-            result = sleeper_refresh_handler.lambda_handler({}, self._make_context())
-        assert result["statusCode"] == 502
+            with pytest.raises(Exception, match="network error"):
+                sleeper_refresh_handler.lambda_handler({}, self._make_context())
 
-    def test_returns_500_when_get_leagues_fails(self, sleeper_refresh_handler):
+    def test_raises_when_get_leagues_fails(self, sleeper_refresh_handler):
+        """A failed league-list query must raise (refreshes zero leagues) so the
+        Lambda Errors alarm fires instead of reporting success."""
         with (
             patch.object(
                 sleeper_refresh_handler,
@@ -55,8 +61,8 @@ class TestLambdaHandlerSleeperRefresh:
                 side_effect=Exception("DDB error"),
             ),
         ):
-            result = sleeper_refresh_handler.lambda_handler({}, self._make_context())
-        assert result["statusCode"] == 500
+            with pytest.raises(Exception, match="DDB error"):
+                sleeper_refresh_handler.lambda_handler({}, self._make_context())
 
     def test_returns_200_when_no_leagues(self, sleeper_refresh_handler):
         with (
@@ -101,7 +107,39 @@ class TestLambdaHandlerSleeperRefresh:
         assert body["success_count"] == 2
         assert body["failure_count"] == 0
 
-    def test_counts_failures_when_invoke_raises(self, sleeper_refresh_handler):
+    def test_logged_correlation_id_matches_invoked_one(self, sleeper_refresh_handler):
+        """The correlation_id logged on success must be the same one sent to the
+        onboarder (regression: a second uuid4() was previously logged)."""
+        with (
+            patch.object(
+                sleeper_refresh_handler,
+                "get_nfl_state",
+                return_value={"season_type": "regular", "week": 5},
+            ),
+            patch.object(
+                sleeper_refresh_handler,
+                "get_sleeper_leagues",
+                return_value=[{"league_id": "lg1", "canonical_league_id": "c1"}],
+            ),
+            patch.object(
+                sleeper_refresh_handler, "invoke_onboarder_lambda"
+            ) as mock_invoke,
+            patch.object(sleeper_refresh_handler, "logger") as mock_logger,
+        ):
+            sleeper_refresh_handler.lambda_handler({}, self._make_context())
+
+        invoked_correlation_id = mock_invoke.call_args.kwargs["correlation_id"]
+        logged_correlation_ids = [
+            call.args[-1]
+            for call in mock_logger.info.call_args_list
+            if "correlation_id" in (call.args[0] if call.args else "")
+        ]
+        assert invoked_correlation_id in logged_correlation_ids
+
+    def test_raises_when_any_dispatch_fails(self, sleeper_refresh_handler):
+        """A dispatch failure never reaches the onboarder (so no onboarder/DLQ
+        alarm covers it); the handler must attempt every league and then raise so
+        the Lambda Errors alarm fires and EventBridge retries the run."""
         with (
             patch.object(
                 sleeper_refresh_handler,
@@ -120,12 +158,12 @@ class TestLambdaHandlerSleeperRefresh:
                 sleeper_refresh_handler,
                 "invoke_onboarder_lambda",
                 side_effect=[None, Exception("fail")],
-            ),
+            ) as mock_invoke,
         ):
-            result = sleeper_refresh_handler.lambda_handler({}, self._make_context())
+            with pytest.raises(
+                RuntimeError, match="Failed to trigger refresh for 1 of 2"
+            ):
+                sleeper_refresh_handler.lambda_handler({}, self._make_context())
 
-        assert result["statusCode"] == 200
-        body = json.loads(result["body"])
-        assert body["success_count"] == 1
-        assert body["failure_count"] == 1
-        assert body["total_leagues"] == 2
+        # A failure on lg2 must not stop lg1 from being attempted: both are tried.
+        assert mock_invoke.call_count == 2

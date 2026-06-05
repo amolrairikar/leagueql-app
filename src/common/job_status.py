@@ -62,6 +62,12 @@ FAILURE_REASONS: dict[str, str] = {
     ),
 }
 
+# Failure codes that indicate a systemic / our-fault problem worth an operational
+# alert (SNS). The rest (INVALID_INPUT, ESPN_AUTH, NOT_FOUND) are expected user
+# errors — recorded on the JOB_STATUS item so the user sees a reason, but never
+# paged on, to keep the alert channel free of noise we can't act on.
+SYSTEMIC_FAILURE_CODES = {"UPSTREAM", "PROCESSING", "INTERNAL"}
+
 # How a platform value is rendered in user-facing messages.
 PLATFORM_DISPLAY = {"ESPN": "ESPN", "SLEEPER": "Sleeper"}
 
