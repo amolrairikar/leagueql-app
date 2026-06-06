@@ -1,8 +1,5 @@
-import { ArrowLeft, TriangleAlert } from 'lucide-react';
+import { TriangleAlert } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-
-import { Button } from '@/components/ui/button';
 
 const TOC_ITEMS = [
   { id: 'getting-started', label: 'Getting Started', level: 1 },
@@ -17,6 +14,14 @@ const TOC_ITEMS = [
   { id: 'migrating-your-league', label: 'Migrating Your League', level: 2 },
   { id: 'switching-leagues', label: 'Switching Leagues', level: 2 },
   { id: 'deleting-a-league', label: 'Deleting a League', level: 2 },
+  {
+    id: 'billing-and-subscriptions',
+    label: 'Billing & Subscriptions',
+    level: 1,
+  },
+  { id: 'subscribing', label: 'Subscribing', level: 2 },
+  { id: 'free-trial', label: 'Free Trial', level: 2 },
+  { id: 'managing-billing', label: 'Managing Billing', level: 2 },
   { id: 'faq-and-troubleshooting', label: 'FAQ & Troubleshooting', level: 1 },
 ] as const;
 
@@ -205,7 +210,6 @@ function DocTable({
 }
 
 export default function InstructionsPage() {
-  const navigate = useNavigate();
   const [activeId, setActiveId] = useState('getting-started');
 
   useEffect(() => {
@@ -229,16 +233,7 @@ export default function InstructionsPage() {
   }, []);
 
   return (
-    <div className="container mx-auto max-w-6xl pt-16 pb-8 px-4">
-      <Button
-        variant="ghost"
-        onClick={() => void navigate(-1)}
-        className="mb-6 cursor-pointer"
-      >
-        <ArrowLeft className="mr-2 h-4 w-4" />
-        Back
-      </Button>
-
+    <div className="container mx-auto flex h-full max-w-6xl flex-col px-4 pt-20">
       <div className="mb-10">
         <h1 className="text-4xl font-bold">User Guide</h1>
         <p className="text-sm text-muted-foreground mt-2">
@@ -246,37 +241,35 @@ export default function InstructionsPage() {
         </p>
       </div>
 
-      <div className="flex gap-12">
-        <aside className="hidden lg:block w-52 shrink-0">
-          <div className="sticky top-24 max-h-[calc(100svh-8rem)] overflow-y-auto">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
-              On this page
-            </p>
-            <nav className="space-y-0.5">
-              {TOC_ITEMS.map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() =>
-                    document
-                      .getElementById(item.id)
-                      ?.scrollIntoView({ behavior: 'smooth' })
-                  }
-                  className={[
-                    'block w-full text-left text-sm py-1 transition-colors rounded cursor-pointer',
-                    item.level === 2 ? 'pl-3' : item.level === 3 ? 'pl-5' : '',
-                    activeId === item.id
-                      ? 'text-primary font-medium'
-                      : 'text-muted-foreground hover:text-foreground',
-                  ].join(' ')}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </nav>
-          </div>
+      <div className="flex min-h-0 flex-1 gap-12">
+        <aside className="hidden w-52 shrink-0 lg:flex lg:min-h-0 lg:flex-col">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
+            On this page
+          </p>
+          <nav className="min-h-0 flex-1 cursor-pointer space-y-0.5 overflow-y-auto overscroll-contain pr-2">
+            {TOC_ITEMS.map((item) => (
+              <button
+                key={item.id}
+                onClick={() =>
+                  document
+                    .getElementById(item.id)
+                    ?.scrollIntoView({ behavior: 'smooth' })
+                }
+                className={[
+                  'block w-full text-left text-sm py-1 transition-colors rounded cursor-pointer',
+                  item.level === 2 ? 'pl-3' : item.level === 3 ? 'pl-5' : '',
+                  activeId === item.id
+                    ? 'text-primary font-medium'
+                    : 'text-muted-foreground hover:text-foreground',
+                ].join(' ')}
+              >
+                {item.label}
+              </button>
+            ))}
+          </nav>
         </aside>
 
-        <div className="flex-1 min-w-0 space-y-12">
+        <div className="min-w-0 flex-1 space-y-12 overflow-y-auto overscroll-contain pb-8 pr-2">
           {/* Getting Started */}
           <section>
             <SectionHeading id="getting-started">
@@ -544,6 +537,76 @@ export default function InstructionsPage() {
                   league from LeagueQL&apos;s backend. This action cannot be
                   undone.
                 </p>
+              </div>
+            </div>
+          </section>
+
+          {/* Billing & Subscriptions */}
+          <section>
+            <SectionHeading id="billing-and-subscriptions">
+              Billing & Subscriptions
+            </SectionHeading>
+            <p className="text-muted-foreground leading-relaxed mb-6">
+              LeagueQL is a paid product. Each connected league has its own
+              subscription. Billing is handled securely by Stripe. LeagueQL
+              never sees or stores your card details. Onboarding and exploring
+              demo mode are free. A subscription is only required to view a
+              connected league&apos;s analytics.
+            </p>
+
+            <div className="space-y-8">
+              <div>
+                <SubHeading id="subscribing">Subscribing</SubHeading>
+                <p className="text-muted-foreground leading-relaxed mb-4">
+                  If a league&apos;s subscription is inactive, its analytics
+                  pages are replaced with a paywall. Click{' '}
+                  <InlineCode>Subscribe</InlineCode> there, or{' '}
+                  <InlineCode>Manage Subscription</InlineCode> in the sidebar to
+                  open Stripe&apos;s secure checkout page. After payment you are
+                  returned to your league&apos;s home dashboard and access is
+                  restored automatically.
+                </p>
+                <Callout>
+                  Have a promotion code? Enter it in the{' '}
+                  <strong className="text-foreground">
+                    Add promotion code
+                  </strong>{' '}
+                  field on the Stripe checkout page to apply a discount.
+                </Callout>
+              </div>
+
+              <div>
+                <SubHeading id="free-trial">Free Trial</SubHeading>
+                <p className="text-muted-foreground leading-relaxed">
+                  Each league gets a 14 day free trial the first time it is
+                  subscribed, so you can try LeagueQL before being charged. The
+                  trial is granted once per league: re-subscribing a league that
+                  has already used its trial, including after deleting and
+                  re-connecting it, starts billing immediately with no second
+                  trial. Trials are independent across different leagues, so
+                  each league you connect gets its own.
+                </p>
+              </div>
+
+              <div>
+                <SubHeading id="managing-billing">Managing Billing</SubHeading>
+                <p className="text-muted-foreground leading-relaxed mb-4">
+                  Click <InlineCode>Manage Subscription</InlineCode> in the
+                  sidebar to open the billing dialog. From there you can launch
+                  the Stripe Billing Portal to update your payment method or
+                  cancel the subscription. LeagueQL shows a reminder dot on the{' '}
+                  <InlineCode>Manage Subscription</InlineCode> icon when a
+                  league&apos;s subscription is within 14 days of expiring.
+                </p>
+                <Callout variant="warning">
+                  <strong className="text-foreground">
+                    Cancellation is immediate.
+                  </strong>{' '}
+                  Canceling ends the subscription right away and access to that
+                  league&apos;s analytics is revoked at once — you are not
+                  billed again, and there is no remaining paid period after
+                  canceling.
+                </Callout>
               </div>
             </div>
           </section>

@@ -159,7 +159,6 @@ function App() {
               <>
                 <Header />
                 <PrivacyPage />
-                <Footer />
               </>
             }
           />
@@ -169,7 +168,6 @@ function App() {
               <>
                 <Header />
                 <ExtensionPrivacyPage />
-                <Footer />
               </>
             }
           />
@@ -179,7 +177,6 @@ function App() {
               <>
                 <Header />
                 <ChangelogPage />
-                <Footer />
               </>
             }
           />
@@ -191,7 +188,6 @@ function App() {
                 <main className="flex-1 overflow-auto">
                   <InstructionsPage />
                 </main>
-                <Footer className="shrink-0" />
               </div>
             }
           />

@@ -1,8 +1,4 @@
-import { ArrowLeft } from 'lucide-react';
 import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-
-import { Button } from '@/components/ui/button';
 
 const releases = [
   {
@@ -23,23 +19,12 @@ const releases = [
 ];
 
 export default function ChangelogPage() {
-  const navigate = useNavigate();
-
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
 
   return (
-    <div className="container mx-auto max-w-3xl pt-16 pb-8 px-4">
-      <Button
-        variant="ghost"
-        onClick={() => void navigate(-1)}
-        className="mb-6 cursor-pointer"
-      >
-        <ArrowLeft className="mr-2 h-4 w-4" />
-        Back
-      </Button>
-
+    <div className="container mx-auto max-w-3xl pt-20 pb-8 px-4">
       <div className="mb-10">
         <h1 className="text-4xl font-bold">Changelog</h1>
         <p className="text-sm text-muted-foreground mt-2">
