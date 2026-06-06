@@ -308,6 +308,9 @@ module "backend_api" {
   clerk_jwt_audience   = var.clerk_jwt_audience
 
   openapi_vars = {
+    # Must match api_name above: API Gateway names the HTTP API from the OpenAPI
+    # info.title on (re)import, overriding the resource's name argument.
+    api_name                  = "leagueql-api-${var.environment}-${local.region}"
     aws_region                = var.aws_region
     lambda_arn                = module.api_lambda.lambda_arn
     stripe_webhook_lambda_arn = module.stripe_webhook_lambda.lambda_arn

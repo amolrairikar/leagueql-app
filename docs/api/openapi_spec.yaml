@@ -1,7 +1,11 @@
 openapi: 3.0.1
 
 info:
-  title: Fantasy Football API
+  # Rendered by Terraform's templatefile(); the title doubles as the API Gateway
+  # name. API Gateway derives the HTTP API name from info.title on (re)import, so
+  # this MUST equal the module's api_name or a body change renames the API and
+  # breaks the CI endpoint lookup (Items[?Name=='leagueql-api-<env>-<region>']).
+  title: ${api_name}
   version: v1
   description: >
     API for onboarding and querying fantasy football league data.
