@@ -2,7 +2,7 @@
 
 ## Description
 The `/changelog` page presents a user-facing history of notable product changes and feature
-releases. Rendered with the marketing header and footer.
+releases. Rendered with the marketing header.
 
 ## Scope
 - Route: `/changelog` (public).
@@ -15,7 +15,7 @@ releases. Rendered with the marketing header and footer.
 
 ## Acceptance Criteria
 - [ ] `/changelog` renders a chronological (newest-first) list of changelog entries.
-- [ ] The page renders with the marketing header and footer.
+- [ ] The page renders with the marketing header.
 - [ ] New user-visible features are reflected with a changelog entry.
 
 ## Sources

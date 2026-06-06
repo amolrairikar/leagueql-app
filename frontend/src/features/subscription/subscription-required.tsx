@@ -41,8 +41,7 @@ export function SubscriptionRequired({
       </div>
       <h1 className="text-2xl font-bold">Subscription required</h1>
       <p className="text-muted-foreground max-w-md">
-        This league&apos;s subscription has expired. Subscribe to regain access
-        to your league&apos;s analytics.
+        Subscribe to gain access to your league&apos;s analytics.
       </p>
       <Button
         className="cursor-pointer"
