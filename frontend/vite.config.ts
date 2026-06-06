@@ -1,12 +1,44 @@
+import fs from 'fs';
 import path from 'path';
 
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
+import { loadEnv, type Plugin } from 'vite';
 import svgr from 'vite-plugin-svgr';
 import { defineConfig } from 'vitest/config';
 
+/**
+ * Substitute the `__VITE_DEV_API_URL__` token in the emitted `dist/_headers` (FE-024) with
+ * the build-time `VITE_DEV_API_URL` so the dev/preview API Gateway origin is not hardcoded
+ * in the CSP `connect-src`. When the var is unset (e.g. production builds) the token — and
+ * its surrounding whitespace — is removed, leaving only the production origins.
+ */
+function headersDevApiOrigin(): Plugin {
+  let outDir = 'dist';
+  let devApiUrl = '';
+  return {
+    name: 'headers-dev-api-origin',
+    apply: 'build',
+    configResolved(config) {
+      outDir = config.build.outDir;
+      devApiUrl =
+        loadEnv(config.mode, config.root, 'VITE_').VITE_DEV_API_URL ?? '';
+    },
+    closeBundle() {
+      const headersPath = path.resolve(outDir, '_headers');
+      if (!fs.existsSync(headersPath)) return;
+      const contents = fs.readFileSync(headersPath, 'utf8');
+      const replacement = devApiUrl ? ` ${devApiUrl} ` : ' ';
+      fs.writeFileSync(
+        headersPath,
+        contents.replace(/ ?__VITE_DEV_API_URL__ ?/g, replacement),
+      );
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), tailwindcss(), svgr()],
+  plugins: [react(), tailwindcss(), svgr(), headersDevApiOrigin()],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

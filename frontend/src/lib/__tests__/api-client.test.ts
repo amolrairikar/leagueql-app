@@ -1,6 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { ApiError, apiClient } from '../api-client';
+import { ApiError, apiClient, setAuthTokenProvider } from '../api-client';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -67,17 +67,13 @@ describe('failed requests', () => {
 // ── Session token ─────────────────────────────────────────────────────────────
 
 describe('session token', () => {
-  beforeEach(() => {
-    document.cookie = '__session=; max-age=0; path=/';
-  });
-
   afterEach(() => {
-    document.cookie = '__session=; max-age=0; path=/';
+    setAuthTokenProvider(null);
     vi.unstubAllGlobals();
   });
 
-  it('includes Authorization header when __session cookie is set', async () => {
-    document.cookie = '__session=mytoken123';
+  it('includes Authorization header from the registered token provider', async () => {
+    setAuthTokenProvider(() => Promise.resolve('mytoken123'));
     mockFetchOk({});
     await apiClient.post('/auth-set', {});
     const [, init] = fetchMock().mock.calls[0] as [string, RequestInit];
@@ -86,9 +82,30 @@ describe('session token', () => {
     );
   });
 
-  it('omits Authorization header when no __session cookie is set', async () => {
+  it('omits Authorization header when no token provider is registered', async () => {
+    setAuthTokenProvider(null);
     mockFetchOk({});
     await apiClient.post('/auth-absent', {});
+    const [, init] = fetchMock().mock.calls[0] as [string, RequestInit];
+    expect(
+      (init.headers as Record<string, string>).Authorization,
+    ).toBeUndefined();
+  });
+
+  it('omits Authorization header when the provider yields no token', async () => {
+    setAuthTokenProvider(() => Promise.resolve(null));
+    mockFetchOk({});
+    await apiClient.post('/auth-null', {});
+    const [, init] = fetchMock().mock.calls[0] as [string, RequestInit];
+    expect(
+      (init.headers as Record<string, string>).Authorization,
+    ).toBeUndefined();
+  });
+
+  it('omits Authorization header when the provider throws', async () => {
+    setAuthTokenProvider(() => Promise.reject(new Error('no session')));
+    mockFetchOk({});
+    await apiClient.post('/auth-throws', {});
     const [, init] = fetchMock().mock.calls[0] as [string, RequestInit];
     expect(
       (init.headers as Record<string, string>).Authorization,
@@ -175,7 +192,10 @@ describe('GET caching', () => {
     const p1 = apiClient.get<{ val: string }>('/dedup-1');
     const p2 = apiClient.get<{ val: string }>('/dedup-1');
 
-    // fetch was called exactly once before either resolves
+    // Let the async token lookup settle so the single underlying fetch is
+    // dispatched (the two GETs are deduped onto one in-flight request), then
+    // assert fetch ran exactly once before either resolves.
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(fetchMock().mock.calls).toHaveLength(1);
 
     resolveFetch();

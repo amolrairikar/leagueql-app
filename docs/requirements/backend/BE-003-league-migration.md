@@ -13,6 +13,9 @@ cross-platform owner IDs so metrics remain continuous.
 - Endpoint: `POST /leagues/{leagueId}/migrate` (`src/api/routes.py::migrate_league`).
 - Request body: `MigrateRequest` (`newPlatformLeagueId`, `newPlatform`, `managerMapping`,
   plus `season`/`s2`/`swid` when destination is ESPN).
+- `managerMapping` entries are strictly validated: each entry has exactly
+  `currentPlatformOwnerId`, `newPlatformOwnerId`, and `displayName` (all strings) — unknown
+  keys are rejected — and the list is bounded (per-field and total-entry size limits).
 - DynamoDB items: `LEAGUE_LOOKUP`, `PLATFORM_MIGRATION#{from}#{to}`, updated `METADATA`.
 
 ## Edge Cases
@@ -27,6 +30,8 @@ cross-platform owner IDs so metrics remain continuous.
   onboarder return `500` "Failed to set up migration."
 - **Onboarder invoke failure:** return `500` "Failed to trigger migration" (metadata may
   already be partially written — must be retry-safe).
+- **Malformed `managerMapping`:** an entry with unknown keys, non-string field values, or a
+  list exceeding the size limits is rejected with `422` before any DynamoDB write occurs.
 
 ## Acceptance Criteria
 - [ ] `POST /leagues/{leagueId}/migrate` returns `202` with `{ data: { correlation_id } }`.
@@ -37,6 +42,8 @@ cross-platform owner IDs so metrics remain continuous.
       active job ID.
 - [ ] Migrating to an already-onboarded destination, or while an operation is in progress,
       returns `409`.
+- [ ] A `managerMapping` entry with unknown keys, non-string values, or a list over the size
+      limit returns `422` and writes no `PLATFORM_MIGRATION` item.
 - [ ] After processing, all-time metrics span both platforms under one canonical league ID.
 
 ## Sources

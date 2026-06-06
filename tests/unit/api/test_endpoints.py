@@ -13,6 +13,41 @@ class TestRootEndpoint:
         assert response.json()["detail"] == "Healthy!"
 
 
+class TestParseCorsOrigins:
+    """CORS allow-list parsing must fail closed and exclude the dev origin in prod."""
+
+    def test_dev_value_allows_localhost_and_prod(self):
+        import main
+
+        assert main._parse_cors_origins(
+            "http://localhost:5173,https://leagueql.com"
+        ) == ["http://localhost:5173", "https://leagueql.com"]
+
+    def test_prod_value_excludes_localhost(self):
+        import main
+
+        assert main._parse_cors_origins("https://leagueql.com") == [
+            "https://leagueql.com"
+        ]
+        assert "http://localhost:5173" not in main._parse_cors_origins(
+            "https://leagueql.com"
+        )
+
+    @pytest.mark.parametrize("raw", ["", "   ", ",", " , "])
+    def test_unset_or_empty_fails_closed_to_prod_only(self, raw):
+        import main
+
+        # A missing/blank env var must never trust the local dev origin.
+        assert main._parse_cors_origins(raw) == ["https://leagueql.com"]
+
+    def test_strips_whitespace_and_blanks(self):
+        import main
+
+        assert main._parse_cors_origins(
+            " http://localhost:5173 , , https://leagueql.com "
+        ) == ["http://localhost:5173", "https://leagueql.com"]
+
+
 class TestGetLeagueEndpoint:
     def test_returns_league_data(
         self, client, mock_table, league_lookup_item, league_metadata_item
@@ -835,6 +870,13 @@ class TestQueryLeagueEndpoint:
         assert any(str(v).startswith(sk_base) for v in sk_values)
 
 
+_VALID_MAPPING_ENTRY = {
+    "currentPlatformOwnerId": "espn-owner-1",
+    "newPlatformOwnerId": "sleeper-owner-1",
+    "displayName": "Manager One",
+}
+
+
 class TestMigrateLeagueEndpoint:
     # Successful migration: get_item calls are (1) current league lookup,
     # (2) metadata fetch, (3) new platform league lookup (returns {} → 404).
@@ -986,6 +1028,66 @@ class TestMigrateLeagueEndpoint:
         response = client.post("/leagues/123/migrate?platform=SLEEPER", json=payload)
         assert response.status_code == 422
 
+    @pytest.mark.parametrize(
+        "bad_mapping",
+        [
+            pytest.param(
+                [{**_VALID_MAPPING_ENTRY, "extraField": "nope"}], id="unknown_key"
+            ),
+            pytest.param(
+                [{"currentPlatformOwnerId": "x", "newPlatformOwnerId": "y"}],
+                id="missing_display_name",
+            ),
+            pytest.param(
+                [{**_VALID_MAPPING_ENTRY, "displayName": 123}],
+                id="non_string_value",
+            ),
+            pytest.param(
+                [{**_VALID_MAPPING_ENTRY, "currentPlatformOwnerId": "x" * 101}],
+                id="owner_id_too_long",
+            ),
+            pytest.param(
+                [dict(_VALID_MAPPING_ENTRY) for _ in range(65)],
+                id="too_many_entries",
+            ),
+        ],
+    )
+    def test_returns_422_for_invalid_manager_mapping(self, client, bad_mapping):
+        payload = {**self._PAYLOAD, "managerMapping": bad_mapping}
+        response = client.post("/leagues/123/migrate?platform=SLEEPER", json=payload)
+        assert response.status_code == 422
+
+    def test_invalid_manager_mapping_writes_no_migration_item(self, client, mock_table):
+        payload = {
+            **self._PAYLOAD,
+            "managerMapping": [{**_VALID_MAPPING_ENTRY, "extraField": "nope"}],
+        }
+        response = client.post("/leagues/123/migrate?platform=SLEEPER", json=payload)
+        assert response.status_code == 422
+        mock_table.put_item.assert_not_called()
+
+    def test_valid_manager_mapping_stored_as_plain_dicts(
+        self,
+        client,
+        mock_table,
+        mock_lambda_client,
+        league_lookup_item,
+        league_metadata_item,
+    ):
+        self._setup_success_mocks(
+            mock_table, mock_lambda_client, league_lookup_item, league_metadata_item
+        )
+        payload = {**self._PAYLOAD, "managerMapping": [_VALID_MAPPING_ENTRY]}
+        response = client.post("/leagues/123/migrate?platform=SLEEPER", json=payload)
+        assert response.status_code == 202
+        migration_puts = [
+            c
+            for c in mock_table.put_item.call_args_list
+            if str(c.kwargs["Item"]["SK"]).startswith("PLATFORM_MIGRATION#")
+        ]
+        assert len(migration_puts) == 1
+        assert migration_puts[0].kwargs["Item"]["data"] == [_VALID_MAPPING_ENTRY]
+
     def test_returns_500_on_dynamodb_error_during_setup(
         self,
         client,
@@ -1134,6 +1236,49 @@ class TestEspnMembersEndpoint:
             response = client.post(self._URL, json=self._PAYLOAD)
         assert response.status_code == 502
         assert "parse ESPN API response" in response.json()["detail"]
+
+    @pytest.mark.parametrize(
+        "espn_league_id",
+        [
+            "99?view=evil",  # query-parameter injection
+            "../../../other/path",  # path traversal within the ESPN host
+            "99&x=1",  # extra query param
+            "abc",  # non-numeric
+            "",  # empty
+        ],
+    )
+    def test_invalid_espn_league_id_returns_422_without_upstream_call(
+        self, client, mock_table, league_lookup_item, espn_league_id
+    ):
+        # Injection-shaped espnLeagueId values must be rejected by validation
+        # before any ESPN request is made (no path traversal / param injection).
+        mock_table.get_item.return_value = {"Item": league_lookup_item}
+        from urllib.parse import quote
+
+        url = (
+            f"/leagues/123/espn_members?platform=ESPN"
+            f"&espnLeagueId={quote(espn_league_id, safe='')}&season=2024"
+        )
+        with patch("main.http_requests.get") as mock_get:
+            response = client.post(url, json=self._PAYLOAD)
+        assert response.status_code == 422
+        mock_get.assert_not_called()
+
+    @pytest.mark.parametrize("season", ["2024/..", "20x4", "12345", "abcd", ""])
+    def test_invalid_season_returns_422_without_upstream_call(
+        self, client, mock_table, league_lookup_item, season
+    ):
+        mock_table.get_item.return_value = {"Item": league_lookup_item}
+        from urllib.parse import quote
+
+        url = (
+            f"/leagues/123/espn_members?platform=ESPN"
+            f"&espnLeagueId=99&season={quote(season, safe='')}"
+        )
+        with patch("main.http_requests.get") as mock_get:
+            response = client.post(url, json=self._PAYLOAD)
+        assert response.status_code == 422
+        mock_get.assert_not_called()
 
 
 class TestSubscriptionGate:

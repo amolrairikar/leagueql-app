@@ -372,12 +372,24 @@ def get_espn_members(
     ],
     platform: Annotated[Platform, Query(description="The current platform")],
     espnLeagueId: Annotated[
-        str, Query(description="The ESPN league ID to fetch members from")
+        str,
+        Query(
+            description="The ESPN league ID to fetch members from",
+            pattern=r"^\d+$",
+        ),
     ],
-    season: Annotated[str, Query(description="The ESPN season year")],
+    season: Annotated[
+        str, Query(description="The ESPN season year", pattern=r"^\d{4}$")
+    ],
     payload: EspnMembersPayload,
 ) -> APIResponse:
-    """Proxy ESPN Fantasy API to fetch league members server-side (avoids browser CORS)."""
+    """Proxy ESPN Fantasy API to fetch league members server-side (avoids browser CORS).
+
+    ``espnLeagueId`` and ``season`` are interpolated into the upstream ESPN URL, so
+    both are constrained to digits only (``^\\d+$`` / ``^\\d{4}$``) to keep
+    attacker-controlled characters (``?``, ``&``, ``/``, ``..``) out of the request
+    path/query — preventing parameter injection / path traversal against the ESPN host.
+    """
     canonical_league_id = lookup_league(league_id=leagueId, platform=platform)
     require_active_subscription(canonical_league_id)
 
@@ -487,7 +499,7 @@ def migrate_league(
             Item={
                 "PK": f"LEAGUE#{canonical_league_id}",
                 "SK": f"PLATFORM_MIGRATION#{platform.value}#{payload.newPlatform.value}",
-                "data": payload.managerMapping,
+                "data": [entry.model_dump() for entry in payload.managerMapping],
             }
         )
 

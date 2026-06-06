@@ -16,3 +16,8 @@ Feature: League migration API (BE-003)
     Given a LEAGUE_LOOKUP exists for league "777" platform "ESPN" canonical "canon-2"
     When I POST a migration of league "100" from "SLEEPER" to "ESPN" league "777"
     Then the API responds with status 409
+
+  Scenario: Malformed manager mapping is rejected before any write
+    When I POST a migration of league "100" from "SLEEPER" to "ESPN" league "777" with an unknown mapping key
+    Then the API responds with status 422
+    And no PLATFORM_MIGRATION item exists for league "canon-1"

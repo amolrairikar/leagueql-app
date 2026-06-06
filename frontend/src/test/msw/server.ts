@@ -1,12 +1,12 @@
 /**
  * Mock Service Worker server for component tests.
  *
- * MSW intercepts `fetch`, so the real `apiClient` (cache, dedup, `__session`
- * cookie, `ApiError` mapping) and the `toResult`/`<ErrorAlert>` path all run —
+ * MSW intercepts `fetch`, so the real `apiClient` (cache, dedup, bearer-token
+ * attach, `ApiError` mapping) and the `toResult`/`<ErrorAlert>` path all run —
  * the component boundary we want. Helpers below build the common LeagueQL
  * response shapes for the three UI states (loads-fine / data-error / empty).
  */
-import { http, HttpResponse } from 'msw';
+import { http, HttpResponse, type JsonBodyType } from 'msw';
 import { setupServer } from 'msw/node';
 
 export const API = 'http://test.local';
@@ -61,6 +61,6 @@ export function leagueQueryError(status = 500) {
 }
 
 /** A `POST` handler returning a JSON body with a status code. */
-export function postJson(path: string, body: unknown, status = 200) {
+export function postJson(path: string, body: JsonBodyType, status = 200) {
   return http.post(`${API}${path}`, () => HttpResponse.json(body, { status }));
 }

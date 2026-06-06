@@ -58,6 +58,7 @@ criteria. Frontend, backend, and extension features are kept separate.
 | [FE-021](frontend/FE-021-subscription-access-control.md) | Subscription Access Control |
 | [FE-022](frontend/FE-022-subscription-checkout.md) | Subscription Checkout (Making Payments) |
 | [FE-023](frontend/FE-023-subscription-management.md) | Subscription Management (Billing Portal) |
+| [FE-024](frontend/FE-024-security-headers.md) | Security Response Headers & Content-Security-Policy |
 
 ## Extension (`extension/`)
 | ID | Feature |
