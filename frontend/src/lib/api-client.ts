@@ -30,12 +30,37 @@ export class ApiError extends Error {
   }
 }
 
-// ── Fetch core ────────────────────────────────────────────────────────────────
+// ── Auth token ──────────────────────────────────────────────────────────────
+// The API client never reads a credential cookie itself. A provider (registered
+// once at app init from Clerk's `useAuth().getToken` via `AuthTokenBridge`)
+// supplies a fresh, short-lived session JWT per request, so the bearer token is
+// not parsed out of the JS-readable `__session` cookie (LQL-05 / FE-019).
 
-function getSessionToken(): string | null {
-  const match = /(?:^|;\s*)__session=([^;]*)/.exec(document.cookie);
-  return match ? decodeURIComponent(match[1]) : null;
+type AuthTokenProvider = () => Promise<string | null | undefined>;
+
+let authTokenProvider: AuthTokenProvider | null = null;
+
+/**
+ * Register (or clear, with `null`) the async getter the client uses to obtain a
+ * bearer token for each request. Called from `AuthTokenBridge` with Clerk's
+ * `getToken`. Until a provider is registered, requests are sent unauthenticated.
+ */
+export function setAuthTokenProvider(provider: AuthTokenProvider | null): void {
+  authTokenProvider = provider;
 }
+
+async function getSessionToken(): Promise<string | null> {
+  if (!authTokenProvider) return null;
+  try {
+    return (await authTokenProvider()) ?? null;
+  } catch {
+    // A failure to mint a token (e.g. signed out / Clerk not loaded) sends the
+    // request unauthenticated; the backend authorizer then returns 401.
+    return null;
+  }
+}
+
+// ── Fetch core ────────────────────────────────────────────────────────────────
 
 // Per-request options. Errors always reject the returned promise so each caller
 // (feature) surfaces them locally; there is no global error sink.
@@ -44,7 +69,7 @@ interface FetchOpts {
 }
 
 async function _doFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const token = getSessionToken();
+  const token = await getSessionToken();
   const response = await fetch(`${API_BASE_URL}${path}`, {
     headers: {
       'Content-Type': 'application/json',

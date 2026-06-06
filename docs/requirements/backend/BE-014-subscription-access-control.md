@@ -8,9 +8,9 @@ Expired leagues are blocked from the data and write endpoints (HTTP `402`), whil
 and delete endpoints stay reachable so the frontend can read status and users can remove a
 league. State is evaluated live on each request — there is no stored status flag and no
 scheduled job. The actual `subscription_end_time` value is written **server-side by the Stripe
-billing webhook** ([BE-015](BE-015-stripe-billing.md)); this gate only *reads* it. The
-client-supplied `subscriptionEndTime` accepted at onboarding ([BE-001](BE-001-league-onboarding.md))
-is an interim, spoofable stopgap that BE-015 supersedes and removes.
+billing webhook** ([BE-015](BE-015-stripe-billing.md)); this gate only *reads* it. Onboarding
+([BE-001](BE-001-league-onboarding.md)) does **not** write it — the former client-supplied
+`subscriptionEndTime` input was a spoofable stopgap and has been removed.
 
 ## Scope
 - Helper: `require_active_subscription(canonical_league_id)` (`src/api/helpers.py`) — reads the
@@ -30,10 +30,9 @@ is an interim, spoofable stopgap that BE-015 supersedes and removes.
 - **`subscription_end_time` absent:** treated as expired → `402`.
 - **Timestamp exactly equal to now:** treated as expired (`<= now` blocks).
 - **New onboarding:** allowed regardless (the league/subscription does not exist yet). The
-  onboarder still writes a client-supplied `subscription_end_time` as an interim stopgap
-  ([BE-001](BE-001-league-onboarding.md)); once [BE-015](BE-015-stripe-billing.md) lands, the
-  value is set only by the Stripe webhook and a freshly onboarded, unsubscribed league reads
-  as expired until checkout completes.
+  onboarder does **not** write `subscription_end_time` ([BE-001](BE-001-league-onboarding.md));
+  the value is set only by the Stripe webhook ([BE-015](BE-015-stripe-billing.md)), so a
+  freshly onboarded, unsubscribed league reads as expired until checkout completes.
 - **Reading status while expired:** `GET /leagues/{id}` is never gated, so the frontend can
   always read `subscription_end_time` to render its paywall ([FE-021](../frontend/FE-021-subscription-access-control.md)).
 - **Delete while expired:** allowed, so users can clean up lapsed leagues.

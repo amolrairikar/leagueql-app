@@ -4,7 +4,7 @@ import { apiClient } from '@/lib/api-client';
 
 /**
  * Stripe billing API accessors (BE-015). Both endpoints are POSTs (uncached) and
- * authenticate via the `__session` cookie that `apiClient` already attaches.
+ * authenticate via the Clerk session JWT that `apiClient` already attaches.
  */
 
 /**

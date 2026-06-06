@@ -249,7 +249,7 @@ provisioning, not duplicate charging.)
       `stripe_subscription_id` on `METADATA`.
 - [ ] `POST /billing-portal-session` returns a Stripe Billing Portal URL for the user's
       Customer.
-- [ ] The client-supplied `subscriptionEndTime` onboarding input is removed;
+- [x] The client-supplied `subscriptionEndTime` onboarding input is removed;
       `subscription_end_time` is set only server-side via this flow (supersedes the
       [BE-001](BE-001-league-onboarding.md) interim behavior).
 - [ ] Stripe secret key and webhook signing secret are stored as SecureString SSM parameters

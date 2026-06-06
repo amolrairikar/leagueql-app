@@ -17,7 +17,7 @@ import stripe
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from mangum import Mangum
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 # Re-exported so ``main.<name>`` stays the public surface for helpers, routes,
 # and tests (e.g. ``from main import correlation_id_var, JsonFormatter``).
@@ -29,10 +29,21 @@ from common.logging_utils import (  # noqa: F401
 )
 from common.secrets import get_secret_from_env_param
 
-ORIGINS = [
-    "http://localhost:5173",  # LOCAL/DEV
-    "https://leagueql.com",  # PROD
-]
+
+def _parse_cors_origins(raw: str) -> list[str]:
+    """Parse the comma-separated ``CORS_ALLOW_ORIGINS`` env var.
+
+    Terraform sets this per environment (dev additionally trusts the local Vite
+    dev origin; prod trusts only the live site), keeping the FastAPI middleware in
+    lockstep with the API Gateway CORS config. When the var is unset/empty this
+    **fails closed** to the production origin only, so a misconfiguration never
+    silently trusts ``http://localhost`` in production.
+    """
+    origins = [origin.strip() for origin in raw.split(",") if origin.strip()]
+    return origins or ["https://leagueql.com"]
+
+
+ORIGINS = _parse_cors_origins(os.environ.get("CORS_ALLOW_ORIGINS", ""))
 
 
 class APIResponse(BaseModel):
@@ -50,7 +61,6 @@ class OnboardingPayload(BaseModel):
     season: Optional[str] = Field(default=None, max_length=100)
     s2: Optional[str] = Field(default=None)
     swid: Optional[str] = Field(default=None, max_length=100)
-    subscriptionEndTime: Optional[str] = Field(default=None, max_length=100)
 
 
 class CaseInsensitiveEnum(str, Enum):
@@ -101,13 +111,23 @@ class EspnMembersPayload(BaseModel):
     s2: str
 
 
+class ManagerMappingEntry(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    currentPlatformOwnerId: str = Field(max_length=100)
+    newPlatformOwnerId: str = Field(max_length=100)
+    displayName: str = Field(max_length=200)
+
+
 class MigratePayload(BaseModel):
     newPlatformLeagueId: str = Field(max_length=100)
     newPlatform: Platform
     season: Optional[str] = Field(default=None, max_length=10)
     s2: Optional[str] = Field(default=None)
     swid: Optional[str] = Field(default=None, max_length=100)
-    managerMapping: list[dict] = Field(default_factory=list)
+    managerMapping: list[ManagerMappingEntry] = Field(
+        default_factory=list, max_length=64
+    )
 
 
 app = FastAPI()

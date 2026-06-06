@@ -143,7 +143,38 @@ def step_post_migration(context, league_id, platform, new_platform, new_league_i
             "newPlatformLeagueId": new_league_id,
             "newPlatform": new_platform,
             "season": "2024",
-            "managerMapping": [{"oldOwnerId": "u1", "newPlatformOwnerId": "u2"}],
+            "managerMapping": [
+                {
+                    "currentPlatformOwnerId": "u1",
+                    "newPlatformOwnerId": "u2",
+                    "displayName": "Manager One",
+                }
+            ],
+        },
+    )
+
+
+@when(
+    'I POST a migration of league "{league_id}" from "{platform}" to '
+    '"{new_platform}" league "{new_league_id}" with an unknown mapping key'
+)
+def step_post_migration_bad_mapping(
+    context, league_id, platform, new_platform, new_league_id
+):
+    context.response = context.api.post(
+        f"/leagues/{league_id}/migrate?platform={platform}",
+        json={
+            "newPlatformLeagueId": new_league_id,
+            "newPlatform": new_platform,
+            "season": "2024",
+            "managerMapping": [
+                {
+                    "currentPlatformOwnerId": "u1",
+                    "newPlatformOwnerId": "u2",
+                    "displayName": "Manager One",
+                    "extraField": "nope",
+                }
+            ],
         },
     )
 
@@ -156,6 +187,16 @@ def step_migration_item(context, canonical):
         & Key("SK").begins_with("PLATFORM_MIGRATION#")
     )
     assert resp["Items"], "no PLATFORM_MIGRATION item written"
+
+
+@then('no PLATFORM_MIGRATION item exists for league "{canonical}"')
+def step_no_migration_item(context, canonical):
+    table = context.ddb_resource.Table(context.table_name)
+    resp = table.query(
+        KeyConditionExpression=Key("PK").eq(f"LEAGUE#{canonical}")
+        & Key("SK").begins_with("PLATFORM_MIGRATION#")
+    )
+    assert not resp["Items"], "unexpected PLATFORM_MIGRATION item written"
 
 
 @then(

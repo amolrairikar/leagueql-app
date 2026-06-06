@@ -29,6 +29,12 @@ locals {
   # Base URL the user's browser returns to after Stripe Checkout / Billing Portal.
   # Prod is the live site; dev (Stripe test mode) uses the local dev server.
   app_base_url = var.environment == "prod" ? "https://leagueql.com" : "http://localhost:5173"
+
+  # Browser origins allowed by CORS. Production trusts only the live site; dev
+  # additionally trusts the local Vite dev server. Shared by the API Gateway CORS
+  # config and the API Lambda (FastAPI middleware) so the two never diverge — in
+  # particular so production never trusts the local dev origin.
+  cors_allow_origins = var.environment == "dev" ? ["http://localhost:5173", "https://leagueql.com"] : ["https://leagueql.com"]
 }
 
 module "onboarder_lambda" {
@@ -105,6 +111,10 @@ module "api_lambda" {
     ONBOARDER_LAMBDA_NAME = "leagueql-onboarder-${var.environment}"
     S3_BUCKET_NAME        = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
     SNS_TOPIC_ARN         = var.environment == "prod" ? aws_sns_topic.lambda_alerts[0].arn : ""
+
+    # Browser origins the FastAPI CORS middleware trusts, kept in lockstep with the
+    # API Gateway CORS config via the shared local (prod excludes the dev origin).
+    CORS_ALLOW_ORIGINS = join(",", local.cors_allow_origins)
 
     # Stripe billing (BE-015) — checkout + billing-portal endpoints. The secret
     # key is fetched at runtime from SSM by *name*; only the non-sensitive name is
@@ -289,7 +299,7 @@ module "backend_api" {
 
   api_name             = "leagueql-api-${var.environment}-${local.region}"
   api_description      = "API for fantasy football recap app"
-  cors_allow_origins   = var.environment == "dev" ? ["http://localhost:5173", "https://leagueql.com"] : ["https://leagueql.com"]
+  cors_allow_origins   = local.cors_allow_origins
   openapi_spec_path    = "${path.module}/../../docs/api/openapi_spec.yaml"
   stage_name           = "${var.environment}-${local.region}"
   lambda_function_name = split(":", module.api_lambda.lambda_arn)[6]
@@ -298,6 +308,9 @@ module "backend_api" {
   clerk_jwt_audience   = var.clerk_jwt_audience
 
   openapi_vars = {
+    # Must match api_name above: API Gateway names the HTTP API from the OpenAPI
+    # info.title on (re)import, overriding the resource's name argument.
+    api_name                  = "leagueql-api-${var.environment}-${local.region}"
     aws_region                = var.aws_region
     lambda_arn                = module.api_lambda.lambda_arn
     stripe_webhook_lambda_arn = module.stripe_webhook_lambda.lambda_arn

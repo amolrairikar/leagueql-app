@@ -1,0 +1,15 @@
+# Cloudflare _headers — applied to every served asset (FE-024).
+#
+# The Content-Security-Policy ships as Report-Only first; once validated against the
+# running app (Clerk, the API, charts, the Stripe redirect) with no violations, rename
+# `Content-Security-Policy-Report-Only` to `Content-Security-Policy` to enforce it.
+#
+# `__VITE_DEV_API_URL__` is substituted at build time from the VITE_DEV_API_URL env var by
+# the headers plugin in vite.config.ts (removed entirely when the var is unset, e.g. prod).
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
+  X-Frame-Options: DENY
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
+  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self' https://clerk.leagueql.com https://*.clerk.accounts.dev https://*.clerk.com https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; connect-src 'self' https://api.leagueql.com __VITE_DEV_API_URL__ https://clerk.leagueql.com https://*.clerk.accounts.dev https://clerk-telemetry.com; img-src 'self' data: https://img.clerk.com; font-src 'self' data:; worker-src 'self' blob:; frame-src https://challenges.cloudflare.com https://*.stripe.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self' https://*.stripe.com; object-src 'none'

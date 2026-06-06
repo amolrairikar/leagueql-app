@@ -14,6 +14,11 @@ to build the manager identity mapping between platforms.
 - Upstream: `https://lm-api-reads.fantasy.espn.com/.../leagues/{espnLeagueId}?view=mTeam`.
 
 ## Edge Cases
+- **Input validation:** `espnLeagueId` and `season` are interpolated into the upstream ESPN
+  URL, so both are constrained to digits only (`espnLeagueId` `^\d+$`, `season` `^\d{4}$`); a
+  non-matching value returns `422` before any upstream request. This keeps attacker-controlled
+  characters (`?`, `&`, `/`, `..`) out of the request path/query, preventing parameter
+  injection / path traversal against the fixed ESPN host.
 - **Current league not onboarded:** `lookup_league` miss returns `404`.
 - **ESPN HTTP error (bad credentials / not found):** return `502` "Failed to fetch ESPN
   league members".
@@ -30,6 +35,8 @@ to build the manager identity mapping between platforms.
 - [ ] Members missing a display name fall back to their owner ID.
 - [ ] Upstream HTTP/network/parse failures return `502` with the appropriate message.
 - [ ] A non-onboarded current league returns `404`.
+- [ ] A non-numeric `espnLeagueId` or a `season` that is not a 4-digit year returns `422`
+      without making an upstream ESPN request.
 - [ ] `swid`/`s2` never appear in logs or stored items.
 
 ## Sources

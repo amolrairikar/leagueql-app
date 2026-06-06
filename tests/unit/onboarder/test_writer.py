@@ -102,29 +102,12 @@ class TestWriteLeagueRecords:
         items = mock_ddb.transact_write_items.call_args[1]["TransactItems"]
         assert len(items) == 2
 
-    def test_onboard_writes_subscription_end_time_when_provided(
+    def test_onboard_never_writes_subscription_end_time(
         self, onboarder_writer, monkeypatch
     ):
-        monkeypatch.setenv("DYNAMODB_TABLE_NAME", "test-table")
-        mock_ddb = MagicMock()
-        with patch.object(onboarder_writer, "_dynamodb", mock_ddb):
-            onboarder_writer.write_league_records(
-                league_id="123",
-                platform="SLEEPER",
-                canonical_league_id="canonical-abc",
-                seasons=["2024"],
-                request_type="ONBOARD",
-                subscription_end_time="2026-07-01T00:00:00+00:00",
-            )
-        items = mock_ddb.transact_write_items.call_args[1]["TransactItems"]
-        metadata_item = items[0]["Put"]["Item"]
-        assert metadata_item["subscription_end_time"] == {
-            "S": "2026-07-01T00:00:00+00:00"
-        }
-
-    def test_onboard_omits_subscription_end_time_when_absent(
-        self, onboarder_writer, monkeypatch
-    ):
+        # subscription_end_time is set only server-side by the Stripe billing
+        # webhook (BE-014 / BE-015). Onboarding must never write it — there is no
+        # longer a client-supplied input that could (BE-001).
         monkeypatch.setenv("DYNAMODB_TABLE_NAME", "test-table")
         mock_ddb = MagicMock()
         with patch.object(onboarder_writer, "_dynamodb", mock_ddb):

@@ -2,6 +2,7 @@ import { ClerkProvider } from '@clerk/react';
 import { dark } from '@clerk/ui/themes';
 
 import App from './app.tsx';
+import { AuthTokenBridge } from './auth-token-bridge.tsx';
 
 import { useTheme } from '@/hooks/use-theme';
 
@@ -22,6 +23,7 @@ export default function ClerkWithTheme() {
       publishableKey={CLERK_PUBLISHABLE_KEY}
       appearance={{ theme: isDark ? dark : undefined }}
     >
+      <AuthTokenBridge />
       <App />
     </ClerkProvider>
   );
