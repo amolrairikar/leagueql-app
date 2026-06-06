@@ -17,7 +17,7 @@ export function SubscriptionGuard({ children }: { children: React.ReactNode }) {
 
   if (loading || activating)
     return (
-      <div className="flex min-h-[70vh] flex-col items-center justify-center gap-3">
+      <div className="flex flex-1 flex-col items-center justify-center gap-3">
         <Spinner className="size-6 text-muted-foreground" />
         {activating && (
           <p className="text-muted-foreground text-sm">

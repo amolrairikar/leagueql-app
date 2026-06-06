@@ -26,7 +26,7 @@ export function SubscriptionRequired({
   const { leagueId, platform } = getLeagueCookies();
 
   return (
-    <div className="flex min-h-[70vh] flex-col items-center justify-center gap-4 p-8 text-center">
+    <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
       {activationFailed && (
         <Alert variant="destructive" className="max-w-md text-left">
           <AlertTitle>We couldn&apos;t confirm your subscription</AlertTitle>
