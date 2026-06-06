@@ -8,8 +8,6 @@
 - [ ] 🏗️ Infra
 - [ ] 📝 Docs
 
-**Ticket:** <!-- #123 -->
-
 ---
 
 ## Testing
