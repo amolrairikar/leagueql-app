@@ -9,10 +9,11 @@ could still mint a Clerk token via the SDK while the page is open — a strict C
 limits where injected script may execute and exfiltrate (closes the
 [LQL-04](../../../SECURITY_FINDINGS.md) residual; addresses LQL-07).
 
-The CSP is rolled out in **`Content-Security-Policy-Report-Only`** first and validated against
-the running app (Clerk, the API, charts, the Stripe redirect) before it is switched to the
-enforcing `Content-Security-Policy` header. The hardening headers are enforced immediately
-(they are low-risk).
+The CSP was rolled out in `Content-Security-Policy-Report-Only` first, validated against the
+running app (Clerk incl. Google sign-in, the API, charts, the Stripe redirect) with no
+violations, and is now shipped as the enforcing **`Content-Security-Policy`** header. The
+hardening headers are likewise enforced. To debug a future policy change, the header name can
+be temporarily reverted to `-Report-Only`.
 
 ## Scope
 - Header source: `frontend/public/_headers` (copied verbatim by Vite to `dist/_headers`;
@@ -47,16 +48,16 @@ enforcing `Content-Security-Policy` header. The hardening headers are enforced i
   only build-time-templated value. An unset `VITE_DEV_API_URL` cleanly drops the dev origin.
 
 ## Acceptance Criteria
-- [ ] `public/_headers` sets `X-Content-Type-Options: nosniff`,
+- [x] `public/_headers` sets `X-Content-Type-Options: nosniff`,
       `Referrer-Policy: strict-origin-when-cross-origin`, `Strict-Transport-Security`,
       `X-Frame-Options: DENY`, and a `Permissions-Policy` on all assets (enforced).
-- [ ] A Content-Security-Policy is present (initially as `Content-Security-Policy-Report-Only`)
-      with `default-src 'self'`, `frame-ancestors 'none'`, `object-src 'none'`, `base-uri 'self'`,
-      the Clerk/API allowlist, `style-src 'unsafe-inline'`, and `worker-src blob:`.
-- [ ] The dev API origin is templated via `__VITE_DEV_API_URL__` and substituted at build time
+- [x] An enforcing `Content-Security-Policy` is present with `default-src 'self'`,
+      `frame-ancestors 'none'`, `object-src 'none'`, `base-uri 'self'`, the Clerk/API allowlist,
+      `style-src 'unsafe-inline'`, and `worker-src blob:`.
+- [x] The dev API origin is templated via `__VITE_DEV_API_URL__` and substituted at build time
       from `VITE_DEV_API_URL` (removed when unset).
-- [ ] The CSP is validated against the running app in Report-Only before being switched to the
-      enforcing header.
+- [x] The CSP was validated against the running app in Report-Only (no violations) before being
+      switched to the enforcing header.
 
 ## Sources
 `frontend/public/_headers`, `frontend/vite.config.ts`, `frontend/src/app/clerk-with-theme.tsx`,

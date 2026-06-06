@@ -34,6 +34,7 @@ import ExtensionPrivacyPage from '@/features/privacy/extension-privacy-page';
 import PrivacyPage from '@/features/privacy/privacy-page';
 import SeasonStandings from '@/features/season_standings/season-standings';
 import { AppSidebar } from '@/features/sidebar/app-sidebar';
+import { HeaderAccount } from '@/features/sidebar/header-account';
 import { SubscriptionGuard } from '@/features/subscription/subscription-guard';
 import { isDemoMode } from '@/lib/cookie-handler';
 
@@ -54,7 +55,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
             <SidebarTrigger className="cursor-pointer" />
             <Link
               to="/"
-              className="absolute left-1/2 -translate-x-1/2 font-heading text-xl tracking-tight text-foreground no-underline"
+              className="font-heading text-xl tracking-tight text-foreground no-underline sm:absolute sm:left-1/2 sm:-translate-x-1/2"
             >
               League<span className="text-primary font-bold">QL</span>
             </Link>
@@ -65,12 +66,13 @@ function AppLayout({ children }: { children: React.ReactNode }) {
               <div className="ml-2">
                 <ModeToggle />
               </div>
+              <HeaderAccount />
             </div>
           </header>
           <ErrorBoundary>
             <SubscriptionGuard>{children}</SubscriptionGuard>
           </ErrorBoundary>
-          <Footer className="py-3" />
+          <Footer className="py-3 shrink-0" />
         </SidebarInset>
       </SidebarProvider>
     </TooltipProvider>

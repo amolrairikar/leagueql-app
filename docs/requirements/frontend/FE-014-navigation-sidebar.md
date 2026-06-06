@@ -19,9 +19,20 @@ wordmark and theme toggle.
   is currently viewing ([BE-002](../backend/BE-002-league-refresh.md)).
 - **Refresh cooldown / up-to-date / in-progress:** surface the backend `429`/`409` responses.
 - **Mobile:** sidebar collapses; `SidebarTrigger` toggles it (`use-mobile` hook).
+- **Account menu placement:** the Clerk `UserButton` (account + sign out) lives in the sidebar
+  footer on desktop. On mobile the sidebar is a modal sheet that locks `pointer-events` outside
+  its content, and Clerk's dropdown portals outside the sheet — so its taps (including "Sign
+  out") would fall through to the sidebar links beneath. To keep sign-out working, the account
+  menu renders in the always-present header on mobile (`HeaderAccount`) instead of the sheet
+  ([FE-019](FE-019-authentication.md)).
 - **Demo mode:** show the demo banner; refresh/connect actions adjust accordingly
   ([FE-015](FE-015-demo-mode.md)).
 - **No league connected:** navigation behaves sensibly when there's no active league.
+- **Footer is fixed-height and bottom-pinned:** the layout is a full-height flex column; the
+  content region grows to fill (`flex-1`) and the footer is `shrink-0`, so the footer keeps a
+  constant height pinned to the bottom regardless of the content state — full dashboard, the
+  subscription paywall, or the loading/activating spinner all fill the area the same way (so the
+  footer never shifts or compresses between states).
 
 ## Acceptance Criteria
 - [ ] The sidebar links to all ten analytics pages and they route correctly.
@@ -31,6 +42,11 @@ wordmark and theme toggle.
 - [ ] The layout is responsive: the sidebar collapses and toggles on mobile.
 - [ ] The demo banner appears in demo mode.
 - [ ] The header wordmark links home and the theme toggle is present.
+- [ ] The account menu (sign out) is reachable and functional on both desktop (sidebar footer)
+      and mobile (header) — on mobile it is not rendered inside the modal sidebar sheet.
+- [ ] The footer stays a constant height pinned to the bottom of the viewport across content
+      states (dashboard, paywall, loading) — it does not shift or resize.
 
 ## Sources
-`src/features/sidebar/app-sidebar.tsx`, `src/app/app.tsx`, `src/hooks/use-mobile.ts`.
+`src/features/sidebar/app-sidebar.tsx`, `src/features/sidebar/header-account.tsx`,
+`src/app/app.tsx`, `src/hooks/use-mobile.ts`.

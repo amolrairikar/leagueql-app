@@ -41,6 +41,9 @@ cancellation surfaces the paywall right away.
   idle. A `404` is the exception — it triggers the Subscribe fallback rather than showing an error.
 - **Return after immediate cancellation:** the refreshed state reads expired, so gated pages show
   the paywall on the next render.
+- **Mobile — opening from the sidebar:** on mobile the sidebar is a slide-over sheet; selecting
+  "Manage Subscription" closes that sheet and opens the dialog. The dialog must stay open — it is
+  rendered outside the sidebar's sheet subtree so closing the sheet does not unmount it.
 
 ## Acceptance Criteria
 - [ ] The Manage Subscription dialog shows the current subscription status (active with date,
@@ -53,6 +56,8 @@ cancellation surfaces the paywall right away.
 - [ ] The Manage billing button shows a loading state and returns to idle on error, with a
       non-404 failure shown inline (an `ErrorAlert`) in the dialog.
 - [ ] Demo mode shows a non-billing placeholder.
+- [ ] On mobile, opening the dialog from the sidebar closes the sidebar sheet but the dialog stays
+      open (it is not unmounted with the sheet).
 
 ## Sources
 `src/components/api/billing.ts` (new), `src/features/subscription/manage-subscription-dialog.tsx`,

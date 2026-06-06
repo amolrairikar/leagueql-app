@@ -124,195 +124,205 @@ export function AppSidebar() {
   }
 
   return (
-    <Sidebar collapsible="icon">
-      <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {navItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={location.pathname === item.url}
-                    tooltip={item.title}
-                  >
-                    <Link to={item.url} onClick={closeMobileSidebar}>
-                      <item.icon />
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+    <>
+      <Sidebar collapsible="icon">
+        <SidebarContent>
+          <SidebarGroup>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {navItems.map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={location.pathname === item.url}
+                      tooltip={item.title}
+                    >
+                      <Link to={item.url} onClick={closeMobileSidebar}>
+                        <item.icon />
+                        <span>{item.title}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
 
-        <SidebarSeparator />
+          <SidebarSeparator />
 
-        <SidebarGroup>
-          <SidebarGroupLabel>Settings</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {demoMode ? (
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    tooltip="Connect Your League"
-                    className="cursor-pointer"
-                    onClick={() => {
-                      closeMobileSidebar();
-                      handleConnectFromDemo();
-                    }}
-                  >
-                    <LogIn />
-                    <span>Connect Your League</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ) : (
-                <>
+          <SidebarGroup>
+            <SidebarGroupLabel>Settings</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {demoMode ? (
                   <SidebarMenuItem>
                     <SidebarMenuButton
-                      asChild
-                      tooltip="Refresh League"
-                      className="cursor-pointer"
-                    >
-                      <Link to={refreshLeagueUrl} onClick={closeMobileSidebar}>
-                        <RefreshCw />
-                        <span>Refresh League</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                  <SidebarMenuItem>
-                    <SidebarMenuButton
-                      asChild
-                      tooltip="Migrate League"
-                      className="cursor-pointer"
-                    >
-                      <Link to="/migrate_league" onClick={closeMobileSidebar}>
-                        <ArrowLeftRight />
-                        <span>Migrate League</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                  <SidebarMenuItem>
-                    <SidebarMenuButton
-                      asChild
-                      tooltip="View Another League"
-                      className="cursor-pointer"
-                    >
-                      <Link to="/?connect=true" onClick={closeMobileSidebar}>
-                        <Search />
-                        <span>View Another League</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                  <SidebarMenuItem>
-                    <SidebarMenuButton
-                      tooltip={
-                        expiringSoon
-                          ? 'Manage Subscription — expiring soon'
-                          : 'Manage Subscription'
-                      }
+                      tooltip="Connect Your League"
                       className="cursor-pointer"
                       onClick={() => {
                         closeMobileSidebar();
-                        setSubscriptionDialogOpen(true);
+                        handleConnectFromDemo();
                       }}
                     >
-                      <span className="relative flex shrink-0 items-center justify-center">
-                        <CreditCard />
-                        {expiringSoon && (
-                          <span
-                            aria-hidden="true"
-                            className="absolute -top-1 -right-1 size-2 rounded-full bg-destructive ring-2 ring-sidebar"
-                          />
-                        )}
-                      </span>
-                      <span>
-                        Manage Subscription
-                        {expiringSoon && (
-                          <span className="sr-only"> (expiring soon)</span>
-                        )}
-                      </span>
+                      <LogIn />
+                      <span>Connect Your League</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
-                  <SidebarMenuItem>
-                    <Dialog
-                      open={dialogOpen}
-                      onOpenChange={(open) => {
-                        setDialogOpen(open);
-                        if (!open) setDeleteError(null);
-                      }}
-                    >
-                      <DialogTrigger asChild>
-                        <SidebarMenuButton
-                          tooltip="Delete League"
-                          className="text-destructive hover:text-destructive hover:bg-destructive/10 cursor-pointer"
+                ) : (
+                  <>
+                    <SidebarMenuItem>
+                      <SidebarMenuButton
+                        asChild
+                        tooltip="Refresh League"
+                        className="cursor-pointer"
+                      >
+                        <Link
+                          to={refreshLeagueUrl}
+                          onClick={closeMobileSidebar}
                         >
-                          <Trash2 />
-                          <span>Delete League</span>
-                        </SidebarMenuButton>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>Delete League</DialogTitle>
-                          <DialogDescription>
-                            This will permanently delete all data for this
-                            league. This action cannot be undone.
-                          </DialogDescription>
-                        </DialogHeader>
-                        {deleteError && (
-                          <p className="text-sm text-destructive">
-                            {deleteError}
-                          </p>
-                        )}
-                        <DialogFooter>
-                          <Button
-                            className="cursor-pointer"
-                            variant="destructive"
-                            onClick={() => void handleDeleteLeague()}
-                            disabled={isDeleting}
+                          <RefreshCw />
+                          <span>Refresh League</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                    <SidebarMenuItem>
+                      <SidebarMenuButton
+                        asChild
+                        tooltip="Migrate League"
+                        className="cursor-pointer"
+                      >
+                        <Link to="/migrate_league" onClick={closeMobileSidebar}>
+                          <ArrowLeftRight />
+                          <span>Migrate League</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                    <SidebarMenuItem>
+                      <SidebarMenuButton
+                        asChild
+                        tooltip="View Another League"
+                        className="cursor-pointer"
+                      >
+                        <Link to="/?connect=true" onClick={closeMobileSidebar}>
+                          <Search />
+                          <span>View Another League</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                    <SidebarMenuItem>
+                      <SidebarMenuButton
+                        tooltip={
+                          expiringSoon
+                            ? 'Manage Subscription — expiring soon'
+                            : 'Manage Subscription'
+                        }
+                        className="cursor-pointer"
+                        onClick={() => {
+                          closeMobileSidebar();
+                          setSubscriptionDialogOpen(true);
+                        }}
+                      >
+                        <span className="relative flex shrink-0 items-center justify-center">
+                          <CreditCard />
+                          {expiringSoon && (
+                            <span
+                              aria-hidden="true"
+                              className="absolute -top-1 -right-1 size-2 rounded-full bg-destructive ring-2 ring-sidebar"
+                            />
+                          )}
+                        </span>
+                        <span>
+                          Manage Subscription
+                          {expiringSoon && (
+                            <span className="sr-only"> (expiring soon)</span>
+                          )}
+                        </span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                    <SidebarMenuItem>
+                      <Dialog
+                        open={dialogOpen}
+                        onOpenChange={(open) => {
+                          setDialogOpen(open);
+                          if (!open) setDeleteError(null);
+                        }}
+                      >
+                        <DialogTrigger asChild>
+                          <SidebarMenuButton
+                            tooltip="Delete League"
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10 cursor-pointer"
                           >
-                            {isDeleting ? 'Deleting…' : 'Delete League'}
-                          </Button>
-                          <Button
-                            className="cursor-pointer"
-                            variant="outline"
-                            onClick={() => setDialogOpen(false)}
-                            disabled={isDeleting}
-                          >
-                            Cancel
-                          </Button>
-                        </DialogFooter>
-                      </DialogContent>
-                    </Dialog>
-                  </SidebarMenuItem>
-                </>
-              )}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-        <ManageSubscriptionDialog
-          open={subscriptionDialogOpen}
-          onOpenChange={setSubscriptionDialogOpen}
-        />
-      </SidebarContent>
-      <SidebarFooter className="p-3">
-        {demoMode ? (
-          <SidebarMenuButton
-            tooltip="Exit Demo"
-            className="cursor-pointer text-muted-foreground hover:text-foreground"
-            onClick={() => {
-              closeMobileSidebar();
-              handleExitDemo();
-            }}
-          >
-            <LogOut />
-            {state === 'expanded' && <span>Exit Demo</span>}
-          </SidebarMenuButton>
-        ) : (
-          <UserButton showName={state === 'expanded'} />
-        )}
-      </SidebarFooter>
-    </Sidebar>
+                            <Trash2 />
+                            <span>Delete League</span>
+                          </SidebarMenuButton>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>Delete League</DialogTitle>
+                            <DialogDescription>
+                              This will permanently delete all data for this
+                              league. This action cannot be undone.
+                            </DialogDescription>
+                          </DialogHeader>
+                          {deleteError && (
+                            <p className="text-sm text-destructive">
+                              {deleteError}
+                            </p>
+                          )}
+                          <DialogFooter>
+                            <Button
+                              className="cursor-pointer"
+                              variant="destructive"
+                              onClick={() => void handleDeleteLeague()}
+                              disabled={isDeleting}
+                            >
+                              {isDeleting ? 'Deleting…' : 'Delete League'}
+                            </Button>
+                            <Button
+                              className="cursor-pointer"
+                              variant="outline"
+                              onClick={() => setDialogOpen(false)}
+                              disabled={isDeleting}
+                            >
+                              Cancel
+                            </Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
+                    </SidebarMenuItem>
+                  </>
+                )}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </SidebarContent>
+        <SidebarFooter className="p-3">
+          {demoMode ? (
+            <SidebarMenuButton
+              tooltip="Exit Demo"
+              className="cursor-pointer text-muted-foreground hover:text-foreground"
+              onClick={() => {
+                closeMobileSidebar();
+                handleExitDemo();
+              }}
+            >
+              <LogOut />
+              {state === 'expanded' && <span>Exit Demo</span>}
+            </SidebarMenuButton>
+          ) : (
+            // Desktop only — on mobile the sidebar is a modal sheet that breaks
+            // Clerk's portaled dropdown, so the account menu moves to the header
+            // (<HeaderAccount/>, FE-014/FE-019).
+            !isMobile && <UserButton showName={state === 'expanded'} />
+          )}
+        </SidebarFooter>
+      </Sidebar>
+      {/* Rendered outside <Sidebar> so closing the mobile sidebar sheet (which unmounts its
+          subtree) does not tear down an open Manage Subscription dialog (FE-023). */}
+      <ManageSubscriptionDialog
+        open={subscriptionDialogOpen}
+        onOpenChange={setSubscriptionDialogOpen}
+      />
+    </>
   );
 }
