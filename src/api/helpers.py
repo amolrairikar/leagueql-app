@@ -484,6 +484,99 @@ def require_active_subscription(
     )
 
 
+def require_league_owner(
+    canonical_league_id: str, clerk_user_id: str, metadata: dict | None = None
+) -> None:
+    """
+    Gate a mutating action to the league's owner (LQL-01 / BE-016).
+
+    The owner is the Clerk user who first onboarded the league
+    (``owner_user_id`` on METADATA). Any other caller — or a league with no
+    recorded owner — is rejected with ``403 Forbidden``.
+
+    Args:
+        canonical_league_id: The canonical league ID.
+        clerk_user_id: The authenticated caller's Clerk user ID.
+        metadata: Optional pre-fetched METADATA item; read from DynamoDB when omitted.
+            Pass it to avoid a redundant read when the caller already loaded it.
+
+    Raises:
+        HTTPException: 403 when the caller is not the owner (or no owner is set).
+    """
+    if metadata is None:
+        metadata = get_league_metadata(canonical_league_id)
+    owner = metadata.get("owner_user_id")
+    if owner and owner == clerk_user_id:
+        return
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Not the league owner",
+    )
+
+
+def require_league_member(
+    canonical_league_id: str,
+    clerk_user_id: str,
+    platform,
+    metadata: dict | None = None,
+) -> None:
+    """
+    Gate reads of an ESPN league to its members (LQL-01 / BE-016).
+
+    ESPN league data is confidential (viewing it upstream requires the caller's
+    ``espn_s2``/``SWID`` cookies), so only members may read it. Membership is the
+    ``members`` string set on METADATA, plus the owner. **Sleeper reads stay open**
+    (Sleeper's API is public), so this is a no-op for Sleeper leagues.
+
+    Args:
+        canonical_league_id: The canonical league ID.
+        clerk_user_id: The authenticated caller's Clerk user ID.
+        platform: The league's ``Platform``; the gate only applies to ESPN.
+        metadata: Optional pre-fetched METADATA item; read from DynamoDB when omitted.
+
+    Raises:
+        HTTPException: 403 when an ESPN caller is neither the owner nor a member.
+    """
+    if platform == main.Platform.SLEEPER:
+        return
+    if metadata is None:
+        metadata = get_league_metadata(canonical_league_id)
+    owner = metadata.get("owner_user_id")
+    members = metadata.get("members") or set()
+    if clerk_user_id == owner or clerk_user_id in members:
+        return
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Not a member of this league",
+    )
+
+
+def add_league_member(canonical_league_id: str, clerk_user_id: str) -> None:
+    """
+    Add a verified caller to a league's ``members`` set (LQL-01 / BE-016).
+
+    Idempotent: ``ADD`` to a DynamoDB string set is a no-op when the value is
+    already present. Used by the ESPN membership-verification flow once the
+    caller's cookies are confirmed valid for the league.
+
+    Args:
+        canonical_league_id: The canonical league ID.
+        clerk_user_id: The Clerk user ID to grant read membership.
+    """
+    try:
+        main.table.update_item(
+            Key={"PK": f"LEAGUE#{canonical_league_id}", "SK": "METADATA"},
+            UpdateExpression="ADD members :m",
+            ExpressionAttributeValues={":m": {clerk_user_id}},
+        )
+    except botocore.exceptions.ClientError as e:
+        logger.error("Failed to add member to league %s: %s", canonical_league_id, e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to record league membership",
+        )
+
+
 def _is_conditional_check_failure(exc: botocore.exceptions.ClientError) -> bool:
     """True when a DynamoDB ClientError is a failed ConditionExpression."""
     return (

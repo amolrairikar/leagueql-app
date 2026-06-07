@@ -130,6 +130,10 @@ the league will not appear as onboarded and a retry will re-run the full onboard
 | `stripe_subscription_id` | String | No | The Stripe subscription backing this league's access. Claimed by the webhook (BE-015) and used to scope cancellation/terminal writes and duplicate-subscription reconciliation. |
 | `pending_checkout` | Map | No | In-flight checkout marker `{ token, expires_at, user_id }` claimed by `POST /leagues/{id}/checkout-session` to block a concurrent second checkout by a *different* user; the initiating `user_id` may re-claim it immediately. Cleared by the webhook on success and self-heals after `expires_at` (BE-015). |
 | `trial_used` | Boolean | No | Set the first time a trial is granted for this league; once present, future subscriptions for the league are created without a trial (BE-015). |
+| `owner_user_id` | String | No | Clerk user ID of the league's owner — the authorization anchor for mutating endpoints (BE-016). Set **once** on first ONBOARD; never overwritten by REFRESH/MIGRATE. Absent for system-initiated onboards. |
+| `members` | String Set | No | Clerk user IDs entitled to **read** an ESPN league (BE-016). Seeded with the owner at onboard; a verified caller is `ADD`ed via `POST /leagues/{id}/verify-membership`. Unused for Sleeper (Sleeper reads are open). |
+| `transfer_token_hash` | String | No | sha256 of an outstanding ownership-transfer token (BE-016). Plaintext is never stored; set by `POST /leagues/{id}/transfer-token` and removed when redeemed. |
+| `transfer_token_expires_at` | String | No | ISO 8601 (UTC) expiry of the outstanding transfer token (BE-016). |
 
 **Example:**
 ```json
@@ -137,7 +141,9 @@ the league will not appear as onboarded and a retry will re-run the full onboard
   "PK": "LEAGUE#123456789",
   "SK": "METADATA",
   "platform": "ESPN",
-  "onboarded_at": "2024-09-01T00:00:00Z"
+  "onboarded_at": "2024-09-01T00:00:00Z",
+  "owner_user_id": "user_2abc123",
+  "members": ["user_2abc123"]
 }
 ```
 </details>

@@ -41,6 +41,9 @@ when the league is already up to date based on current NFL state.
 - [ ] ESPN refreshes use the user-entered latest season.
 - [ ] On success `last_refresh_at` is updated to enforce the next cooldown window.
 
+## Authorization (BE-016)
+Refresh is **owner-gated** ([BE-016](BE-016-league-ownership-authorization.md)): a non-owner caller gets `403`.
+
 ## Sources
 `src/api/routes.py`, `src/api/main.py`, `src/onboarder/`, memory: `feedback_espn_refresh_season`,
 `feedback_ai_recap_idempotency`.

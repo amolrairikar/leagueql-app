@@ -89,6 +89,43 @@ async function submitLeague(leagueId: string) {
   });
 }
 
+async function connectEspnFlow(leagueId: string) {
+  vi.useFakeTimers();
+  window.history.pushState({}, '', '/connect_league?platform=espn');
+  await renderRoute(
+    <Routes>
+      <Route path="/connect_league" element={<LeagueConnect />} />
+      <Route path="/home" element={<div>HOME PAGE</div>} />
+    </Routes>,
+    { route: '/connect_league' },
+  );
+  await act(async () => {
+    fireEvent.change(screen.getByPlaceholderText('Enter your league ID'), {
+      target: { value: leagueId },
+    });
+    fireEvent.change(
+      screen.getByPlaceholderText(
+        'Enter the latest season your league was active',
+      ),
+      { target: { value: '2024' } },
+    );
+    fireEvent.change(screen.getByPlaceholderText('Enter your SWID'), {
+      target: { value: '{SWID}' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('Enter your ESPN S2 token'), {
+      target: { value: 's2cookie' },
+    });
+    await Promise.resolve();
+  });
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: /^connect$/i }));
+    await Promise.resolve();
+  });
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(8000);
+  });
+}
+
 defineFeature(feature, (test) => {
   // Restore real timers after every scenario; a no-op when they were never faked
   // (the validation scenario uses real timers so userEvent works).
@@ -139,6 +176,93 @@ defineFeature(feature, (test) => {
     });
     then(/^I see a failure message "(.*)"$/, (reason) => {
       expect(screen.getByText(new RegExp(reason))).toBeInTheDocument();
+    });
+  });
+
+  test('Opening an already-onboarded league as a non-owner routes home without refreshing', ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    let onboardCalled = false;
+    given('the league is already onboarded and I am not its owner', () => {
+      server.use(
+        http.get(`${API}/leagues/:id`, () =>
+          HttpResponse.json({
+            detail: 'Found league',
+            data: {
+              seasons: ['2024'],
+              league_name: 'L',
+              subscription_end_time: null,
+              is_owner: false,
+            },
+          }),
+        ),
+        http.post(`${API}/leagues`, () => {
+          onboardCalled = true;
+          return HttpResponse.json(
+            { detail: 'x', data: { correlation_id: 'c' } },
+            { status: 201 },
+          );
+        }),
+      );
+    });
+    when(/^I onboard Sleeper league "(.*)"$/, async (leagueId) => {
+      await onboardFlow(leagueId);
+    });
+    then('I am routed to the home page', () => {
+      expect(screen.getByText('HOME PAGE')).toBeInTheDocument();
+    });
+    and('no onboard or refresh request was made', () => {
+      expect(onboardCalled).toBe(false);
+    });
+  });
+
+  test('Connecting to an ESPN league I am not yet a member of verifies membership', ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    let verifyCalled = false;
+    given('the ESPN league is onboarded but I am not yet a member', () => {
+      let getCalls = 0;
+      server.use(
+        http.get(`${API}/leagues/:id`, () => {
+          getCalls += 1;
+          // First read (existence check) is a member-gated 403; after verifying,
+          // the post-join read succeeds.
+          if (getCalls === 1) {
+            return HttpResponse.json(
+              { detail: 'Not a member of this league' },
+              { status: 403 },
+            );
+          }
+          return HttpResponse.json({
+            detail: 'Found league',
+            data: {
+              seasons: ['2024'],
+              league_name: 'L',
+              subscription_end_time: null,
+              is_owner: false,
+            },
+          });
+        }),
+        http.post(`${API}/leagues/:id/verify-membership`, () => {
+          verifyCalled = true;
+          return HttpResponse.json({ detail: 'Membership verified' });
+        }),
+      );
+    });
+    when(/^I connect ESPN league "(.*)"$/, async (leagueId) => {
+      await connectEspnFlow(leagueId);
+    });
+    then('I am routed to the home page', () => {
+      expect(screen.getByText('HOME PAGE')).toBeInTheDocument();
+    });
+    and('membership verification was requested', () => {
+      expect(verifyCalled).toBe(true);
     });
   });
 });

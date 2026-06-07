@@ -56,6 +56,9 @@ defineFeature(feature, (test) => {
       assignSpy = mockNavigation();
     });
     when('I click Subscribe on the paywall', async () => {
+      // Only the owner sees the Subscribe CTA (FE-025); the paywall reads
+      // is_owner via getLeague.
+      server.use(leagueMetadata({ is_owner: true }));
       await renderRoute(<SubscriptionRequired />, { league });
       await userEvent.click(screen.getByRole('button', { name: /subscribe/i }));
     });
@@ -75,6 +78,9 @@ defineFeature(feature, (test) => {
       );
     });
     when('I click Subscribe on the paywall', async () => {
+      // Only the owner sees the Subscribe CTA (FE-025); the paywall reads
+      // is_owner via getLeague.
+      server.use(leagueMetadata({ is_owner: true }));
       await renderRoute(<SubscriptionRequired />, { league });
       await userEvent.click(screen.getByRole('button', { name: /subscribe/i }));
     });
@@ -101,6 +107,9 @@ defineFeature(feature, (test) => {
       );
     });
     when('I click Subscribe on the paywall', async () => {
+      // Only the owner sees the Subscribe CTA (FE-025); the paywall reads
+      // is_owner via getLeague.
+      server.use(leagueMetadata({ is_owner: true }));
       await renderRoute(<SubscriptionRequired />, { league });
       await userEvent.click(screen.getByRole('button', { name: /subscribe/i }));
     });

@@ -14,6 +14,10 @@ const TOC_ITEMS = [
   { id: 'migrating-your-league', label: 'Migrating Your League', level: 2 },
   { id: 'switching-leagues', label: 'Switching Leagues', level: 2 },
   { id: 'deleting-a-league', label: 'Deleting a League', level: 2 },
+  { id: 'ownership-and-access', label: 'Ownership & Access', level: 1 },
+  { id: 'the-league-owner', label: 'The League Owner', level: 2 },
+  { id: 'joining-an-espn-league', label: 'Joining an ESPN League', level: 2 },
+  { id: 'transferring-ownership', label: 'Transferring Ownership', level: 2 },
   {
     id: 'billing-and-subscriptions',
     label: 'Billing & Subscriptions',
@@ -73,6 +77,29 @@ const FAQ_ITEMS: FaqItem[] = [
         Yes. Use the <InlineCode>View Another League</InlineCode> option in the
         sidebar to view or onboard another league. Each league is stored
         independently.
+      </>
+    ),
+  },
+  {
+    q: "Why don't I see the Refresh, Migrate, or Delete buttons?",
+    a: (
+      <>
+        Those actions are available only to the league&apos;s owner — the person
+        who first connected it. Everyone else can view the full dashboard but
+        not manage the league. See{' '}
+        <InlineCode>Ownership &amp; Access</InlineCode> for how ownership works
+        and how to transfer it.
+      </>
+    ),
+  },
+  {
+    q: "How do I view a league-mate's ESPN league?",
+    a: (
+      <>
+        Open the league, then use the <InlineCode>Verify membership</InlineCode>{' '}
+        prompt to confirm your ESPN cookies grant you access. Once verified you
+        become a member and the dashboard unlocks. Sleeper leagues are public,
+        so no verification is needed.
       </>
     ),
   },
@@ -425,8 +452,13 @@ export default function InstructionsPage() {
             <p className="text-muted-foreground leading-relaxed">
               At the bottom of the sidebar you will find league management
               options: refresh your league, migrate to another platform, switch
-              to view another league, submit a feature request, and delete the
-              current league.
+              to view another league, manage your subscription, transfer
+              ownership, and delete the current league. Most of these are owner
+              only — see{' '}
+              <strong className="text-foreground">
+                Ownership &amp; Access
+              </strong>{' '}
+              below.
             </p>
           </section>
 
@@ -537,6 +569,130 @@ export default function InstructionsPage() {
                   league from LeagueQL&apos;s backend. This action cannot be
                   undone.
                 </p>
+              </div>
+            </div>
+          </section>
+
+          {/* Ownership & Access */}
+          <section>
+            <SectionHeading id="ownership-and-access">
+              Ownership & Access
+            </SectionHeading>
+            <p className="text-muted-foreground leading-relaxed mb-6">
+              Every league has a single <strong>owner</strong> — the person who
+              first connected it. The owner controls how the league is managed
+              and billed. Who can <em>view</em> a league depends on the
+              platform: Sleeper data is public, so any signed-in user can view a
+              Sleeper league, while ESPN data is private, so only verified
+              members of an ESPN league can view it.
+            </p>
+
+            <div className="space-y-8">
+              <div>
+                <SubHeading id="the-league-owner">The League Owner</SubHeading>
+                <p className="text-muted-foreground leading-relaxed mb-3">
+                  The first person to connect a league becomes its owner. Only
+                  the owner sees and can use the league&apos;s management
+                  actions in the sidebar:
+                </p>
+                <ul className="list-disc pl-6 space-y-2 text-muted-foreground leading-relaxed mb-3">
+                  <li>
+                    <strong className="text-foreground">Refresh League</strong>{' '}
+                    and{' '}
+                    <strong className="text-foreground">Migrate League</strong>
+                  </li>
+                  <li>
+                    <strong className="text-foreground">
+                      Manage Subscription
+                    </strong>{' '}
+                    / <strong className="text-foreground">Subscribe</strong>{' '}
+                    (billing)
+                  </li>
+                  <li>
+                    <strong className="text-foreground">
+                      Transfer Ownership
+                    </strong>{' '}
+                    and{' '}
+                    <strong className="text-foreground">Delete League</strong>
+                  </li>
+                </ul>
+                <p className="text-muted-foreground leading-relaxed">
+                  Everyone else who can view the league (your league-mates) sees
+                  the full dashboard but not these actions. If a league&apos;s
+                  subscription has lapsed, only the owner is shown the Subscribe
+                  button — non-owners are asked to have the owner subscribe.
+                </p>
+              </div>
+
+              <div>
+                <SubHeading id="joining-an-espn-league">
+                  Joining an ESPN League
+                </SubHeading>
+                <p className="text-muted-foreground leading-relaxed mb-3">
+                  Because ESPN league data is private, league-mates other than
+                  the owner must prove they belong to the league before they can
+                  view it. When you open an ESPN league you are not yet a member
+                  of, you will see a{' '}
+                  <strong className="text-foreground">
+                    Verify your ESPN league membership
+                  </strong>{' '}
+                  prompt instead of the dashboard.
+                </p>
+                <ol className="list-decimal pl-6 space-y-2 text-muted-foreground leading-relaxed mb-3">
+                  <li>
+                    Make sure you are logged into ESPN in your browser (the
+                    LeagueQL ESPN Cookie Helper extension makes this seamless).
+                  </li>
+                  <li>
+                    Click <InlineCode>Verify membership</InlineCode>. LeagueQL
+                    checks your ESPN cookies against this specific league.
+                  </li>
+                  <li>
+                    If your cookies grant access, you are added to the
+                    league&apos;s members and the dashboard unlocks immediately.
+                    If they do not, you will see &quot;We couldn&apos;t confirm
+                    you&apos;re in this ESPN league.&quot;
+                  </li>
+                </ol>
+                <Callout>
+                  The owner never needs to verify — they are a member
+                  automatically. Verification reuses the same SWID / ESPN S2
+                  cookies as onboarding; they are used once to confirm access
+                  and are never stored. Sleeper leagues are public, so they
+                  never show this prompt.
+                </Callout>
+              </div>
+
+              <div>
+                <SubHeading id="transferring-ownership">
+                  Transferring Ownership
+                </SubHeading>
+                <p className="text-muted-foreground leading-relaxed mb-3">
+                  Ownership can be handed to another member with a one-time
+                  token:
+                </p>
+                <ul className="list-disc pl-6 space-y-2 text-muted-foreground leading-relaxed mb-3">
+                  <li>
+                    <strong className="text-foreground">Current owner:</strong>{' '}
+                    click <InlineCode>Transfer Ownership</InlineCode> in the
+                    sidebar, then <InlineCode>Generate token</InlineCode>. Copy
+                    the token and share it privately with the new owner.
+                  </li>
+                  <li>
+                    <strong className="text-foreground">New owner:</strong>{' '}
+                    click <InlineCode>Claim Ownership</InlineCode> in the
+                    sidebar, paste the token, and click{' '}
+                    <InlineCode>Claim ownership</InlineCode>. Ownership
+                    transfers right away — you gain the owner actions and the
+                    previous owner becomes a regular member.
+                  </li>
+                </ul>
+                <Callout variant="warning">
+                  The token expires after 24 hours and can be used only once;
+                  generating a new token invalidates any previous one. Anyone
+                  with the token can claim ownership, so share it privately. If
+                  a league&apos;s owner is unavailable, contact support.
+                </Callout>
               </div>
             </div>
           </section>

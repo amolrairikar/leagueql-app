@@ -17,3 +17,15 @@ Feature: Connect league onboarding flow (FE-002)
     Given onboarding will fail with reason "We could not reach Sleeper right now."
     When I onboard Sleeper league "100"
     Then I see a failure message "We could not reach Sleeper right now."
+
+  Scenario: Opening an already-onboarded league as a non-owner routes home without refreshing
+    Given the league is already onboarded and I am not its owner
+    When I onboard Sleeper league "100"
+    Then I am routed to the home page
+    And no onboard or refresh request was made
+
+  Scenario: Connecting to an ESPN league I am not yet a member of verifies membership
+    Given the ESPN league is onboarded but I am not yet a member
+    When I connect ESPN league "100"
+    Then I am routed to the home page
+    And membership verification was requested

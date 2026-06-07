@@ -554,6 +554,7 @@ class TestDeleteLeagueEndpoint:
                     "PK": "LEAGUE#canonical-abc",
                     "SK": "METADATA",
                     "stripe_subscription_id": "sub_123",
+                    "owner_user_id": "user_1",
                 }
             },
         ]
@@ -570,7 +571,13 @@ class TestDeleteLeagueEndpoint:
         self._setup_delete_mocks(mock_table, league_lookup_item, mock_s3_client)
         mock_table.get_item.side_effect = [
             {"Item": league_lookup_item},
-            {"Item": {"PK": "LEAGUE#canonical-abc", "SK": "METADATA"}},
+            {
+                "Item": {
+                    "PK": "LEAGUE#canonical-abc",
+                    "SK": "METADATA",
+                    "owner_user_id": "user_1",
+                }
+            },
         ]
         with patch("main.stripe") as mock_stripe:
             response = client.delete("/leagues/123?platform=SLEEPER")
@@ -590,6 +597,7 @@ class TestDeleteLeagueEndpoint:
                     "PK": "LEAGUE#canonical-abc",
                     "SK": "METADATA",
                     "stripe_subscription_id": "sub_123",
+                    "owner_user_id": "user_1",
                 }
             },
         ]
@@ -614,6 +622,7 @@ class TestDeleteLeagueEndpoint:
                     "PK": "LEAGUE#canonical-abc",
                     "SK": "METADATA",
                     "stripe_subscription_id": "sub_123",
+                    "owner_user_id": "user_1",
                 }
             },
         ]
@@ -1286,11 +1295,14 @@ class TestSubscriptionGate:
 
     @pytest.fixture
     def expired_metadata_item(self):
-        # No subscription_end_time → treated as expired by the gate.
+        # No subscription_end_time → treated as expired by the gate. The owner
+        # matches the default authed user so the owner gate passes first and the
+        # subscription (402) gate is what's exercised here (LQL-01 / BE-016).
         return {
             "PK": "LEAGUE#canonical-abc",
             "SK": "METADATA",
             "league_name": "Test League",
+            "owner_user_id": "user_1",
         }
 
     def test_query_blocked_when_expired(
@@ -1372,3 +1384,405 @@ class TestSubscriptionGate:
         response = client.get("/leagues/123?platform=SLEEPER")
         assert response.status_code == 200
         assert response.json()["data"]["subscription_end_time"] is None
+
+
+def _as_user(user_id):
+    """Override the Clerk auth dependency to a specific (non-default) caller."""
+    import main
+    import routes
+
+    main.app.dependency_overrides[routes.get_authenticated_user] = lambda: user_id
+
+
+class TestOwnerGate:
+    """Mutating endpoints are owner-gated (LQL-01 / BE-016): a non-owner gets 403."""
+
+    def test_delete_non_owner_returns_403(self, client, mock_table, league_lookup_item):
+        mock_table.get_item.return_value = {"Item": league_lookup_item}
+        _as_user("intruder")
+        response = client.delete("/leagues/123?platform=SLEEPER")
+        assert response.status_code == 403
+
+    def test_migrate_non_owner_returns_403(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+        ]
+        _as_user("intruder")
+        response = client.post(
+            "/leagues/123/migrate?platform=SLEEPER",
+            json={
+                "newPlatformLeagueId": "456",
+                "newPlatform": "ESPN",
+                "season": "2024",
+                "managerMapping": [],
+            },
+        )
+        assert response.status_code == 403
+
+    def test_refresh_non_owner_returns_403(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+        ]
+        _as_user("intruder")
+        response = client.post(
+            "/leagues?requestType=REFRESH",
+            json={"leagueId": "123", "platform": "SLEEPER"},
+        )
+        assert response.status_code == 403
+
+    def test_espn_members_non_owner_returns_403(
+        self, client, mock_table, league_lookup_item
+    ):
+        mock_table.get_item.return_value = {"Item": league_lookup_item}
+        _as_user("intruder")
+        with patch("main.http_requests.get") as mock_get:
+            response = client.post(
+                "/leagues/123/espn_members?platform=ESPN&espnLeagueId=99&season=2024",
+                json={"swid": "{abc}", "s2": "s2-token"},
+            )
+        assert response.status_code == 403
+        mock_get.assert_not_called()
+
+    def test_checkout_non_owner_returns_403(
+        self, client, mock_table, league_lookup_item
+    ):
+        mock_table.get_item.return_value = {"Item": league_lookup_item}
+        _as_user("intruder")
+        response = client.post("/leagues/123/checkout-session?platform=SLEEPER")
+        assert response.status_code == 403
+
+
+class TestGetLeagueIsOwner:
+    """get_league returns is_owner and member-gates ESPN reads (LQL-01 / BE-016)."""
+
+    def _seasons_query(self, mock_table):
+        mock_table.query.return_value = {
+            "Items": [{"seasons": {"2024"}, "canonical_league_id": "canonical-abc"}]
+        }
+
+    def test_is_owner_true_for_owner(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+        ]
+        self._seasons_query(mock_table)
+        response = client.get("/leagues/123?platform=SLEEPER")
+        assert response.status_code == 200
+        assert response.json()["data"]["is_owner"] is True
+
+    def test_is_owner_false_for_non_owner_sleeper(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+        ]
+        self._seasons_query(mock_table)
+        _as_user("user_2")  # not the owner, but Sleeper reads stay open
+        response = client.get("/leagues/123?platform=SLEEPER")
+        assert response.status_code == 200
+        assert response.json()["data"]["is_owner"] is False
+
+    def test_espn_non_member_returns_403(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+        ]
+        _as_user("stranger")
+        response = client.get("/leagues/123?platform=ESPN")
+        assert response.status_code == 403
+
+    def test_espn_member_allowed(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        league_metadata_item["members"] = {"user_1", "user_2"}
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+        ]
+        self._seasons_query(mock_table)
+        _as_user("user_2")
+        response = client.get("/leagues/123?platform=ESPN")
+        assert response.status_code == 200
+        assert response.json()["data"]["is_owner"] is False
+
+
+class TestQueryLeagueMemberGate:
+    """query_league member-gates ESPN reads in addition to the subscription gate."""
+
+    def test_espn_non_member_returns_403(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+        ]
+        _as_user("stranger")
+        response = client.get("/leagues/123/query?platform=ESPN&queryType=MATCHUPS")
+        assert response.status_code == 403
+
+    def test_espn_member_allowed(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        league_metadata_item["members"] = {"user_1", "user_2"}
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+        ]
+        mock_table.query.return_value = {"Items": [{"data": [{"week": 1}]}]}
+        _as_user("user_2")
+        response = client.get("/leagues/123/query?platform=ESPN&queryType=MATCHUPS")
+        assert response.status_code == 200
+
+
+class TestOnboardThreadsOwner:
+    def test_onboard_passes_owner_to_invoke(
+        self, client, mock_table, mock_lambda_client
+    ):
+        mock_table.get_item.return_value = {}
+        mock_lambda_client.invoke.return_value = {}
+        response = client.post(
+            "/leagues",
+            json={"leagueId": "123", "platform": "SLEEPER", "season": "2024"},
+        )
+        assert response.status_code == 201
+        import json
+
+        payload = json.loads(mock_lambda_client.invoke.call_args.kwargs["Payload"])
+        assert payload["ownerUserId"] == "user_1"
+
+
+class TestTransferTokenEndpoint:
+    def test_owner_mints_token(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+        ]
+        mock_table.update_item.return_value = {}
+        response = client.post("/leagues/123/transfer-token?platform=SLEEPER")
+        assert response.status_code == 200
+        assert response.json()["data"]["token"]
+        kwargs = mock_table.update_item.call_args.kwargs
+        assert "transfer_token_hash" in kwargs["UpdateExpression"]
+
+    def test_non_owner_returns_403(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+        ]
+        _as_user("intruder")
+        response = client.post("/leagues/123/transfer-token?platform=SLEEPER")
+        assert response.status_code == 403
+
+    def test_update_failure_returns_500(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+        ]
+        mock_table.update_item.side_effect = botocore.exceptions.ClientError(
+            {"Error": {"Code": "InternalError", "Message": "x"}}, "UpdateItem"
+        )
+        response = client.post("/leagues/123/transfer-token?platform=SLEEPER")
+        assert response.status_code == 500
+
+
+class TestClaimOwnershipEndpoint:
+    def _meta_with_token(self, token, expires_at):
+        import hashlib
+
+        return {
+            "PK": "LEAGUE#canonical-abc",
+            "SK": "METADATA",
+            "owner_user_id": "user_1",
+            "transfer_token_hash": hashlib.sha256(token.encode()).hexdigest(),
+            "transfer_token_expires_at": expires_at,
+        }
+
+    def _future(self):
+        from datetime import datetime, timedelta, timezone
+
+        return (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
+
+    def _past(self):
+        from datetime import datetime, timedelta, timezone
+
+        return (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+
+    def test_happy_path_claims_ownership(self, client, mock_table, league_lookup_item):
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": self._meta_with_token("tok", self._future())},
+        ]
+        mock_table.update_item.return_value = {}
+        _as_user("user_2")
+        response = client.post(
+            "/leagues/123/claim-ownership?platform=SLEEPER", json={"token": "tok"}
+        )
+        assert response.status_code == 200
+        kwargs = mock_table.update_item.call_args.kwargs
+        assert kwargs["ExpressionAttributeValues"][":caller"] == "user_2"
+        assert "owner_user_id" in kwargs["UpdateExpression"]
+
+    def test_no_token_returns_404(self, client, mock_table, league_lookup_item):
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": {"PK": "LEAGUE#canonical-abc", "SK": "METADATA"}},
+        ]
+        response = client.post(
+            "/leagues/123/claim-ownership?platform=SLEEPER", json={"token": "tok"}
+        )
+        assert response.status_code == 404
+
+    def test_mismatched_token_returns_403(self, client, mock_table, league_lookup_item):
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": self._meta_with_token("real", self._future())},
+        ]
+        response = client.post(
+            "/leagues/123/claim-ownership?platform=SLEEPER", json={"token": "wrong"}
+        )
+        assert response.status_code == 403
+
+    def test_expired_token_returns_410(self, client, mock_table, league_lookup_item):
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": self._meta_with_token("tok", self._past())},
+        ]
+        response = client.post(
+            "/leagues/123/claim-ownership?platform=SLEEPER", json={"token": "tok"}
+        )
+        assert response.status_code == 410
+
+    def test_unparseable_expiry_returns_410(
+        self, client, mock_table, league_lookup_item
+    ):
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": self._meta_with_token("tok", "not-a-date")},
+        ]
+        response = client.post(
+            "/leagues/123/claim-ownership?platform=SLEEPER", json={"token": "tok"}
+        )
+        assert response.status_code == 410
+
+    def test_race_conditional_failure_returns_409(
+        self, client, mock_table, league_lookup_item
+    ):
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": self._meta_with_token("tok", self._future())},
+        ]
+        mock_table.update_item.side_effect = botocore.exceptions.ClientError(
+            {"Error": {"Code": "ConditionalCheckFailedException", "Message": "x"}},
+            "UpdateItem",
+        )
+        response = client.post(
+            "/leagues/123/claim-ownership?platform=SLEEPER", json={"token": "tok"}
+        )
+        assert response.status_code == 409
+
+    def test_update_error_returns_500(self, client, mock_table, league_lookup_item):
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": self._meta_with_token("tok", self._future())},
+        ]
+        mock_table.update_item.side_effect = botocore.exceptions.ClientError(
+            {"Error": {"Code": "InternalError", "Message": "x"}}, "UpdateItem"
+        )
+        response = client.post(
+            "/leagues/123/claim-ownership?platform=SLEEPER", json={"token": "tok"}
+        )
+        assert response.status_code == 500
+
+
+class TestVerifyMembershipEndpoint:
+    _PAYLOAD = {"swid": "{abc}", "s2": "s2-token"}
+
+    def _seasons_query(self, mock_table):
+        mock_table.query.return_value = {
+            "Items": [{"seasons": {"2023", "2024"}, "canonical_league_id": "x"}]
+        }
+
+    def test_non_espn_returns_400(self, client, mock_table, league_lookup_item):
+        mock_table.get_item.return_value = {"Item": league_lookup_item}
+        response = client.post(
+            "/leagues/123/verify-membership?platform=SLEEPER", json=self._PAYLOAD
+        )
+        assert response.status_code == 400
+
+    def test_valid_cookies_add_member(self, client, mock_table, league_lookup_item):
+        mock_table.get_item.return_value = {"Item": league_lookup_item}
+        self._seasons_query(mock_table)
+        mock_table.update_item.return_value = {}
+        espn_resp = MagicMock()
+        espn_resp.raise_for_status = MagicMock()
+        _as_user("user_2")
+        with patch("main.http_requests.get", return_value=espn_resp):
+            response = client.post(
+                "/leagues/123/verify-membership?platform=ESPN", json=self._PAYLOAD
+            )
+        assert response.status_code == 200
+        kwargs = mock_table.update_item.call_args.kwargs
+        assert "ADD members" in kwargs["UpdateExpression"]
+        assert kwargs["ExpressionAttributeValues"][":m"] == {"user_2"}
+
+    def test_rejected_cookies_return_403(self, client, mock_table, league_lookup_item):
+        import requests
+
+        mock_table.get_item.return_value = {"Item": league_lookup_item}
+        self._seasons_query(mock_table)
+        espn_resp = MagicMock()
+        err = requests.exceptions.HTTPError("401")
+        err.response = MagicMock(status_code=401)
+        espn_resp.raise_for_status.side_effect = err
+        with patch("main.http_requests.get", return_value=espn_resp):
+            response = client.post(
+                "/leagues/123/verify-membership?platform=ESPN", json=self._PAYLOAD
+            )
+        assert response.status_code == 403
+        mock_table.update_item.assert_not_called()
+
+    def test_other_http_error_returns_502(self, client, mock_table, league_lookup_item):
+        import requests
+
+        mock_table.get_item.return_value = {"Item": league_lookup_item}
+        self._seasons_query(mock_table)
+        espn_resp = MagicMock()
+        err = requests.exceptions.HTTPError("500")
+        err.response = MagicMock(status_code=500)
+        espn_resp.raise_for_status.side_effect = err
+        with patch("main.http_requests.get", return_value=espn_resp):
+            response = client.post(
+                "/leagues/123/verify-membership?platform=ESPN", json=self._PAYLOAD
+            )
+        assert response.status_code == 502
+
+    def test_request_error_returns_502(self, client, mock_table, league_lookup_item):
+        import requests
+
+        mock_table.get_item.return_value = {"Item": league_lookup_item}
+        self._seasons_query(mock_table)
+        with patch(
+            "main.http_requests.get",
+            side_effect=requests.exceptions.ConnectionError("boom"),
+        ):
+            response = client.post(
+                "/leagues/123/verify-membership?platform=ESPN", json=self._PAYLOAD
+            )
+        assert response.status_code == 502

@@ -28,6 +28,7 @@ import ManagerHistory from '@/features/manager_history/manager-history';
 import MatchupRecords from '@/features/matchup_records/matchup-records';
 import Matchups from '@/features/matchups/matchups';
 import MigrateLeague from '@/features/migrate_league/migrate-league';
+import { MembershipGuard } from '@/features/ownership/membership-guard';
 import PlayerRecords from '@/features/player_records/player-records';
 import PlayoffBracket from '@/features/playoff_bracket/playoff-bracket';
 import ExtensionPrivacyPage from '@/features/privacy/extension-privacy-page';
@@ -70,7 +71,9 @@ function AppLayout({ children }: { children: React.ReactNode }) {
             </div>
           </header>
           <ErrorBoundary>
-            <SubscriptionGuard>{children}</SubscriptionGuard>
+            <MembershipGuard>
+              <SubscriptionGuard>{children}</SubscriptionGuard>
+            </MembershipGuard>
           </ErrorBoundary>
           <Footer className="py-3 shrink-0" />
         </SidebarInset>

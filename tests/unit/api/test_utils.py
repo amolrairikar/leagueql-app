@@ -386,6 +386,152 @@ class TestRequireActiveSubscription:
         mock_table.get_item.assert_not_called()
 
 
+class TestRequireLeagueOwner:
+    def _meta(self, owner):
+        item = {"PK": "LEAGUE#canonical-abc", "SK": "METADATA"}
+        if owner is not None:
+            item["owner_user_id"] = owner
+        return item
+
+    def test_owner_match_passes(self):
+        from main import require_league_owner
+
+        require_league_owner("canonical-abc", "user_1", metadata=self._meta("user_1"))
+
+    def test_owner_mismatch_raises_403(self):
+        from fastapi import HTTPException
+
+        from main import require_league_owner
+
+        with pytest.raises(HTTPException) as exc:
+            require_league_owner(
+                "canonical-abc", "user_2", metadata=self._meta("user_1")
+            )
+        assert exc.value.status_code == 403
+
+    def test_absent_owner_raises_403(self):
+        from fastapi import HTTPException
+
+        from main import require_league_owner
+
+        with pytest.raises(HTTPException) as exc:
+            require_league_owner("canonical-abc", "user_1", metadata=self._meta(None))
+        assert exc.value.status_code == 403
+
+    def test_reads_metadata_when_not_provided(self, mock_table):
+        from main import require_league_owner
+
+        mock_table.get_item.return_value = {"Item": self._meta("user_1")}
+        require_league_owner("canonical-abc", "user_1")
+        mock_table.get_item.assert_called_once()
+
+    def test_provided_metadata_short_circuits_read(self, mock_table):
+        from main import require_league_owner
+
+        require_league_owner("canonical-abc", "user_1", metadata=self._meta("user_1"))
+        mock_table.get_item.assert_not_called()
+
+
+class TestRequireLeagueMember:
+    def _meta(self, owner=None, members=None):
+        item = {"PK": "LEAGUE#canonical-abc", "SK": "METADATA"}
+        if owner is not None:
+            item["owner_user_id"] = owner
+        if members is not None:
+            item["members"] = members
+        return item
+
+    def test_sleeper_is_noop(self, mock_table):
+        from main import Platform, require_league_member
+
+        # No metadata fetch for Sleeper, and a non-member is allowed.
+        require_league_member("canonical-abc", "stranger", Platform.SLEEPER)
+        mock_table.get_item.assert_not_called()
+
+    def test_espn_owner_allowed(self):
+        from main import Platform, require_league_member
+
+        require_league_member(
+            "canonical-abc",
+            "user_1",
+            Platform.ESPN,
+            metadata=self._meta(owner="user_1"),
+        )
+
+    def test_espn_member_allowed(self):
+        from main import Platform, require_league_member
+
+        require_league_member(
+            "canonical-abc",
+            "user_2",
+            Platform.ESPN,
+            metadata=self._meta(owner="user_1", members={"user_2"}),
+        )
+
+    def test_espn_non_member_raises_403(self):
+        from fastapi import HTTPException
+
+        from main import Platform, require_league_member
+
+        with pytest.raises(HTTPException) as exc:
+            require_league_member(
+                "canonical-abc",
+                "stranger",
+                Platform.ESPN,
+                metadata=self._meta(owner="user_1", members={"user_2"}),
+            )
+        assert exc.value.status_code == 403
+
+    def test_espn_missing_members_treated_as_empty(self):
+        from fastapi import HTTPException
+
+        from main import Platform, require_league_member
+
+        with pytest.raises(HTTPException) as exc:
+            require_league_member(
+                "canonical-abc",
+                "stranger",
+                Platform.ESPN,
+                metadata=self._meta(owner="user_1"),
+            )
+        assert exc.value.status_code == 403
+
+    def test_espn_reads_metadata_when_not_provided(self, mock_table):
+        from main import Platform, require_league_member
+
+        mock_table.get_item.return_value = {"Item": self._meta(owner="user_1")}
+        require_league_member("canonical-abc", "user_1", Platform.ESPN)
+        mock_table.get_item.assert_called_once()
+
+
+class TestAddLeagueMember:
+    def test_adds_member_via_update_item(self, mock_table):
+        from main import add_league_member
+
+        add_league_member("canonical-abc", "user_2")
+        mock_table.update_item.assert_called_once()
+        kwargs = mock_table.update_item.call_args.kwargs
+        assert kwargs["Key"] == {
+            "PK": "LEAGUE#canonical-abc",
+            "SK": "METADATA",
+        }
+        assert "ADD members" in kwargs["UpdateExpression"]
+        assert kwargs["ExpressionAttributeValues"][":m"] == {"user_2"}
+
+    def test_client_error_raises_500(self, mock_table):
+        import botocore.exceptions
+        from fastapi import HTTPException
+
+        from main import add_league_member
+
+        mock_table.update_item.side_effect = botocore.exceptions.ClientError(
+            {"Error": {"Code": "InternalError", "Message": "x"}}, "UpdateItem"
+        )
+        with pytest.raises(HTTPException) as exc:
+            add_league_member("canonical-abc", "user_2")
+        assert exc.value.status_code == 500
+
+
 class TestDeleteLeagueHelpers:
     def _setup_writer(self, mock_table):
         mock_writer = MagicMock()

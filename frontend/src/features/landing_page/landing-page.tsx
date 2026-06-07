@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { onboardLeague } from '@/features/connect_league/api-calls';
+import { JoinLeagueDialog } from '@/features/connect_league/join-league-dialog';
 import { pollForCompletion } from '@/features/connect_league/poll';
 import { FEATURES } from '@/features/landing_page/constants';
 import type { Feature } from '@/features/landing_page/types';
@@ -85,6 +86,7 @@ export default function LeagueQLLanding() {
   const [loadingMessage, setLoadingMessage] = useState('');
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<ReactNode>(null);
+  const [joinLeagueId, setJoinLeagueId] = useState<string | null>(null);
   const [leagueCount, setLeagueCount] = useState<number | null>(null);
   const loadingStartRef = useRef<number | null>(null);
   const loadingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
@@ -156,53 +158,58 @@ export default function LeagueQLLanding() {
       setLeagueCookies(leagueId.trim(), platform, leagueData.data.seasons);
       void navigate('/home');
     } catch (err) {
-      if (err instanceof ApiError && err.status === 404) {
-        if (platform === 'SLEEPER') {
-          try {
-            const onboardResult = await onboardLeague('ONBOARD', {
-              leagueId: leagueId.trim(),
-              platform: 'SLEEPER',
-            });
-            const result = await pollForCompletion(
-              onboardResult.data.correlation_id,
+      const status = err instanceof ApiError ? err.status : null;
+      if (platform === 'ESPN' && status === 404) {
+        // Not onboarded yet — route to the onboard/refresh form to set it up.
+        void navigate(
+          `/connect_league?leagueId=${encodeURIComponent(leagueId.trim())}&platform=espn`,
+        );
+      } else if (platform === 'ESPN' && status === 403) {
+        // Already onboarded but the caller isn't a member of this private ESPN
+        // league yet — open the Join League dialog to verify membership rather
+        // than the (confusing) onboard form (LQL-01 / BE-016 / FE-025).
+        setJoinLeagueId(leagueId.trim());
+      } else if (platform === 'SLEEPER' && status === 404) {
+        try {
+          const onboardResult = await onboardLeague('ONBOARD', {
+            leagueId: leagueId.trim(),
+            platform: 'SLEEPER',
+          });
+          const result = await pollForCompletion(
+            onboardResult.data.correlation_id,
+          );
+          if (result.status === 'success') {
+            const leagueData = await getLeague(leagueId.trim(), 'SLEEPER');
+            setLeagueCookies(
+              leagueId.trim(),
+              'SLEEPER',
+              leagueData.data.seasons,
             );
-            if (result.status === 'success') {
-              const leagueData = await getLeague(leagueId.trim(), 'SLEEPER');
-              setLeagueCookies(
-                leagueId.trim(),
-                'SLEEPER',
-                leagueData.data.seasons,
-              );
-              void navigate('/home');
-            } else if (result.failureReason) {
-              setError(result.failureReason);
-            } else {
-              setError(
-                <>
-                  League onboarding failed. Please try again or{' '}
-                  <a
-                    href="mailto:support@leagueql.com"
-                    className="underline underline-offset-4"
-                  >
-                    contact support
-                  </a>{' '}
-                  if the error persists.
-                </>,
-              );
-            }
-          } catch {
+            void navigate('/home');
+          } else if (result.failureReason) {
+            setError(result.failureReason);
+          } else {
             setError(
-              'Failed to onboard league. Please check your league ID and try again.',
+              <>
+                League onboarding failed. Please try again or{' '}
+                <a
+                  href="mailto:support@leagueql.com"
+                  className="underline underline-offset-4"
+                >
+                  contact support
+                </a>{' '}
+                if the error persists.
+              </>,
             );
           }
-        } else {
-          void navigate(
-            `/connect_league?leagueId=${encodeURIComponent(leagueId.trim())}&platform=espn`,
+        } catch {
+          setError(
+            'Failed to onboard league. Please check your league ID and try again.',
           );
         }
       } else {
-        // A non-404 lookup failure (network / 5xx) is infrastructure trouble, not
-        // a bad league ID — show a generic message (matching the connect-league
+        // A non-404/403 lookup failure (network / 5xx) is infrastructure trouble,
+        // not a bad league ID — show a generic message (matching the connect-league
         // form) rather than the rarely-actionable backend detail.
         setError(
           <>
@@ -360,6 +367,14 @@ export default function LeagueQLLanding() {
           />
         </DialogContent>
       </Dialog>
+
+      <JoinLeagueDialog
+        open={joinLeagueId !== null}
+        onOpenChange={(next) => {
+          if (!next) setJoinLeagueId(null);
+        }}
+        leagueId={joinLeagueId ?? ''}
+      />
 
       <section className="relative z-10 px-6 pb-24">
         <div

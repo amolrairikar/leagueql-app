@@ -18,6 +18,7 @@ export function leagueMetadata(data: {
   seasons?: string[];
   league_name?: string | null;
   subscription_end_time?: string | null;
+  is_owner?: boolean;
 }) {
   return http.get(`${API}/leagues/:id`, () =>
     HttpResponse.json({
@@ -26,8 +27,16 @@ export function leagueMetadata(data: {
         seasons: data.seasons ?? [],
         league_name: data.league_name ?? null,
         subscription_end_time: data.subscription_end_time ?? null,
+        is_owner: data.is_owner ?? false,
       },
     }),
+  );
+}
+
+/** A `GET /leagues/:id` handler that fails with a status (e.g. 403 for ESPN non-members). */
+export function leagueMetadataError(status = 403) {
+  return http.get(`${API}/leagues/:id`, () =>
+    HttpResponse.json({ detail: 'Not a member of this league' }, { status }),
   );
 }
 

@@ -16,6 +16,7 @@ def invoke_onboarder(
     request_type: str,
     canonical_league_id: str | None,
     correlation_id: str,
+    owner_user_id: str | None = None,
 ) -> dict:
     """
     Asynchronously invoke the onboarder Lambda with the standard payload contract.
@@ -27,6 +28,9 @@ def invoke_onboarder(
         request_type: One of ONBOARD, REFRESH, or MIGRATE.
         canonical_league_id: The canonical league ID, or None for first-time onboarding.
         correlation_id: Correlation ID propagated for request tracing.
+        owner_user_id: Clerk user ID of the onboarding owner, recorded on the
+            league's METADATA on first ONBOARD (LQL-01 / BE-016). ``None`` for the
+            Sleeper auto-refresh job and other system-initiated invocations.
 
     Returns:
         The boto3 ``invoke`` response.
@@ -36,6 +40,7 @@ def invoke_onboarder(
         "requestType": request_type,
         "canonicalLeagueId": canonical_league_id,
         "correlation_id": correlation_id,
+        "ownerUserId": owner_user_id,
     }
     return lambda_client.invoke(
         FunctionName=function_name,

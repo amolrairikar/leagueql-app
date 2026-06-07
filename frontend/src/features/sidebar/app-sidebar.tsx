@@ -5,6 +5,7 @@ import {
   GraduationCap,
   History,
   Home,
+  KeyRound,
   LogIn,
   LogOut,
   RefreshCw,
@@ -15,6 +16,7 @@ import {
   TableProperties,
   Trophy,
   Trash2,
+  UserRoundCog,
   Users,
   Zap,
 } from 'lucide-react';
@@ -44,6 +46,9 @@ import {
   SidebarSeparator,
   useSidebar,
 } from '@/components/ui/sidebar';
+import { ClaimOwnershipDialog } from '@/features/ownership/claim-ownership-dialog';
+import { TransferOwnershipDialog } from '@/features/ownership/transfer-ownership-dialog';
+import { useIsOwner } from '@/features/ownership/use-is-owner';
 import { deleteLeague } from '@/features/sidebar/api-calls';
 import { ManageSubscriptionDialog } from '@/features/subscription/manage-subscription-dialog';
 import { useSubscription } from '@/features/subscription/use-subscription';
@@ -80,8 +85,11 @@ export function AppSidebar() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [subscriptionDialogOpen, setSubscriptionDialogOpen] = useState(false);
+  const [transferDialogOpen, setTransferDialogOpen] = useState(false);
+  const [claimDialogOpen, setClaimDialogOpen] = useState(false);
 
   const { expiringSoon } = useSubscription();
+  const { isOwner } = useIsOwner();
 
   const demoMode = isDemoMode();
 
@@ -173,33 +181,6 @@ export function AppSidebar() {
                     <SidebarMenuItem>
                       <SidebarMenuButton
                         asChild
-                        tooltip="Refresh League"
-                        className="cursor-pointer"
-                      >
-                        <Link
-                          to={refreshLeagueUrl}
-                          onClick={closeMobileSidebar}
-                        >
-                          <RefreshCw />
-                          <span>Refresh League</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                    <SidebarMenuItem>
-                      <SidebarMenuButton
-                        asChild
-                        tooltip="Migrate League"
-                        className="cursor-pointer"
-                      >
-                        <Link to="/migrate_league" onClick={closeMobileSidebar}>
-                          <ArrowLeftRight />
-                          <span>Migrate League</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                    <SidebarMenuItem>
-                      <SidebarMenuButton
-                        asChild
                         tooltip="View Another League"
                         className="cursor-pointer"
                       >
@@ -209,87 +190,154 @@ export function AppSidebar() {
                         </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
-                    <SidebarMenuItem>
-                      <SidebarMenuButton
-                        tooltip={
-                          expiringSoon
-                            ? 'Manage Subscription — expiring soon'
-                            : 'Manage Subscription'
-                        }
-                        className="cursor-pointer"
-                        onClick={() => {
-                          closeMobileSidebar();
-                          setSubscriptionDialogOpen(true);
-                        }}
-                      >
-                        <span className="relative flex shrink-0 items-center justify-center">
-                          <CreditCard />
-                          {expiringSoon && (
-                            <span
-                              aria-hidden="true"
-                              className="absolute -top-1 -right-1 size-2 rounded-full bg-destructive ring-2 ring-sidebar"
-                            />
-                          )}
-                        </span>
-                        <span>
-                          Manage Subscription
-                          {expiringSoon && (
-                            <span className="sr-only"> (expiring soon)</span>
-                          )}
-                        </span>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                    <SidebarMenuItem>
-                      <Dialog
-                        open={dialogOpen}
-                        onOpenChange={(open) => {
-                          setDialogOpen(open);
-                          if (!open) setDeleteError(null);
-                        }}
-                      >
-                        <DialogTrigger asChild>
+                    {/* Non-owners (shared league-mates) see the dashboard but
+                        none of the owner-only actions (LQL-01 / FE-025). */}
+                    {!isOwner && (
+                      <SidebarMenuItem>
+                        <SidebarMenuButton
+                          tooltip="Claim Ownership"
+                          className="cursor-pointer"
+                          onClick={() => {
+                            closeMobileSidebar();
+                            setClaimDialogOpen(true);
+                          }}
+                        >
+                          <KeyRound />
+                          <span>Claim Ownership</span>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    )}
+                    {isOwner && (
+                      <>
+                        <SidebarMenuItem>
                           <SidebarMenuButton
-                            tooltip="Delete League"
-                            className="text-destructive hover:text-destructive hover:bg-destructive/10 cursor-pointer"
+                            asChild
+                            tooltip="Refresh League"
+                            className="cursor-pointer"
                           >
-                            <Trash2 />
-                            <span>Delete League</span>
+                            <Link
+                              to={refreshLeagueUrl}
+                              onClick={closeMobileSidebar}
+                            >
+                              <RefreshCw />
+                              <span>Refresh League</span>
+                            </Link>
                           </SidebarMenuButton>
-                        </DialogTrigger>
-                        <DialogContent>
-                          <DialogHeader>
-                            <DialogTitle>Delete League</DialogTitle>
-                            <DialogDescription>
-                              This will permanently delete all data for this
-                              league. This action cannot be undone.
-                            </DialogDescription>
-                          </DialogHeader>
-                          {deleteError && (
-                            <p className="text-sm text-destructive">
-                              {deleteError}
-                            </p>
-                          )}
-                          <DialogFooter>
-                            <Button
-                              className="cursor-pointer"
-                              variant="destructive"
-                              onClick={() => void handleDeleteLeague()}
-                              disabled={isDeleting}
+                        </SidebarMenuItem>
+                        <SidebarMenuItem>
+                          <SidebarMenuButton
+                            asChild
+                            tooltip="Migrate League"
+                            className="cursor-pointer"
+                          >
+                            <Link
+                              to="/migrate_league"
+                              onClick={closeMobileSidebar}
                             >
-                              {isDeleting ? 'Deleting…' : 'Delete League'}
-                            </Button>
-                            <Button
-                              className="cursor-pointer"
-                              variant="outline"
-                              onClick={() => setDialogOpen(false)}
-                              disabled={isDeleting}
-                            >
-                              Cancel
-                            </Button>
-                          </DialogFooter>
-                        </DialogContent>
-                      </Dialog>
-                    </SidebarMenuItem>
+                              <ArrowLeftRight />
+                              <span>Migrate League</span>
+                            </Link>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                        <SidebarMenuItem>
+                          <SidebarMenuButton
+                            tooltip="Transfer Ownership"
+                            className="cursor-pointer"
+                            onClick={() => {
+                              closeMobileSidebar();
+                              setTransferDialogOpen(true);
+                            }}
+                          >
+                            <UserRoundCog />
+                            <span>Transfer Ownership</span>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                        <SidebarMenuItem>
+                          <SidebarMenuButton
+                            tooltip={
+                              expiringSoon
+                                ? 'Manage Subscription — expiring soon'
+                                : 'Manage Subscription'
+                            }
+                            className="cursor-pointer"
+                            onClick={() => {
+                              closeMobileSidebar();
+                              setSubscriptionDialogOpen(true);
+                            }}
+                          >
+                            <span className="relative flex shrink-0 items-center justify-center">
+                              <CreditCard />
+                              {expiringSoon && (
+                                <span
+                                  aria-hidden="true"
+                                  className="absolute -top-1 -right-1 size-2 rounded-full bg-destructive ring-2 ring-sidebar"
+                                />
+                              )}
+                            </span>
+                            <span>
+                              Manage Subscription
+                              {expiringSoon && (
+                                <span className="sr-only">
+                                  {' '}
+                                  (expiring soon)
+                                </span>
+                              )}
+                            </span>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                        <SidebarMenuItem>
+                          <Dialog
+                            open={dialogOpen}
+                            onOpenChange={(open) => {
+                              setDialogOpen(open);
+                              if (!open) setDeleteError(null);
+                            }}
+                          >
+                            <DialogTrigger asChild>
+                              <SidebarMenuButton
+                                tooltip="Delete League"
+                                className="text-destructive hover:text-destructive hover:bg-destructive/10 cursor-pointer"
+                              >
+                                <Trash2 />
+                                <span>Delete League</span>
+                              </SidebarMenuButton>
+                            </DialogTrigger>
+                            <DialogContent>
+                              <DialogHeader>
+                                <DialogTitle>Delete League</DialogTitle>
+                                <DialogDescription>
+                                  This will permanently delete all data for this
+                                  league. This action cannot be undone.
+                                </DialogDescription>
+                              </DialogHeader>
+                              {deleteError && (
+                                <p className="text-sm text-destructive">
+                                  {deleteError}
+                                </p>
+                              )}
+                              <DialogFooter>
+                                <Button
+                                  className="cursor-pointer"
+                                  variant="destructive"
+                                  onClick={() => void handleDeleteLeague()}
+                                  disabled={isDeleting}
+                                >
+                                  {isDeleting ? 'Deleting…' : 'Delete League'}
+                                </Button>
+                                <Button
+                                  className="cursor-pointer"
+                                  variant="outline"
+                                  onClick={() => setDialogOpen(false)}
+                                  disabled={isDeleting}
+                                >
+                                  Cancel
+                                </Button>
+                              </DialogFooter>
+                            </DialogContent>
+                          </Dialog>
+                        </SidebarMenuItem>
+                      </>
+                    )}
                   </>
                 )}
               </SidebarMenu>
@@ -322,6 +370,14 @@ export function AppSidebar() {
       <ManageSubscriptionDialog
         open={subscriptionDialogOpen}
         onOpenChange={setSubscriptionDialogOpen}
+      />
+      <TransferOwnershipDialog
+        open={transferDialogOpen}
+        onOpenChange={setTransferDialogOpen}
+      />
+      <ClaimOwnershipDialog
+        open={claimDialogOpen}
+        onOpenChange={setClaimDialogOpen}
       />
     </>
   );

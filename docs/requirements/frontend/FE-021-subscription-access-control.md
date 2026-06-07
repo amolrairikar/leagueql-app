@@ -64,6 +64,9 @@ handling.
       subscription is active but expires within 14 days, and is hidden otherwise (active >14 days
       out, expired, loading, demo mode, or no league).
 
+## Authorization (FE-025)
+Only the league owner sees the Subscribe CTA on the paywall; a non-owner sees an "ask the league owner to subscribe" message ([FE-025](FE-025-ownership-transfer-owner-gated-actions.md)).
+
 ## Sources
 `src/features/subscription/`, `src/app/app.tsx`, `src/features/sidebar/app-sidebar.tsx`,
 `src/components/api/leagues.ts`, `src/components/api/types.ts`.

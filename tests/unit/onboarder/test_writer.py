@@ -102,6 +102,47 @@ class TestWriteLeagueRecords:
         items = mock_ddb.transact_write_items.call_args[1]["TransactItems"]
         assert len(items) == 2
 
+    def test_onboard_writes_owner_and_seeds_members(
+        self, onboarder_writer, monkeypatch
+    ):
+        # LQL-01 / BE-016: the onboarding owner is recorded and seeds members.
+        monkeypatch.setenv("DYNAMODB_TABLE_NAME", "test-table")
+        mock_ddb = MagicMock()
+        with patch.object(onboarder_writer, "_dynamodb", mock_ddb):
+            onboarder_writer.write_league_records(
+                league_id="123",
+                platform="ESPN",
+                canonical_league_id="canonical-abc",
+                seasons=["2024"],
+                request_type="ONBOARD",
+                owner_user_id="user_1",
+            )
+        metadata_item = mock_ddb.transact_write_items.call_args[1]["TransactItems"][0][
+            "Put"
+        ]["Item"]
+        assert metadata_item["owner_user_id"] == {"S": "user_1"}
+        assert metadata_item["members"] == {"SS": ["user_1"]}
+
+    def test_onboard_without_owner_omits_owner_and_members(
+        self, onboarder_writer, monkeypatch
+    ):
+        # System-initiated onboards (no owner) leave owner/members absent.
+        monkeypatch.setenv("DYNAMODB_TABLE_NAME", "test-table")
+        mock_ddb = MagicMock()
+        with patch.object(onboarder_writer, "_dynamodb", mock_ddb):
+            onboarder_writer.write_league_records(
+                league_id="123",
+                platform="SLEEPER",
+                canonical_league_id="canonical-abc",
+                seasons=["2024"],
+                request_type="ONBOARD",
+            )
+        metadata_item = mock_ddb.transact_write_items.call_args[1]["TransactItems"][0][
+            "Put"
+        ]["Item"]
+        assert "owner_user_id" not in metadata_item
+        assert "members" not in metadata_item
+
     def test_onboard_never_writes_subscription_end_time(
         self, onboarder_writer, monkeypatch
     ):

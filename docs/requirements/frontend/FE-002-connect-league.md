@@ -7,10 +7,27 @@ ESPN cookies for private ESPN leagues), submits to `POST /leagues`, then polls
 `GET /jobs/{jobId}` until the job completes or fails. On success the user is routed into the
 app.
 
+The flow is ownership/membership aware (LQL-01 / BE-016). The initial `getLeague` existence
+check distinguishes three outcomes — `404` (not onboarded → ONBOARD; the caller becomes
+owner), `200` (already onboarded and readable), and `403` (an already-onboarded **ESPN** league
+the caller isn't a member of yet). On `200` for a **non-owner** the flow routes straight to the
+dashboard rather than attempting a refresh (refresh is owner-only, so a refresh attempt would
+`403`); the owner path still re-onboards/refreshes.
+
+**Joining vs. onboarding are distinct UIs.** A non-member doesn't use the onboard/refresh form
+to "join": the **Join League** dialog (`join-league-dialog.tsx`) handles ESPN membership
+verification only (`POST /leagues/{id}/verify-membership` — no onboard/refresh request) with
+ESPN cookies (extension autofill or manual entry), then opens the dashboard. The landing-page
+inline form opens this dialog on an ESPN `403` (the user has only entered a league ID there). On
+the `/connect_league` page itself a `403` is handled inline using the cookies already entered on
+the form (so the user isn't re-prompted), as a safety net for direct navigation.
+
 ## Scope
 - Route: `/connect_league` (protected) (`src/app/app.tsx`).
 - Component: `src/features/connect_league/league-connect.tsx`; schema
   `league-connect-schema.ts`; API in `api-calls.ts`.
+- **Join League dialog:** `src/features/connect_league/join-league-dialog.tsx` (ESPN membership
+  verification), opened from the landing-page inline connect form (FE-001) on a `403`.
 - Triggers [BE-001](../backend/BE-001-league-onboarding.md) /
   [BE-002](../backend/BE-002-league-refresh.md); polls
   [BE-008](../backend/BE-008-job-status-tracking.md).
@@ -34,6 +51,13 @@ app.
   error banner.
 - **Already onboarded:** backend may return "already onboarded"; route the user in rather
   than erroring.
+- **Non-owner of an existing league:** when the league already exists and the caller is not
+  its owner, the flow opens the dashboard without sending an (owner-only) refresh; for ESPN it
+  first verifies membership (a `403` on the lookup) before opening.
+- **ESPN non-member join:** an ESPN `403` is a membership problem, not an onboard one — from
+  the landing form it opens the Join League dialog (cookie autofill or manual entry →
+  `verify-membership` → open the dashboard); on the connect page it verifies inline with the
+  already-entered cookies. ESPN-rejected cookies surface the failure inline.
 - **Validation:** league ID must be numeric; ESPN requires a season.
 - **Demo mode:** connecting is disabled/redirected in demo mode.
 
@@ -47,6 +71,8 @@ app.
 - [ ] Polling persists long enough to capture completion of slow (~120s) jobs.
 - [ ] Pre-filled platform/league ID fields are locked.
 - [ ] On success the user is routed into the app (home).
+- [ ] A non-owner opening an already-onboarded league is routed to the dashboard without an
+      onboard/refresh request; an ESPN non-member verifies membership first.
 - [ ] ESPN credentials never appear in logs or persistent storage.
 
 ## Sources

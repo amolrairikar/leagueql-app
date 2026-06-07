@@ -47,6 +47,9 @@ wordmark and theme toggle.
 - [ ] The footer stays a constant height pinned to the bottom of the viewport across content
       states (dashboard, paywall, loading) — it does not shift or resize.
 
+## Authorization (FE-025)
+Owner-only actions (Refresh, Migrate, Transfer Ownership, Manage Subscription, Delete) are gated on `is_owner` ([FE-025](FE-025-ownership-transfer-owner-gated-actions.md)); non-owners see View Another League and Claim Ownership.
+
 ## Sources
 `src/features/sidebar/app-sidebar.tsx`, `src/features/sidebar/header-account.tsx`,
 `src/app/app.tsx`, `src/hooks/use-mobile.ts`.

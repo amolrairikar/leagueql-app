@@ -57,6 +57,8 @@ def step_checkout_ready_league(context, canonical, league_id, platform, user_id)
             "platform": platform,
             "native_league_id": league_id,
             "trial_used": True,
+            # The checkout caller must be the league owner (LQL-01 / BE-016).
+            "owner_user_id": user_id,
         },
     )
 

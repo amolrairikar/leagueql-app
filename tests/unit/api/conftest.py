@@ -103,6 +103,31 @@ def mock_sns_client():
         yield mock
 
 
+# Default Clerk user the auth dependency resolves to in unit tests. The shared
+# league fixtures record this user as the league owner so owner-gated endpoints
+# (LQL-01 / BE-016) succeed by default; tests for the 403 path override the auth
+# dependency to a different user.
+DEFAULT_TEST_USER = "user_1"
+
+
+@pytest.fixture(autouse=True)
+def override_authenticated_user():
+    """Make endpoints see a fixed authenticated caller (LQL-01 / BE-016).
+
+    Every league route now sits behind the Clerk JWT dependency; without an
+    override the TestClient (which carries no JWT) would get 401. Tests that
+    exercise the unauthenticated path pop this override explicitly.
+    """
+    import main
+    import routes
+
+    main.app.dependency_overrides[routes.get_authenticated_user] = lambda: (
+        DEFAULT_TEST_USER
+    )
+    yield DEFAULT_TEST_USER
+    main.app.dependency_overrides.pop(routes.get_authenticated_user, None)
+
+
 @pytest.fixture
 def client(aws_env_vars):
     import main
@@ -115,13 +140,15 @@ def league_lookup_item():
     # A far-future subscription_end_time is included so the subscription gate
     # passes in tests that stub a single generic get_item return_value (where the
     # gate's METADATA read resolves to this same item). Harmless to lookup_league,
-    # which only reads canonical_league_id.
+    # which only reads canonical_league_id. owner_user_id matches the default
+    # authed user so the owner gate passes when this item doubles as METADATA.
     return {
         "PK": "LEAGUE#123#PLATFORM#SLEEPER",
         "SK": "LEAGUE_LOOKUP",
         "canonical_league_id": "canonical-abc",
         "seasons": {"2023", "2024"},
         "subscription_end_time": "2999-01-01T00:00:00+00:00",
+        "owner_user_id": DEFAULT_TEST_USER,
     }
 
 
@@ -132,11 +159,15 @@ def league_metadata_item():
     # guard lets requests through; guard tests add active_job_id explicitly.
     # A far-future subscription_end_time keeps gated endpoints reachable by
     # default; subscription tests override or drop it to exercise the 402 gate.
+    # owner_user_id matches the default authed user so owner-gated endpoints
+    # pass by default; 403 tests override the auth dependency to another user.
     return {
         "PK": "LEAGUE#canonical-abc",
         "SK": "METADATA",
         "league_name": "Test League",
         "subscription_end_time": "2999-01-01T00:00:00+00:00",
+        "owner_user_id": DEFAULT_TEST_USER,
+        "members": {DEFAULT_TEST_USER},
     }
 
 

@@ -40,7 +40,10 @@ defineFeature(feature, (test) => {
   }) => {
     given('I am on a mobile viewport with an active subscription', async () => {
       window.innerWidth = 480;
-      server.use(leagueMetadata({ subscription_end_time: isoIn(30) }));
+      // Manage Subscription is an owner-only action (FE-025).
+      server.use(
+        leagueMetadata({ subscription_end_time: isoIn(30), is_owner: true }),
+      );
       await renderRoute(
         <SidebarProvider>
           <SidebarTrigger />
