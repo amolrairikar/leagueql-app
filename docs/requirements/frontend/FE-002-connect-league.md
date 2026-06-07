@@ -37,7 +37,9 @@ the form (so the user isn't re-prompted), as a safety net for direct navigation.
   HTTPS and cleared (`clearEspnCookies`) on success — never persisted or logged.
 - **Chrome extension auto-fill:** ESPN cookies may be auto-filled by the extension
   ([EXT-001](../extension/EXT-001-espn-cookie-autofill.md)); the form must also accept
-  manual entry.
+  manual entry. When the extension is detected the "Autofill cookies from ESPN" button is
+  shown; when it is not detected, an inline hyperlink to the Chrome Web Store listing is
+  shown instead so users can install it. The same behavior applies in the Join League dialog.
 - **Pre-filled league:** when arriving with a known platform + league ID, those fields are
   locked against edits.
 - **Long-running job:** the processor can take up to ~120s; polling must run long enough to

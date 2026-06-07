@@ -19,6 +19,15 @@ Feature: Stripe billing checkout and webhook lifecycle (BE-015)
     And a durable TRIAL_USED marker exists for native league "100" on "SLEEPER"
     And a WEBHOOK_EVENT dedup marker exists for event "evt_1"
 
+  Scenario: An auto-renewal advances the end time for the same subscription
+    Given a subscribable league "canon-1" native "100" on "SLEEPER"
+    And league "canon-1" has subscription "sub_1" with end time "2026-05-01T00:00:00+00:00"
+    When Stripe sends a "invoice.paid" webhook (event "evt_renew") for subscription "sub_1" with status "active"
+    Then the webhook responds with status 200
+    And league "canon-1" subscription_end_time is later than "2026-05-01T00:00:00+00:00"
+    And league "canon-1" still records subscription "sub_1"
+    And the subscription was not canceled
+
   Scenario: A redelivered event is ignored (dedup)
     Given a subscribable league "canon-1" native "100" on "SLEEPER"
     When Stripe sends a "checkout.session.completed" webhook (event "evt_1") for subscription "sub_1" with status "trialing"

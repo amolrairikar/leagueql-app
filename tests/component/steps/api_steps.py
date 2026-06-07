@@ -132,6 +132,16 @@ def step_delete_with_stripe(context, league_id, platform, behavior):
     context.response = context.api.delete(f"/leagues/{league_id}?platform={platform}")
 
 
+@when('I POST a REFRESH of league "{league_id}" on "{platform}"')
+def step_post_refresh(context, league_id, platform):
+    # requestType is a query param; the gate fires on the REFRESH path of an
+    # already-onboarded league before the owner check (BE-014).
+    context.response = context.api.post(
+        "/leagues?requestType=REFRESH",
+        json={"leagueId": league_id, "platform": platform},
+    )
+
+
 @when(
     'I POST a migration of league "{league_id}" from "{platform}" to '
     '"{new_platform}" league "{new_league_id}"'

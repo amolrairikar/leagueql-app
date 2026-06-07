@@ -139,6 +139,18 @@ def step_existing_subscription(context, canonical, sub_id):
     )
 
 
+@given('league "{canonical}" has subscription "{sub_id}" with end time "{end_time}"')
+def step_existing_subscription_ending(context, canonical, sub_id, end_time):
+    # Like the prior step, but with a caller-chosen (earlier) end time so a renewal
+    # write is observably an *advance* rather than a no-op.
+    table = context.ddb_resource.Table(context.table_name)
+    table.update_item(
+        Key={"PK": f"LEAGUE#{canonical}", "SK": "METADATA"},
+        UpdateExpression="SET stripe_subscription_id = :s, subscription_end_time = :t",
+        ExpressionAttributeValues={":s": sub_id, ":t": end_time},
+    )
+
+
 def _build_subscription(sub_id, status, canonical, platform, native):
     sub = {
         "id": sub_id,
@@ -228,6 +240,25 @@ def step_webhook_status(context, code):
 def step_has_sub_end(context, canonical):
     item = get_item(context, f"LEAGUE#{canonical}", "METADATA")
     assert item.get("subscription_end_time"), item
+
+
+@then('league "{canonical}" subscription_end_time is later than "{end_time}"')
+def step_sub_end_advanced(context, canonical, end_time):
+    item = get_item(context, f"LEAGUE#{canonical}", "METADATA")
+    stored = item.get("subscription_end_time")
+    # Both values are ISO 8601 UTC (same format + offset), so lexical order == time order.
+    assert stored and stored > end_time, (stored, end_time)
+
+
+@then('league "{canonical}" still records subscription "{sub_id}"')
+def step_still_records_subscription(context, canonical, sub_id):
+    item = get_item(context, f"LEAGUE#{canonical}", "METADATA")
+    assert item.get("stripe_subscription_id") == sub_id, item
+
+
+@then("the subscription was not canceled")
+def step_sub_not_canceled(context):
+    assert not context.cancel_mock.called, "cancel unexpectedly called"
 
 
 @then('league "{canonical}" subscription is expired')

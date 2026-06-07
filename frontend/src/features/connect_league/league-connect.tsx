@@ -42,6 +42,7 @@ import { pollForCompletion, sleep } from '@/features/connect_league/poll';
 import { ApiError } from '@/lib/api-client';
 import { clearEspnCookies, setLeagueCookies } from '@/lib/cookie-handler';
 import {
+  ESPN_EXTENSION_URL,
   EspnExtensionError,
   isEspnExtensionAvailable,
   onEspnExtensionReady,
@@ -479,6 +480,20 @@ export default function LeagueConnect() {
                         </p>
                       )}
                     </div>
+                  )}
+                  {!extensionReady && (
+                    <p className="text-sm text-muted-foreground">
+                      Tired of copying cookies?{' '}
+                      <a
+                        href={ESPN_EXTENSION_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline underline-offset-4"
+                      >
+                        Get the LeagueQL ESPN Cookie Helper extension
+                      </a>{' '}
+                      to autofill them automatically.
+                    </p>
                   )}
                 </>
               )}

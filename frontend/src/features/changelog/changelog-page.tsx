@@ -3,8 +3,10 @@ import { useEffect } from 'react';
 const releases = [
   {
     version: '1.0.0',
-    date: '2025-05-31',
+    date: '2026-06-06',
     added: [
+      'Connect and onboard ESPN or Sleeper fantasy football leagues',
+      'Home dashboard summarizing your league at a glance',
       'Season standings from each past + current season and season superlative awards',
       'All historical league matchups + box scores',
       'Playoff brackets from each season',
@@ -14,6 +16,12 @@ const releases = [
       'All-time fantasy player performance records',
       'All-time fantasy team performance records',
       'League migration: track all-time metrics even if your fantasy league migrates platforms',
+      'Refresh league data on demand (ESPN) or automatically each week during the season (Sleeper)',
+      'League ownership controls: owner-gated management actions, private ESPN league access via membership verification, and ownership transfer via a one-time token',
+      'Per-league subscriptions with a 14-day free trial, secure Stripe checkout, and self-serve billing management',
+      'Demo mode to explore a sample league without connecting your own',
+      'LeagueQL ESPN Cookie Helper Chrome extension to autofill ESPN credentials',
+      'Light and dark mode',
     ],
   },
 ];
