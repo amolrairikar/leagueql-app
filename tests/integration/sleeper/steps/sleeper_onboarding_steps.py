@@ -18,6 +18,9 @@ def step_invoke_onboarder(context):
     event = {
         "requestType": "ONBOARD",
         "correlation_id": context.test_correlation_id,
+        # Record the test user as owner so the league mirrors a real API onboard
+        # and the owner-gated cleanup DELETE (same user) succeeds (BE-016).
+        "ownerUserId": context.clerk_user_id,
         "body": {"leagueId": context.test_league_id, "platform": "SLEEPER"},
     }
     context.response = context.onboarder_handler_mod.lambda_handler(event, mock_ctx)

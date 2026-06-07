@@ -7,6 +7,14 @@ ESPN cookies for private ESPN leagues), submits to `POST /leagues`, then polls
 `GET /jobs/{jobId}` until the job completes or fails. On success the user is routed into the
 app.
 
+The flow is ownership/membership aware (LQL-01 / BE-016): the initial `getLeague` existence
+check distinguishes three outcomes — `404` (not onboarded → ONBOARD; the caller becomes
+owner), `200` (already onboarded and readable), and `403` (an already-onboarded **ESPN** league
+the caller isn't a member of yet). On `403` the flow verifies the supplied ESPN cookies via
+`POST /leagues/{id}/verify-membership` and, on success, opens the league. On `200` for a
+**non-owner** it routes straight to the dashboard rather than attempting a refresh (refresh is
+owner-only, so a refresh attempt would `403`); the owner path still re-onboards/refreshes.
+
 ## Scope
 - Route: `/connect_league` (protected) (`src/app/app.tsx`).
 - Component: `src/features/connect_league/league-connect.tsx`; schema
@@ -34,6 +42,12 @@ app.
   error banner.
 - **Already onboarded:** backend may return "already onboarded"; route the user in rather
   than erroring.
+- **Non-owner of an existing league:** when the league already exists and the caller is not
+  its owner, the flow opens the dashboard without sending an (owner-only) refresh; for ESPN it
+  first verifies membership (a `403` on the lookup) before opening.
+- **ESPN non-member join:** a `403` on the initial ESPN lookup triggers
+  `verify-membership` with the supplied cookies; if ESPN rejects them, the failure is surfaced
+  inline.
 - **Validation:** league ID must be numeric; ESPN requires a season.
 - **Demo mode:** connecting is disabled/redirected in demo mode.
 
@@ -47,6 +61,8 @@ app.
 - [ ] Polling persists long enough to capture completion of slow (~120s) jobs.
 - [ ] Pre-filled platform/league ID fields are locked.
 - [ ] On success the user is routed into the app (home).
+- [ ] A non-owner opening an already-onboarded league is routed to the dashboard without an
+      onboard/refresh request; an ESPN non-member verifies membership first.
 - [ ] ESPN credentials never appear in logs or persistent storage.
 
 ## Sources

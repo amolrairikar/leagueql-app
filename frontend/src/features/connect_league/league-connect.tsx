@@ -9,7 +9,7 @@ import {
 } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 
-import { getLeague } from '@/components/api/leagues';
+import { getLeague, verifyMembership } from '@/components/api/leagues';
 import { Spinner } from '@/components/spinner';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -204,13 +204,42 @@ export default function LeagueConnect() {
     const apiPlatform = API_PLATFORM[data.platform];
 
     let requestType: 'ONBOARD' | 'REFRESH';
+    let existingIsOwner = false;
+    let existingSeasons: string[] = [];
 
     try {
-      await getLeague(data.leagueId, apiPlatform);
+      const existing = await getLeague(data.leagueId, apiPlatform);
+      existingIsOwner = existing.data.is_owner === true;
+      existingSeasons = existing.data.seasons;
       requestType = 'REFRESH';
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) {
         requestType = 'ONBOARD';
+      } else if (
+        err instanceof ApiError &&
+        err.status === 403 &&
+        data.platform === 'espn'
+      ) {
+        // The ESPN league is already onboarded but the caller isn't a member yet
+        // (ESPN reads are member-gated — LQL-01 / BE-016). Verify their cookies
+        // grant access (which adds them to the league's members), then open it —
+        // no onboard/refresh needed (and refresh is owner-only anyway).
+        try {
+          await verifyMembership(data.leagueId, apiPlatform, {
+            swid: data.swid,
+            s2: data.espnS2,
+          });
+        } catch {
+          // ESPN rejected the cookies (403) or the proxy failed — surface inline.
+          setFailureReason(null);
+          setPollStatus('failed');
+          return;
+        }
+        const leagueData = await getLeague(data.leagueId, apiPlatform);
+        setLeagueCookies(data.leagueId, apiPlatform, leagueData.data.seasons);
+        clearEspnCookies();
+        void navigate('/home');
+        return;
       } else {
         // A non-404 lookup failure (network / 5xx) isn't an "onboard vs refresh"
         // signal — surface the generic failure message inline (the backend detail
@@ -219,6 +248,16 @@ export default function LeagueConnect() {
         setPollStatus('failed');
         return;
       }
+    }
+
+    // The league already exists and the caller can read it but is not the owner
+    // (a league-mate re-opening it). Refresh is owner-only (BE-016), so just open
+    // the dashboard rather than attempting an onboard/refresh that would 403.
+    if (requestType === 'REFRESH' && !existingIsOwner) {
+      setLeagueCookies(data.leagueId, apiPlatform, existingSeasons);
+      clearEspnCookies();
+      void navigate('/home');
+      return;
     }
 
     // ESPN S2/SWID are read from cookies, transmitted once over HTTPS, then cleared by
