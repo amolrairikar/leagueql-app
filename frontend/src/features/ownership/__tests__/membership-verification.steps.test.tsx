@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { defineFeature, loadFeature } from 'jest-cucumber';
 import { expect, vi } from 'vitest';
@@ -23,6 +23,18 @@ const league = {
   platform: 'ESPN' as const,
   seasons: ['2024'],
 };
+
+async function autofillAndJoin() {
+  const dialog = await screen.findByRole('dialog');
+  await userEvent.click(
+    within(dialog).getByRole('button', { name: /autofill cookies from espn/i }),
+  );
+  // Autofill populates the inputs (enabling the Join button) before we submit.
+  await within(dialog).findByDisplayValue('{SWID}');
+  await userEvent.click(
+    within(dialog).getByRole('button', { name: /join league/i }),
+  );
+}
 
 defineFeature(feature, (test) => {
   const cookies = vi.mocked(requestEspnCookies);
@@ -57,11 +69,7 @@ defineFeature(feature, (test) => {
         }),
       );
     });
-    and('I click "Verify membership"', async () => {
-      await userEvent.click(
-        screen.getByRole('button', { name: /verify membership/i }),
-      );
-    });
+    and('I autofill my cookies and join in the dialog', autofillAndJoin);
     then(/^I see the gated content "(.*)"$/, async (text) => {
       expect(await screen.findByText(text)).toBeInTheDocument();
     });
@@ -99,11 +107,7 @@ defineFeature(feature, (test) => {
         ),
       );
     });
-    and('I click "Verify membership"', async () => {
-      await userEvent.click(
-        screen.getByRole('button', { name: /verify membership/i }),
-      );
-    });
+    and('I autofill my cookies and join in the dialog', autofillAndJoin);
     then(/^I see an inline error "(.*)"$/, async (message) => {
       expect(await screen.findByText(message)).toBeInTheDocument();
     });

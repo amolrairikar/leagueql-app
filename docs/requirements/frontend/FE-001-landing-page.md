@@ -20,6 +20,11 @@ sidebar layout).
   or hidden), never blocking the page.
 - **Signed-in user:** primary CTA should route into the app rather than re-prompting sign in.
 - **Demo mode entry:** offers a way to explore with sample data without connecting a league.
+- **Inline connect routing:** the inline connect form resolves the league via `getLeague`. A
+  Sleeper `404` onboards in place; an ESPN `404` (not onboarded) routes to `/connect_league` to
+  onboard. An ESPN `403` (already onboarded but the caller isn't a member of the private league
+  yet) opens the **Join League** dialog (membership verification) in place rather than the
+  onboard form (LQL-01 / BE-016 / FE-025). Other failures show a generic inline message.
 - **Mobile layout:** feature grid and hero must remain legible on small screens.
 
 ## Acceptance Criteria

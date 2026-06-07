@@ -15,10 +15,14 @@ gives non-owners an ESPN membership-verification path, and adds the ownership tr
   owner; a non-owner sees "ask the league owner to subscribe" instead of a dead-end button.
 - **ESPN membership verification.** `MembershipGuard`
   (`frontend/src/features/ownership/membership-guard.tsx`) wraps the analytics layout. When
-  `getLeague` returns `403` for an ESPN league, it renders a **Verify your ESPN league
-  membership** prompt that pulls the caller's cookies via `requestEspnCookies()` and posts them to
-  `verify-membership`. On success it clears the API cache and renders the page; a `403` from
-  verify shows "We couldn't confirm you're in this ESPN league." Sleeper leagues never hit this.
+  `getLeague` returns `403` for an ESPN league, it shows a **Verify your ESPN league membership**
+  backdrop and opens the shared **Join League** dialog
+  (`features/connect_league/join-league-dialog.tsx`) — the single membership-verification UI used
+  across entry points (FE-002). The caller supplies cookies (extension autofill or manual entry)
+  and the dialog posts them to `verify-membership`; on success the guard clears the API cache and
+  re-renders the page in place (via the dialog's `onJoined` callback, instead of its default
+  set-cookies-and-navigate), and a `403` from verify shows "We couldn't confirm you're in this
+  ESPN league." Sleeper leagues never hit this.
 - **Transfer / claim.** `TransferOwnershipDialog` (owner) mints a one-time token and copies it;
   `ClaimOwnershipDialog` (recipient) redeems a token and reloads league state on success. Both
   reuse the shared dialog + `<ErrorAlert>` patterns.
@@ -41,9 +45,10 @@ gives non-owners an ESPN membership-verification path, and adds the ownership tr
 - **Demo / no league:** owner gating is bypassed (demo uses its own sidebar branch); the
   membership guard renders children.
 - **Fail-open membership guard:** a non-403 `getLeague` failure renders the page (the backend
-  remains the source of truth); only a `403` shows the verify prompt.
-- **Extension missing / not logged in:** the verify prompt surfaces the existing
-  "Could not reach the ESPN extension" / "Log into ESPN" guidance.
+  remains the source of truth); only a `403` shows the verification backdrop + Join dialog.
+- **Extension missing / not logged in:** the Join dialog's autofill surfaces the existing
+  "Could not reach the ESPN extension" / "Log into ESPN" guidance, and manual cookie entry
+  remains available as a fallback.
 - **Verify rejected:** ESPN-rejected cookies show "We couldn't confirm you're in this ESPN league."
 - **Token copy:** the transfer token is shown once and copyable; closing the dialog clears it.
 - **Claim success:** clears the API cache and reloads so the new owner immediately sees owner

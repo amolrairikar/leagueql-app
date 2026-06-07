@@ -1,4 +1,4 @@
-import { Copy } from 'lucide-react';
+import { Check, Copy } from 'lucide-react';
 import { useState } from 'react';
 
 import { createTransferToken } from '@/components/api/leagues';
@@ -33,10 +33,19 @@ export function TransferOwnershipDialog({
   const [loading, setLoading] = useState(false);
   const [token, setToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   function reset() {
     setToken(null);
     setError(null);
+    setCopied(false);
+  }
+
+  function handleCopy(value: string) {
+    void navigator.clipboard?.writeText(value).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
   }
 
   async function handleGenerate() {
@@ -77,10 +86,19 @@ export function TransferOwnershipDialog({
             <Button
               variant="outline"
               className="cursor-pointer"
-              onClick={() => void navigator.clipboard?.writeText(token)}
+              onClick={() => handleCopy(token)}
             >
-              <Copy className="size-4" />
-              Copy
+              {copied ? (
+                <>
+                  <Check className="size-4" />
+                  Copied
+                </>
+              ) : (
+                <>
+                  <Copy className="size-4" />
+                  Copy
+                </>
+              )}
             </Button>
           </div>
         ) : null}
