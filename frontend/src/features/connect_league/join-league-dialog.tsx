@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { getLeague, verifyMembership } from '@/components/api/leagues';
@@ -17,7 +17,13 @@ import { Label } from '@/components/ui/label';
 import { ApiError } from '@/lib/api-client';
 import { setLeagueCookies } from '@/lib/cookie-handler';
 import { ErrorAlert } from '@/lib/error-alert';
-import { EspnExtensionError, requestEspnCookies } from '@/lib/espn-extension';
+import {
+  ESPN_EXTENSION_URL,
+  EspnExtensionError,
+  isEspnExtensionAvailable,
+  onEspnExtensionReady,
+  requestEspnCookies,
+} from '@/lib/espn-extension';
 
 /**
  * "Join League" flow for an already-onboarded **private ESPN league** the caller
@@ -49,6 +55,16 @@ export function JoinLeagueDialog({
   const [loading, setLoading] = useState(false);
   const [autofilling, setAutofilling] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [extensionReady, setExtensionReady] = useState(
+    isEspnExtensionAvailable,
+  );
+
+  useEffect(() => {
+    if (extensionReady) return;
+    return onEspnExtensionReady(() => {
+      setExtensionReady(true);
+    });
+  }, [extensionReady]);
 
   function reset() {
     setSwid('');
@@ -139,16 +155,31 @@ export function JoinLeagueDialog({
               placeholder="Enter your ESPN S2 token"
             />
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            className="cursor-pointer"
-            disabled={autofilling}
-            onClick={() => void handleAutofill()}
-          >
-            {autofilling && <Spinner className="size-4" />}
-            Autofill cookies from ESPN
-          </Button>
+          {extensionReady ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="cursor-pointer"
+              disabled={autofilling}
+              onClick={() => void handleAutofill()}
+            >
+              {autofilling && <Spinner className="size-4" />}
+              Autofill cookies from ESPN
+            </Button>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Tired of copying cookies?{' '}
+              <a
+                href={ESPN_EXTENSION_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline underline-offset-4"
+              >
+                Get the LeagueQL ESPN Cookie Helper extension
+              </a>{' '}
+              to autofill them automatically.
+            </p>
+          )}
         </div>
         {error && <ErrorAlert message={error} />}
         <DialogFooter>

@@ -36,6 +36,7 @@ import {
 } from '@/features/migrate_league/api-calls';
 import { setLeagueCookies, getLeagueCookies } from '@/lib/cookie-handler';
 import {
+  ESPN_EXTENSION_URL,
   EspnExtensionError,
   isEspnExtensionAvailable,
   onEspnExtensionReady,
@@ -443,6 +444,20 @@ function Step2({
                 <p className="text-sm text-destructive">{autofillError}</p>
               )}
             </div>
+          )}
+          {!extensionReady && (
+            <p className="text-sm text-muted-foreground">
+              Tired of copying cookies?{' '}
+              <a
+                href={ESPN_EXTENSION_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline underline-offset-4"
+              >
+                Get the LeagueQL ESPN Cookie Helper extension
+              </a>{' '}
+              to autofill them automatically.
+            </p>
           )}
         </>
       )}

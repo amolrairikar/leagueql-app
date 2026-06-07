@@ -18,6 +18,10 @@ const WINDOW_MSG = {
 const EXTENSION_ATTR = 'data-leagueql-espn-extension';
 const REQUEST_TIMEOUT_MS = 5000;
 
+/** Chrome Web Store listing for the LeagueQL ESPN Cookie Helper extension. */
+export const ESPN_EXTENSION_URL =
+  'https://chromewebstore.google.com/detail/leagueql-espn-cookie-help/iinibakcpfopdipfoacabnmcngogbcmg';
+
 interface EspnCookieResponse {
   type: string;
   ok?: boolean;

@@ -1,7 +1,7 @@
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { defineFeature, loadFeature } from 'jest-cucumber';
-import { expect, vi } from 'vitest';
+import { afterEach, expect, vi } from 'vitest';
 
 import { MembershipGuard } from '../membership-guard';
 
@@ -24,6 +24,17 @@ const league = {
   seasons: ['2024'],
 };
 
+async function openGuardedLeague() {
+  // Flag the page as having the extension so the dialog's autofill button renders.
+  document.documentElement.setAttribute('data-leagueql-espn-extension', '1');
+  await renderRoute(
+    <MembershipGuard>
+      <div>Protected dashboard</div>
+    </MembershipGuard>,
+    { league },
+  );
+}
+
 async function autofillAndJoin() {
   const dialog = await screen.findByRole('dialog');
   await userEvent.click(
@@ -39,6 +50,10 @@ async function autofillAndJoin() {
 defineFeature(feature, (test) => {
   const cookies = vi.mocked(requestEspnCookies);
 
+  afterEach(() => {
+    document.documentElement.removeAttribute('data-leagueql-espn-extension');
+  });
+
   test('A non-member verifies and unlocks the dashboard', ({
     given,
     and,
@@ -51,14 +66,10 @@ defineFeature(feature, (test) => {
     and('the extension can supply valid ESPN cookies', () => {
       cookies.mockResolvedValue({ swid: '{SWID}', espnS2: 's2cookie' });
     });
-    when('I open the ESPN league behind the membership guard', async () => {
-      await renderRoute(
-        <MembershipGuard>
-          <div>Protected dashboard</div>
-        </MembershipGuard>,
-        { league },
-      );
-    });
+    when(
+      'I open the ESPN league behind the membership guard',
+      openGuardedLeague,
+    );
     then(/^I see the verification prompt "(.*)"$/, async (text) => {
       expect(await screen.findByText(text)).toBeInTheDocument();
     });
@@ -87,14 +98,10 @@ defineFeature(feature, (test) => {
     and('the extension can supply valid ESPN cookies', () => {
       cookies.mockResolvedValue({ swid: '{SWID}', espnS2: 's2cookie' });
     });
-    when('I open the ESPN league behind the membership guard', async () => {
-      await renderRoute(
-        <MembershipGuard>
-          <div>Protected dashboard</div>
-        </MembershipGuard>,
-        { league },
-      );
-    });
+    when(
+      'I open the ESPN league behind the membership guard',
+      openGuardedLeague,
+    );
     then(/^I see the verification prompt "(.*)"$/, async (text) => {
       expect(await screen.findByText(text)).toBeInTheDocument();
     });

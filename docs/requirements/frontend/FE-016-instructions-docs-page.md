@@ -42,9 +42,9 @@ Rendered with the marketing header (scrollable content area).
       onboarding/refresh/migration.
 - [ ] Both extension-based and manual ESPN cookie retrieval are documented.
 - [ ] Content scrolls within the page while the header remains.
-- [ ] A Billing & Subscriptions section documents how to subscribe (Stripe Checkout), the
-      once-per-league free trial, promotion codes, and managing/canceling billing (immediate
-      cancellation via the Stripe Billing Portal).
+- [ ] The docs document how to subscribe (Stripe Checkout), the once-per-league free trial, and
+      promotion codes (under Connecting a League), plus managing/canceling billing — immediate
+      cancellation via the Stripe Billing Portal (under Managing Your League).
 - [ ] An Ownership & Access section documents the league-owner model and owner-only actions,
       joining a private ESPN league via membership verification, and transferring ownership via
       a one-time token.

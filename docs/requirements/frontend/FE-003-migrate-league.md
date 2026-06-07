@@ -25,6 +25,10 @@ submits to `POST /leagues/{leagueId}/migrate` and polls until the job completes.
   explicitly marked not returning) before submit.
 - **Long-running job:** same ~120s pipeline; poll long enough to observe completion.
 - **Cookies handling:** ESPN credentials transmitted once, cleared after use, never logged.
+- **Chrome extension auto-fill:** when the extension
+  ([EXT-001](../extension/EXT-001-espn-cookie-autofill.md)) is detected the "Autofill cookies
+  from ESPN" button is shown; when it is not detected, an inline hyperlink to the Chrome Web
+  Store listing is shown instead so users can install it. Manual entry is always accepted.
 
 ## Acceptance Criteria
 - [ ] The flow confirms the source league, collects destination platform + league ID, and

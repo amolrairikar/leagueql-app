@@ -21,6 +21,11 @@ Feature: Subscription access control (BE-014)
     When I GET "/leagues/100/query?platform=SLEEPER&queryType=MATCHUPS"
     Then the API responds with status 402
 
+  Scenario: REFRESH of an already-onboarded league is gated with 402 when expired
+    Given league "canon-1" has subscription_end_time "2000-01-01T00:00:00+00:00"
+    When I POST a REFRESH of league "100" on "SLEEPER"
+    Then the API responds with status 402
+
   Scenario: GET league metadata is never gated
     Given league "canon-1" has no subscription_end_time
     When I GET "/leagues/100?platform=SLEEPER"
