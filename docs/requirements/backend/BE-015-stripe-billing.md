@@ -298,6 +298,9 @@ provisioning, not duplicate charging.)
   `/leagueql/{env}/stripe/secret_key` and `/leagueql/{env}/stripe/webhook_secret`. See the
   runbook [`docs/deploy/stripe-webhook-setup.md`](../../deploy/stripe-webhook-setup.md).
 
+## Authorization (BE-016)
+Checkout (`POST /leagues/{id}/checkout-session`) is **owner-gated** ([BE-016](BE-016-league-ownership-authorization.md)); the per-user billing portal is unchanged.
+
 ## Sources
 `src/api/routes.py` (`create_checkout_session`, `create_billing_portal_session`,
 `get_authenticated_user`), `src/api/helpers.py` (`get_or_create_stripe_customer`,

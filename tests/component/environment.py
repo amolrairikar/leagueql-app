@@ -36,6 +36,9 @@ _API_SRC = _SRC / "api"
 TABLE_NAME = "leagueql-table-test"
 BUCKET_NAME = "leagueql-test-bucket"
 REGION = "us-east-1"
+# Default authenticated caller for API scenarios; the shared seeding step records
+# this user as the league owner so owner-gated endpoints pass (LQL-01 / BE-016).
+DEFAULT_USER = "owner_user"
 # Stripe secrets are sourced from SecureString SSM params by name (BE-015); the
 # Lambdas fetch them at import, so the params must exist (in moto) before load.
 STRIPE_SECRET_KEY_PARAM = "/leagueql/test/stripe/secret_key"
@@ -280,12 +283,25 @@ def before_scenario(context, scenario):
     context.main.lambda_client.reset_mock()
     # Per-scenario ``mock.patch`` handles (started in steps) to stop on teardown.
     context._patches = []
+    # Every league route now sits behind the Clerk JWT dependency (LQL-01 /
+    # BE-016). Authenticate as the default owner so owner-gated endpoints pass;
+    # the shared seeding step records DEFAULT_USER as the league owner. Steps that
+    # need a different caller layer their own ``patch.dict`` override on top.
+    import routes
+
+    context.default_user = DEFAULT_USER
+    context.main.app.dependency_overrides[routes.get_authenticated_user] = lambda: (
+        DEFAULT_USER
+    )
 
 
 def after_scenario(context, scenario):
     for patcher in getattr(context, "_patches", []):
         patcher.stop()
     context._patches = []
+    import routes
+
+    context.main.app.dependency_overrides.pop(routes.get_authenticated_user, None)
     _clear_table(context)
     _clear_bucket(context)
 

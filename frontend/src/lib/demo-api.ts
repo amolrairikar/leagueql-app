@@ -97,6 +97,10 @@ export async function getDemoLeague(): Promise<GetLeagueResponse> {
     data: {
       seasons: DEMO_SEASONS,
       league_name: _leagueName,
+      // The demo viewer is treated as the owner of the sample league. Demo mode
+      // bypasses owner/membership gating anyway; this keeps the response shape
+      // faithful to the real endpoint (LQL-01 / BE-016).
+      is_owner: true,
     },
   };
 }

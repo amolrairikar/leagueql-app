@@ -62,6 +62,8 @@ paths:
       responses:
         "200":
           $ref: "#/components/responses/LeagueFoundResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
         "404":
           $ref: "#/components/responses/LeagueNotFoundError"
         "500":
@@ -100,6 +102,8 @@ paths:
       responses:
         "200":
           $ref: "#/components/responses/DeleteLeagueResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
         "404":
           $ref: "#/components/responses/LeagueNotFoundError"
         "500":
@@ -202,6 +206,8 @@ paths:
           $ref: "#/components/responses/BadRequestError"
         "402":
           $ref: "#/components/responses/SubscriptionRequiredError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
         "404":
           $ref: "#/components/responses/LeagueNotFoundError"
         "500":
@@ -266,6 +272,8 @@ paths:
           $ref: "#/components/responses/EspnMembersResponse"
         "402":
           $ref: "#/components/responses/SubscriptionRequiredError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
         "404":
           $ref: "#/components/responses/LeagueNotFoundError"
         "502":
@@ -316,6 +324,8 @@ paths:
           $ref: "#/components/responses/MigrateSuccessResponse"
         "402":
           $ref: "#/components/responses/SubscriptionRequiredError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
         "404":
           $ref: "#/components/responses/LeagueNotFoundError"
         "409":
@@ -394,10 +404,186 @@ paths:
           $ref: "#/components/responses/BillingSessionResponse"
         "401":
           $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
         "404":
           $ref: "#/components/responses/LeagueNotFoundError"
         "409":
           $ref: "#/components/responses/ConflictError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      security:
+        - ClerkJWT: []
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        httpMethod: POST
+        uri: "arn:aws:apigateway:${aws_region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations"
+        payloadFormatVersion: "2.0"
+
+  /leagues/{leagueId}/verify-membership:
+    post:
+      summary: Verify ESPN league membership
+      description: >
+        Verifies the caller's ESPN league membership (BE-016). The caller's ESPN
+        cookies (filled by the Chrome extension) are proxied against the league;
+        on success the caller is added to the league's members and may read the
+        league. ESPN leagues only — Sleeper returns 400. ESPN-rejected cookies
+        return 403.
+      operationId: verifyMembership
+      parameters:
+        - name: leagueId
+          in: path
+          required: true
+          description: The ESPN league ID
+          schema:
+            type: string
+            pattern: '^\d+$'
+            example: "12345678"
+        - name: platform
+          in: query
+          required: true
+          description: The platform the league is on (must be ESPN)
+          schema:
+            type: string
+            enum: [ESPN, SLEEPER]
+            example: "ESPN"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EspnMembersRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/LeagueFoundResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/LeagueNotFoundError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "502":
+          $ref: "#/components/responses/BadGatewayError"
+      security:
+        - ClerkJWT: []
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        httpMethod: POST
+        uri: "arn:aws:apigateway:${aws_region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations"
+        payloadFormatVersion: "2.0"
+
+  /leagues/{leagueId}/transfer-token:
+    post:
+      summary: Mint an ownership-transfer token
+      description: >
+        Owner-only (BE-016). Generates a one-time ownership-transfer token,
+        returning the plaintext token once; only its sha256 hash and a short
+        expiry are stored. Minting a new token invalidates any prior one.
+      operationId: createTransferToken
+      parameters:
+        - name: leagueId
+          in: path
+          required: true
+          description: The ID of the fantasy league
+          schema:
+            type: string
+            pattern: '^\d+$'
+            example: "12345678"
+        - name: platform
+          in: query
+          required: true
+          description: The platform the league is on
+          schema:
+            type: string
+            enum: [ESPN, SLEEPER]
+            example: "SLEEPER"
+      responses:
+        "200":
+          description: Transfer token created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/APIResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          token:
+                            type: string
+                          expires_at:
+                            type: string
+                            format: date-time
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/LeagueNotFoundError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      security:
+        - ClerkJWT: []
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        httpMethod: POST
+        uri: "arn:aws:apigateway:${aws_region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations"
+        payloadFormatVersion: "2.0"
+
+  /leagues/{leagueId}/claim-ownership:
+    post:
+      summary: Claim league ownership with a transfer token
+      description: >
+        Redeems a one-time transfer token to become the league owner (BE-016).
+        Single-use and race-safe. Returns 404 (no outstanding token), 403 (token
+        mismatch), 410 (expired), or 409 (token already redeemed).
+      operationId: claimOwnership
+      parameters:
+        - name: leagueId
+          in: path
+          required: true
+          description: The ID of the fantasy league
+          schema:
+            type: string
+            pattern: '^\d+$'
+            example: "12345678"
+        - name: platform
+          in: query
+          required: true
+          description: The platform the league is on
+          schema:
+            type: string
+            enum: [ESPN, SLEEPER]
+            example: "SLEEPER"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+                  description: The plaintext transfer token issued to the recipient.
+      responses:
+        "200":
+          $ref: "#/components/responses/LeagueFoundResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/LeagueNotFoundError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+        "410":
+          $ref: "#/components/responses/GoneError"
         "500":
           $ref: "#/components/responses/InternalError"
       security:
@@ -509,6 +695,12 @@ components:
             lapses. Access is granted while now < subscription_end_time; absent or
             past means expired. Null/omitted when no billing value has been written.
           example: "2026-07-01T00:00:00+00:00"
+        is_owner:
+          type: boolean
+          description: >
+            Whether the authenticated caller is the league owner (BE-016). Used by
+            the frontend to gate owner-only actions.
+          example: true
 
     APIResponse:
       type: object
@@ -819,6 +1011,28 @@ components:
           example:
             error: "Payment required"
             message: "Subscription required"
+
+    ForbiddenError:
+      description: >
+        The caller is not authorized for this league (BE-016) — not the owner for
+        a mutating action, or not a member of a confidential ESPN league.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error: "Forbidden"
+            message: "Not the league owner"
+
+    GoneError:
+      description: The ownership-transfer token has expired (BE-016)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error: "Gone"
+            message: "Transfer token has expired"
 
     BadGatewayError:
       description: Upstream ESPN API request failed

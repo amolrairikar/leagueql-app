@@ -80,6 +80,9 @@ subscription is confirmed canceled (or absent / already canceled).
 - [ ] Deleting an un-onboarded league returns `404`.
 - [ ] Backend errors during deletion return `500`.
 
+## Authorization (BE-016)
+Delete is **owner-gated** ([BE-016](BE-016-league-ownership-authorization.md)): only the league owner can delete; a non-owner gets `403` before any data is touched.
+
 ## Sources
 `src/api/routes.py::delete_league`, `src/api/helpers.py` (`delete_all_league_items`;
 subscription-cancellation helper, e.g. `cancel_league_subscription`),

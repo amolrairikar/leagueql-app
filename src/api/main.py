@@ -111,6 +111,10 @@ class EspnMembersPayload(BaseModel):
     s2: str
 
 
+class ClaimOwnershipPayload(BaseModel):
+    token: str = Field(max_length=512)
+
+
 class ManagerMappingEntry(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -184,6 +188,7 @@ CHECKOUT_PENDING_TTL_MINUTES = int(os.environ.get("CHECKOUT_PENDING_TTL_MINUTES"
 # the infrastructure above so helpers can resolve ``main`` attributes at call time.
 from helpers import (  # noqa: E402, F401
     _query_all_keys,
+    add_league_member,
     cancel_league_subscription,
     claim_pending_checkout,
     collect_league_keys,
@@ -201,6 +206,8 @@ from helpers import (  # noqa: E402, F401
     lookup_league,
     publish_failure,
     require_active_subscription,
+    require_league_member,
+    require_league_owner,
     set_active_job,
     trial_used_for_league,
     update_league_count,

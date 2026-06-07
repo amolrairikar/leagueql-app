@@ -38,6 +38,9 @@ and concatenates all matching items.
 - [ ] All `Decimal` values are converted to JSON-safe numbers.
 - [ ] Successful responses set `Cache-Control: private, max-age=300`.
 
+## Authorization (BE-016)
+ESPN queries are **member-gated** ([BE-016](BE-016-league-ownership-authorization.md)) in addition to the subscription gate — a non-member gets `403`. Sleeper queries stay subscription-gated only.
+
 ## Sources
 `src/api/routes.py::query_league`, `src/api/main.py` (`QueryType`, `QUERY_TYPE_TO_SK_BASE`),
 `docs/api/openapi_spec.yaml`.

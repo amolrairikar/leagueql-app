@@ -31,5 +31,11 @@ must be able to read `subscription_end_time` even when the subscription has laps
 - [ ] Response sets `Cache-Control: no-store`.
 - [ ] `seasons` is the unified, sorted list across all platforms for migrated leagues.
 
+## Authorization (BE-016)
+The response includes `is_owner` so the frontend can gate owner-only actions. For **ESPN**
+leagues this endpoint is **member-gated** ([BE-016](BE-016-league-ownership-authorization.md)) — a
+non-member gets `403` before any metadata is returned; **Sleeper** reads stay open to any
+authenticated caller.
+
 ## Sources
 `src/api/routes.py::get_league`, `docs/db/dynamodb_spec.md` (METADATA).

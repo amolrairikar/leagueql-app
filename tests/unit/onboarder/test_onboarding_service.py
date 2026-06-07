@@ -156,3 +156,37 @@ class TestOnboardingServiceRun:
 
         mock_ddb.assert_called_once()
         mock_s3.assert_called_once()
+
+    def test_run_forwards_owner_user_id(
+        self,
+        onboarder_onboarding_service,
+        monkeypatch,
+    ):
+        # LQL-01 / BE-016: the owner threaded from the API reaches the writer.
+        monkeypatch.setenv("S3_BUCKET_NAME", "test-bucket")
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = {"status": {"previousSeasons": []}}
+        with patch("requests.get", return_value=mock_resp):
+            svc = onboarder_onboarding_service.OnboardingService(
+                league_id="123",
+                platform="ESPN",
+                request_type="ONBOARD",
+                latest_season="2024",
+                owner_user_id="user_1",
+            )
+
+        async def fake_fetch():
+            return [{"season": "2024", "data_type": "users", "data": {}}]
+
+        svc.client.fetch_all = fake_fetch
+
+        with (
+            patch.object(
+                onboarder_onboarding_service, "write_league_records"
+            ) as mock_ddb,
+            patch.object(onboarder_onboarding_service, "upload_results_to_s3"),
+        ):
+            svc.run()
+
+        assert mock_ddb.call_args.kwargs["owner_user_id"] == "user_1"

@@ -296,7 +296,12 @@ class TestCheckoutSessionEndpoint:
     def test_requires_authentication(
         self, client, mock_table, league_lookup_item, league_metadata_item
     ):
-        # No override and no aws.event in scope -> 401 from the dependency.
+        # Drop the default auth override so the real dependency runs; with no
+        # aws.event in scope it raises 401.
+        import main
+        import routes
+
+        main.app.dependency_overrides.pop(routes.get_authenticated_user, None)
         resp = client.post("/leagues/123/checkout-session?platform=SLEEPER")
         assert resp.status_code == 401
 

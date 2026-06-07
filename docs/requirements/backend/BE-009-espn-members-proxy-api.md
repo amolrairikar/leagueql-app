@@ -39,5 +39,8 @@ to build the manager identity mapping between platforms.
       without making an upstream ESPN request.
 - [ ] `swid`/`s2` never appear in logs or stored items.
 
+## Authorization (BE-016)
+The ESPN-members proxy is **owner-gated** ([BE-016](BE-016-league-ownership-authorization.md)) — it is the owner's onboarding/migration manager-mapping tool. Non-owner league-mates join via `POST /leagues/{id}/verify-membership` instead.
+
 ## Sources
 `src/api/routes.py::get_espn_members`, `docs/api/openapi_spec.yaml`.

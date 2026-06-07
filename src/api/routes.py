@@ -6,7 +6,10 @@ module are reached through ``main`` at call time so test patches on
 ``main.table`` etc. take effect here.
 """
 
+import hashlib
+import hmac
 import os
+import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Annotated, Any
@@ -32,6 +35,7 @@ from main import (
     REFRESH_COOLDOWN_MINUTES,
     S3_BUCKET,
     APIResponse,
+    ClaimOwnershipPayload,
     EspnMembersPayload,
     MigratePayload,
     OnboardingPayload,
@@ -43,6 +47,8 @@ from main import (
     logger,
 )
 from helpers import (
+    _is_conditional_check_failure,
+    add_league_member,
     cancel_league_subscription,
     claim_pending_checkout,
     convert_decimals,
@@ -59,6 +65,8 @@ from helpers import (
     is_job_in_progress,
     lookup_league,
     require_active_subscription,
+    require_league_member,
+    require_league_owner,
     set_active_job,
     trial_used_for_league,
     update_league_count,
@@ -73,42 +81,13 @@ def root() -> APIResponse:
     return APIResponse(detail="Healthy!")
 
 
-@router.get("/leagues/{leagueId}", status_code=status.HTTP_200_OK)
-def get_league(
-    leagueId: Annotated[
-        str, Path(description="The ID of the fantasy league", pattern=r"^\d+$")
-    ],
-    platform: Annotated[Platform, Query(description="The platform the league is on")],
-    response: Response,
-) -> APIResponse:
-    """Gets league by league ID and platform."""
-    canonical_league_id = lookup_league(league_id=leagueId, platform=platform)
-    logger.info(
-        "Canonical league for league ID %s and platform %s: %s",
-        leagueId,
-        platform,
-        canonical_league_id,
-    )
-    seasons = get_league_seasons(canonical_league_id=canonical_league_id)
-    metadata = get_league_metadata(canonical_league_id=canonical_league_id)
-    response.headers["Cache-Control"] = "no-store"
-    return APIResponse(
-        detail="Found league",
-        data={
-            "seasons": seasons,
-            "league_name": metadata.get("league_name"),
-            "subscription_end_time": metadata.get("subscription_end_time"),
-        },
-    )
-
-
 def get_authenticated_user(request: Request) -> str:
     """Return the authenticated Clerk user ID from the API Gateway JWT authorizer.
 
     The Clerk JWT is validated by the API Gateway authorizer; its verified claims
     are surfaced to the Lambda under the original event, which Mangum exposes at
-    ``request.scope["aws.event"]``. Used as a FastAPI dependency for billing
-    endpoints that must map the caller to a Stripe customer (BE-015).
+    ``request.scope["aws.event"]``. Used as a FastAPI dependency for endpoints
+    that must identify the caller (billing, ownership, and ESPN read gating).
 
     Raises:
         HTTPException: 401 when no authenticated user (``sub`` claim) is present.
@@ -126,6 +105,45 @@ def get_authenticated_user(request: Request) -> str:
             detail="Authentication required",
         )
     return sub
+
+
+@router.get("/leagues/{leagueId}", status_code=status.HTTP_200_OK)
+def get_league(
+    leagueId: Annotated[
+        str, Path(description="The ID of the fantasy league", pattern=r"^\d+$")
+    ],
+    platform: Annotated[Platform, Query(description="The platform the league is on")],
+    response: Response,
+    clerk_user_id: Annotated[str, Depends(get_authenticated_user)],
+) -> APIResponse:
+    """Gets league by league ID and platform.
+
+    Sleeper reads stay open; ESPN reads are member-gated (LQL-01 / BE-016) — a
+    non-member is rejected with 403 before any league metadata is returned. The
+    response includes ``is_owner`` so the frontend can gate owner-only actions.
+    """
+    canonical_league_id = lookup_league(league_id=leagueId, platform=platform)
+    logger.info(
+        "Canonical league for league ID %s and platform %s: %s",
+        leagueId,
+        platform,
+        canonical_league_id,
+    )
+    metadata = get_league_metadata(canonical_league_id=canonical_league_id)
+    require_league_member(
+        canonical_league_id, clerk_user_id, platform, metadata=metadata
+    )
+    seasons = get_league_seasons(canonical_league_id=canonical_league_id)
+    response.headers["Cache-Control"] = "no-store"
+    return APIResponse(
+        detail="Found league",
+        data={
+            "seasons": seasons,
+            "league_name": metadata.get("league_name"),
+            "subscription_end_time": metadata.get("subscription_end_time"),
+            "is_owner": metadata.get("owner_user_id") == clerk_user_id,
+        },
+    )
 
 
 @router.post("/leagues/{leagueId}/checkout-session", status_code=status.HTTP_200_OK)
@@ -147,6 +165,7 @@ def create_checkout_session(
     """
     canonical_league_id = lookup_league(league_id=leagueId, platform=platform)
     metadata = get_league_metadata(canonical_league_id=canonical_league_id)
+    require_league_owner(canonical_league_id, clerk_user_id, metadata=metadata)
     # The league is ineligible for a trial if either the current METADATA marker
     # or the durable (platform, native_league_id) record says it was already used
     # — the latter survives a delete/re-onboard cycle (BE-015).
@@ -249,6 +268,7 @@ def get_job(
 def onboard_league(
     payload: OnboardingPayload,
     response: Response,
+    clerk_user_id: Annotated[str, Depends(get_authenticated_user)],
     requestType: Annotated[
         RequestType, Query(description="The type of request: ONBOARD or REFRESH")
     ] = RequestType.ONBOARD,
@@ -293,6 +313,9 @@ def onboard_league(
     if requestType == RequestType.REFRESH and canonical_league_id:
         league_metadata = get_league_metadata(canonical_league_id)
         require_active_subscription(canonical_league_id, metadata=league_metadata)
+        require_league_owner(
+            canonical_league_id, clerk_user_id, metadata=league_metadata
+        )
         if is_job_in_progress(league_metadata):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -348,6 +371,7 @@ def onboard_league(
             request_type=requestType.value,
             canonical_league_id=canonical_league_id,
             correlation_id=correlation_id,
+            owner_user_id=clerk_user_id,
         )
 
         detail_msg = (
@@ -382,6 +406,7 @@ def get_espn_members(
         str, Query(description="The ESPN season year", pattern=r"^\d{4}$")
     ],
     payload: EspnMembersPayload,
+    clerk_user_id: Annotated[str, Depends(get_authenticated_user)],
 ) -> APIResponse:
     """Proxy ESPN Fantasy API to fetch league members server-side (avoids browser CORS).
 
@@ -389,9 +414,14 @@ def get_espn_members(
     both are constrained to digits only (``^\\d+$`` / ``^\\d{4}$``) to keep
     attacker-controlled characters (``?``, ``&``, ``/``, ``..``) out of the request
     path/query — preventing parameter injection / path traversal against the ESPN host.
+
+    Owner-gated (LQL-01 / BE-016): this is the owner's onboarding/migration
+    manager-mapping tool. Non-owner league-mates join via ``verify-membership``.
     """
     canonical_league_id = lookup_league(league_id=leagueId, platform=platform)
-    require_active_subscription(canonical_league_id)
+    metadata = get_league_metadata(canonical_league_id=canonical_league_id)
+    require_league_owner(canonical_league_id, clerk_user_id, metadata=metadata)
+    require_active_subscription(canonical_league_id, metadata=metadata)
 
     espn_url = (
         f"https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl"
@@ -441,6 +471,7 @@ def migrate_league(
     platform: Annotated[Platform, Query(description="The current platform")],
     payload: MigratePayload,
     response: Response,
+    clerk_user_id: Annotated[str, Depends(get_authenticated_user)],
 ) -> APIResponse:
     """Migrate a league from one platform to another."""
     correlation_id = str(uuid.uuid4())
@@ -455,6 +486,7 @@ def migrate_league(
     )
 
     league_metadata = get_league_metadata(canonical_league_id)
+    require_league_owner(canonical_league_id, clerk_user_id, metadata=league_metadata)
     require_active_subscription(canonical_league_id, metadata=league_metadata)
     if is_job_in_progress(league_metadata):
         raise HTTPException(
@@ -558,12 +590,14 @@ def delete_league(
         str, Path(description="The ID of the fantasy league", pattern=r"^\d+$")
     ],
     platform: Annotated[Platform, Query(description="The platform the league is on")],
+    clerk_user_id: Annotated[str, Depends(get_authenticated_user)],
 ) -> APIResponse:
     """Deletes an onboarded league."""
     canonical_league_id = lookup_league(league_id=leagueId, platform=platform)
     # Cancel the league's Stripe subscription before touching any data, so a failed
     # cancellation aborts the delete with the league intact (BE-007 / BE-015).
     metadata = get_league_metadata(canonical_league_id=canonical_league_id)
+    require_league_owner(canonical_league_id, clerk_user_id, metadata=metadata)
     cancel_league_subscription(metadata.get("stripe_subscription_id"))
     logger.info(
         "Proceeding with delete for canonical_league_id: %s", canonical_league_id
@@ -608,8 +642,13 @@ def query_league(
     platform: Annotated[Platform, Query(description="The platform the league is on")],
     queryType: Annotated[str, Query(description="The precomputed view to retrieve")],
     response: Response,
+    clerk_user_id: Annotated[str, Depends(get_authenticated_user)],
 ) -> QueryResponse:
-    """Returns a precomputed data view for the specified league."""
+    """Returns a precomputed data view for the specified league.
+
+    ESPN queries are member-gated (LQL-01 / BE-016) in addition to the
+    subscription gate; Sleeper queries stay subscription-gated only.
+    """
     parts = queryType.split("#", 1)
     base_type_str = parts[0].upper()
     suffix = parts[1] if len(parts) > 1 else None
@@ -626,7 +665,11 @@ def query_league(
     sk = f"{sk_base}#{suffix}" if suffix is not None else f"{sk_base}#"
 
     canonical_league_id = lookup_league(league_id=leagueId, platform=platform)
-    require_active_subscription(canonical_league_id)
+    metadata = get_league_metadata(canonical_league_id=canonical_league_id)
+    require_league_member(
+        canonical_league_id, clerk_user_id, platform, metadata=metadata
+    )
+    require_active_subscription(canonical_league_id, metadata=metadata)
     pk = f"LEAGUE#{canonical_league_id}"
 
     try:
@@ -672,3 +715,205 @@ def query_league(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve league data",
         )
+
+
+# How long an outstanding ownership-transfer token stays valid before it expires.
+TRANSFER_TOKEN_TTL_HOURS = 24
+
+
+@router.post("/leagues/{leagueId}/transfer-token", status_code=status.HTTP_200_OK)
+def create_transfer_token(
+    leagueId: Annotated[
+        str, Path(description="The ID of the fantasy league", pattern=r"^\d+$")
+    ],
+    platform: Annotated[Platform, Query(description="The platform the league is on")],
+    clerk_user_id: Annotated[str, Depends(get_authenticated_user)],
+) -> APIResponse:
+    """Mint a one-time ownership-transfer token (owner-gated, LQL-01 / BE-016).
+
+    Only the plaintext token is returned (to the owner, once); only its sha256
+    hash and a short expiry are stored on METADATA. Minting a new token
+    overwrites/invalidates any prior outstanding one.
+    """
+    canonical_league_id = lookup_league(league_id=leagueId, platform=platform)
+    metadata = get_league_metadata(canonical_league_id=canonical_league_id)
+    require_league_owner(canonical_league_id, clerk_user_id, metadata=metadata)
+
+    token = secrets.token_urlsafe(32)
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
+    expires_at = (
+        datetime.now(timezone.utc) + timedelta(hours=TRANSFER_TOKEN_TTL_HOURS)
+    ).isoformat()
+    try:
+        main.table.update_item(
+            Key={"PK": f"LEAGUE#{canonical_league_id}", "SK": "METADATA"},
+            UpdateExpression=(
+                "SET transfer_token_hash = :h, transfer_token_expires_at = :e"
+            ),
+            ExpressionAttributeValues={":h": token_hash, ":e": expires_at},
+        )
+    except botocore.exceptions.ClientError as e:
+        logger.error(
+            "Failed to store transfer token for %s: %s", canonical_league_id, e
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create transfer token",
+        )
+
+    return APIResponse(
+        detail="Transfer token created",
+        data={"token": token, "expires_at": expires_at},
+    )
+
+
+@router.post("/leagues/{leagueId}/claim-ownership", status_code=status.HTTP_200_OK)
+def claim_ownership(
+    leagueId: Annotated[
+        str, Path(description="The ID of the fantasy league", pattern=r"^\d+$")
+    ],
+    platform: Annotated[Platform, Query(description="The platform the league is on")],
+    payload: ClaimOwnershipPayload,
+    clerk_user_id: Annotated[str, Depends(get_authenticated_user)],
+) -> APIResponse:
+    """Redeem a transfer token to become the league owner (LQL-01 / BE-016).
+
+    Single-use and race-safe: the owner swap is a conditional ``update_item`` that
+    only succeeds while the stored hash still matches, so a concurrent second
+    redemption fails the condition. The new owner is also added to ``members``.
+    """
+    canonical_league_id = lookup_league(league_id=leagueId, platform=platform)
+    metadata = get_league_metadata(canonical_league_id=canonical_league_id)
+
+    stored_hash = metadata.get("transfer_token_hash")
+    if not stored_hash:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No transfer token outstanding for this league",
+        )
+
+    token_hash = hashlib.sha256(payload.token.encode()).hexdigest()
+    if not hmac.compare_digest(token_hash, stored_hash):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid transfer token",
+        )
+
+    expires_at = metadata.get("transfer_token_expires_at")
+    expired = True
+    if expires_at:
+        try:
+            expired = datetime.fromisoformat(expires_at) <= datetime.now(timezone.utc)
+        except ValueError:
+            logger.warning(
+                "Unparseable transfer_token_expires_at %r for league %s; treating as expired",
+                expires_at,
+                canonical_league_id,
+            )
+    if expired:
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="Transfer token has expired",
+        )
+
+    try:
+        main.table.update_item(
+            Key={"PK": f"LEAGUE#{canonical_league_id}", "SK": "METADATA"},
+            UpdateExpression=(
+                "SET owner_user_id = :caller ADD members :m "
+                "REMOVE transfer_token_hash, transfer_token_expires_at"
+            ),
+            ConditionExpression="transfer_token_hash = :h",
+            ExpressionAttributeValues={
+                ":caller": clerk_user_id,
+                ":m": {clerk_user_id},
+                ":h": stored_hash,
+            },
+        )
+    except botocore.exceptions.ClientError as e:
+        if _is_conditional_check_failure(e):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Transfer token already redeemed",
+            )
+        logger.error("Failed to claim ownership for %s: %s", canonical_league_id, e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to claim ownership",
+        )
+
+    return APIResponse(detail="Ownership claimed")
+
+
+@router.post("/leagues/{leagueId}/verify-membership", status_code=status.HTTP_200_OK)
+def verify_membership(
+    leagueId: Annotated[
+        str, Path(description="The ID of the fantasy league", pattern=r"^\d+$")
+    ],
+    platform: Annotated[Platform, Query(description="The platform the league is on")],
+    payload: EspnMembersPayload,
+    clerk_user_id: Annotated[str, Depends(get_authenticated_user)],
+) -> APIResponse:
+    """Verify ESPN league membership via the caller's cookies (LQL-01 / BE-016).
+
+    The Chrome extension fills the caller's ``espn_s2``/``SWID``; the backend
+    proxies an authenticated read of this exact ESPN league with those cookies.
+    A success means the cookies grant access to the league, so the caller's Clerk
+    user ID is added to ``members`` (idempotent) and they may read the league.
+    Cookies ESPN rejects (401/403) leave the caller unauthorized (403).
+
+    Only applies to ESPN leagues — Sleeper reads are open, so verification is a
+    400. ``leagueId`` (digits) and the derived season are interpolated into the
+    upstream ESPN URL, keeping attacker-controlled characters out of it.
+    """
+    if platform != Platform.ESPN:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Membership verification only applies to ESPN leagues",
+        )
+
+    canonical_league_id = lookup_league(league_id=leagueId, platform=platform)
+    seasons = get_league_seasons(canonical_league_id=canonical_league_id)
+    season = max(seasons)
+
+    espn_url = (
+        f"https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl"
+        f"/seasons/{season}/segments/0/leagues/{leagueId}?view=mTeam"
+    )
+    try:
+        espn_response = http_requests.get(
+            espn_url,
+            cookies={"SWID": payload.swid, "espn_s2": payload.s2},
+            timeout=10,
+        )
+        espn_response.raise_for_status()
+    except http_requests.exceptions.HTTPError as e:
+        status_code = getattr(e.response, "status_code", None)
+        if status_code in (
+            status.HTTP_401_UNAUTHORIZED,
+            status.HTTP_403_FORBIDDEN,
+        ):
+            logger.info(
+                "ESPN rejected membership cookies for league %s", canonical_league_id
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Could not verify ESPN league membership",
+            )
+        logger.error("ESPN API error verifying membership: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Failed to verify ESPN league membership",
+        )
+    except http_requests.exceptions.RequestException as e:
+        logger.error("Request error verifying ESPN membership: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Failed to reach ESPN API",
+        )
+
+    add_league_member(canonical_league_id, clerk_user_id)
+    logger.info(
+        "Verified ESPN membership; added user to league %s", canonical_league_id
+    )
+    return APIResponse(detail="Membership verified")

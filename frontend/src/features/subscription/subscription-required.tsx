@@ -3,6 +3,7 @@ import { Lock } from 'lucide-react';
 import { Spinner } from '@/components/spinner';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { useIsOwner } from '@/features/ownership/use-is-owner';
 import { useStripeBilling } from '@/features/subscription/use-stripe-billing';
 import { getLeagueCookies } from '@/lib/cookie-handler';
 import { ErrorAlert } from '@/lib/error-alert';
@@ -24,6 +25,9 @@ export function SubscriptionRequired({
 }) {
   const { startCheckout, checkoutLoading, error } = useStripeBilling();
   const { leagueId, platform } = getLeagueCookies();
+  // Only the owner can subscribe (BE-016); non-owners are pointed at the owner
+  // instead of a dead-end Subscribe button (FE-025).
+  const { isOwner } = useIsOwner();
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
@@ -40,18 +44,29 @@ export function SubscriptionRequired({
         <Lock className="size-6 text-muted-foreground" />
       </div>
       <h1 className="text-2xl font-bold">Subscription required</h1>
-      <p className="text-muted-foreground max-w-md">
-        Subscribe to gain access to your league&apos;s analytics.
-      </p>
-      <Button
-        className="cursor-pointer"
-        disabled={checkoutLoading || !leagueId}
-        onClick={() => void startCheckout(leagueId, platform)}
-      >
-        {checkoutLoading && <Spinner className="size-4" />}
-        Subscribe
-      </Button>
-      {error && <ErrorAlert message={error} className="max-w-md text-left" />}
+      {isOwner ? (
+        <>
+          <p className="text-muted-foreground max-w-md">
+            Subscribe to gain access to your league&apos;s analytics.
+          </p>
+          <Button
+            className="cursor-pointer"
+            disabled={checkoutLoading || !leagueId}
+            onClick={() => void startCheckout(leagueId, platform)}
+          >
+            {checkoutLoading && <Spinner className="size-4" />}
+            Subscribe
+          </Button>
+          {error && (
+            <ErrorAlert message={error} className="max-w-md text-left" />
+          )}
+        </>
+      ) : (
+        <p className="text-muted-foreground max-w-md">
+          This league&apos;s subscription has lapsed. Ask the league owner to
+          subscribe to restore access to its analytics.
+        </p>
+      )}
     </div>
   );
 }

@@ -99,6 +99,7 @@ def write_league_records(
     seasons: list[str],
     request_type: str,
     is_new_season_refresh: bool = False,
+    owner_user_id: str | None = None,
 ) -> None:
     """
     Writes the league's METADATA (on first onboard) and LEAGUE_LOOKUP records.
@@ -115,6 +116,9 @@ def write_league_records(
         request_type: The type of onboarding request (e.g., "ONBOARD" or "REFRESH")
         is_new_season_refresh: If True, league_id is a new season's ID not yet in LEAGUE_LOOKUP;
             a new LEAGUE_LOOKUP item is created via Put instead of updating an existing one.
+        owner_user_id: Clerk user ID of the onboarding owner (LQL-01 / BE-016). On first
+            ONBOARD it is recorded on METADATA and seeds the ``members`` set; REFRESH/MIGRATE
+            never touch it, so the original owner and any verified members are preserved.
     """
     try:
         table_name = os.environ["DYNAMODB_TABLE_NAME"]
@@ -184,6 +188,12 @@ def write_league_records(
                 "platform": {"S": platform},
                 "onboarded_at": {"S": now_iso},
             }
+            # Record the onboarding owner as the authorization anchor and seed the
+            # read-membership set with them (LQL-01 / BE-016). Skipped for
+            # system-initiated onboards (no owner), keeping ``members`` absent.
+            if owner_user_id:
+                metadata_item["owner_user_id"] = {"S": owner_user_id}
+                metadata_item["members"] = {"SS": [owner_user_id]}
             transact_items = [
                 {
                     "Put": {

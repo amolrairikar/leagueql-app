@@ -71,5 +71,8 @@ and an incremented `LEAGUE_COUNT`.
 - [ ] When an async onboarder invocation exhausts its retries, the failed event is delivered
       to the onboarder DLQ (not dropped) and a CloudWatch alarm fires on DLQ depth > 0.
 
+## Authorization (BE-016)
+First ONBOARD records the onboarding Clerk user as the league **owner** (`owner_user_id`) and seeds the `members` set — the authorization anchor for [BE-016](BE-016-league-ownership-authorization.md). REFRESH/MIGRATE never overwrite it.
+
 ## Sources
 `src/api/routes.py`, `src/onboarder/`, `docs/api/openapi_spec.yaml`, `docs/db/dynamodb_spec.md`.

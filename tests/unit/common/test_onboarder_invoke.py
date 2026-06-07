@@ -17,6 +17,7 @@ def test_invoke_onboarder_builds_payload_and_invokes():
         request_type="REFRESH",
         canonical_league_id="canonical-abc",
         correlation_id="corr-1",
+        owner_user_id="user_1",
     )
 
     assert result == {"StatusCode": 202}
@@ -30,7 +31,22 @@ def test_invoke_onboarder_builds_payload_and_invokes():
         "requestType": "REFRESH",
         "canonicalLeagueId": "canonical-abc",
         "correlation_id": "corr-1",
+        "ownerUserId": "user_1",
     }
+
+
+def test_invoke_onboarder_defaults_owner_to_none():
+    client = MagicMock()
+    invoke_onboarder(
+        lambda_client=client,
+        function_name="onboarder-fn",
+        body={"leagueId": "123", "platform": "SLEEPER"},
+        request_type="REFRESH",
+        canonical_league_id="canonical-abc",
+        correlation_id="corr-1",
+    )
+    payload = json.loads(client.invoke.call_args.kwargs["Payload"])
+    assert payload["ownerUserId"] is None
 
 
 def test_invoke_onboarder_allows_none_canonical_id():

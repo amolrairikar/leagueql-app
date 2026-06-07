@@ -66,3 +66,53 @@ export function getAllMatchups(
 ): Promise<{ data: MatchupItem[] }> {
   return queryLeague<MatchupItem>(leagueId, platform, 'MATCHUPS#');
 }
+
+/**
+ * Verify the caller's ESPN league membership (LQL-01 / BE-016 / FE-025).
+ *
+ * Sends the caller's ESPN cookies (filled by the Chrome extension) to the
+ * backend, which proxies an authenticated read of the league. On success the
+ * caller is added to the league's members and may read the league. ESPN-rejected
+ * cookies resolve to a `403` `ApiError`.
+ */
+export function verifyMembership(
+  leagueId: string,
+  platform: Platform,
+  cookies: { swid: string; s2: string },
+): Promise<{ detail: string }> {
+  const params = new URLSearchParams({ platform });
+  return apiClient.post<{ detail: string }>(
+    `/leagues/${leagueId}/verify-membership?${params}`,
+    cookies,
+  );
+}
+
+export interface TransferTokenResponse {
+  detail: string;
+  data: { token: string; expires_at: string };
+}
+
+/** Mint a one-time ownership-transfer token for the league (owner-only). */
+export function createTransferToken(
+  leagueId: string,
+  platform: Platform,
+): Promise<TransferTokenResponse> {
+  const params = new URLSearchParams({ platform });
+  return apiClient.post<TransferTokenResponse>(
+    `/leagues/${leagueId}/transfer-token?${params}`,
+    {},
+  );
+}
+
+/** Redeem a transfer token to become the league owner. */
+export function claimOwnership(
+  leagueId: string,
+  platform: Platform,
+  token: string,
+): Promise<{ detail: string }> {
+  const params = new URLSearchParams({ platform });
+  return apiClient.post<{ detail: string }>(
+    `/leagues/${leagueId}/claim-ownership?${params}`,
+    { token },
+  );
+}

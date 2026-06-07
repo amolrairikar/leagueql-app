@@ -46,5 +46,8 @@ cross-platform owner IDs so metrics remain continuous.
       limit returns `422` and writes no `PLATFORM_MIGRATION` item.
 - [ ] After processing, all-time metrics span both platforms under one canonical league ID.
 
+## Authorization (BE-016)
+Migration is **owner-gated** ([BE-016](BE-016-league-ownership-authorization.md)): a non-owner caller gets `403`.
+
 ## Sources
 `src/api/routes.py`, `docs/api/openapi_spec.yaml`, `docs/db/dynamodb_spec.md` (PLATFORM_MIGRATION).

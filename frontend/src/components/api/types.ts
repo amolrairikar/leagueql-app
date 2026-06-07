@@ -65,6 +65,8 @@ export interface GetLeagueResponse {
     league_name?: string;
     /** ISO 8601 (UTC) timestamp when the subscription/trial lapses. Absent = expired. */
     subscription_end_time?: string;
+    /** Whether the authenticated caller is the league owner (LQL-01 / BE-016 / FE-025). */
+    is_owner?: boolean;
   };
 }
 
