@@ -30,3 +30,9 @@ Feature: Subscription access control (BE-014)
     Given league "canon-1" has no subscription_end_time
     When I GET "/leagues/100?platform=SLEEPER"
     Then the API responds with status 200
+
+  Scenario: Billing disabled lets a gated endpoint through without a subscription (BE-017)
+    Given billing is disabled
+    And league "canon-1" has no subscription_end_time
+    When I GET "/leagues/100/query?platform=SLEEPER&queryType=MATCHUPS"
+    Then the API responds with status 200

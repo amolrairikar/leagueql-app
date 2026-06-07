@@ -8,11 +8,12 @@
  */
 import '@testing-library/jest-dom/vitest';
 
-import { afterAll, afterEach, beforeAll, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, vi } from 'vitest';
 
 import { server } from './msw/server';
 
 import { clearApiCache } from '@/lib/api-client';
+import { setFlagsForTesting } from '@/lib/feature-flags';
 
 vi.mock('@clerk/react', () => import('./clerk-mock'));
 
@@ -62,6 +63,11 @@ if (!window.matchMedia) {
 }
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
+
+// Billing ships feature-flagged OFF (FE-026), but historically the subscription
+// UI always rendered, and most tests assume it. Default the flag ON for every
+// test; OFF-path tests flip it back within the test via setFlagsForTesting.
+beforeEach(() => setFlagsForTesting({ billing: true }));
 
 afterEach(async () => {
   server.resetHandlers();

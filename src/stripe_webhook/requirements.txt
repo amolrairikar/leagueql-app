@@ -1,1 +1,2 @@
+openfeature-sdk
 stripe

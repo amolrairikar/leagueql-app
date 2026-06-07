@@ -29,6 +29,7 @@ from fastapi import (
 )
 
 import main
+from common.feature_flags import is_billing_enabled
 from common.onboarder_invoke import invoke_onboarder
 from main import (
     QUERY_TYPE_TO_SK_BASE,
@@ -161,8 +162,10 @@ def create_checkout_session(
     subscription-mode Checkout Session whose subscription carries the league's
     canonical ID. The trial is included only on the league's first subscription.
     Returns 409 when the league already has a subscription or an unexpired
-    in-flight checkout.
+    in-flight checkout. Returns 404 when billing is disabled (BE-017).
     """
+    if not is_billing_enabled():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
     canonical_league_id = lookup_league(league_id=leagueId, platform=platform)
     metadata = get_league_metadata(canonical_league_id=canonical_league_id)
     require_league_owner(canonical_league_id, clerk_user_id, metadata=metadata)
@@ -214,8 +217,11 @@ def create_billing_portal_session(
     """Create a Stripe Billing Portal session for the caller (BE-015).
 
     Lets the user manage their card or cancel (cancellation takes effect
-    immediately). Returns 404 when the caller has no Stripe customer yet.
+    immediately). Returns 404 when the caller has no Stripe customer yet, or when
+    billing is disabled (BE-017).
     """
+    if not is_billing_enabled():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
     customer_id = get_stripe_customer_id(clerk_user_id)
     if not customer_id:
         raise HTTPException(

@@ -1,5 +1,9 @@
 # FE-023: Subscription Management (Billing Portal)
 
+> **Feature-flagged ([FE-026](FE-026-feature-flags.md)).** Subscription management is shown only
+> when the `billing` flag is ON. When OFF (the current default), the "Manage Subscription"
+> sidebar entry and its dialog are hidden, and the backend billing-portal endpoint returns `404`.
+
 ## Description
 Turns the skeleton Manage Subscription dialog ([FE-021](FE-021-subscription-access-control.md))
 into a real management surface backed by Stripe's Billing Portal. For a user with an existing

@@ -11,3 +11,9 @@ Feature: Subscription access guard (FE-021)
     Given the current league subscription has expired
     When I open a gated page behind the subscription guard
     Then I see the paywall heading "Subscription required"
+
+  Scenario: Billing disabled renders the page without a paywall (FE-026)
+    Given billing is disabled
+    And the current league subscription has expired
+    When I open a gated page behind the subscription guard
+    Then I see the gated content "Protected analytics"

@@ -1,6 +1,7 @@
 import { Spinner } from '@/components/spinner';
 import { SubscriptionRequired } from '@/features/subscription/subscription-required';
 import { useSubscription } from '@/features/subscription/use-subscription';
+import { isBillingEnabled } from '@/lib/feature-flags';
 
 /**
  * Gates the analytics pages on an active subscription for the current league.
@@ -13,6 +14,13 @@ import { useSubscription } from '@/features/subscription/use-subscription';
  * otherwise it shows the inline paywall when the subscription is expired/absent.
  */
 export function SubscriptionGuard({ children }: { children: React.ReactNode }) {
+  // Billing is feature-flagged (FE-026). When off, the paywall and the
+  // subscription polling in {@link useSubscription} are skipped entirely.
+  if (!isBillingEnabled()) return <>{children}</>;
+  return <SubscriptionGate>{children}</SubscriptionGate>;
+}
+
+function SubscriptionGate({ children }: { children: React.ReactNode }) {
   const { loading, isActive, activating, activationFailed } = useSubscription();
 
   if (loading || activating)

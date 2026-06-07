@@ -1,5 +1,9 @@
 # FE-021: Subscription Access Control
 
+> **Feature-flagged ([FE-026](FE-026-feature-flags.md)).** The paywall is active only when the
+> `billing` flag is ON. When OFF (the current default), `SubscriptionGuard` is a pass-through
+> and the analytics pages render with no paywall or subscription spinner.
+
 ## Description
 Gates the in-app analytics pages on an active subscription and exposes a "Manage Subscription"
 entry point. The ten `AppLayout` analytics routes are wrapped in a `SubscriptionGuard` that

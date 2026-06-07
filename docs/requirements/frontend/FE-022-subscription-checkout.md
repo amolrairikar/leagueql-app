@@ -1,5 +1,9 @@
 # FE-022: Subscription Checkout (Making Payments)
 
+> **Feature-flagged ([FE-026](FE-026-feature-flags.md)).** Checkout is reachable only when the
+> `billing` flag is ON. When OFF (the current default), the paywall and "Manage Subscription"
+> entry points that start checkout are hidden, and the backend checkout endpoint returns `404`.
+
 ## Description
 Lets a user start a paid subscription for the current league via Stripe Checkout. A **Subscribe**
 action — surfaced from the inline paywall ([FE-021](FE-021-subscription-access-control.md)) and

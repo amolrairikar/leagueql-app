@@ -53,3 +53,16 @@ Feature: Stripe billing checkout and webhook lifecycle (BE-015)
     When Stripe sends a "customer.subscription.updated" webhook (event "evt_2") for subscription "sub_2" with status "active"
     Then the webhook responds with status 200
     And the duplicate subscription was canceled
+
+  Scenario: Checkout is unreachable when billing is disabled (BE-017)
+    Given billing is disabled
+    And a checkout-ready league "canon-1" native "100" on "SLEEPER" for user "user_1"
+    When user "user_1" starts checkout for league "100" on "SLEEPER"
+    Then the API responds with status 404
+
+  Scenario: The webhook is a no-op when billing is disabled (BE-017)
+    Given billing is disabled
+    And a subscribable league "canon-1" native "100" on "SLEEPER"
+    When Stripe sends a "checkout.session.completed" webhook (event "evt_1") for subscription "sub_1" with status "trialing"
+    Then the webhook responds with status 200
+    And no WEBHOOK_EVENT dedup marker exists for event "evt_1"

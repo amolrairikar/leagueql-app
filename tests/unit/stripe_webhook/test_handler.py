@@ -43,6 +43,21 @@ def patched(webhook_handler):
         )
 
 
+class TestBillingDisabled:
+    def test_returns_200_noop_when_billing_disabled(self, patched):
+        # Billing feature-flagged off (BE-017): acknowledge the delivery with 200
+        # without verifying the signature or writing any subscription state.
+        from common import feature_flags
+
+        feature_flags._override_for_testing({"billing": False})
+        resp = patched.wh.lambda_handler(_event(), None)
+        assert resp["statusCode"] == 200
+        patched.stripe.Webhook.construct_event.assert_not_called()
+        patched.record.assert_not_called()
+        patched.expire.assert_not_called()
+        patched.ddb.put_item.assert_not_called()
+
+
 class TestSignatureVerification:
     def test_invalid_signature_returns_400(self, patched):
         patched.stripe.Webhook.construct_event.side_effect = ValueError("bad")

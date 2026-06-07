@@ -81,6 +81,16 @@ def step_clear_subscription(context, canonical):
     )
 
 
+@given("billing is disabled")
+def step_billing_disabled(context):
+    # Flip the BE-017 billing flag off for this scenario (before_scenario defaults
+    # it on). All handlers read the same OpenFeature provider, so this affects the
+    # API gate, the billing endpoints, and the webhook.
+    from common import feature_flags
+
+    feature_flags._override_for_testing({"billing": False})
+
+
 @when('I GET "{path}"')
 def step_get(context, path):
     context.response = context.api.get(path)
