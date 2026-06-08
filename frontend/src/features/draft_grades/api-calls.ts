@@ -18,7 +18,7 @@ export interface DraftPickItem {
   nominating_team_id: number;
   overall_pick_number: number;
   owner_username: string;
-  pick_id: number;
+  pick_id: number | null;
   player_id: string;
   player_name: string | null;
   position: string;
