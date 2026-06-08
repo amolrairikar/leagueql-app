@@ -26,6 +26,10 @@ rate-limited to stay within Sleeper's API limits.
     live cache. Omitted in production → the canonical output key is used.
 
 ## Edge Cases
+- **Player selection:** fetch stats for players with `status == "Active"`. Team defenses
+  (D/ST) carry no `status` field in Sleeper's metadata (only an `active` boolean), so they
+  are always fetched via a `position == "DEF"` exception — otherwise defenses are dropped and
+  their draft picks get null `total_points` / position ranks.
 - **NFL state fetch fails:** log a warning and continue.
 - **Per-player stats fetch fails:** skip that player without aborting the whole run.
 - **Rate limiting:** pace requests to ~`TARGET_INTERVAL` between calls to avoid 429s.
