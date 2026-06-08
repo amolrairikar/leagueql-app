@@ -49,6 +49,10 @@ FAILURE_REASONS: dict[str, str] = {
         "We couldn't find that league on {platform}. Please confirm the league ID "
         "is correct."
     ),
+    "NOT_STARTED": (
+        "This league hasn't started a season yet on {platform}. Connect it once your "
+        "draft is complete and the season is underway."
+    ),
     "UPSTREAM": (
         "We couldn't reach {platform} right now. Please try again in a few minutes."
     ),

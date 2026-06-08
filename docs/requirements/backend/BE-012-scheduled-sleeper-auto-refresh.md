@@ -30,6 +30,11 @@ NFL state, enumerates onboarded Sleeper leagues, and invokes the onboarder Lambd
   or conflicting runs.
 - **ESPN leagues excluded:** ESPN refresh requires user-supplied cookies, so it cannot be
   automated here — only Sleeper leagues are auto-refreshed.
+- **Renewed-but-not-started season:** auto-refresh dispatches against the most recent
+  *registered* league ID, so a league that has renewed for a new season Sleeper still marks
+  `pre_draft`/`drafting` is refreshed on its prior (`in_season`/`complete`) league ID. The
+  onboarder's not-yet-started filter ([BE-001](BE-001-league-onboarding.md)) keeps the new
+  season out of all views until it flips to `in_season`.
 
 ## Acceptance Criteria
 - [ ] During the NFL season, the Lambda invokes the onboarder in `REFRESH` mode for each

@@ -164,6 +164,67 @@ class TestSleeperClientGetLeagueSeasons:
         # Exactly two fetches: no attempt to fetch league "None".
         assert mock_get.call_count == 2
 
+    @pytest.mark.parametrize("status", ["pre_draft", "drafting"])
+    def test_skips_not_started_latest_season_on_refresh(
+        self, onboarder_sleeper_client, status
+    ):
+        # A renewed offseason season the user refreshes into is still pre_draft/
+        # drafting; with is_refresh only that latest season is examined, so the
+        # mapping comes back empty (nothing usable to refresh).
+        http_resp = _mock_http_response(
+            {
+                "season": "2026",
+                "league_id": "league-2026",
+                "previous_league_id": "league-2025",
+                "status": status,
+            }
+        )
+        with patch("requests.get", return_value=http_resp):
+            client = onboarder_sleeper_client.SleeperClient(
+                "league-2026", is_refresh=True
+            )
+        assert client.season_mapping == {}
+
+    def test_skips_not_started_season_in_full_chain(self, onboarder_sleeper_client):
+        # Onboarding walks the full chain: the latest (2026) season is pre_draft and
+        # must be dropped, while the started 2025 season is kept.
+        responses = [
+            _mock_http_response(
+                {
+                    "season": "2026",
+                    "league_id": "league-2026",
+                    "previous_league_id": "league-2025",
+                    "status": "pre_draft",
+                }
+            ),
+            _mock_http_response(
+                {
+                    "season": "2025",
+                    "league_id": "league-2025",
+                    "previous_league_id": "0",
+                    "status": "complete",
+                }
+            ),
+        ]
+        with patch("requests.get", side_effect=responses):
+            client = onboarder_sleeper_client.SleeperClient("league-2026")
+        assert list(client.season_mapping.keys()) == ["2025"]
+
+    def test_unknown_status_is_kept(self, onboarder_sleeper_client):
+        # Defensive: an unrecognized/absent status is treated as started so a future
+        # Sleeper status value never silently drops a real season.
+        http_resp = _mock_http_response(
+            {
+                "season": "2024",
+                "league_id": "league-2024",
+                "previous_league_id": "0",
+                "status": "some_future_status",
+            }
+        )
+        with patch("requests.get", return_value=http_resp):
+            client = onboarder_sleeper_client.SleeperClient("league-2024")
+        assert list(client.season_mapping.keys()) == ["2024"]
+
     def test_http_error_raises(self, onboarder_sleeper_client):
         http_resp = _mock_http_response({}, raise_error=True)
         with patch("requests.get", return_value=http_resp):
