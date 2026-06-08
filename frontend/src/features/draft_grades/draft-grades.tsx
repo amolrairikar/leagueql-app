@@ -469,7 +469,7 @@ function DraftGradesContent({
               const isOpen = !!openBusts[bustKey];
 
               return (
-                <Fragment key={pick.pick_id}>
+                <Fragment key={`${pick.pick_id}-${i}`}>
                   <tr>
                     <td className="border-b border-border/50 sticky left-0 z-10 bg-card">
                       <div className="px-3 py-2.5 text-muted-foreground text-[11px]">
@@ -591,7 +591,7 @@ function DraftGradesContent({
                         </div>
                         {isOpen && (
                           <div className="flex flex-col divide-y divide-border/50">
-                            {bustData.alts.map((alt) => {
+                            {bustData.alts.map((alt, altIdx) => {
                               const altPm = posMeta[alt.position] ?? {
                                 bg: POSITION_COLORS.K.bg,
                                 tc: POSITION_COLORS.K.tc,
@@ -605,7 +605,7 @@ function DraftGradesContent({
                                 : `Picked ${alt.overall_pick_number - pick.overall_pick_number} spots later`;
                               return (
                                 <div
-                                  key={alt.pick_id}
+                                  key={`${alt.pick_id}-${altIdx}`}
                                   className="flex items-center gap-3 px-3 py-2.5 bg-muted/30"
                                 >
                                   <span
@@ -689,7 +689,7 @@ function DraftGradesContent({
                 </div>
                 {isOpen && (
                   <div className="p-2.5 flex flex-col gap-1.5">
-                    {alts.map((alt) => {
+                    {alts.map((alt, altIdx) => {
                       const altPm = posMeta[alt.position] ?? {
                         bg: POSITION_COLORS.K.bg,
                         tc: POSITION_COLORS.K.tc,
@@ -702,7 +702,7 @@ function DraftGradesContent({
                         : `Picked ${alt.overall_pick_number - pick.overall_pick_number} spots later`;
                       return (
                         <div
-                          key={alt.pick_id}
+                          key={`${alt.pick_id}-${altIdx}`}
                           className="flex items-center gap-2 px-2 py-1.5 bg-muted/50 border border-border/50 rounded-md"
                         >
                           <span
