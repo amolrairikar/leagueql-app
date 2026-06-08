@@ -62,11 +62,15 @@ function PickCell({
       className="flex flex-col h-[4.5rem] rounded-md px-2 py-1.5"
       style={{ background: pm.bg, color: pm.tc }}
     >
-      <div className="flex items-center justify-between gap-1 mb-0.5">
+      <div className="relative flex items-center justify-between gap-1 mb-0.5">
         <span className="text-[9px] font-semibold uppercase tracking-[0.04em]">
           {pick.position}
-          {pick.keeper && ' · K'}
         </span>
+        {pick.keeper && (
+          <span className="absolute left-1/2 -translate-x-1/2 text-[9px] font-semibold uppercase tracking-[0.04em]">
+            Keeper
+          </span>
+        )}
         {topRight}
       </div>
       <span className="block text-[12px] font-medium leading-tight line-clamp-2 break-words">
