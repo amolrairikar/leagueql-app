@@ -43,6 +43,20 @@ class TestResolveSleeperCanonicalLeagueId:
             )
         assert result is None
 
+    def test_chain_exhausted_on_null_previous_league_id_returns_none(
+        self, onboarder_sleeper_client, monkeypatch
+    ):
+        # Founding season returns JSON null for previous_league_id; the resolver must
+        # treat it as end-of-chain rather than walking into league "None".
+        monkeypatch.setenv("DYNAMODB_TABLE_NAME", "test-table")
+        http_resp = _mock_http_response({"previous_league_id": None})
+        with patch("requests.get", return_value=http_resp) as mock_get:
+            result = onboarder_sleeper_client.resolve_sleeper_canonical_league_id(
+                "new-1"
+            )
+        assert result is None
+        assert mock_get.call_count == 1
+
     def test_http_error_raises(self, onboarder_sleeper_client, monkeypatch):
         monkeypatch.setenv("DYNAMODB_TABLE_NAME", "test-table")
         http_resp = _mock_http_response({}, raise_error=True)
@@ -121,6 +135,34 @@ class TestSleeperClientGetLeagueSeasons:
             client = onboarder_sleeper_client.SleeperClient("league-2024")
         assert "2023" in client.season_mapping
         assert "2024" in client.season_mapping
+
+    def test_walks_chain_terminating_on_null_previous_league_id(
+        self, onboarder_sleeper_client
+    ):
+        # The founding season is created fresh, so Sleeper returns JSON null (None) for
+        # previous_league_id rather than the string "0". The walk must stop there
+        # instead of trying to fetch league "None".
+        responses = [
+            _mock_http_response(
+                {
+                    "season": "2024",
+                    "league_id": "league-2024",
+                    "previous_league_id": "league-2023",
+                }
+            ),
+            _mock_http_response(
+                {
+                    "season": "2023",
+                    "league_id": "league-2023",
+                    "previous_league_id": None,
+                }
+            ),
+        ]
+        with patch("requests.get", side_effect=responses) as mock_get:
+            client = onboarder_sleeper_client.SleeperClient("league-2024")
+        assert list(client.season_mapping.keys()) == ["2024", "2023"]
+        # Exactly two fetches: no attempt to fetch league "None".
+        assert mock_get.call_count == 2
 
     def test_http_error_raises(self, onboarder_sleeper_client):
         http_resp = _mock_http_response({}, raise_error=True)

@@ -28,6 +28,11 @@ and an incremented `LEAGUE_COUNT`.
   for Sleeper (resolved via `previous_league_id` chain).
 - **Sleeper multi-season chain:** consecutive Sleeper seasons use different league IDs;
   the onboarder resolves the canonical league via the `previous_league_id` chain.
+- **Sleeper chain terminator (`"0"` vs `null`):** the chain walk stops at the founding
+  season, which Sleeper marks either with the string `previous_league_id == "0"` (leagues
+  created as a continuation) **or** with JSON `null` (Python `None`, for leagues created
+  fresh). Both — and any other falsy value — terminate the walk; the onboarder must never
+  follow a `null` into a fetch for league `None` (which 404s and fails onboarding).
 - **Invalid/expired ESPN credentials:** classified as `ESPN_AUTH` failure with a
   user-friendly message; job recorded as `FAILED`.
 - **Platform API unreachable / rate limited / partial data:** onboarding fails cleanly;
@@ -63,6 +68,9 @@ and an incremented `LEAGUE_COUNT`.
 - [ ] Onboarding never writes `subscription_end_time`; a freshly onboarded league's `METADATA`
       item carries no subscription attribute (it is set only by the Stripe webhook —
       [BE-015](BE-015-stripe-billing.md)). The request body has no `subscriptionEndTime` field.
+- [ ] The Sleeper `previous_league_id` chain walk terminates at the founding season for
+      both terminator forms — string `"0"` and JSON `null` (`None`) — and never issues a
+      request for league `None`.
 - [ ] Raw platform API payloads are written to S3 under `raw-api-data/{canonical_league_id}/`.
 - [ ] On any failure a `JOB_STATUS` item is written with `status=FAILED` and a
       `failure_code` / `failure_reason` that the frontend can surface.

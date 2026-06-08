@@ -35,8 +35,12 @@ def _iter_sleeper_league_chain(start_league_id: str) -> Iterator[dict]:
     Walk a Sleeper league's previous_league_id chain, yielding each season's API data.
 
     Fetches ``{SLEEPER_BASE_URL}/league/{id}`` starting at start_league_id and follows
-    previous_league_id back to the oldest season (previous_league_id == "0"), yielding
-    the parsed JSON for each league. Bounded by MAX_CHAIN_DEPTH to guard against cycles.
+    previous_league_id back to the oldest season, yielding the parsed JSON for each
+    league. The chain terminates when previous_league_id is a "no prior season"
+    sentinel: Sleeper returns the string ``"0"`` for continued leagues but ``null``
+    (JSON) — i.e. Python ``None`` — for a league that was created fresh rather than as
+    a continuation, so both (and any other falsy value) end the walk. Bounded by
+    MAX_CHAIN_DEPTH to guard against cycles.
 
     Args:
         start_league_id: The most recent season's Sleeper league ID to start from.
@@ -70,8 +74,10 @@ def _iter_sleeper_league_chain(start_league_id: str) -> Iterator[dict]:
         data = response.json()
         yield data
 
-        previous_league_id = data.get("previous_league_id", "0")
-        if previous_league_id == "0":
+        previous_league_id = data.get("previous_league_id")
+        # Sleeper marks "no prior season" with the string "0" on continued leagues but
+        # with JSON null (Python None) on leagues created fresh; both end the chain.
+        if not previous_league_id or previous_league_id == "0":
             return
         current_id = previous_league_id
 
@@ -91,8 +97,10 @@ def resolve_sleeper_canonical_league_id(new_league_id: str) -> str | None:
     table_name = os.environ["DYNAMODB_TABLE_NAME"]
 
     for data in _iter_sleeper_league_chain(new_league_id):
-        previous_league_id = data.get("previous_league_id", "0")
-        if previous_league_id == "0":
+        previous_league_id = data.get("previous_league_id")
+        # Oldest season has no prior league: "0" for continued leagues, null/None for
+        # leagues created fresh. Either way there is nothing further to resolve.
+        if not previous_league_id or previous_league_id == "0":
             break
 
         try:
@@ -156,7 +164,7 @@ class SleeperClient:
 
         Iteratively walks backwards through the league's history one season
         at a time via the previous_league_id field until it reaches the
-        oldest season (previous_league_id == "0"), then returns the mapping.
+        oldest season (previous_league_id is "0" or null), then returns the mapping.
 
         Args:
             is_refresh: If True, only fetches the current (most recent) season.
