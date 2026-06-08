@@ -134,6 +134,38 @@ class TestLambdaHandlerRefresher:
         written = json.loads(call_kwargs["Body"])
         assert len(written) == 3
 
+    def test_includes_defenses_without_active_status(self, stats_refresher_handler):
+        """Team defenses carry no ``status`` field (only an ``active`` flag), so they
+        must be fetched via the position exception rather than dropped."""
+        players = {
+            "p1": {"status": "Active", "position": "QB"},
+            "p2": {"status": "Inactive", "position": "RB"},
+            "DEN": {"active": True, "position": "DEF"},
+        }
+        player_json = json.dumps(players).encode()
+        mock_body = MagicMock()
+        mock_body.read.return_value = player_json
+        mock_s3 = MagicMock()
+        mock_s3.get_object.return_value = {"Body": mock_body}
+
+        with (
+            patch.object(
+                stats_refresher_handler,
+                "fetch_nfl_state",
+                return_value={"season_type": "regular", "season": "2024"},
+            ),
+            patch.object(stats_refresher_handler, "s3_client", mock_s3),
+            patch.object(
+                stats_refresher_handler, "fetch_stats", return_value={"pts_allow": 17}
+            ),
+        ):
+            stats_refresher_handler.lambda_handler({}, MagicMock())
+
+        written = json.loads(mock_s3.put_object.call_args[1]["Body"])
+        assert "DEN" in written  # defense fetched despite no "Active" status
+        assert "p1" in written
+        assert "p2" not in written  # inactive non-defense still excluded
+
     def test_excludes_players_with_no_stats(self, stats_refresher_handler):
         players = {"p1": {"status": "Active"}, "p2": {"status": "Active"}}
         player_json = json.dumps(players).encode()

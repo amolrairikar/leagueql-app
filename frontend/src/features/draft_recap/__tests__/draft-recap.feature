@@ -7,6 +7,11 @@ Feature: Draft recap (FE-012)
     When I open the draft recap page
     Then I see the player "Pat Quarterback"
 
+  Scenario: A pick with no scoring data renders without crashing
+    Given draft data is available
+    When I open the draft recap page
+    Then I see the player "Denver Broncos"
+
   Scenario: A failed load surfaces an inline error
     Given the draft data fails to load
     When I open the draft recap page

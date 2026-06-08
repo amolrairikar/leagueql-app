@@ -1,5 +1,12 @@
 import { useUser } from '@clerk/react';
-import { BrowserRouter, Routes, Route, Navigate, Link } from 'react-router-dom';
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+  Link,
+  useLocation,
+} from 'react-router-dom';
 
 import { ErrorBoundary } from '@/components/error-boundary';
 import Footer from '@/components/footer';
@@ -40,6 +47,7 @@ import { SubscriptionGuard } from '@/features/subscription/subscription-guard';
 import { isDemoMode } from '@/lib/cookie-handler';
 
 function AppLayout({ children }: { children: React.ReactNode }) {
+  const location = useLocation();
   return (
     <TooltipProvider>
       <SidebarProvider>
@@ -70,7 +78,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
               <HeaderAccount />
             </div>
           </header>
-          <ErrorBoundary>
+          <ErrorBoundary resetKeys={[location.pathname]}>
             <MembershipGuard>
               <SubscriptionGuard>{children}</SubscriptionGuard>
             </MembershipGuard>

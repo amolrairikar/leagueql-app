@@ -77,8 +77,14 @@ def lambda_handler(event, context) -> None:
     response = s3_client.get_object(Bucket=bucket, Key=PLAYER_METADATA_S3_KEY)
     players = json.loads(response["Body"].read())
 
+    # Team defenses (D/ST) carry no "status" field in Sleeper's player metadata —
+    # they use an "active" boolean instead — so the status check alone drops every
+    # defense and their draft picks end up with null scoring. Always fetch defenses
+    # so the pipeline can compute their total_points / position ranks.
     active_ids = [
-        pid for pid, meta in players.items() if meta.get("status") == "Active"
+        pid
+        for pid, meta in players.items()
+        if meta.get("status") == "Active" or meta.get("position") == "DEF"
     ]
     if max_players:
         active_ids = active_ids[: int(max_players)]

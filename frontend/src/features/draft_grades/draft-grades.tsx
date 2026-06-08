@@ -56,22 +56,27 @@ function getAlts(
   allPicks: DraftPickItem[],
   isAuction: boolean,
 ): DraftPickItem[] {
+  // A pick with no scoring row has no point total to compare against, so it can
+  // neither be an alternative nor have alternatives suggested for it.
+  if (pick.total_points == null) return [];
   return allPicks
     .filter((a) =>
-      isAuction
-        ? a.position === pick.position &&
-          a.player_name !== pick.player_name &&
-          a.team_id !== pick.team_id &&
-          a.bid_amount <= pick.bid_amount &&
-          a.total_points > pick.total_points
-        : a.position === pick.position &&
-          a.overall_pick_number > pick.overall_pick_number &&
-          a.round <= pick.round + ALT_PICK_ROUND_WINDOW &&
-          a.player_name !== pick.player_name &&
-          a.team_id !== pick.team_id &&
-          a.total_points > pick.total_points,
+      a.total_points == null
+        ? false
+        : isAuction
+          ? a.position === pick.position &&
+            a.player_name !== pick.player_name &&
+            a.team_id !== pick.team_id &&
+            a.bid_amount <= pick.bid_amount &&
+            a.total_points > pick.total_points!
+          : a.position === pick.position &&
+            a.overall_pick_number > pick.overall_pick_number &&
+            a.round <= pick.round + ALT_PICK_ROUND_WINDOW &&
+            a.player_name !== pick.player_name &&
+            a.team_id !== pick.team_id &&
+            a.total_points > pick.total_points!,
     )
-    .sort((a, b) => b.total_points - a.total_points)
+    .sort((a, b) => (b.total_points ?? 0) - (a.total_points ?? 0))
     .slice(0, 2);
 }
 
@@ -158,19 +163,22 @@ function DraftGradesContent({
     [allPicks, selectedManager],
   );
 
+  // Best/worst grading needs a draft_rank_delta; picks with null analytics
+  // (e.g. D/ST, kickers, unscored players) are excluded per FE-013.
   const scorablePicks = picks.filter(
-    (p) => p.position !== 'K' && p.position !== 'D/ST',
+    (p) =>
+      p.position !== 'K' && p.position !== 'D/ST' && p.draft_rank_delta != null,
   );
 
   const bestPick = scorablePicks.length
     ? scorablePicks.reduce((best, p) =>
-        p.draft_rank_delta > best.draft_rank_delta ? p : best,
+        (p.draft_rank_delta ?? 0) > (best.draft_rank_delta ?? 0) ? p : best,
       )
     : null;
 
   const worstPick = scorablePicks.length
     ? scorablePicks.reduce((worst, p) =>
-        p.draft_rank_delta < worst.draft_rank_delta ? p : worst,
+        (p.draft_rank_delta ?? 0) < (worst.draft_rank_delta ?? 0) ? p : worst,
       )
     : null;
 
@@ -179,6 +187,7 @@ function DraftGradesContent({
     : 0;
   const isBustPick = useCallback(
     (p: DraftPickItem) =>
+      p.draft_rank_delta != null &&
       p.draft_rank_delta <= BUST_DELTA_MAX &&
       (isAuction
         ? p.bid_amount > AUCTION_BUST_MIN_BID
@@ -187,7 +196,7 @@ function DraftGradesContent({
   );
   const busts = picks.filter(isBustPick).length;
   const steals = picks.filter(
-    (p) => p.draft_rank_delta >= STEAL_DELTA_MIN,
+    (p) => p.draft_rank_delta != null && p.draft_rank_delta >= STEAL_DELTA_MIN,
   ).length;
 
   const toggleBust = (key: string) => {
@@ -444,13 +453,16 @@ function DraftGradesContent({
                 tc: POSITION_COLORS.K.tc,
               };
               const delta = pick.draft_rank_delta;
-              const deltaStr = (delta >= 0 ? '+' : '') + delta;
+              const deltaStr =
+                delta == null ? '—' : (delta >= 0 ? '+' : '') + delta;
               const dpillCls =
-                delta >= DELTA_PILL_POS
-                  ? 'delta-pos'
-                  : delta <= DELTA_PILL_NEG
-                    ? 'delta-neg'
-                    : 'delta-neu';
+                delta == null
+                  ? 'delta-neu'
+                  : delta >= DELTA_PILL_POS
+                    ? 'delta-pos'
+                    : delta <= DELTA_PILL_NEG
+                      ? 'delta-neg'
+                      : 'delta-neu';
               const isBust = isBustPick(pick);
               const bustKey = `${selectedManager}-${selectedSeason}-${i}`;
               const bustData = bustsWithAltsMap.get(bustKey);
@@ -468,12 +480,13 @@ function DraftGradesContent({
                       <div className="px-3 py-2.5">
                         <div className="text-[13px] font-medium text-foreground flex items-center gap-1">
                           {pick.player_name}
-                          {pick.draft_rank_delta >= STEAL_DELTA_MIN && (
-                            <Gem
-                              className="w-3 h-3 shrink-0"
-                              style={{ color: GREEN }}
-                            />
-                          )}
+                          {pick.draft_rank_delta != null &&
+                            pick.draft_rank_delta >= STEAL_DELTA_MIN && (
+                              <Gem
+                                className="w-3 h-3 shrink-0"
+                                style={{ color: GREEN }}
+                              />
+                            )}
                           {isBust && (
                             <X
                               className="w-3 h-3 shrink-0"
@@ -500,7 +513,9 @@ function DraftGradesContent({
                     </td>
                     <td className="border-b border-border/50">
                       <div className="px-3 py-2.5 text-center text-[13px] font-medium text-foreground">
-                        {pick.total_points.toFixed(2)}
+                        {pick.total_points != null
+                          ? pick.total_points.toFixed(2)
+                          : '—'}
                       </div>
                     </td>
                     <td className="border-b border-border/50">
@@ -524,7 +539,7 @@ function DraftGradesContent({
                     </td>
                     <td className="border-b border-border/50">
                       <div className="px-3 py-2.5 text-center text-[13px] font-medium text-foreground">
-                        {pick.actual_position_rank}
+                        {pick.actual_position_rank ?? '—'}
                       </div>
                     </td>
                     <td className="border-b border-border/50">
@@ -546,7 +561,7 @@ function DraftGradesContent({
                                   : POSITION_COLORS.K.tc,
                           }}
                         >
-                          {deltaStr} places
+                          {delta == null ? deltaStr : `${deltaStr} places`}
                         </span>
                       </div>
                     </td>
@@ -582,7 +597,8 @@ function DraftGradesContent({
                                 tc: POSITION_COLORS.K.tc,
                               };
                               const diff = (
-                                alt.total_points - pick.total_points
+                                (alt.total_points ?? 0) -
+                                (pick.total_points ?? 0)
                               ).toFixed(2);
                               const altLabel = isAuction
                                 ? `${fmtBid(pick.bid_amount - alt.bid_amount)} cheaper`
@@ -608,7 +624,7 @@ function DraftGradesContent({
                                     {altLabel}
                                   </span>
                                   <span className="text-[13px] font-medium text-foreground">
-                                    {alt.total_points.toFixed(2)} pts
+                                    {(alt.total_points ?? 0).toFixed(2)} pts
                                   </span>
                                   <span
                                     className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium whitespace-nowrap"
@@ -679,7 +695,7 @@ function DraftGradesContent({
                         tc: POSITION_COLORS.K.tc,
                       };
                       const diff = (
-                        alt.total_points - pick.total_points
+                        (alt.total_points ?? 0) - (pick.total_points ?? 0)
                       ).toFixed(2);
                       const altLabel = isAuction
                         ? `${fmtBid(pick.bid_amount - alt.bid_amount)} cheaper`
@@ -702,7 +718,7 @@ function DraftGradesContent({
                             {altLabel}
                           </span>
                           <span className="text-[12px] font-medium text-foreground ml-auto">
-                            {alt.total_points.toFixed(2)} pts
+                            {(alt.total_points ?? 0).toFixed(2)} pts
                           </span>
                           <span
                             className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium whitespace-nowrap"

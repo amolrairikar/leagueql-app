@@ -73,10 +73,14 @@ function PickCell({
         {pick.player_name}
       </span>
       <div className="mt-auto flex items-center justify-between gap-1 text-[10px] font-semibold opacity-80">
-        <span>{pick.total_points.toFixed(1)} pts</span>
+        <span>
+          {pick.total_points != null
+            ? `${pick.total_points.toFixed(1)} pts`
+            : '—'}
+        </span>
         <span>
           {pick.position}
-          {pick.actual_position_rank}
+          {pick.actual_position_rank ?? ''}
         </span>
       </div>
     </div>
