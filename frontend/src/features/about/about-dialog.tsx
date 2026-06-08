@@ -59,7 +59,7 @@ export function AboutDialog({ open, onOpenChange }: AboutDialogProps) {
           <br />
           <br />
           <a
-            href="https://www.buymeacoffee.com/amolrairikar"
+            href="https://www.buymeacoffee.com/amol.rairikar"
             target="_blank"
             rel="noopener noreferrer"
             className="flex justify-center"
