@@ -17,6 +17,13 @@ from utils import (
 
 SLEEPER_BASE_URL = "https://api.sleeper.app/v1"
 MAX_CHAIN_DEPTH = 50
+# Sleeper league lifecycle: pre_draft -> drafting -> in_season -> complete. A season
+# that has not begun (pre_draft/drafting) carries no usable data — empty rosters, empty
+# matchups, no draft picks — so it is excluded from onboarding/refresh entirely (it would
+# otherwise pollute every dropdown, chart, and calculation). It is picked up automatically
+# once it flips to in_season. Any unrecognized status is treated as started (kept) so a
+# future Sleeper status value never silently drops a real season.
+NOT_STARTED_LEAGUE_STATUSES = frozenset({"pre_draft", "drafting"})
 _dynamodb = boto3.client("dynamodb")
 DATA_FETCH_TYPES = [
     "users",
@@ -166,6 +173,12 @@ class SleeperClient:
         at a time via the previous_league_id field until it reaches the
         oldest season (previous_league_id is "0" or null), then returns the mapping.
 
+        Seasons that have not started yet (league status in
+        NOT_STARTED_LEAGUE_STATUSES, e.g. a renewed offseason season still in
+        pre_draft) are skipped so they never reach S3, the processor, or any
+        precomputed view. For a refresh this can leave the mapping empty (the only
+        season examined is not yet started); the caller treats that as a no-op.
+
         Args:
             is_refresh: If True, only fetches the current (most recent) season.
 
@@ -175,13 +188,24 @@ class SleeperClient:
         """
         result: dict[str, str] = {}
         for data in _iter_sleeper_league_chain(self.league_id):
-            try:
-                result[data["season"]] = data["league_id"]
-            except KeyError as e:
-                logger.error("Could not find league_id field in Sleeper API response")
-                raise RuntimeError(
-                    f"Unexpected response from Sleeper API: missing field {e}"
-                ) from e
+            status = data.get("status")
+            if status in NOT_STARTED_LEAGUE_STATUSES:
+                logger.info(
+                    "Skipping not-yet-started Sleeper season %s (status=%s) for league %s",
+                    data.get("season"),
+                    status,
+                    self.league_id,
+                )
+            else:
+                try:
+                    result[data["season"]] = data["league_id"]
+                except KeyError as e:
+                    logger.error(
+                        "Could not find league_id field in Sleeper API response"
+                    )
+                    raise RuntimeError(
+                        f"Unexpected response from Sleeper API: missing field {e}"
+                    ) from e
 
             if is_refresh:
                 break

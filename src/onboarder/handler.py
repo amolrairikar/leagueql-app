@@ -218,6 +218,58 @@ def lambda_handler(event, context) -> dict[str, str | int]:
         "OnboardingService initialized: canonical_league_id=%s",
         onboarding_service.canonical_league_id,
     )
+
+    # A Sleeper league whose only resolvable season(s) have not started yet
+    # (pre_draft/drafting) yields no usable seasons — see sleeper_client. There is
+    # nothing to fetch, process, or write. For ONBOARD this is a user error (the
+    # league hasn't begun); for REFRESH/MIGRATE it is a no-op success (the league
+    # keeps its existing data and the not-yet-started season is registered later,
+    # once it flips to in_season).
+    if not onboarding_service.client.get_seasons():
+        league_id = body.get("leagueId")
+        if request_type == "ONBOARD":
+            logger.warning(
+                "ONBOARD for league %s resolved no started seasons; nothing to onboard",
+                league_id,
+            )
+            _record_failure(
+                request_type,
+                "NOT_STARTED",
+                body,
+                onboarding_service.canonical_league_id,
+            )
+            return {
+                "statusCode": 400,
+                "body": json.dumps(
+                    {
+                        "status": "failed",
+                        "error_msg": "League has not started a season yet.",
+                    }
+                ),
+            }
+        logger.info(
+            "%s for league %s resolved no started seasons; treating as no-op success",
+            request_type,
+            league_id,
+        )
+        write_job_status(
+            correlation_id_var.get(),
+            "COMPLETED",
+            request_type,
+            league_id=str(league_id) if league_id else None,
+            platform=body.get("platform"),
+            canonical_league_id=onboarding_service.canonical_league_id,
+        )
+        return {
+            "statusCode": 200,
+            "body": json.dumps(
+                {
+                    "status": "succeeded",
+                    "canonical_league_id": onboarding_service.canonical_league_id,
+                }
+            ),
+        }
+
     try:
         onboarding_service.run()
     except KeyError as e:

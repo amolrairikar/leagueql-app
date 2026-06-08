@@ -33,6 +33,15 @@ and an incremented `LEAGUE_COUNT`.
   created as a continuation) **or** with JSON `null` (Python `None`, for leagues created
   fresh). Both — and any other falsy value — terminate the walk; the onboarder must never
   follow a `null` into a fetch for league `None` (which 404s and fails onboarding).
+- **Not-yet-started Sleeper season:** a renewed Sleeper season that has not begun (league
+  `status` of `pre_draft` or `drafting`) carries no usable data — empty rosters, empty
+  matchups, no draft picks. The onboarder excludes such seasons from the resolved season
+  list (`SleeperClient._get_league_seasons`) so they never reach S3, the processor, or any
+  precomputed view; only seasons with `status` of `in_season` or `complete` are kept. As a
+  result the not-yet-started season never appears in any dropdown, chart, or calculation,
+  and is picked up automatically once it flips to `in_season`. Onboarding a Sleeper league
+  whose **only** season is not-yet-started fails with a friendly `NOT_STARTED` message
+  rather than writing empty records.
 - **Invalid/expired ESPN credentials:** classified as `ESPN_AUTH` failure with a
   user-friendly message; job recorded as `FAILED`.
 - **Platform API unreachable / rate limited / partial data:** onboarding fails cleanly;
@@ -71,6 +80,9 @@ and an incremented `LEAGUE_COUNT`.
 - [ ] The Sleeper `previous_league_id` chain walk terminates at the founding season for
       both terminator forms — string `"0"` and JSON `null` (`None`) — and never issues a
       request for league `None`.
+- [ ] A Sleeper season with `status` of `pre_draft` or `drafting` is excluded from the
+      onboarded season list and produces no S3 payload, no processed views, and no dropdown
+      entry; a Sleeper onboard whose only season is not-yet-started fails with `NOT_STARTED`.
 - [ ] Raw platform API payloads are written to S3 under `raw-api-data/{canonical_league_id}/`.
 - [ ] On any failure a `JOB_STATUS` item is written with `status=FAILED` and a
       `failure_code` / `failure_reason` that the frontend can surface.
