@@ -67,7 +67,7 @@ function PickCell({
           {pick.position}
         </span>
         {pick.keeper && (
-          <span className="absolute left-1/2 -translate-x-1/2 text-[9px] font-semibold uppercase tracking-[0.04em]">
+          <span className="absolute left-1/2 -translate-x-1/2 rounded-full bg-black/25 px-1.5 py-px text-[8px] font-semibold uppercase tracking-[0.04em] leading-none">
             Keeper
           </span>
         )}
