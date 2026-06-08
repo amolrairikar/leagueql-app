@@ -32,6 +32,7 @@ criteria. Frontend, backend, and extension features are kept separate.
 | [BE-014](backend/BE-014-subscription-access-control.md) | Subscription Access Control |
 | [BE-015](backend/BE-015-stripe-billing.md) | Stripe Billing — Checkout, Webhook & Subscription Lifecycle |
 | [BE-016](backend/BE-016-league-ownership-authorization.md) | League Ownership & Authorization |
+| [BE-017](backend/BE-017-feature-flags.md) | Feature Flags (OpenFeature) |
 
 ## Frontend (`frontend/`)
 | ID | Feature |
@@ -61,6 +62,7 @@ criteria. Frontend, backend, and extension features are kept separate.
 | [FE-023](frontend/FE-023-subscription-management.md) | Subscription Management (Billing Portal) |
 | [FE-024](frontend/FE-024-security-headers.md) | Security Response Headers & Content-Security-Policy |
 | [FE-025](frontend/FE-025-ownership-transfer-owner-gated-actions.md) | Ownership Transfer & Owner-Gated Actions |
+| [FE-026](frontend/FE-026-feature-flags.md) | Feature Flags (OpenFeature) |
 
 ## Extension (`extension/`)
 | ID | Feature |

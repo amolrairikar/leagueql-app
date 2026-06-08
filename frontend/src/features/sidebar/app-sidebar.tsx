@@ -59,6 +59,7 @@ import {
   getLeagueCookies,
   isDemoMode,
 } from '@/lib/cookie-handler';
+import { isBillingEnabled } from '@/lib/feature-flags';
 
 const navItems = [
   { title: 'Home', url: '/home', icon: Home },
@@ -88,10 +89,10 @@ export function AppSidebar() {
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
   const [claimDialogOpen, setClaimDialogOpen] = useState(false);
 
-  const { expiringSoon } = useSubscription();
   const { isOwner } = useIsOwner();
 
   const demoMode = isDemoMode();
+  const billingEnabled = isBillingEnabled();
 
   // Pre-fill (and lock) the platform/league ID on the refresh form with the
   // league the user is currently viewing.
@@ -252,39 +253,16 @@ export function AppSidebar() {
                             <span>Transfer Ownership</span>
                           </SidebarMenuButton>
                         </SidebarMenuItem>
-                        <SidebarMenuItem>
-                          <SidebarMenuButton
-                            tooltip={
-                              expiringSoon
-                                ? 'Manage Subscription — expiring soon'
-                                : 'Manage Subscription'
-                            }
-                            className="cursor-pointer"
-                            onClick={() => {
+                        {/* Subscription management is feature-flagged (FE-026);
+                            hidden (and its subscription poll skipped) when off. */}
+                        {billingEnabled && (
+                          <ManageSubscriptionItem
+                            onOpen={() => {
                               closeMobileSidebar();
                               setSubscriptionDialogOpen(true);
                             }}
-                          >
-                            <span className="relative flex shrink-0 items-center justify-center">
-                              <CreditCard />
-                              {expiringSoon && (
-                                <span
-                                  aria-hidden="true"
-                                  className="absolute -top-1 -right-1 size-2 rounded-full bg-destructive ring-2 ring-sidebar"
-                                />
-                              )}
-                            </span>
-                            <span>
-                              Manage Subscription
-                              {expiringSoon && (
-                                <span className="sr-only">
-                                  {' '}
-                                  (expiring soon)
-                                </span>
-                              )}
-                            </span>
-                          </SidebarMenuButton>
-                        </SidebarMenuItem>
+                          />
+                        )}
                         <SidebarMenuItem>
                           <Dialog
                             open={dialogOpen}
@@ -366,11 +344,14 @@ export function AppSidebar() {
         </SidebarFooter>
       </Sidebar>
       {/* Rendered outside <Sidebar> so closing the mobile sidebar sheet (which unmounts its
-          subtree) does not tear down an open Manage Subscription dialog (FE-023). */}
-      <ManageSubscriptionDialog
-        open={subscriptionDialogOpen}
-        onOpenChange={setSubscriptionDialogOpen}
-      />
+          subtree) does not tear down an open Manage Subscription dialog (FE-023). Hidden
+          when billing is disabled (FE-026). */}
+      {billingEnabled && (
+        <ManageSubscriptionDialog
+          open={subscriptionDialogOpen}
+          onOpenChange={setSubscriptionDialogOpen}
+        />
+      )}
       <TransferOwnershipDialog
         open={transferDialogOpen}
         onOpenChange={setTransferDialogOpen}
@@ -380,5 +361,41 @@ export function AppSidebar() {
         onOpenChange={setClaimDialogOpen}
       />
     </>
+  );
+}
+
+/**
+ * Owner-only "Manage Subscription" sidebar entry. Split out so the
+ * {@link useSubscription} poll that drives the "expiring soon" indicator only
+ * runs when billing is enabled (FE-026) — the parent renders this conditionally.
+ */
+function ManageSubscriptionItem({ onOpen }: { onOpen: () => void }) {
+  const { expiringSoon } = useSubscription();
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        tooltip={
+          expiringSoon
+            ? 'Manage Subscription — expiring soon'
+            : 'Manage Subscription'
+        }
+        className="cursor-pointer"
+        onClick={onOpen}
+      >
+        <span className="relative flex shrink-0 items-center justify-center">
+          <CreditCard />
+          {expiringSoon && (
+            <span
+              aria-hidden="true"
+              className="absolute -top-1 -right-1 size-2 rounded-full bg-destructive ring-2 ring-sidebar"
+            />
+          )}
+        </span>
+        <span>
+          Manage Subscription
+          {expiringSoon && <span className="sr-only"> (expiring soon)</span>}
+        </span>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
   );
 }

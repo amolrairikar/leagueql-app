@@ -35,3 +35,15 @@ def webhook_handler():
 @pytest.fixture(autouse=True)
 def aws_env(monkeypatch):
     monkeypatch.setenv("DYNAMODB_TABLE_NAME", "test-table")
+
+
+@pytest.fixture(autouse=True)
+def enable_billing_flag():
+    """Billing ships feature-flagged OFF (BE-017), but the existing webhook tests
+    assume it is ON. Enable it for every webhook test; the OFF-path test flips it
+    back within the test via ``feature_flags._override_for_testing``."""
+    from common import feature_flags
+
+    feature_flags._override_for_testing({"billing": True})
+    yield
+    feature_flags._override_for_testing({"billing": False})

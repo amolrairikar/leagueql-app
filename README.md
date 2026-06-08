@@ -5,28 +5,12 @@
 - Fast API + Python (Backend)
 - React + TypeScript (Frontend)
 - Terraform + AWS (Infrastructure)
+- Stripe (payments)
 - Backend hosted on AWS API Gateway + Lambda
 - Frontend hosted on Cloudflare Pages
 
-# Current Features
-- Season standings from each past + current season and season superlative awards
-- All historical league matchups + box scores
-- Playoff brackets from each season
-- Head-to-head comparison of any two managers
-- Year-to-year history of each manager's performance
-- Recap of draft picks and grades
-- All-time fantasy player performance records
-- All-time fantasy team performance records
-- League migration: track all-time metrics even if your fantasy league migrates platforms
-- Chrome extension to auto-fill your ESPN cookies during onboarding (see [`extension/`](./extension))
-
-# Roadmap
-- Add support for additional platforms (e.g. Yahoo, NFL.com)
-- Support leagues with auction drafts (the current draft page is designed for snake drafts)
-
-
 # Contributing
-All contributions are welcome! You can look through the existing issues or create your own. Create a feature branch from `main` and submit a pull request once you have implemented your changes. I will review once it passes all checks.
+All contributions are welcome! You can look through the existing issues or create your own. Create a fork off `main` and submit a pull request once you have implemented your changes. I will review it and if it looks reasonable, will allowlist the PR to build DEV infrastructure and run the full testing suite.
 
 # Support
-Report any bugs/issues in the [issues tab](https://github.com/amolrairikar/leagueql-app/issues) and I will try my best to address them when I can. Please note that this is a passion project and I may not be able to provide immediate support.
+Report any bugs/issues in the [issues tab](https://github.com/amolrairikar/leagueql-app/issues) and I will try my best to address them when I can. Please note that this is a passion project and I likely will not be able to provide immediate support.

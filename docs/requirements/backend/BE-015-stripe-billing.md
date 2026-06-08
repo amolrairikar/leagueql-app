@@ -1,5 +1,10 @@
 # BE-015: Stripe Billing — Checkout, Webhook & Subscription Lifecycle
 
+> **Feature-flagged ([BE-017](BE-017-feature-flags.md)).** Billing is active only when the
+> `billing` flag is ON. When OFF (the current default), `POST /leagues/{id}/checkout-session`
+> and `POST /billing-portal-session` return `404`, and the Stripe webhook returns a `200`
+> no-op without writing subscription state.
+
 ## Description
 Establishes and maintains each league's paid subscription through **Stripe**, making the
 `subscription_end_time` consumed by [BE-014](BE-014-subscription-access-control.md) an

@@ -20,6 +20,7 @@ from boto3.dynamodb.conditions import Key
 from fastapi import HTTPException, status
 
 import main
+from common.feature_flags import is_billing_enabled
 from common.job_status import JOB_TTL_SECONDS
 from common.sns import publish_failure as _publish_failure
 from main import (
@@ -464,6 +465,10 @@ def require_active_subscription(
     Raises:
         HTTPException: 402 when the subscription is expired or absent.
     """
+    # Billing is feature-flagged (BE-017). When off, every league has full access
+    # and this gate is a no-op.
+    if not is_billing_enabled():
+        return
     if metadata is None:
         metadata = get_league_metadata(canonical_league_id)
     subscription_end_time = metadata.get("subscription_end_time")

@@ -1,5 +1,9 @@
 # BE-014: Subscription Access Control
 
+> **Feature-flagged ([BE-017](BE-017-feature-flags.md)).** This gate is active only when the
+> `billing` flag is ON. When OFF (the current default), `require_active_subscription` is a
+> no-op and every league reaches the gated endpoints with full access.
+
 ## Description
 Enforces a per-league subscription on the backend API. Each league's `METADATA` item carries a
 `subscription_end_time` (ISO 8601 UTC timestamp). A league's subscription is **active** while

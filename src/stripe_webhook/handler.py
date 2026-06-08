@@ -25,6 +25,7 @@ import boto3
 import botocore.config
 import stripe
 
+from common.feature_flags import is_billing_enabled
 from common.logging_utils import logger
 from common.secrets import get_secret_from_env_param
 from common.subscription import (
@@ -229,7 +230,13 @@ def lambda_handler(event, context) -> dict[str, str | int]:
     Verifies the signature, dedups on the Stripe event id, processes the event,
     and only then records the dedup marker. A processing failure returns ``500``
     without recording, so Stripe redelivers and the (idempotent) handler retries.
+
+    No-ops with a ``200`` when billing is disabled (BE-017) so any in-flight
+    Stripe delivery is acknowledged without mutating subscription state.
     """
+    if not is_billing_enabled():
+        logger.info("Billing disabled; webhook event acknowledged without processing")
+        return _response(200, "Billing disabled")
     payload = _raw_body(event)
     signature = _signature_header(event)
 

@@ -43,10 +43,7 @@ export function AboutDialog({ open, onOpenChange }: AboutDialogProps) {
             GitHub
           </a>
           . If you encounter any bugs, please report them there using the issues
-          section.
-          <br />
-          <br />
-          Have a feature request? Add your idea to the board{' '}
+          section. Have a feature request? Add your idea to the board{' '}
           <a
             href="https://leagueql.supahub.com/en"
             target="_blank"
@@ -57,6 +54,22 @@ export function AboutDialog({ open, onOpenChange }: AboutDialogProps) {
           </a>
           .
           <br />
+          <br />
+          Found this app useful? Support its development by donating below.
+          <br />
+          <br />
+          <a
+            href="https://www.buymeacoffee.com/amolrairikar"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex justify-center"
+          >
+            <img
+              src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png"
+              alt="Buy Me A Coffee"
+              style={{ height: '60px', width: '217px' }}
+            />
+          </a>
         </p>
       </DialogContent>
     </Dialog>

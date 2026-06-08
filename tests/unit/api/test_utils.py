@@ -385,6 +385,16 @@ class TestRequireActiveSubscription:
         )
         mock_table.get_item.assert_not_called()
 
+    def test_noop_when_billing_disabled(self, mock_table):
+        # Billing feature-flagged off (BE-017): the gate is a no-op, so an expired
+        # (here absent) subscription does not raise and no METADATA read happens.
+        from common import feature_flags
+        from main import require_active_subscription
+
+        feature_flags._override_for_testing({"billing": False})
+        require_active_subscription("canonical-abc")
+        mock_table.get_item.assert_not_called()
+
 
 class TestRequireLeagueOwner:
     def _meta(self, owner):

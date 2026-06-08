@@ -305,6 +305,14 @@ class TestCheckoutSessionEndpoint:
         resp = client.post("/leagues/123/checkout-session?platform=SLEEPER")
         assert resp.status_code == 401
 
+    def test_returns_404_when_billing_disabled(self, client, override_user):
+        # Billing feature-flagged off (BE-017): checkout is unreachable.
+        from common import feature_flags
+
+        feature_flags._override_for_testing({"billing": False})
+        resp = client.post("/leagues/123/checkout-session?platform=SLEEPER")
+        assert resp.status_code == 404
+
 
 class TestBillingPortalEndpoint:
     def test_returns_portal_url(self, client, mock_table, override_user):
@@ -319,5 +327,14 @@ class TestBillingPortalEndpoint:
 
     def test_returns_404_when_no_customer(self, client, mock_table, override_user):
         mock_table.get_item.return_value = {}
+        resp = client.post("/billing-portal-session")
+        assert resp.status_code == 404
+
+    def test_returns_404_when_billing_disabled(self, client, override_user):
+        # Billing feature-flagged off (BE-017): the portal is unreachable, even
+        # before any Stripe customer lookup.
+        from common import feature_flags
+
+        feature_flags._override_for_testing({"billing": False})
         resp = client.post("/billing-portal-session")
         assert resp.status_code == 404

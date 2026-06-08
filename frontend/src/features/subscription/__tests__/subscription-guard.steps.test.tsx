@@ -3,6 +3,7 @@ import { defineFeature, loadFeature } from 'jest-cucumber';
 
 import { SubscriptionGuard } from '../subscription-guard';
 
+import { setFlagsForTesting } from '@/lib/feature-flags';
 import { leagueMetadata, server } from '@/test/msw/server';
 import { renderRoute } from '@/test/render';
 
@@ -59,6 +60,31 @@ defineFeature(feature, (test) => {
       );
     });
     then(/^I see the paywall heading "(.*)"$/, async (text) => {
+      expect(await screen.findByText(text)).toBeInTheDocument();
+    });
+  });
+
+  test('Billing disabled renders the page without a paywall (FE-026)', ({
+    given,
+    and,
+    when,
+    then,
+  }) => {
+    given('billing is disabled', () => {
+      setFlagsForTesting({ billing: false });
+    });
+    and('the current league subscription has expired', () => {
+      server.use(leagueMetadata({ subscription_end_time: isoIn(-1) }));
+    });
+    when('I open a gated page behind the subscription guard', async () => {
+      await renderRoute(
+        <SubscriptionGuard>
+          <div>Protected analytics</div>
+        </SubscriptionGuard>,
+        { league },
+      );
+    });
+    then(/^I see the gated content "(.*)"$/, async (text) => {
       expect(await screen.findByText(text)).toBeInTheDocument();
     });
   });

@@ -38,6 +38,22 @@ mint_jwt = _load_module(
 
 
 def before_all(context):
+    # _SRC makes the shared ``common`` package importable (feature flag + SSM lookups).
+    if str(_SRC) not in sys.path:
+        sys.path.insert(0, str(_SRC))
+
+    # Stripe billing is feature-flagged (BE-017). This suite exercises the deployed
+    # billing endpoints + webhook, which only behave as tested when billing is ON;
+    # with the flag OFF they 404 / no-op, so the whole suite is not applicable.
+    # Read the same ``feature_flags.json`` that ships in the Lambda zips and, when
+    # it is off, skip every scenario (see ``before_scenario``) without requiring
+    # the Stripe/Clerk env or resolving any SSM secrets.
+    from common.feature_flags import is_billing_enabled
+
+    context.billing_enabled = is_billing_enabled()
+    if not context.billing_enabled:
+        return
+
     missing = [v for v in _REQUIRED_ENV_VARS if not os.environ.get(v)]
     if missing:
         raise EnvironmentError(
@@ -45,10 +61,6 @@ def before_all(context):
         )
 
     os.environ.setdefault("DYNAMODB_TABLE_NAME", "leagueql-table-dev")
-
-    # _SRC makes the shared ``common`` package importable for the SSM lookup.
-    if str(_SRC) not in sys.path:
-        sys.path.insert(0, str(_SRC))
 
     # Resolve the Clerk auth config used to mint the bearer token the deployed
     # billing endpoints authenticate against (the secret is a SecureString SSM
@@ -80,6 +92,14 @@ def before_all(context):
 
 
 def before_scenario(context, scenario):
+    # Billing feature-flagged off (BE-017): the deployed endpoints don't do billing,
+    # so skip the scenario rather than asserting billing behavior that can't happen.
+    if not getattr(context, "billing_enabled", True):
+        scenario.skip(
+            "Billing disabled (BE-017); Stripe integration suite not applicable"
+        )
+        return
+
     # Stripe objects a scenario creates in sandbox, torn down in after_scenario so
     # a lifecycle run leaves no dangling test-mode subscriptions/customers.
     context.cleanup_subscription_ids = []

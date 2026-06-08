@@ -17,3 +17,10 @@ Feature: Owner-gated sidebar actions (LQL-01 / FE-025)
     And I do not see the "Refresh League" action
     And I do not see the "Delete League" action
     And I do not see the "Transfer Ownership" action
+
+  Scenario: Billing disabled hides Manage Subscription for the owner (FE-026)
+    Given billing is disabled
+    And I am the owner of the current league
+    When I render the sidebar
+    Then I see the "Refresh League" action
+    And I do not see the "Manage Subscription" action

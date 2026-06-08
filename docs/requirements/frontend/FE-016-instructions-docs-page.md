@@ -1,5 +1,11 @@
 # FE-016: Instructions / Docs Page
 
+> **Billing content is feature-flagged ([FE-026](FE-026-feature-flags.md)).** The Subscribing,
+> Free Trial, and Managing Billing sections (and their table-of-contents entries), the
+> "Why is there a subscription for the app?" FAQ, and the inline billing mentions in the
+> Ownership & Access and Navigation sections are shown only when the `billing` flag is ON. When
+> OFF (the current default), all of that is hidden; the rest of the guide renders unchanged.
+
 ## Description
 The `/docs` page provides user-facing instructions for using LeagueQL: how to find your
 ESPN/Sleeper league ID, how to retrieve ESPN cookies (including via the Chrome extension),
