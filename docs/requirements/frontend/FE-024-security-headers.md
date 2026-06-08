@@ -34,6 +34,9 @@ be temporarily reverted to `-Report-Only`.
   `connect-src`.
 - **Stripe** — `*.stripe.com` in `frame-src`/`form-action`. Checkout/billing are top-level
   redirects (not CSP-governed), so these are belt-and-suspenders, validated in Report-Only.
+- **Buy Me A Coffee** — `cdn.buymeacoffee.com` in `img-src`, the origin of the donate button
+  image rendered in the About dialog ([FE-022](FE-022-about-dialog.md)). The link target
+  (`www.buymeacoffee.com`) is a top-level navigation and not CSP-governed.
 
 ## Edge Cases
 - **Inline chart styles:** `components/ui/chart.tsx` injects a dynamic inline `<style>` and
