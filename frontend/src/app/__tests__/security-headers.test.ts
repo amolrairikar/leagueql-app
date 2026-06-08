@@ -43,6 +43,8 @@ describe('public/_headers (FE-024 security headers)', () => {
     expect(cspLine).toContain('__VITE_DEV_API_URL__');
     // Stripe checkout/billing redirect targets.
     expect(cspLine).toContain('https://*.stripe.com');
+    // Buy Me A Coffee donate button image (About dialog).
+    expect(cspLine).toContain('https://cdn.buymeacoffee.com');
   });
 
   it('permits inline styles and Clerk blob workers', () => {
