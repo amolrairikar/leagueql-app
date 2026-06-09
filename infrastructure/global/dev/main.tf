@@ -728,6 +728,16 @@ module "sleeper-player-stats-refresher-lambda-role" {
         Resource = [
           "${local.primary_bucket_arn}/player-stats/sleeper_nfl_player_stats.json"
         ]
+      },
+      {
+        Sid    = "WriteTestPlayerStats"
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject"
+        ]
+        Resource = [
+          "${local.primary_bucket_arn}/player-stats/integration-test/sleeper_nfl_player_stats.json"
+        ]
       }
     ]
   })
