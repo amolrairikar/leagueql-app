@@ -3,6 +3,7 @@
 import json
 from unittest.mock import MagicMock, patch
 
+import botocore
 import pytest
 import requests
 
@@ -76,6 +77,9 @@ class TestFetchStats:
         assert result is None
 
 
+_METADATA_KEY = "player-metadata/sleeper_nfl_players.json"
+
+
 class TestLambdaHandlerRefresher:
     def _make_players(self, count: int, active: int) -> dict:
         players = {}
@@ -84,6 +88,28 @@ class TestLambdaHandlerRefresher:
         for i in range(active, count):
             players[str(i)] = {"status": "Inactive"}
         return players
+
+    def _mock_s3(self, players: dict, existing_stats: dict | None = None) -> MagicMock:
+        """Build a mock S3 client whose ``get_object`` dispatches by key: the metadata
+        key returns the player list; the stats-cache key returns ``existing_stats`` (or
+        raises ``NoSuchKey`` when ``existing_stats`` is None, simulating a fresh cache)."""
+        mock_s3 = MagicMock()
+
+        def get_object(Bucket, Key):
+            if Key == _METADATA_KEY:
+                body = MagicMock()
+                body.read.return_value = json.dumps(players).encode()
+                return {"Body": body}
+            if existing_stats is not None:
+                body = MagicMock()
+                body.read.return_value = json.dumps(existing_stats).encode()
+                return {"Body": body}
+            raise botocore.exceptions.ClientError(
+                {"Error": {"Code": "NoSuchKey"}}, "GetObject"
+            )
+
+        mock_s3.get_object.side_effect = get_object
+        return mock_s3
 
     def test_raises_when_nfl_state_unavailable(self, stats_refresher_handler):
         with patch.object(
@@ -107,11 +133,7 @@ class TestLambdaHandlerRefresher:
 
     def test_fetches_and_writes_all_active_players(self, stats_refresher_handler):
         players = self._make_players(count=5, active=3)
-        player_json = json.dumps(players).encode()
-        mock_body = MagicMock()
-        mock_body.read.return_value = player_json
-        mock_s3 = MagicMock()
-        mock_s3.get_object.return_value = {"Body": mock_body}
+        mock_s3 = self._mock_s3(players)
 
         with (
             patch.object(
@@ -142,11 +164,7 @@ class TestLambdaHandlerRefresher:
             "p2": {"status": "Inactive", "position": "RB"},
             "DEN": {"active": True, "position": "DEF"},
         }
-        player_json = json.dumps(players).encode()
-        mock_body = MagicMock()
-        mock_body.read.return_value = player_json
-        mock_s3 = MagicMock()
-        mock_s3.get_object.return_value = {"Body": mock_body}
+        mock_s3 = self._mock_s3(players)
 
         with (
             patch.object(
@@ -168,11 +186,7 @@ class TestLambdaHandlerRefresher:
 
     def test_excludes_players_with_no_stats(self, stats_refresher_handler):
         players = {"p1": {"status": "Active"}, "p2": {"status": "Active"}}
-        player_json = json.dumps(players).encode()
-        mock_body = MagicMock()
-        mock_body.read.return_value = player_json
-        mock_s3 = MagicMock()
-        mock_s3.get_object.return_value = {"Body": mock_body}
+        mock_s3 = self._mock_s3(players)
 
         def fetch_side_effect(player_id, season):
             return None if player_id == "p2" else {"pass_yd": 100}
@@ -196,11 +210,7 @@ class TestLambdaHandlerRefresher:
 
     def test_no_active_players_writes_empty_stats(self, stats_refresher_handler):
         players = self._make_players(count=5, active=0)
-        player_json = json.dumps(players).encode()
-        mock_body = MagicMock()
-        mock_body.read.return_value = player_json
-        mock_s3 = MagicMock()
-        mock_s3.get_object.return_value = {"Body": mock_body}
+        mock_s3 = self._mock_s3(players)
 
         with (
             patch.object(
@@ -223,11 +233,7 @@ class TestLambdaHandlerRefresher:
         """An explicit ``season`` in the event forces a refresh and skips the
         live NFL-state check entirely."""
         players = {"p1": {"status": "Active"}}
-        player_json = json.dumps(players).encode()
-        mock_body = MagicMock()
-        mock_body.read.return_value = player_json
-        mock_s3 = MagicMock()
-        mock_s3.get_object.return_value = {"Body": mock_body}
+        mock_s3 = self._mock_s3(players)
         mock_state = MagicMock()
 
         with (
@@ -246,11 +252,7 @@ class TestLambdaHandlerRefresher:
     def test_season_override_refreshes_during_off_season(self, stats_refresher_handler):
         """The override still runs even when the live state would report off-season."""
         players = {"p1": {"status": "Active"}}
-        player_json = json.dumps(players).encode()
-        mock_body = MagicMock()
-        mock_body.read.return_value = player_json
-        mock_s3 = MagicMock()
-        mock_s3.get_object.return_value = {"Body": mock_body}
+        mock_s3 = self._mock_s3(players)
 
         with (
             patch.object(
@@ -272,11 +274,7 @@ class TestLambdaHandlerRefresher:
     def test_max_players_caps_the_fan_out(self, stats_refresher_handler):
         """``max_players`` limits the run to the first N active players."""
         players = self._make_players(count=10, active=8)
-        player_json = json.dumps(players).encode()
-        mock_body = MagicMock()
-        mock_body.read.return_value = player_json
-        mock_s3 = MagicMock()
-        mock_s3.get_object.return_value = {"Body": mock_body}
+        mock_s3 = self._mock_s3(players)
 
         with (
             patch.object(
@@ -299,11 +297,7 @@ class TestLambdaHandlerRefresher:
     def test_output_key_override_redirects_write(self, stats_refresher_handler):
         """``output_key`` writes to the override key, not the production cache."""
         players = {"p1": {"status": "Active"}}
-        player_json = json.dumps(players).encode()
-        mock_body = MagicMock()
-        mock_body.read.return_value = player_json
-        mock_s3 = MagicMock()
-        mock_s3.get_object.return_value = {"Body": mock_body}
+        mock_s3 = self._mock_s3(players)
 
         with (
             patch.object(
@@ -328,11 +322,7 @@ class TestLambdaHandlerRefresher:
     def test_defaults_to_production_key_without_override(self, stats_refresher_handler):
         """Without ``output_key`` the canonical production key is used."""
         players = {"p1": {"status": "Active"}}
-        player_json = json.dumps(players).encode()
-        mock_body = MagicMock()
-        mock_body.read.return_value = player_json
-        mock_s3 = MagicMock()
-        mock_s3.get_object.return_value = {"Body": mock_body}
+        mock_s3 = self._mock_s3(players)
 
         with (
             patch.object(
@@ -354,11 +344,7 @@ class TestLambdaHandlerRefresher:
 
     def test_stats_keyed_by_player_and_season(self, stats_refresher_handler):
         players = {"p1": {"status": "Active"}}
-        player_json = json.dumps(players).encode()
-        mock_body = MagicMock()
-        mock_body.read.return_value = player_json
-        mock_s3 = MagicMock()
-        mock_s3.get_object.return_value = {"Body": mock_body}
+        mock_s3 = self._mock_s3(players)
 
         with (
             patch.object(
@@ -377,3 +363,92 @@ class TestLambdaHandlerRefresher:
 
         written = json.loads(mock_s3.put_object.call_args[1]["Body"])
         assert written == {"p1": {"2024": {"pass_yd": 300}}}
+
+    def test_merges_into_existing_cache(self, stats_refresher_handler):
+        """A refresh for one season deep-merges into the existing cache: prior seasons
+        for the refreshed player and players outside this run's selection survive."""
+        players = {"p1": {"status": "Active"}}
+        existing = {
+            "p1": {"2024": {"pass_yd": 100}},
+            "p99": {"2024": {"rush_yd": 50}},  # not in this run's selection
+        }
+        mock_s3 = self._mock_s3(players, existing_stats=existing)
+
+        with (
+            patch.object(stats_refresher_handler, "fetch_nfl_state", MagicMock()),
+            patch.object(stats_refresher_handler, "s3_client", mock_s3),
+            patch.object(
+                stats_refresher_handler, "fetch_stats", return_value={"pass_yd": 300}
+            ),
+        ):
+            stats_refresher_handler.lambda_handler({"season": "2025"}, MagicMock())
+
+        written = json.loads(mock_s3.put_object.call_args[1]["Body"])
+        # p1 keeps its 2024 stats and gains 2025; the untouched p99 survives.
+        assert written == {
+            "p1": {"2024": {"pass_yd": 100}, "2025": {"pass_yd": 300}},
+            "p99": {"2024": {"rush_yd": 50}},
+        }
+
+    def test_starts_fresh_when_no_existing_cache(self, stats_refresher_handler):
+        """A missing cache object (NoSuchKey) bootstraps an empty map."""
+        players = {"p1": {"status": "Active"}}
+        mock_s3 = self._mock_s3(players, existing_stats=None)
+
+        with (
+            patch.object(stats_refresher_handler, "fetch_nfl_state", MagicMock()),
+            patch.object(stats_refresher_handler, "s3_client", mock_s3),
+            patch.object(
+                stats_refresher_handler, "fetch_stats", return_value={"pass_yd": 300}
+            ),
+        ):
+            stats_refresher_handler.lambda_handler({"season": "2025"}, MagicMock())
+
+        written = json.loads(mock_s3.put_object.call_args[1]["Body"])
+        assert written == {"p1": {"2025": {"pass_yd": 300}}}
+
+    def test_treats_non_dict_existing_cache_as_empty(self, stats_refresher_handler):
+        """A corrupt cache (non-dict JSON) is discarded rather than merged into."""
+        players = {"p1": {"status": "Active"}}
+        mock_s3 = self._mock_s3(players, existing_stats=[1, 2, 3])
+
+        with (
+            patch.object(stats_refresher_handler, "fetch_nfl_state", MagicMock()),
+            patch.object(stats_refresher_handler, "s3_client", mock_s3),
+            patch.object(
+                stats_refresher_handler, "fetch_stats", return_value={"pass_yd": 300}
+            ),
+        ):
+            stats_refresher_handler.lambda_handler({"season": "2025"}, MagicMock())
+
+        written = json.loads(mock_s3.put_object.call_args[1]["Body"])
+        assert written == {"p1": {"2025": {"pass_yd": 300}}}
+
+    def test_raises_on_unexpected_s3_read_error(self, stats_refresher_handler):
+        """A non-NoSuchKey error reading the cache aborts the run rather than silently
+        starting fresh (which would wipe the cache on the subsequent write)."""
+        players = {"p1": {"status": "Active"}}
+        mock_s3 = MagicMock()
+
+        def get_object(Bucket, Key):
+            if Key == _METADATA_KEY:
+                body = MagicMock()
+                body.read.return_value = json.dumps(players).encode()
+                return {"Body": body}
+            raise botocore.exceptions.ClientError(
+                {"Error": {"Code": "AccessDenied"}}, "GetObject"
+            )
+
+        mock_s3.get_object.side_effect = get_object
+
+        with (
+            patch.object(stats_refresher_handler, "fetch_nfl_state", MagicMock()),
+            patch.object(stats_refresher_handler, "s3_client", mock_s3),
+            patch.object(
+                stats_refresher_handler, "fetch_stats", return_value={"pass_yd": 300}
+            ),
+        ):
+            with pytest.raises(botocore.exceptions.ClientError):
+                stats_refresher_handler.lambda_handler({"season": "2025"}, MagicMock())
+
+        mock_s3.put_object.assert_not_called()

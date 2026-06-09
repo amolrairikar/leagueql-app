@@ -3,6 +3,7 @@ import json
 import os
 import time
 import boto3
+import botocore.exceptions
 from utils import build_retry_session, logger
 
 s3_client = boto3.client("s3")
@@ -94,12 +95,27 @@ def lambda_handler(event, context) -> None:
         )
     logger.info("Processing %d active players for season %s", len(active_ids), season)
 
-    all_stats = {}
+    # A run only fetches the selected players for a single ``season``. Read the existing
+    # cache and deep-merge into it so previously cached seasons for the same player and
+    # players outside this run's selection are preserved (rather than overwriting the
+    # object with just this season's slice). A missing object bootstraps an empty cache.
+    try:
+        existing_response = s3_client.get_object(Bucket=bucket, Key=output_key)
+        all_stats = json.loads(existing_response["Body"].read())
+        if not isinstance(all_stats, dict):
+            all_stats = {}
+    except botocore.exceptions.ClientError as e:
+        if e.response["Error"]["Code"] in ("NoSuchKey", "404"):
+            logger.info("No existing stats cache at %s — starting fresh.", output_key)
+            all_stats = {}
+        else:
+            raise
+
     total = len(active_ids)
     for index, player_id in enumerate(active_ids, start=1):
         stats = fetch_stats(player_id, season)
         if stats is not None:
-            all_stats[player_id] = {season: stats}
+            all_stats.setdefault(player_id, {})[season] = stats
         if index % 500 == 0:
             logger.info("Processed %d/%d players", index, total)
 
