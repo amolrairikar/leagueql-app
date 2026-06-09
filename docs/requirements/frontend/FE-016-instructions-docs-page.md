@@ -46,14 +46,22 @@ Rendered with the marketing header (scrollable content area).
 ## Acceptance Criteria
 - [ ] `/docs` renders user instructions for finding league IDs, retrieving ESPN cookies, and
       onboarding/refresh/migration.
+- [ ] Connecting a League splits ESPN and Sleeper into their own subsections (each a
+      table-of-contents entry); the ESPN subsection shows a screenshot of the Onboard/Refresh
+      League form followed by a "Form Fields" sub-subsection (also a table-of-contents entry)
+      documenting the League ID, Latest Season, SWID, and ESPN S2 fields, and a "Chrome
+      Extension" sub-subsection (also a table-of-contents entry) describing the LeagueQL ESPN
+      Cookie Helper extension ([EXT-001](../extension/EXT-001-espn-cookie-autofill.md)) that
+      autofills the SWID/ESPN S2 cookies, with a link to its Chrome Web Store listing.
 - [ ] Both extension-based and manual ESPN cookie retrieval are documented.
 - [ ] Content scrolls within the page while the header remains.
 - [ ] The docs document how to subscribe (Stripe Checkout), the once-per-league free trial, and
       promotion codes (under Connecting a League), plus managing/canceling billing — immediate
       cancellation via the Stripe Billing Portal (under Managing Your League).
 - [ ] An Ownership & Access section documents the league-owner model and owner-only actions,
-      joining a private ESPN league via membership verification, and transferring ownership via
-      a one-time token.
+      joining a private ESPN league via membership verification (with a screenshot of the
+      "Join league" / verify-membership dialog), and transferring ownership via a one-time
+      token.
 
 ## Sources
 `src/features/instructions/instructions-page.tsx`.

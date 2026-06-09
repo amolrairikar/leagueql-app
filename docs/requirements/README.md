@@ -53,7 +53,6 @@ criteria. Frontend, backend, and extension features are kept separate.
 | [FE-014](frontend/FE-014-navigation-sidebar.md) | Navigation Sidebar & App Layout |
 | [FE-015](frontend/FE-015-demo-mode.md) | Demo Mode |
 | [FE-016](frontend/FE-016-instructions-docs-page.md) | Instructions / Docs Page |
-| [FE-017](frontend/FE-017-changelog-page.md) | Changelog Page |
 | [FE-018](frontend/FE-018-privacy-pages.md) | Privacy Pages |
 | [FE-019](frontend/FE-019-authentication.md) | Authentication & Protected Routes |
 | [FE-020](frontend/FE-020-theme-toggle.md) | Theme (Light/Dark Mode) |

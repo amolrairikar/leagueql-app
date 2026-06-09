@@ -1,6 +1,10 @@
 import { Info, TriangleAlert } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
+import espnOnboardFormScreenshot from '@/assets/espn-onboard-form-screenshot.png';
+import espnVerifyMembershipScreenshot from '@/assets/espn-verify-membership-screenshot.png';
+import { Kbd } from '@/components/ui/kbd';
+import { ESPN_EXTENSION_URL } from '@/lib/espn-extension';
 import { isBillingEnabled } from '@/lib/feature-flags';
 
 const TOC_ITEMS = [
@@ -9,9 +13,10 @@ const TOC_ITEMS = [
   { id: 'authentication', label: 'Authentication', level: 2 },
   { id: 'connecting-a-league', label: 'Connecting a League', level: 1 },
   { id: 'espn-leagues', label: 'ESPN Leagues', level: 2 },
+  { id: 'form-fields', label: 'Form Fields', level: 3 },
+  { id: 'chrome-extension', label: 'Chrome Extension', level: 3 },
   { id: 'sleeper-leagues', label: 'Sleeper Leagues', level: 2 },
-  { id: 'ownership-and-access', label: 'Ownership & Access', level: 2 },
-  { id: 'the-league-owner', label: 'The League Owner', level: 3 },
+  { id: 'league-ownership', label: 'League Ownership', level: 2 },
   { id: 'joining-an-espn-league', label: 'Joining an ESPN League', level: 3 },
   { id: 'transferring-ownership', label: 'Transferring Ownership', level: 3 },
   { id: 'subscribing', label: 'Subscribing', level: 2 },
@@ -61,15 +66,27 @@ const FAQ_ITEMS: FaqItem[] = [
   },
   {
     q: 'The connection timed out. What happened?',
-    a: 'If the page shows a timeout error, note the operation ID displayed and try again. If the issue persists, file a bug report with the operation ID so it can be investigated.',
+    a: (
+      <>
+        If the page shows a timeout error, note the operation ID displayed and
+        try again. If the issue persists, file a bug report with{' '}
+        <a
+          href="mailto:support@leagueql.com"
+          className="text-primary underline underline-offset-2 hover:text-primary/80"
+        >
+          support@leagueql.com
+        </a>{' '}
+        and provide a screenshot + details so it can be investigated.
+      </>
+    ),
   },
   {
     q: 'My data looks outdated. How do I refresh it?',
     a: (
       <>
-        For ESPN leagues, click <InlineCode>Refresh League</InlineCode> in the
-        sidebar and re-submit your league credentials. Sleeper leagues will
-        refresh automatically each week during the season.
+        For ESPN leagues, click <Kbd>Refresh League</Kbd> in the sidebar and
+        re-submit your league credentials. Sleeper leagues will refresh
+        automatically each week during the season.
       </>
     ),
   },
@@ -81,9 +98,8 @@ const FAQ_ITEMS: FaqItem[] = [
     q: 'Can I connect more than one league?',
     a: (
       <>
-        Yes. Use the <InlineCode>View Another League</InlineCode> option in the
-        sidebar to view or onboard another league. Each league is stored
-        independently.
+        Yes. Use the <Kbd>View Another League</Kbd> option in the sidebar to
+        view or onboard another league. Each league is stored independently.
       </>
     ),
   },
@@ -94,9 +110,7 @@ const FAQ_ITEMS: FaqItem[] = [
         Those actions are available only to the league&apos;s owner, the person
         who first connected it. Everyone else can view the full dashboard but
         not manage the league. See{' '}
-        <SectionLink id="ownership-and-access">
-          Ownership &amp; Access
-        </SectionLink>{' '}
+        <SectionLink id="ownership-and-access">League Ownership</SectionLink>{' '}
         for how ownership works and how to transfer it.
       </>
     ),
@@ -105,22 +119,14 @@ const FAQ_ITEMS: FaqItem[] = [
     q: 'My leaguemate onboarded our ESPN league. How do I view it?',
     a: (
       <>
-        Open the league, then use the <InlineCode>Verify membership</InlineCode>{' '}
-        prompt to confirm your ESPN cookies grant you access. Once verified you
-        become a member and the dashboard unlocks. Sleeper leagues are public,
-        so no verification is needed.
+        Open the league, then use the <Kbd>Verify membership</Kbd> prompt to
+        confirm your ESPN cookies grant you access. Once verified you become a
+        member and the dashboard unlocks. Sleeper leagues are public, so no
+        verification is needed.
       </>
     ),
   },
 ];
-
-function InlineCode({ children }: { children: React.ReactNode }) {
-  return (
-    <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">
-      {children}
-    </code>
-  );
-}
 
 function SectionLink({
   id,
@@ -339,7 +345,10 @@ export default function InstructionsPage() {
               This app is designed for a web browser, not a mobile browser.
               While efforts have been made to make the mobile experience closely
               reflect the web experience, your experience may vary on mobile
-              devices. Currently, only redraft leagues are supported.
+              devices. Currently, only redraft leagues are compatible with all
+              functionalities of the app. If you have a dynasty league, you may
+              find the two draft pages do not make much sense as the
+              calculations are designed to evaluate redraft leagues.
             </p>
 
             <div className="space-y-6">
@@ -347,11 +356,10 @@ export default function InstructionsPage() {
                 <SubHeading id="demo-mode">Demo Mode</SubHeading>
                 <p className="text-muted-foreground leading-relaxed">
                   Want to explore the app before connecting your own league?
-                  Click <InlineCode>View Demo</InlineCode> on the landing page.
-                  A sample league is pre-loaded so you can navigate every page.
-                  Click
-                  <InlineCode>Exit Demo</InlineCode> in the sidebar to return to
-                  the landing page and connect your own league.
+                  Click <Kbd>View Demo</Kbd> on the landing page. A sample
+                  league is pre-loaded so you can navigate every page. Click
+                  <Kbd>Exit Demo</Kbd> in the sidebar to return to the landing
+                  page and connect your own league.
                 </p>
               </div>
 
@@ -359,9 +367,9 @@ export default function InstructionsPage() {
                 <SubHeading id="authentication">Authentication</SubHeading>
                 <p className="text-muted-foreground leading-relaxed">
                   LeagueQL uses Clerk for authentication. From the landing page,
-                  click <InlineCode>Connect Your League</InlineCode> and sign in
-                  when prompted. After signing in you are returned to the
-                  landing page.
+                  click <Kbd>Connect Your League</Kbd> and use Clerk&apos;s form
+                  to sign in using your email and password or Google login.
+                  After signing in you are returned to the landing page.
                 </p>
               </div>
             </div>
@@ -372,36 +380,31 @@ export default function InstructionsPage() {
             <SectionHeading id="connecting-a-league">
               Connecting a League
             </SectionHeading>
-            <p className="text-muted-foreground leading-relaxed mb-4">
+            <p className="text-muted-foreground leading-relaxed mb-8">
               On the landing page, select your platform (ESPN or Sleeper) and
-              enter your league ID in the inline connect form, then submit. What
-              happens next depends on the platform:
+              enter your league ID, then click <Kbd>Connect</Kbd>. What happens
+              next depends on the platform:
             </p>
-            <ul className="list-disc pl-6 space-y-2 text-muted-foreground leading-relaxed mb-8">
-              <li>
-                <strong className="text-foreground">Sleeper leagues:</strong>{' '}
-                The league ID is all that is needed. The app fetches or onboards
-                your league right from the landing page (no credentials
-                required, as the underlying Sleeper API is read-only).
-                Onboarding typically takes ~45 seconds, after which you are
-                redirected to your league&apos;s home dashboard.
-              </li>
-              <li>
-                <strong className="text-foreground">ESPN leagues:</strong> If
-                the league has already been onboarded, you are taken straight to
-                your dashboard (or, if you are not yet a member of the private
-                league, prompted to verify your membership; see{' '}
-                <SectionLink id="joining-an-espn-league">
-                  Joining an ESPN League
-                </SectionLink>{' '}
-                below). If it is a new league, you are taken to a separate form
-                to enter your ESPN credentials and complete onboarding.
-              </li>
-            </ul>
 
             <div className="space-y-8">
               <div>
                 <SubHeading id="espn-leagues">ESPN Leagues</SubHeading>
+                <p className="text-muted-foreground leading-relaxed mb-4">
+                  If the league has already been onboarded, you are taken
+                  straight to your dashboard (or, if you are not yet a member of
+                  the private league, prompted to verify your membership; see{' '}
+                  <SectionLink id="joining-an-espn-league">
+                    Joining an ESPN League
+                  </SectionLink>{' '}
+                  below). If it is a new league, you are taken to a separate
+                  form to enter your ESPN credentials and complete onboarding.
+                </p>
+                <img
+                  src={espnOnboardFormScreenshot}
+                  alt="The ESPN Onboard/Refresh League form with fields for League ID, Latest Season, SWID, and ESPN S2"
+                  className="mb-4 w-full rounded-md border border-border"
+                />
+                <SubSubHeading id="form-fields">Form Fields</SubSubHeading>
                 <div className="mb-4">
                   <DocTable
                     headers={['Field', 'Description']}
@@ -410,7 +413,7 @@ export default function InstructionsPage() {
                         'League ID',
                         <>
                           The numeric ID in your ESPN fantasy URL (e.g.{' '}
-                          <InlineCode>?leagueId=12345</InlineCode>)
+                          <Kbd>?leagueId=12345</Kbd>)
                         </>,
                       ],
                       [
@@ -434,10 +437,58 @@ export default function InstructionsPage() {
                   Your SWID and ESPN S2 cookies are only transmitted once over
                   HTTPS to fetch your data and are never stored by LeagueQL.
                 </Callout>
+
+                <div className="mt-6">
+                  <SubSubHeading id="chrome-extension">
+                    Chrome Extension
+                  </SubSubHeading>
+                </div>
+                <p className="text-muted-foreground leading-relaxed mb-3">
+                  Finding your SWID and ESPN S2 cookies by hand can be tedious.
+                  The{' '}
+                  <a
+                    href={ESPN_EXTENSION_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary underline underline-offset-2 hover:text-primary/80"
+                  >
+                    LeagueQL ESPN Cookie Helper
+                  </a>{' '}
+                  Chrome extension reads those two cookies straight from your
+                  browser and fills them into the form for you. Please note that
+                  it is not required to use the extension; you can enter the
+                  cookie values manually if you prefer.
+                </p>
+                <ol className="list-decimal pl-6 space-y-2 text-muted-foreground leading-relaxed mb-3">
+                  <li>
+                    Install the extension from the Chrome Web Store and log into{' '}
+                    <strong className="text-foreground">
+                      fantasy.espn.com
+                    </strong>{' '}
+                    in the same browser.
+                  </li>
+                  <li>
+                    On the Onboard/Refresh League form, click{' '}
+                    <Kbd>Autofill cookies from ESPN</Kbd>. The extension reads
+                    your ESPN cookies and populates the SWID and ESPN S2 fields
+                    automatically.
+                  </li>
+                </ol>
+                <Callout>
+                  The extension reads only your <code>espn_s2</code> and{' '}
+                  <code>SWID</code> cookies from ESPN and passes them to the
+                  form; it never stores or transmits them anywhere else. If it
+                  is not installed, you can fill the cookie fields in manually.
+                </Callout>
               </div>
 
               <div>
                 <SubHeading id="sleeper-leagues">Sleeper Leagues</SubHeading>
+                <p className="text-muted-foreground leading-relaxed mb-4">
+                  Enter your league ID, then click <Kbd>Connect</Kbd>.
+                  Onboarding typically takes ~45 seconds, after which you are
+                  redirected to your league&apos;s dashboard.
+                </p>
                 <div className="mb-4">
                   <DocTable
                     headers={['Field', 'Description']}
@@ -446,10 +497,7 @@ export default function InstructionsPage() {
                         'League ID',
                         <>
                           The numeric ID in your Sleeper league URL (e.g.{' '}
-                          <InlineCode>
-                            https://sleeper.com/leagues/12345
-                          </InlineCode>
-                          )
+                          <Kbd>https://sleeper.com/leagues/12345</Kbd>)
                         </>,
                       ],
                     ]}
@@ -459,58 +507,42 @@ export default function InstructionsPage() {
 
               <div>
                 <SubHeading id="ownership-and-access">
-                  Ownership &amp; Access
+                  League Ownership
                 </SubHeading>
-                <p className="text-muted-foreground leading-relaxed mb-6">
-                  Once you connect a league you become its{' '}
-                  <strong>owner</strong>. Every league has a single owner, the
-                  person who first connected it, who controls how the league is
-                  managed{billingEnabled ? ' and billed' : ''}. Who can{' '}
-                  <em>view</em> a league depends on the platform: Sleeper data
-                  is public, so any signed-in user can view a Sleeper league,
-                  while ESPN data is private, so only verified members of an
-                  ESPN league can view it.
+                <p className="text-muted-foreground leading-relaxed mb-3">
+                  The first person to connect a league becomes its owner. Only
+                  the owner sees and can use the league&apos;s management
+                  actions in the sidebar:
+                </p>
+                <ul className="list-disc pl-6 space-y-2 text-muted-foreground leading-relaxed mb-3">
+                  <li>Refresh League</li>
+                  <li>Migrate League</li>
+                  {billingEnabled && (
+                    <li>Manage Subscription / Subscribe (billing)</li>
+                  )}
+                  <li>Transfer Ownership</li>
+                  <li>Delete League</li>
+                </ul>
+                <p className="text-muted-foreground leading-relaxed mb-8">
+                  Everyone else (your leaguemates) can view the league dashboard
+                  but not these actions.
+                  {billingEnabled && (
+                    <>
+                      {' '}
+                      If a league&apos;s subscription has lapsed, only the owner
+                      is shown the Subscribe button; non-owners are asked to
+                      have the owner subscribe.
+                    </>
+                  )}
                 </p>
 
                 <div className="space-y-8">
-                  <div>
-                    <SubSubHeading id="the-league-owner">
-                      The League Owner
-                    </SubSubHeading>
-                    <p className="text-muted-foreground leading-relaxed mb-3">
-                      The first person to connect a league becomes its owner.
-                      Only the owner sees and can use the league&apos;s
-                      management actions in the sidebar:
-                    </p>
-                    <ul className="list-disc pl-6 space-y-2 text-muted-foreground leading-relaxed mb-3">
-                      <li>Refresh League</li>
-                      <li>Migrate League</li>
-                      {billingEnabled && (
-                        <li>Manage Subscription / Subscribe (billing)</li>
-                      )}
-                      <li>Transfer Ownership</li>
-                      <li>Delete League</li>
-                    </ul>
-                    <p className="text-muted-foreground leading-relaxed">
-                      Everyone else who can view the league (your league-mates)
-                      sees the full dashboard but not these actions.
-                      {billingEnabled && (
-                        <>
-                          {' '}
-                          If a league&apos;s subscription has lapsed, only the
-                          owner is shown the Subscribe button; non-owners are
-                          asked to have the owner subscribe.
-                        </>
-                      )}
-                    </p>
-                  </div>
-
                   <div>
                     <SubSubHeading id="joining-an-espn-league">
                       Joining an ESPN League
                     </SubSubHeading>
                     <p className="text-muted-foreground leading-relaxed mb-3">
-                      Because ESPN league data is private, league-mates other
+                      Because ESPN league data is private, leaguemates other
                       than the owner must prove they belong to the league before
                       they can view it. When you open an ESPN league you are not
                       yet a member of, you will see a{' '}
@@ -519,25 +551,31 @@ export default function InstructionsPage() {
                       </strong>{' '}
                       prompt instead of the dashboard.
                     </p>
-                    <ol className="list-decimal pl-6 space-y-2 text-muted-foreground leading-relaxed mb-3">
-                      <li>
-                        Make sure you are logged into ESPN in your browser (the
-                        LeagueQL ESPN Cookie Helper extension makes this
-                        seamless).
-                      </li>
-                      <li>
-                        Click <InlineCode>Verify membership</InlineCode>.
-                        LeagueQL checks your ESPN cookies against this specific
+                    <img
+                      src={espnVerifyMembershipScreenshot}
+                      alt="The Join league dialog prompting for SWID and ESPN S2 cookies to verify ESPN league membership"
+                      className="mb-4 w-full rounded-md border border-border"
+                    />
+                    <p>
+                      Enter your SWID and ESPN S2 cookies or use the LeagueQL
+                      ESPN Cookie Helper{' '}
+                      <a
+                        href={ESPN_EXTENSION_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary underline underline-offset-2 hover:text-primary/80"
+                      >
+                        extension
+                      </a>{' '}
+                      to verify your membership. If your cookies are valid, you
+                      are added to the league as a member and the dashboard
+                      unlocks immediately. If not, you will see
+                      <Kbd>
+                        We couldn&apos;t confirm you&apos;re in this ESPN
                         league.
-                      </li>
-                      <li>
-                        If your cookies grant access, you are added to the
-                        league&apos;s members and the dashboard unlocks
-                        immediately. If they do not, you will see &quot;We
-                        couldn&apos;t confirm you&apos;re in this ESPN
-                        league.&quot;
-                      </li>
-                    </ol>
+                      </Kbd>
+                    </p>
+                    <br></br>
                     <Callout>
                       The owner never needs to verify; they are a member
                       automatically. Verification reuses the same SWID / ESPN S2
@@ -560,18 +598,16 @@ export default function InstructionsPage() {
                         <strong className="text-foreground">
                           Current owner:
                         </strong>{' '}
-                        click <InlineCode>Transfer Ownership</InlineCode> in the
-                        sidebar, then <InlineCode>Generate token</InlineCode>.
-                        Copy the token and share it privately with the new
-                        owner.
+                        click <Kbd>Transfer Ownership</Kbd> in the sidebar, then{' '}
+                        <Kbd>Generate token</Kbd>. Copy the token and share it
+                        privately with the new owner.
                       </li>
                       <li>
                         <strong className="text-foreground">New owner:</strong>{' '}
-                        click <InlineCode>Claim Ownership</InlineCode> in the
-                        sidebar, paste the token, and click{' '}
-                        <InlineCode>Claim ownership</InlineCode>. Ownership
-                        transfers right away; you gain the owner actions and the
-                        previous owner becomes a regular member.
+                        click <Kbd>Claim Ownership</Kbd> in the sidebar, paste
+                        the token, and click <Kbd>Claim ownership</Kbd>.
+                        Ownership transfers right away; you gain the owner
+                        actions and the previous owner becomes a regular member.
                       </li>
                     </ul>
                     <Callout variant="warning">
@@ -579,7 +615,14 @@ export default function InstructionsPage() {
                       once; generating a new token invalidates any previous one.
                       Anyone with the token can claim ownership, so share it
                       privately. If a league&apos;s owner is unavailable,
-                      contact support.
+                      contact{' '}
+                      <a
+                        href="mailto:support@leagueql.com"
+                        className="text-primary underline underline-offset-2 hover:text-primary/80"
+                      >
+                        support@leagueql.com
+                      </a>
+                      .
                     </Callout>
                   </div>
                 </div>
@@ -601,11 +644,11 @@ export default function InstructionsPage() {
                       newly connected league starts without an active
                       subscription, so once onboarding completes its analytics
                       pages are replaced with a paywall. Click{' '}
-                      <InlineCode>Subscribe</InlineCode> there, or{' '}
-                      <InlineCode>Manage Subscription</InlineCode> in the
-                      sidebar, to open Stripe&apos;s secure checkout page. After
-                      payment you are returned to your league&apos;s home
-                      dashboard and access is restored automatically.
+                      <Kbd>Subscribe</Kbd> there, or{' '}
+                      <Kbd>Manage Subscription</Kbd> in the sidebar, to open
+                      Stripe&apos;s secure checkout page. After payment you are
+                      returned to your league&apos;s home dashboard and access
+                      is restored automatically.
                     </p>
                     <Callout>
                       Have a promotion code? Enter it in the{' '}
@@ -670,7 +713,7 @@ export default function InstructionsPage() {
               ownership, and delete the current league. Most of these are
               available to owners only. See{' '}
               <SectionLink id="ownership-and-access">
-                Ownership &amp; Access
+                League Ownership
               </SectionLink>{' '}
               above.
             </p>
@@ -713,17 +756,14 @@ export default function InstructionsPage() {
                   Migrating Your League
                 </SubHeading>
                 <Callout variant="warning">
-                  <strong className="text-foreground">
-                    Experimental feature
-                  </strong>
-                  : League migration cannot be undone. All-time metrics will be
-                  recalculated to reflect the merged history across both
-                  platforms.
+                  <strong>Experimental feature</strong>: League migration cannot
+                  be undone. All-time metrics will be recalculated to reflect
+                  the merged history across both platforms.
                 </Callout>
                 <p className="text-muted-foreground leading-relaxed mt-4 mb-4">
                   Use this when your league moves from one platform to another
                   in the offseason (ESPN → Sleeper or Sleeper → ESPN). Click
-                  Migrate League in the sidebar settings.
+                  <Kbd>Migrate League</Kbd> in the sidebar settings.
                 </p>
                 <p className="text-muted-foreground mb-3">
                   The wizard walks you through four steps:
@@ -740,9 +780,12 @@ export default function InstructionsPage() {
                     <strong className="text-foreground">
                       Enter new league details:
                     </strong>{' '}
-                    Provide the league ID on the new platform. For ESPN, you
+                    Provide the league ID for the new platform. For ESPN, you
                     will also need to enter the latest season, SWID, and ESPN S2
-                    cookies.
+                    cookies. See the{' '}
+                    <SectionLink id="form-fields">Form Fields</SectionLink>{' '}
+                    section above for details on these fields and how to fill
+                    them in.
                   </li>
                   <li>
                     <strong className="text-foreground">Map managers:</strong>{' '}
@@ -765,9 +808,9 @@ export default function InstructionsPage() {
                   Switching Leagues
                 </SubHeading>
                 <p className="text-muted-foreground leading-relaxed">
-                  Click <InlineCode>View Another League</InlineCode> in the
-                  sidebar. You are taken back to the landing page where you can
-                  enter a different league ID using the inline connect form.
+                  Click <Kbd>View Another League</Kbd> in the sidebar. You are
+                  taken back to the landing page where you can enter a different
+                  league ID.
                 </p>
               </div>
 
@@ -777,13 +820,12 @@ export default function InstructionsPage() {
                     Managing Billing
                   </SubHeading>
                   <p className="text-muted-foreground leading-relaxed mb-4">
-                    Click <InlineCode>Manage Subscription</InlineCode> in the
-                    sidebar to open the billing dialog. From there you can
-                    launch the Stripe Billing Portal to update your payment
-                    method or cancel the subscription. LeagueQL shows a reminder
-                    dot on the <InlineCode>Manage Subscription</InlineCode> icon
-                    when a league&apos;s subscription is within 14 days of
-                    expiring.
+                    Click <Kbd>Manage Subscription</Kbd> in the sidebar to open
+                    the billing dialog. From there you can launch the Stripe
+                    Billing Portal to update your payment method or cancel the
+                    subscription. LeagueQL shows a reminder dot on the{' '}
+                    <Kbd>Manage Subscription</Kbd> icon when a league&apos;s
+                    subscription is within 14 days of expiring.
                   </p>
                   <Callout variant="warning">
                     <strong className="text-foreground">
@@ -802,10 +844,9 @@ export default function InstructionsPage() {
                   Deleting a League
                 </SubHeading>
                 <p className="text-muted-foreground leading-relaxed">
-                  Click <InlineCode>Delete League</InlineCode> at the bottom of
-                  the sidebar. This permanently removes all stored data for the
-                  league from LeagueQL&apos;s backend. This action cannot be
-                  undone.
+                  Click <Kbd>Delete League</Kbd> at the bottom of the sidebar.
+                  This permanently removes all stored data for the league from
+                  LeagueQL&apos;s backend. This action cannot be undone.
                 </p>
               </div>
             </div>

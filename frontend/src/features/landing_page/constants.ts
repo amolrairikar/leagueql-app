@@ -15,7 +15,12 @@ import type {
 } from '@/features/landing_page/types';
 
 export const NAV_LINKS: NavLinkItem[] = [
-  { label: 'Changelog', href: '/changelog', icon: FileText, external: false },
+  {
+    label: 'Changelog',
+    href: 'https://github.com/amolrairikar/leagueql-app/blob/main/CHANGELOG.md',
+    icon: FileText,
+    external: true,
+  },
   { label: 'Docs', href: '/docs', icon: Info, external: false },
 ];
 

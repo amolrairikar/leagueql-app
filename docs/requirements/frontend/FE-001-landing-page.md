@@ -13,7 +13,7 @@ sidebar layout).
 - Feature highlights: Standings, Matchups, Playoff Bracket, Manager Comparison, Manager
   History, Draft Grades, Player Records, Matchup Records, Complete History, Rivalry Tracker,
   Championship Timeline, Team Trends, League Records, Platform Migration.
-- Nav links: Changelog (`/changelog`), Docs (`/docs`).
+- Nav links: Changelog (external — `CHANGELOG.md` on GitHub), Docs (`/docs`).
 
 ## Edge Cases
 - **Counts endpoint fails/slow:** the league-count figure degrades gracefully (placeholder
@@ -33,7 +33,8 @@ sidebar layout).
       page still renders if it fails.
 - [ ] CTAs route to sign in / connect league (or into the app for signed-in users) and to
       demo mode.
-- [ ] Changelog and Docs nav links resolve to `/changelog` and `/docs`.
+- [ ] The Docs nav link resolves to `/docs`; the Changelog nav link opens the GitHub
+      `CHANGELOG.md` in a new tab.
 - [ ] Layout is responsive on mobile and desktop.
 
 ## Sources
