@@ -21,7 +21,6 @@ import {
   SidebarTrigger,
 } from '@/components/ui/sidebar';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import ChangelogPage from '@/features/changelog/changelog-page';
 import LeagueConnect from '@/features/connect_league/league-connect';
 import DraftGrades from '@/features/draft_grades/draft-grades';
 import DraftRecap from '@/features/draft_recap/draft-recap';
@@ -181,15 +180,6 @@ function App() {
               <>
                 <Header />
                 <ExtensionPrivacyPage />
-              </>
-            }
-          />
-          <Route
-            path="/changelog"
-            element={
-              <>
-                <Header />
-                <ChangelogPage />
               </>
             }
           />
