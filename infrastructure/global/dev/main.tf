@@ -723,7 +723,8 @@ module "sleeper-player-stats-refresher-lambda-role" {
         Sid    = "WritePlayerStats"
         Effect = "Allow"
         Action = [
-          "s3:PutObject"
+          "s3:PutObject",
+          "s3:GetObject"
         ]
         Resource = [
           "${local.primary_bucket_arn}/player-stats/sleeper_nfl_player_stats.json"
