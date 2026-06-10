@@ -39,6 +39,13 @@ only ever reads these precomputed items via [BE-005](BE-005-query-precomputed-vi
 - **Migrated leagues:** owner IDs must be resolved across platforms via the
   `PLATFORM_MIGRATION` mapping so all-time aggregates stay continuous.
 - **Bench slot detection (Sleeper):** `BN`, `IL`, `IR`, `TAXI` are bench slots.
+- **Starter slot labels:** each starter's `fantasy_position` reflects the actual lineup
+  slot it filled. Sleeper derives this from the league's `roster_positions` (positionally,
+  bench slots removed). ESPN derives it from each player's `lineupSlotId` via
+  `ESPN_FANTASY_POSITION_ID_MAPPING`, which covers all starting slots (Superflex/`OP`,
+  two-QB/`TQB`, the `RB/WR` and `WR/TE` flex variants, IDP, `P`, `HC`); only slots outside
+  that set fall back to `FLEX`. Non-standard formats are therefore labelled accurately
+  rather than collapsing every non-PPR-offense slot to `FLEX`.
 - **Large leagues:** processor runs up to ~120s; writes parallelized across views.
 - **Refresh:** views are overwritten in place (idempotent per `(canonical_league_id, SK)`).
 
