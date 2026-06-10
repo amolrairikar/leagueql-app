@@ -556,6 +556,47 @@ def require_league_member(
     )
 
 
+def record_league_access(canonical_league_id: str, metadata: dict) -> None:
+    """
+    Record that a league was just opened, for stale-league detection (BE-018).
+
+    Writes a ``last_accessed_at`` ISO-8601 (UTC) timestamp on the league's METADATA
+    item, throttled to at most once per hour: ``get_league`` already loaded
+    ``metadata``, so a still-fresh timestamp short-circuits the write and a fresh
+    access costs zero extra DynamoDB ops. The write is conditional on the item still
+    existing and is fully best-effort — any failure (a concurrent delete, or any other
+    DynamoDB error) is logged and swallowed so tracking never breaks the league read.
+
+    Args:
+        canonical_league_id: The canonical league ID.
+        metadata: The already-fetched METADATA item, used for the throttle check.
+    """
+    now = datetime.now(timezone.utc)
+    last_accessed = metadata.get("last_accessed_at")
+    if last_accessed:
+        try:
+            age_seconds = (now - datetime.fromisoformat(last_accessed)).total_seconds()
+            if age_seconds < main.LEAGUE_ACCESS_THROTTLE_SECONDS:
+                return
+        except (ValueError, TypeError):
+            # Unparseable/naive stored value — fall through and overwrite it.
+            pass
+
+    try:
+        main.table.update_item(
+            Key={"PK": f"LEAGUE#{canonical_league_id}", "SK": "METADATA"},
+            UpdateExpression="SET last_accessed_at = :t",
+            ExpressionAttributeValues={":t": now.isoformat()},
+            ConditionExpression="attribute_exists(PK)",
+        )
+    except botocore.exceptions.ClientError as e:
+        # Best-effort: a conditional-check failure (league deleted concurrently) or
+        # any other DynamoDB error must not affect the league read.
+        logger.warning(
+            "Failed to record access for league %s: %s", canonical_league_id, e
+        )
+
+
 def add_league_member(canonical_league_id: str, clerk_user_id: str) -> None:
     """
     Add a verified caller to a league's ``members`` set (LQL-01 / BE-016).

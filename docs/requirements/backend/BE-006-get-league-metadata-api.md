@@ -37,5 +37,11 @@ leagues this endpoint is **member-gated** ([BE-016](BE-016-league-ownership-auth
 non-member gets `403` before any metadata is returned; **Sleeper** reads stay open to any
 authenticated caller.
 
+## Access tracking (BE-018)
+On a successful open (after the membership gate), `get_league` records a `last_accessed_at`
+timestamp on the `METADATA` item, throttled to once per hour, so stale leagues can later be
+identified ([BE-018](BE-018-league-access-tracking.md)). The write is best-effort and never
+affects this endpoint's response.
+
 ## Sources
 `src/api/routes.py::get_league`, `docs/db/dynamodb_spec.md` (METADATA).

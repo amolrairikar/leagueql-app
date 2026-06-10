@@ -275,3 +275,30 @@ def step_stripe_canceled(context):
 @then('a METADATA item still exists for league "{canonical}"')
 def step_metadata_survives(context, canonical):
     assert get_item(context, f"LEAGUE#{canonical}", "METADATA"), "METADATA was deleted"
+
+
+@given('league "{canonical}" was last accessed {minutes:d} minutes ago')
+def step_seed_last_accessed(context, canonical, minutes):
+    # Seed a recent last_accessed_at and stash it so a later assertion can confirm
+    # the throttle held (no overwrite within the window). BE-018.
+    seeded = (datetime.now(timezone.utc) - timedelta(minutes=minutes)).isoformat()
+    context.ddb_resource.Table(context.table_name).update_item(
+        Key={"PK": f"LEAGUE#{canonical}", "SK": "METADATA"},
+        UpdateExpression="SET last_accessed_at = :t",
+        ExpressionAttributeValues={":t": seeded},
+    )
+    context.seeded_last_accessed = seeded
+
+
+@then('league "{canonical}" has a last_accessed_at timestamp')
+def step_last_accessed_present(context, canonical):
+    item = get_item(context, f"LEAGUE#{canonical}", "METADATA")
+    assert item and item.get("last_accessed_at"), "last_accessed_at was not recorded"
+
+
+@then('league "{canonical}" last_accessed_at is unchanged')
+def step_last_accessed_unchanged(context, canonical):
+    item = get_item(context, f"LEAGUE#{canonical}", "METADATA")
+    assert item.get("last_accessed_at") == context.seeded_last_accessed, (
+        "last_accessed_at was overwritten within the throttle window"
+    )

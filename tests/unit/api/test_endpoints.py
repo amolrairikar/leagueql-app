@@ -1,5 +1,6 @@
 """Tests for FastAPI endpoint handlers in main.py."""
 
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 import botocore.exceptions
@@ -124,6 +125,78 @@ class TestGetLeagueEndpoint:
         }
         response = client.get("/leagues/123?platform=SLEEPER")
         assert response.headers["cache-control"] == "no-store"
+
+
+class TestLeagueAccessTracking:
+    """`get_league` records `last_accessed_at` for stale-league detection (BE-018).
+
+    The write is throttled in-memory against the already-fetched METADATA and is
+    best-effort — a failed write must never affect the read.
+    """
+
+    def _seed_reads(self, mock_table, lookup, metadata):
+        mock_table.get_item.side_effect = [{"Item": lookup}, {"Item": metadata}]
+        mock_table.query.return_value = {
+            "Items": [{"seasons": {"2024"}, "canonical_league_id": "canonical-abc"}]
+        }
+
+    def test_writes_when_absent(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        # Default fixture has no last_accessed_at — treated as stale, so a write fires.
+        self._seed_reads(mock_table, league_lookup_item, league_metadata_item)
+        response = client.get("/leagues/123?platform=SLEEPER")
+        assert response.status_code == 200
+        mock_table.update_item.assert_called_once()
+        kwargs = mock_table.update_item.call_args.kwargs
+        assert kwargs["Key"] == {"PK": "LEAGUE#canonical-abc", "SK": "METADATA"}
+        assert kwargs["UpdateExpression"] == "SET last_accessed_at = :t"
+        assert kwargs["ConditionExpression"] == "attribute_exists(PK)"
+        assert isinstance(kwargs["ExpressionAttributeValues"][":t"], str)
+
+    def test_writes_when_stale(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        league_metadata_item["last_accessed_at"] = (
+            datetime.now(timezone.utc) - timedelta(hours=2)
+        ).isoformat()
+        self._seed_reads(mock_table, league_lookup_item, league_metadata_item)
+        response = client.get("/leagues/123?platform=SLEEPER")
+        assert response.status_code == 200
+        mock_table.update_item.assert_called_once()
+
+    def test_skips_when_fresh(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        league_metadata_item["last_accessed_at"] = (
+            datetime.now(timezone.utc) - timedelta(minutes=1)
+        ).isoformat()
+        self._seed_reads(mock_table, league_lookup_item, league_metadata_item)
+        response = client.get("/leagues/123?platform=SLEEPER")
+        assert response.status_code == 200
+        mock_table.update_item.assert_not_called()
+
+    def test_writes_when_stored_value_unparseable(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        league_metadata_item["last_accessed_at"] = "not-a-timestamp"
+        self._seed_reads(mock_table, league_lookup_item, league_metadata_item)
+        response = client.get("/leagues/123?platform=SLEEPER")
+        assert response.status_code == 200
+        mock_table.update_item.assert_called_once()
+
+    def test_write_failure_is_swallowed(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        # A concurrent delete (conditional-check failure) or any DynamoDB error on
+        # the tracking write must not break the league read.
+        self._seed_reads(mock_table, league_lookup_item, league_metadata_item)
+        mock_table.update_item.side_effect = botocore.exceptions.ClientError(
+            {"Error": {"Code": "ConditionalCheckFailedException"}}, "UpdateItem"
+        )
+        response = client.get("/leagues/123?platform=SLEEPER")
+        assert response.status_code == 200
+        assert response.json()["data"]["league_name"] == "Test League"
 
 
 _JOB_ID = "f47ac10b-58cc-4372-a567-0e02b2c3d479"
