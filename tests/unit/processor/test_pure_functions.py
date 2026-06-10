@@ -152,6 +152,53 @@ class TestCompileESPNStarterStats:
         stats, ids = processor_handler.compile_espn_starter_stats(roster, slot_map={})
         assert stats[0]["fantasy_position"] == "WR"
 
+    @pytest.mark.parametrize(
+        "slot_id,expected",
+        [
+            (0, "QB"),
+            (1, "TQB"),
+            (2, "RB"),
+            (3, "RB/WR"),
+            (4, "WR"),
+            (5, "WR/TE"),
+            (6, "TE"),
+            (7, "OP"),
+            (8, "DT"),
+            (9, "DE"),
+            (10, "LB"),
+            (11, "DL"),
+            (12, "CB"),
+            (13, "S"),
+            (14, "DB"),
+            (15, "DP"),
+            (16, "D/ST"),
+            (17, "K"),
+            (18, "P"),
+            (19, "HC"),
+            (23, "FLEX"),
+            (24, "EDR"),
+        ],
+    )
+    def test_all_lineup_slots_mapped(self, processor_handler, slot_id, expected):
+        roster = self._make_roster([{"id": 1, "name": "Player", "slot_id": slot_id}])
+        slot_map = {1: slot_id}
+        stats, _ = processor_handler.compile_espn_starter_stats(roster, slot_map)
+        assert stats[0]["fantasy_position"] == expected
+
+    def test_superflex_op_slot_not_collapsed_to_flex(self, processor_handler):
+        # Slot 7 (OP / Superflex) must resolve to "OP", not the "FLEX" fallback.
+        roster = self._make_roster([{"id": 1, "name": "QB in superflex", "pos_id": 1}])
+        slot_map = {1: 7}
+        stats, _ = processor_handler.compile_espn_starter_stats(roster, slot_map)
+        assert stats[0]["fantasy_position"] == "OP"
+
+    def test_unknown_slot_falls_back_to_flex(self, processor_handler):
+        # A slot ID outside the mapping (e.g. bench=20) defaults to "FLEX".
+        roster = self._make_roster([{"id": 1, "name": "Unknown slot"}])
+        slot_map = {1: 20}
+        stats, _ = processor_handler.compile_espn_starter_stats(roster, slot_map)
+        assert stats[0]["fantasy_position"] == "FLEX"
+
     def test_empty_roster(self, processor_handler):
         stats, ids = processor_handler.compile_espn_starter_stats({}, {})
         assert stats == []

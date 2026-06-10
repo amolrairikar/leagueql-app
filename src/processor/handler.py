@@ -32,14 +32,34 @@ ESPN_POSITION_ID_MAPPING = {
     16: "D/ST",
 }
 
+# ESPN lineup-slot IDs → fantasy-position label. Covers the full set of starting
+# slots ESPN exposes, not just the standard PPR offense, so non-standard formats
+# (Superflex/OP, two-QB, extra flex variants, IDP, P/HC) are labelled accurately
+# instead of collapsing to the "FLEX" fallback. Bench (20), IR (21), and the unused
+# slot (22) are intentionally omitted — they are not starting slots.
 ESPN_FANTASY_POSITION_ID_MAPPING = {
     0: "QB",
+    1: "TQB",
     2: "RB",
+    3: "RB/WR",
     4: "WR",
+    5: "WR/TE",
     6: "TE",
+    7: "OP",
+    8: "DT",
+    9: "DE",
+    10: "LB",
+    11: "DL",
+    12: "CB",
+    13: "S",
+    14: "DB",
+    15: "DP",
     16: "D/ST",
     17: "K",
+    18: "P",
+    19: "HC",
     23: "FLEX",
+    24: "EDR",
 }
 
 SLEEPER_BENCH_SLOTS = frozenset({"BN", "IL", "IR", "TAXI"})
