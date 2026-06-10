@@ -730,6 +730,18 @@ module "sleeper-player-stats-refresher-task-role" {
     Version = "2012-10-17"
     Statement = [
       {
+        # Required so a GetObject on a not-yet-existing stats cache returns 404
+        # NoSuchKey (handled as a fresh-start bootstrap) rather than 403 AccessDenied.
+        Sid    = "ListBucket"
+        Effect = "Allow"
+        Action = [
+          "s3:ListBucket"
+        ]
+        Resource = [
+          local.primary_bucket_arn
+        ]
+      },
+      {
         Sid    = "ReadPlayerMetadata"
         Effect = "Allow"
         Action = [
@@ -751,10 +763,13 @@ module "sleeper-player-stats-refresher-task-role" {
         ]
       },
       {
-        Sid    = "WriteTestPlayerStats"
+        # GetObject (not just PutObject) so the deep-merge read of the test key works
+        # when the object already exists; ListBucket above covers the missing case.
+        Sid    = "ReadWriteTestPlayerStats"
         Effect = "Allow"
         Action = [
-          "s3:PutObject"
+          "s3:PutObject",
+          "s3:GetObject"
         ]
         Resource = [
           "${local.primary_bucket_arn}/player-stats/integration-test/sleeper_nfl_player_stats.json"

@@ -773,6 +773,18 @@ module "sleeper-player-stats-refresher-task-role" {
     Version = "2012-10-17"
     Statement = [
       {
+        # Required so a GetObject on a not-yet-existing stats cache returns 404
+        # NoSuchKey (handled as a fresh-start bootstrap) rather than 403 AccessDenied.
+        Sid    = "ListBucket"
+        Effect = "Allow"
+        Action = [
+          "s3:ListBucket"
+        ]
+        Resource = [
+          local.primary_bucket_arn
+        ]
+      },
+      {
         Sid    = "ReadPlayerMetadata"
         Effect = "Allow"
         Action = [

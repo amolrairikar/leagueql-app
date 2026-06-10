@@ -53,6 +53,15 @@ jobs:
       - name: Run unit tests
         run: pipenv run pytest tests/unit --cov=src --cov-report=term-missing
 
+      - name: Coverage summary
+        if: ${{ !cancelled() }}
+        run: |
+          {
+            echo "## Unit Test Coverage"
+            echo ""
+            pipenv run coverage report --format=markdown
+          } >> "$GITHUB_STEP_SUMMARY"
+
   run-component-tests:
     name: Run Component Tests - Backend
     runs-on: ubuntu-latest
@@ -73,7 +82,11 @@ jobs:
         run: pipenv install --dev
 
       - name: Run component tests
-        run: pipenv run behave tests/component
+        run: pipenv run behave tests/component -f json -o behave-report.json -f pretty
+
+      - name: Component test summary
+        if: ${{ !cancelled() }}
+        run: python3 scripts/ci_scripts/behave_summary.py behave-report.json >> "$GITHUB_STEP_SUMMARY"
 
   run-frontend-tests:
     name: Run Component Tests - Frontend
