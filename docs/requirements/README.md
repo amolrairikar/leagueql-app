@@ -33,6 +33,7 @@ criteria. Frontend, backend, and extension features are kept separate.
 | [BE-015](backend/BE-015-stripe-billing.md) | Stripe Billing — Checkout, Webhook & Subscription Lifecycle |
 | [BE-016](backend/BE-016-league-ownership-authorization.md) | League Ownership & Authorization |
 | [BE-017](backend/BE-017-feature-flags.md) | Feature Flags (OpenFeature) |
+| [BE-018](backend/BE-018-league-access-tracking.md) | League Access Tracking |
 
 ## Frontend (`frontend/`)
 | ID | Feature |

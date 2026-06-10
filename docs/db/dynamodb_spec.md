@@ -125,6 +125,7 @@ the league will not appear as onboarded and a retry will re-run the full onboard
 | `platform` | String | Yes | Platform the league belongs to. Enum: `ESPN`, `SLEEPER` |
 | `onboarded_at` | String | Yes | ISO 8601 timestamp of when the league was onboarded |
 | `last_refresh_at` | String | No | ISO 8601 timestamp of when the most recent refresh completed successfully. Used to enforce the per-league refresh cooldown. |
+| `last_accessed_at` | String | No | ISO 8601 (UTC) timestamp of when a member last opened the league via `GET /leagues/{leagueId}` (BE-018). Written at most once per hour (app-side throttle); absent on older items and on leagues never opened since the field shipped. Used to identify stale leagues for future pruning/archival. |
 | `league_name` | String | No | League name from the most recent season's settings |
 | `subscription_end_time` | String | No | ISO 8601 (UTC) timestamp marking when the league's subscription/trial lapses. Access is granted while `now < subscription_end_time`; an **absent** value is treated as expired (no access). Written **only** by the Stripe billing webhook (BE-015). |
 | `stripe_subscription_id` | String | No | The Stripe subscription backing this league's access. Claimed by the webhook (BE-015) and used to scope cancellation/terminal writes and duplicate-subscription reconciliation. |

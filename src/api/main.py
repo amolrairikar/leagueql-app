@@ -183,6 +183,13 @@ STRIPE_BILLING_PORTAL_RETURN_URL = os.environ.get(
 # (Terraform sets a shorter window in dev); defaults to 30 minutes.
 CHECKOUT_PENDING_TTL_MINUTES = int(os.environ.get("CHECKOUT_PENDING_TTL_MINUTES", "30"))
 
+# Minimum interval between `last_accessed_at` writes for a single league (BE-018).
+# `get_league` already reads METADATA, so a fresher timestamp short-circuits the write;
+# this caps the tracking writes to at most one per league per hour by default.
+LEAGUE_ACCESS_THROTTLE_SECONDS = int(
+    os.environ.get("LEAGUE_ACCESS_THROTTLE_SECONDS", "3600")
+)
+
 
 # Re-export helpers so ``main.<helper>`` stays the public surface. Imported after
 # the infrastructure above so helpers can resolve ``main`` attributes at call time.
@@ -205,6 +212,7 @@ from helpers import (  # noqa: E402, F401
     is_job_in_progress,
     lookup_league,
     publish_failure,
+    record_league_access,
     require_active_subscription,
     require_league_member,
     require_league_owner,

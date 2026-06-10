@@ -65,6 +65,7 @@ from helpers import (
     get_stripe_customer_id,
     is_job_in_progress,
     lookup_league,
+    record_league_access,
     require_active_subscription,
     require_league_member,
     require_league_owner,
@@ -134,6 +135,7 @@ def get_league(
     require_league_member(
         canonical_league_id, clerk_user_id, platform, metadata=metadata
     )
+    record_league_access(canonical_league_id, metadata)
     seasons = get_league_seasons(canonical_league_id=canonical_league_id)
     response.headers["Cache-Control"] = "no-store"
     return APIResponse(
