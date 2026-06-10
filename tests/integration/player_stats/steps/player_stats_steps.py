@@ -31,59 +31,75 @@ def _production_cache_fingerprint(context) -> tuple | None:
 
 
 @given(
-    "an S3 event notification for the player metadata object with season, player-cap, and output-key overrides"
+    "season, player-cap, and output-key overrides for the player stats refresher task"
 )
-def step_build_event(context):
+def step_build_overrides(context):
     context.season = _most_recent_completed_season()
     context.test_output_key = TEST_OUTPUT_S3_KEY
     # Snapshot the production cache so we can assert it is untouched afterward.
     context.prod_cache_fingerprint = _production_cache_fingerprint(context)
-    # Mirror the S3 ObjectCreated event AWS delivers when the player metadata
-    # object is written, plus overrides that drive a deterministic, capped
-    # refresh into an isolated test key regardless of the live NFL state.
-    context.invoke_payload = {
-        "season": context.season,
-        "max_players": MAX_PLAYERS,
-        "output_key": TEST_OUTPUT_S3_KEY,
-        "Records": [
-            {
-                "eventVersion": "2.1",
-                "eventSource": "aws:s3",
-                "awsRegion": "us-east-1",
-                "eventName": "ObjectCreated:Put",
-                "s3": {
-                    "s3SchemaVersion": "1.0",
-                    "bucket": {
-                        "name": context.s3_bucket,
-                        "arn": f"arn:aws:s3:::{context.s3_bucket}",
-                    },
-                    "object": {"key": PLAYER_METADATA_S3_KEY},
-                },
+    # Container env-var overrides that drive a deterministic, capped refresh into an
+    # isolated test key regardless of the live NFL state. The scheduled task sets none
+    # of these and keeps full production behavior.
+    context.env_overrides = [
+        {"name": "SEASON", "value": context.season},
+        {"name": "MAX_PLAYERS", "value": str(MAX_PLAYERS)},
+        {"name": "OUTPUT_KEY", "value": TEST_OUTPUT_S3_KEY},
+    ]
+
+
+@when("the deployed player stats refresher task is run to completion")
+def step_run_task(context):
+    response = context.ecs_client.run_task(
+        cluster=context.cluster,
+        taskDefinition=context.task_family,
+        launchType="FARGATE",
+        count=1,
+        networkConfiguration={
+            "awsvpcConfiguration": {
+                "subnets": context.subnet_ids,
+                "securityGroups": context.security_group_ids,
+                "assignPublicIp": "ENABLED",
             }
-        ],
-    }
-
-
-@when("the deployed player stats refresher Lambda is invoked synchronously")
-def step_invoke_deployed(context):
-    response = context.lambda_client.invoke(
-        FunctionName=context.function_name,
-        InvocationType="RequestResponse",
-        Payload=json.dumps(context.invoke_payload).encode(),
+        },
+        overrides={
+            "containerOverrides": [
+                {
+                    "name": context.container_name,
+                    "environment": context.env_overrides,
+                }
+            ]
+        },
     )
-    context.invoke_status = response["StatusCode"]
-    context.function_error = response.get("FunctionError")
-    context.invoke_response_payload = response["Payload"].read().decode()
+    failures = response.get("failures", [])
+    assert not failures, f"RunTask failed: {failures}"
+    task_arn = response["tasks"][0]["taskArn"]
 
-
-@then("the invocation succeeds without a function error")
-def step_assert_invoke_ok(context):
-    assert context.invoke_status == 200, (
-        f"Unexpected status {context.invoke_status}: {context.invoke_response_payload}"
+    # Block until the task stops. A capped run is fast (~MAX_PLAYERS requests) plus
+    # task startup/image pull, so allow up to ~10 minutes.
+    waiter = context.ecs_client.get_waiter("tasks_stopped")
+    waiter.wait(
+        cluster=context.cluster,
+        tasks=[task_arn],
+        WaiterConfig={"Delay": 15, "MaxAttempts": 40},
     )
-    assert context.function_error is None, (
-        f"Lambda returned a function error ({context.function_error}): "
-        f"{context.invoke_response_payload}"
+    described = context.ecs_client.describe_tasks(
+        cluster=context.cluster, tasks=[task_arn]
+    )
+    context.task = described["tasks"][0]
+
+
+@then("the task completes with a zero exit code")
+def step_assert_task_ok(context):
+    container = next(
+        c for c in context.task["containers"] if c["name"] == context.container_name
+    )
+    exit_code = container.get("exitCode")
+    assert exit_code == 0, (
+        f"Task stopped with exit code {exit_code}: "
+        f"stopCode={context.task.get('stopCode')} "
+        f"reason={context.task.get('stoppedReason')} "
+        f"containerReason={container.get('reason')}"
     )
 
 

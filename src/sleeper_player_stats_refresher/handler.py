@@ -42,24 +42,20 @@ def fetch_stats(player_id: str, season: str) -> dict | None:
             time.sleep(remaining)
 
 
-def lambda_handler(event, context) -> None:
-    logger.info("Event data: %s", event)
+def main() -> None:
     bucket = os.environ["S3_BUCKET_NAME"]
 
-    # An explicit ``season`` in the event (used for on-demand / integration-test
-    # runs) forces a refresh for that season and bypasses the live NFL-state
-    # gating. The scheduled S3-triggered invocation carries no ``season``, so it
-    # keeps the original behavior: skip during the off-season.
-    is_dict_event = isinstance(event, dict)
-    season_override = event.get("season") if is_dict_event else None
-    # ``max_players`` caps the fan-out and ``output_key`` redirects the write — both
+    # An explicit ``SEASON`` env var (used for on-demand / integration-test runs)
+    # forces a refresh for that season and bypasses the live NFL-state gating. The
+    # scheduled task sets no ``SEASON``, so it keeps the original behavior: skip
+    # during the off-season.
+    season_override = os.environ.get("SEASON")
+    # ``MAX_PLAYERS`` caps the fan-out and ``OUTPUT_KEY`` redirects the write — both
     # are test-only overrides so an integration run can validate the end-to-end path
     # against a small subset without clobbering the production stats cache. The
-    # scheduled S3 invocation supplies neither, keeping full production behavior.
-    max_players = event.get("max_players") if is_dict_event else None
-    output_key = (
-        event.get("output_key") if is_dict_event else None
-    ) or PLAYER_STATS_S3_KEY
+    # scheduled task supplies neither, keeping full production behavior.
+    max_players = os.environ.get("MAX_PLAYERS")
+    output_key = os.environ.get("OUTPUT_KEY") or PLAYER_STATS_S3_KEY
     if season_override:
         season = str(season_override)
         logger.info(
@@ -131,3 +127,7 @@ def lambda_handler(event, context) -> None:
         bucket,
         output_key,
     )
+
+
+if __name__ == "__main__":  # pragma: no cover
+    main()

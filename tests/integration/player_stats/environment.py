@@ -1,7 +1,6 @@
 import os
 
 import boto3
-from botocore.config import Config
 
 _REQUIRED_ENV_VARS = ["AWS_ACCOUNT_ID"]
 
@@ -16,21 +15,37 @@ def before_all(context):
     environment = os.environ.get("ENVIRONMENT", "dev")
     account_id = os.environ["AWS_ACCOUNT_ID"]
     context.s3_bucket = f"leagueql-{environment}-bucket-east-{account_id}"
-    context.function_name = f"leagueql-sleeper-player-stats-refresher-{environment}"
+    context.cluster = f"leagueql-{environment}"
+    context.task_family = f"leagueql-sleeper-player-stats-refresher-{environment}"
+    context.container_name = "sleeper-player-stats-refresher"
 
-    # A synchronous (RequestResponse) invoke blocks until the Lambda finishes,
-    # which for a full refresh can approach the Lambda's 900s timeout. Raise the
-    # client read timeout above that and disable retries so we wait exactly once
-    # rather than re-invoking a long-running function.
-    lambda_config = Config(
-        read_timeout=920,
-        connect_timeout=60,
-        retries={"max_attempts": 0},
-    )
-    context.lambda_client = boto3.client(
-        "lambda", region_name="us-east-1", config=lambda_config
-    )
+    context.ecs_client = boto3.client("ecs", region_name="us-east-1")
+    context.ec2_client = boto3.client("ec2", region_name="us-east-1")
     context.s3_client = boto3.client("s3", region_name="us-east-1")
+
+    # Discover the shared outbound-only Fargate networking by tag (created in the
+    # aws-account-management repo), the same way the Terraform data sources do.
+    vpcs = context.ec2_client.describe_vpcs(
+        Filters=[{"Name": "tag:Name", "Values": ["leagueql-fargate-vpc"]}]
+    )["Vpcs"]
+    assert vpcs, "Could not find the leagueql-fargate-vpc"
+    vpc_id = vpcs[0]["VpcId"]
+
+    subnets = context.ec2_client.describe_subnets(
+        Filters=[
+            {"Name": "vpc-id", "Values": [vpc_id]},
+            {"Name": "tag:tier", "Values": ["public"]},
+        ]
+    )["Subnets"]
+    context.subnet_ids = [s["SubnetId"] for s in subnets]
+
+    sgs = context.ec2_client.describe_security_groups(
+        Filters=[
+            {"Name": "vpc-id", "Values": [vpc_id]},
+            {"Name": "tag:Name", "Values": ["leagueql-fargate-task-sg"]},
+        ]
+    )["SecurityGroups"]
+    context.security_group_ids = [g["GroupId"] for g in sgs]
 
 
 def after_scenario(context, scenario):

@@ -129,18 +129,14 @@ module "s3-bidirectional-replication" {
     }
   ]
 
+  # The player stats refresher no longer triggers off player-metadata puts — it runs
+  # on a weekly CloudWatch Events schedule as a Fargate task (see BE-011 / regional).
   primary_event_notifications = [
     {
       lambda_function_arn = "arn:aws:lambda:us-east-1:${var.account_id}:function:leagueql-processor-${var.environment}"
       events              = ["s3:ObjectCreated:*"]
       filter_prefix       = "raw-api-data/"
       filter_suffix       = "manifest.json"
-    },
-    {
-      lambda_function_arn = "arn:aws:lambda:us-east-1:${var.account_id}:function:leagueql-sleeper-player-stats-refresher-${var.environment}"
-      events              = ["s3:ObjectCreated:Put"]
-      filter_prefix       = "player-metadata/"
-      filter_suffix       = "sleeper_nfl_players.json"
     }
   ]
 
@@ -669,10 +665,55 @@ module "api-gateway-role" {
   }
 }
 
-module "sleeper-player-stats-refresher-lambda-role" {
+# Container image for the Sleeper player stats refresher Fargate task. Pushed by CI
+# (deploy-fargate-image) before the regional task definition references it.
+resource "aws_ecr_repository" "sleeper_player_stats_refresher" {
+  provider             = aws.primary
+  name                 = "leagueql-sleeper-player-stats-refresher-${var.environment}"
+  image_tag_mutability = "MUTABLE"
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    component   = "data-processing"
+    managed-by  = "terraform"
+  }
+}
+
+resource "aws_ecr_lifecycle_policy" "sleeper_player_stats_refresher" {
+  provider   = aws.primary
+  repository = aws_ecr_repository.sleeper_player_stats_refresher.name
+
+  policy = jsonencode({
+    rules = [
+      {
+        rulePriority = 1
+        description  = "Keep only the last 10 images"
+        selection = {
+          tagStatus   = "any"
+          countType   = "imageCountMoreThan"
+          countNumber = 10
+        }
+        action = {
+          type = "expire"
+        }
+      }
+    ]
+  })
+}
+
+# Task role — the application identity the container assumes at runtime. Repurposed
+# from the former Lambda execution role: trust is now ecs-tasks (not lambda) and the
+# log-group statements are dropped (the execution role + Terraform-created log group
+# handle logging). The S3 read/write statements are unchanged.
+module "sleeper-player-stats-refresher-task-role" {
   source           = "../../modules/iam-role"
-  role_name        = "leagueql-${var.environment}-sleeper-player-stats-refresher-role"
-  role_description = "Execution role for Sleeper player stats refresher lambda."
+  role_name        = "leagueql-${var.environment}-sleeper-player-stats-refresher-task-role"
+  role_description = "Task role for Sleeper player stats refresher Fargate task."
   trust_policy_json = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -680,7 +721,7 @@ module "sleeper-player-stats-refresher-lambda-role" {
         Action = "sts:AssumeRole"
         Effect = "Allow"
         Principal = {
-          Service = "lambda.amazonaws.com"
+          Service = "ecs-tasks.amazonaws.com"
         }
       }
     ]
@@ -688,27 +729,6 @@ module "sleeper-player-stats-refresher-lambda-role" {
   role_policy_json = jsonencode({
     Version = "2012-10-17"
     Statement = [
-      {
-        Sid    = "CreateLogGroups"
-        Effect = "Allow"
-        Action = [
-          "logs:CreateLogGroup"
-        ]
-        Resource = [
-          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/lambda/leagueql-sleeper-player-stats-refresher-${var.environment}"
-        ]
-      },
-      {
-        Sid    = "CreateLogEvents"
-        Effect = "Allow"
-        Action = [
-          "logs:CreateLogStream",
-          "logs:PutLogEvents"
-        ]
-        Resource = [
-          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/lambda/leagueql-sleeper-player-stats-refresher-${var.environment}:*"
-        ]
-      },
       {
         Sid    = "ReadPlayerMetadata"
         Effect = "Allow"
@@ -738,6 +758,113 @@ module "sleeper-player-stats-refresher-lambda-role" {
         ]
         Resource = [
           "${local.primary_bucket_arn}/player-stats/integration-test/sleeper_nfl_player_stats.json"
+        ]
+      }
+    ]
+  })
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    component   = "data-processing"
+    managed-by  = "terraform"
+  }
+}
+
+# Execution role — used by the ECS agent (not the app) to pull the image from ECR
+# and ship container logs to the task's CloudWatch log group.
+module "sleeper-stats-task-exec-role" {
+  source           = "../../modules/iam-role"
+  role_name        = "leagueql-${var.environment}-sleeper-stats-task-exec-role"
+  role_description = "Execution role for the Sleeper player stats refresher Fargate task."
+  trust_policy_json = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ecs-tasks.amazonaws.com"
+        }
+      }
+    ]
+  })
+  role_policy_json = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "ECRAuthToken"
+        Effect   = "Allow"
+        Action   = ["ecr:GetAuthorizationToken"]
+        Resource = "*"
+      },
+      {
+        Sid    = "ECRPull"
+        Effect = "Allow"
+        Action = [
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:BatchGetImage"
+        ]
+        Resource = [
+          aws_ecr_repository.sleeper_player_stats_refresher.arn
+        ]
+      },
+      {
+        Sid    = "WriteTaskLogs"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = [
+          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/ecs/leagueql-sleeper-player-stats-refresher-${var.environment}:*"
+        ]
+      }
+    ]
+  })
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    component   = "data-processing"
+    managed-by  = "terraform"
+  }
+}
+
+# Invoke role assumed by the CloudWatch Events rule to launch the scheduled task.
+module "sleeper-stats-events-role" {
+  source           = "../../modules/iam-role"
+  role_name        = "leagueql-${var.environment}-sleeper-stats-events-role"
+  role_description = "Role assumed by EventBridge to run the Sleeper player stats refresher task."
+  trust_policy_json = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "events.amazonaws.com"
+        }
+      }
+    ]
+  })
+  role_policy_json = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "RunTask"
+        Effect   = "Allow"
+        Action   = ["ecs:RunTask"]
+        Resource = ["arn:aws:ecs:us-east-1:${var.account_id}:task-definition/leagueql-sleeper-player-stats-refresher-${var.environment}:*"]
+      },
+      {
+        Sid    = "PassTaskRoles"
+        Effect = "Allow"
+        Action = ["iam:PassRole"]
+        Resource = [
+          module.sleeper-player-stats-refresher-task-role.role_arn,
+          module.sleeper-stats-task-exec-role.role_arn
         ]
       }
     ]

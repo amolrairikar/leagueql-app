@@ -8,6 +8,12 @@ variable "aws_region" {
   type        = string
 }
 
+variable "image_tag" {
+  description = "Container image tag for the Sleeper player stats refresher Fargate task (git short SHA in CI)"
+  type        = string
+  default     = "latest"
+}
+
 
 variable "clerk_issuer_url" {
   description = "Clerk Frontend API URL, used as JWT issuer (e.g. https://xxx.clerk.accounts.dev)"
