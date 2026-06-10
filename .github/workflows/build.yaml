@@ -143,6 +143,79 @@ jobs:
             -var="environment=${{ env.ENVIRONMENT }}" \
             -var="account_id=${{ secrets.AWS_ACCOUNT_ID }}"
 
+  deploy-fargate-image:
+    name: Build & Push Fargate Image - ${{ needs.set-env.outputs.environment }}
+    runs-on: ubuntu-latest
+    needs:
+      - set-env
+      - deploy-global  # ECR repo is created by the global stack
+    env:
+      ENVIRONMENT: ${{ needs.set-env.outputs.environment }}
+    outputs:
+      image_tag: ${{ steps.meta.outputs.image_tag }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Make AWS credentials script executable
+        run: chmod +x scripts/deployment_scripts/configure_aws_credentials.sh
+
+      - name: Configure AWS credentials via OIDC
+        run: bash scripts/deployment_scripts/configure_aws_credentials.sh "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-${{ env.ENVIRONMENT }}-role" "us-east-1" "GitHubActions-${{ github.run_id }}"
+
+      - name: Verify AWS identity
+        run: aws sts get-caller-identity
+
+      - name: Resolve image metadata
+        id: meta
+        env:
+          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+        run: |
+          # Content-addressed tag: a hash of the image's build inputs — the refresher
+          # directory (which includes the Dockerfile + requirements.txt) and the vendored
+          # common/ package. git rev-parse HEAD:<dir> is that directory's tree object, so
+          # the tag only changes when a file inside changes. As a result the task
+          # definition is re-registered only when the image content actually changes, not
+          # on every unrelated commit.
+          TAG="$( { git rev-parse "HEAD:src/sleeper_player_stats_refresher"; \
+                    git rev-parse "HEAD:src/common"; } | sha256sum | cut -c1-12 )"
+          REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com"
+          REPO="leagueql-sleeper-player-stats-refresher-${ENVIRONMENT}"
+          echo "image_tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "registry=$REGISTRY" >> "$GITHUB_OUTPUT"
+          echo "repo=$REPO" >> "$GITHUB_OUTPUT"
+
+      - name: Check whether image already exists in ECR
+        id: exists
+        run: |
+          if aws ecr describe-images --region us-east-1 \
+               --repository-name "${{ steps.meta.outputs.repo }}" \
+               --image-ids imageTag="${{ steps.meta.outputs.image_tag }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Image tag ${{ steps.meta.outputs.image_tag }} already in ECR — skipping build/push."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Log in to Amazon ECR
+        if: steps.exists.outputs.exists == 'false'
+        run: |
+          aws ecr get-login-password --region us-east-1 \
+            | docker login --username AWS --password-stdin "${{ steps.meta.outputs.registry }}"
+
+      - name: Build, tag, and push image
+        if: steps.exists.outputs.exists == 'false'
+        run: |
+          IMAGE="${{ steps.meta.outputs.registry }}/${{ steps.meta.outputs.repo }}"
+          docker build \
+            -f src/sleeper_player_stats_refresher/Dockerfile \
+            -t "$IMAGE:${{ steps.meta.outputs.image_tag }}" \
+            -t "$IMAGE:latest" \
+            ./src
+          docker push "$IMAGE:${{ steps.meta.outputs.image_tag }}"
+          docker push "$IMAGE:latest"
+
   deploy-lambda-artifacts:
     name: Deploy Lambda Artifacts - ${{ needs.set-env.outputs.environment }}
     runs-on: ubuntu-latest
@@ -178,27 +251,15 @@ jobs:
       - name: Make packaging script executable
         run: chmod +x scripts/deployment_scripts/build_lambda_zip.sh
 
-      - name: Make changed files check script executable
-        run: chmod +x scripts/deployment_scripts/check_changed_files.sh
-
-      - name: Check for Lambda code changes
-        id: changed
-        env:
-          GITHUB_EVENT_NAME: ${{ github.event_name }}
-          GITHUB_EVENT_PULL_REQUEST_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          GITHUB_EVENT_BEFORE: ${{ github.event.before }}
-        run: |
-          # TODO: Remove this temporary workaround
-          echo "any_changed=true" >> $GITHUB_OUTPUT
-          # bash scripts/deployment_scripts/check_changed_files.sh "src/**"
-
       - name: Package and upload Lambda functions
-        if: steps.changed.outputs.any_changed == 'true'
         env:
           S3_BUCKET: leagueql-${{ env.ENVIRONMENT }}-bucket
           AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
-        # NOTE: The script here handles us-east-1 and us-west-2
-        run: bash scripts/deployment_scripts/build_lambda_zip.sh ./src/onboarder ./src/processor ./src/api ./src/player_metadata ./src/sleeper_refresh ./src/sleeper_player_stats_refresher ./src/stripe_webhook
+        # The script self-gates per function: it packages and uploads a Lambda only when
+        # the source hash (its dir + the vendored common/) differs from the artifact
+        # already in S3, so unchanged functions are neither re-uploaded nor redeployed.
+        # NOTE: The script here handles us-east-1 and us-west-2.
+        run: bash scripts/deployment_scripts/build_lambda_zip.sh ./src/onboarder ./src/processor ./src/api ./src/player_metadata ./src/sleeper_refresh ./src/stripe_webhook
 
   deploy-regional:
     name: Deploy Regional Infrastructure - ${{ needs.set-env.outputs.environment }} - ${{ matrix.region }}
@@ -206,6 +267,7 @@ jobs:
     needs:
       - set-env
       - deploy-lambda-artifacts
+      - deploy-fargate-image  # task definition references the pushed image
     env:
       ENVIRONMENT: ${{ needs.set-env.outputs.environment }}
 
@@ -260,6 +322,7 @@ jobs:
             -auto-approve \
             -var="environment=${{ env.ENVIRONMENT }}" \
             -var="aws_region=${{ matrix.region }}" \
+            -var="image_tag=${{ needs.deploy-fargate-image.outputs.image_tag }}" \
             -var="clerk_issuer_url=${{ env.CLERK_ISSUER_URL }}" \
             -var="clerk_jwt_audience=${{ secrets.CLERK_JWT_AUDIENCE }}"
 
@@ -447,50 +510,3 @@ jobs:
           STRIPE_SECRET_KEY_SSM_PARAM: /leagueql/${{ env.ENVIRONMENT }}/stripe/secret_key
           STRIPE_PRICE_ID: ${{ secrets.STRIPE_PRICE_ID_DEV }}
         run: pipenv run behave tests/integration/stripe
-
-  # TODO: Temporarily disabled — this API should only be called once per day,
-  # The live Sleeper player-metadata canary (BE-010) lives in its own scheduled
-  # workflow — .github/workflows/player-metadata-canary.yaml — so the once-per-day
-  # Sleeper players endpoint is hit at most once a day on a cron, fully isolated
-  # from this commit-triggered pipeline (no risk of cron-triggered deploys).
-
-  # TODO: Temporarily disabled — re-enable once the CI OIDC role has
-  # lambda:InvokeFunction on leagueql-sleeper-player-stats-refresher-dev.
-  # run-sleeper-player-stats-integration-tests:
-  #   name: Run Sleeper Player Stats Integration Tests
-  #   runs-on: ubuntu-latest
-  #   needs:
-  #     - set-env
-  #     - deploy-regional
-  #   if: github.event_name == 'pull_request'
-  #   env:
-  #     ENVIRONMENT: ${{ needs.set-env.outputs.environment }}
-  #
-  #   steps:
-  #     - name: Checkout code
-  #       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-  #
-  #     - name: Set up Python
-  #       uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
-  #       with:
-  #         python-version: "3.13"
-  #
-  #     - name: Install pipenv
-  #       run: python3.13 -m pip install pipenv
-  #
-  #     - name: Install dependencies
-  #       run: pipenv install --dev
-  #
-  #     - name: Make AWS credentials script executable
-  #       run: chmod +x scripts/deployment_scripts/configure_aws_credentials.sh
-  #
-  #     - name: Configure AWS credentials via OIDC
-  #       run: bash scripts/deployment_scripts/configure_aws_credentials.sh "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-${{ env.ENVIRONMENT }}-role" "us-east-1" "GitHubActions-${{ github.run_id }}"
-  #
-  #     - name: Verify AWS identity
-  #       run: aws sts get-caller-identity
-  #
-  #     - name: Run player stats integration tests
-  #       env:
-  #         AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
-  #       run: pipenv run behave tests/integration/player_stats

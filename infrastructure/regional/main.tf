@@ -18,13 +18,19 @@ locals {
   account_id = data.aws_caller_identity.current.account_id
 
   # Role ARNs constructed from global role names
-  onboarder_role_arn                      = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-onboarder-role"
-  processor_role_arn                      = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-onboarding-processor-role"
-  api_role_arn                            = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-api-role"
-  player_metadata_role_arn                = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-sleeper-player-metadata-fetcher-role"
-  sleeper_refresh_role_arn                = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-sleeper-league-refresh-role"
-  sleeper_player_stats_refresher_role_arn = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-sleeper-player-stats-refresher-role"
-  stripe_webhook_role_arn                 = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-stripe-webhook-role"
+  onboarder_role_arn       = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-onboarder-role"
+  processor_role_arn       = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-onboarding-processor-role"
+  api_role_arn             = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-api-role"
+  player_metadata_role_arn = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-sleeper-player-metadata-fetcher-role"
+  sleeper_refresh_role_arn = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-sleeper-league-refresh-role"
+  stripe_webhook_role_arn  = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-stripe-webhook-role"
+
+  # Sleeper player stats refresher runs as a Fargate task (see BE-011). Roles are
+  # created in infrastructure/global; ARNs are reconstructed here from their names.
+  sleeper_stats_task_role_arn      = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-sleeper-player-stats-refresher-task-role"
+  sleeper_stats_task_exec_role_arn = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-sleeper-stats-task-exec-role"
+  sleeper_stats_events_role_arn    = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-sleeper-stats-events-role"
+  sleeper_stats_image              = "${local.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com/leagueql-sleeper-player-stats-refresher-${var.environment}:${var.image_tag}"
 
   # Base URL the user's browser returns to after Stripe Checkout / Billing Portal.
   # Prod is the live site; dev (Stripe test mode) uses the local dev server.
@@ -326,32 +332,139 @@ module "backend_api" {
   }
 }
 
-module "sleeper_player_stats_refresher_lambda" {
-  source = "../modules/lambda"
-  count  = local.region == "east" ? 1 : 0
+# ── Sleeper player stats refresher: Fargate task (BE-011) ─────────────────────
+# A full active-roster refresh fans out one rate-limited request per player and
+# regularly exceeds Lambda's 15-minute cap, so it runs as a scheduled Fargate task
+# with no execution-time limit. East-only (matches the former Lambda).
 
-  function_name        = "leagueql-sleeper-player-stats-refresher-${var.environment}"
-  function_description = "Fetches stats for all active NFL players from Sleeper API and writes to S3"
-  role_arn             = local.sleeper_player_stats_refresher_role_arn
-  handler              = "handler.lambda_handler"
-  memory_size          = 512
-  # A full active-roster refresh is rate-limited (~850 req/min) and can run many
-  # minutes; allow up to the Lambda maximum so a full run completes (also makes a
-  # synchronous integration-test invocation viable).
-  timeout       = 900
-  log_retention = 7
-  s3_bucket     = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
-  s3_key        = "lambda-code-artifacts/sleeper_player_stats_refresher-lambda.zip"
+# Shared outbound-only VPC discovered by tag (created in aws-account-management).
+data "aws_vpc" "fargate" {
+  count = local.region == "east" ? 1 : 0
+  tags = {
+    Name = "leagueql-fargate-vpc"
+  }
+}
 
-  environment_variables = {
-    S3_BUCKET_NAME = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
+data "aws_subnets" "fargate_public" {
+  count = local.region == "east" ? 1 : 0
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.fargate[0].id]
+  }
+  tags = {
+    tier = "public"
+  }
+}
+
+data "aws_security_group" "fargate_task" {
+  count = local.region == "east" ? 1 : 0
+  tags = {
+    Name = "leagueql-fargate-task-sg"
+  }
+}
+
+resource "aws_ecs_cluster" "leagueql" {
+  count = local.region == "east" ? 1 : 0
+  name  = "leagueql-${var.environment}"
+
+  setting {
+    name  = "containerInsights"
+    value = "disabled"
   }
 
   tags = {
     environment = var.environment
     project     = "leagueql"
-    component   = "api"
+    component   = "data-processing"
     managed-by  = "terraform"
+  }
+}
+
+resource "aws_cloudwatch_log_group" "sleeper_player_stats_refresher" {
+  count             = local.region == "east" ? 1 : 0
+  name              = "/ecs/leagueql-sleeper-player-stats-refresher-${var.environment}"
+  retention_in_days = 7
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    component   = "data-processing"
+    managed-by  = "terraform"
+  }
+}
+
+resource "aws_ecs_task_definition" "sleeper_player_stats_refresher" {
+  count                    = local.region == "east" ? 1 : 0
+  family                   = "leagueql-sleeper-player-stats-refresher-${var.environment}"
+  requires_compatibilities = ["FARGATE"]
+  network_mode             = "awsvpc"
+  cpu                      = 512
+  memory                   = 1024
+  execution_role_arn       = local.sleeper_stats_task_exec_role_arn
+  task_role_arn            = local.sleeper_stats_task_role_arn
+
+  container_definitions = jsonencode([
+    {
+      name      = "sleeper-player-stats-refresher"
+      image     = local.sleeper_stats_image
+      essential = true
+      environment = [
+        {
+          name  = "S3_BUCKET_NAME"
+          value = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
+        }
+      ]
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = aws_cloudwatch_log_group.sleeper_player_stats_refresher[0].name
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = "ecs"
+        }
+      }
+    }
+  ])
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    component   = "data-processing"
+    managed-by  = "terraform"
+  }
+}
+
+# Weekly schedule, 15 min after the Tuesday player-metadata refresh so metadata is
+# fresh. CloudWatch Events cron is UTC. Replaces the former S3-event trigger.
+resource "aws_cloudwatch_event_rule" "sleeper_player_stats_refresh_schedule" {
+  count               = local.region == "east" ? 1 : 0
+  name                = "sleeper-player-stats-refresh-${var.environment}-${local.region}"
+  schedule_expression = "cron(15 12 ? * TUE *)"
+  state               = "ENABLED"
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    component   = "data-processing"
+    managed-by  = "terraform"
+  }
+}
+
+resource "aws_cloudwatch_event_target" "sleeper_player_stats_refresh_target" {
+  count    = local.region == "east" ? 1 : 0
+  rule     = aws_cloudwatch_event_rule.sleeper_player_stats_refresh_schedule[0].name
+  arn      = aws_ecs_cluster.leagueql[0].arn
+  role_arn = local.sleeper_stats_events_role_arn
+
+  ecs_target {
+    task_definition_arn = aws_ecs_task_definition.sleeper_player_stats_refresher[0].arn
+    launch_type         = "FARGATE"
+    task_count          = 1
+
+    network_configuration {
+      subnets          = data.aws_subnets.fargate_public[0].ids
+      security_groups  = [data.aws_security_group.fargate_task[0].id]
+      assign_public_ip = true
+    }
   }
 }
 
@@ -549,24 +662,28 @@ resource "aws_cloudwatch_metric_alarm" "player_metadata_errors" {
   }
 }
 
-resource "aws_cloudwatch_metric_alarm" "player_stats_refresher_errors" {
-  count               = local.region == "east" && var.environment == "prod" ? 1 : 0
-  alarm_name          = "leagueql-sleeper-player-stats-refresher-${var.environment}-errors"
-  comparison_operator = "GreaterThanOrEqualToThreshold"
-  evaluation_periods  = 1
-  metric_name         = "Errors"
-  namespace           = "AWS/Lambda"
-  period              = 300
-  statistic           = "Sum"
-  threshold           = 1
-  alarm_description   = "Player stats refresher Lambda error detected"
-  alarm_actions       = [aws_sns_topic.lambda_alerts[0].arn]
-  ok_actions          = [aws_sns_topic.lambda_alerts[0].arn]
-  treat_missing_data  = "notBreaching"
+# A one-shot Fargate task emits no per-run "Errors" metric, so failure monitoring is
+# event-based: match ECS Task State Change events for this task definition that stopped
+# either with a non-zero container exit code or a start failure (image pull, networking,
+# etc., where no exitCode is emitted), and notify via the existing alerts topic.
+resource "aws_cloudwatch_event_rule" "sleeper_stats_task_failed" {
+  count       = local.region == "east" && var.environment == "prod" ? 1 : 0
+  name        = "leagueql-sleeper-player-stats-refresher-${var.environment}-task-failed"
+  description = "Sleeper player stats refresher Fargate task failed"
 
-  dimensions = {
-    FunctionName = "leagueql-sleeper-player-stats-refresher-${var.environment}"
-  }
+  event_pattern = jsonencode({
+    source      = ["aws.ecs"]
+    detail-type = ["ECS Task State Change"]
+    detail = {
+      clusterArn        = [aws_ecs_cluster.leagueql[0].arn]
+      taskDefinitionArn = [{ prefix = "${aws_ecs_task_definition.sleeper_player_stats_refresher[0].arn_without_revision}:" }]
+      lastStatus        = ["STOPPED"]
+      "$or" = [
+        { containers = { exitCode = [{ "anything-but" = 0 }] } },
+        { stopCode = ["TaskFailedToStart"] }
+      ]
+    }
+  })
 
   tags = {
     environment = var.environment
@@ -574,6 +691,37 @@ resource "aws_cloudwatch_metric_alarm" "player_stats_refresher_errors" {
     component   = "monitoring"
     managed-by  = "terraform"
   }
+}
+
+resource "aws_cloudwatch_event_target" "sleeper_stats_task_failed_sns" {
+  count = local.region == "east" && var.environment == "prod" ? 1 : 0
+  rule  = aws_cloudwatch_event_rule.sleeper_stats_task_failed[0].name
+  arn   = aws_sns_topic.lambda_alerts[0].arn
+}
+
+# Unlike CloudWatch alarm actions, EventBridge must be explicitly granted publish on
+# the topic, otherwise the notification silently fails to deliver.
+resource "aws_sns_topic_policy" "lambda_alerts_eventbridge" {
+  count = local.region == "east" && var.environment == "prod" ? 1 : 0
+  arn   = aws_sns_topic.lambda_alerts[0].arn
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "AllowEventBridgePublish"
+        Effect    = "Allow"
+        Principal = { Service = "events.amazonaws.com" }
+        Action    = "SNS:Publish"
+        Resource  = aws_sns_topic.lambda_alerts[0].arn
+        Condition = {
+          ArnEquals = {
+            "aws:SourceArn" = aws_cloudwatch_event_rule.sleeper_stats_task_failed[0].arn
+          }
+        }
+      }
+    ]
+  })
 }
 
 resource "aws_cloudwatch_metric_alarm" "api_lambda_errors" {

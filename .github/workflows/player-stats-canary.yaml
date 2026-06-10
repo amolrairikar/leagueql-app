@@ -3,12 +3,13 @@ name: leagueql-player-stats-canary
 # Live Sleeper player-stats end-to-end canary (BE-011). Kept in its own workflow —
 # separate from the commit-triggered build pipeline — so the live Sleeper stats
 # endpoint is hit at most once a day on a cron, with no chance of a scheduled run
-# triggering the build pipeline's deploy jobs. Invokes the deployed refresher Lambda
-# with season + max_players + output_key overrides so the full S3-read → live-fetch →
-# S3-write path is validated against a small (~100-player) subset in seconds, written
-# to an isolated test key that never clobbers the production stats cache. The
-# per-commit logic + S3-wiring coverage lives in tests/unit and tests/component; this
-# job is the only path that touches the live stats endpoint and the deployed Lambda.
+# triggering the build pipeline's deploy jobs. Runs the deployed refresher Fargate
+# task (ECS RunTask) with SEASON + MAX_PLAYERS + OUTPUT_KEY env overrides so the full
+# S3-read → live-fetch → S3-write path is validated against a small (~100-player)
+# subset in seconds, written to an isolated test key that never clobbers the production
+# stats cache. The per-commit logic + S3-wiring coverage lives in tests/unit and
+# tests/component; this job is the only path that touches the live stats endpoint and
+# the deployed task.
 
 on:
   schedule:
@@ -26,9 +27,9 @@ jobs:
     name: Run Sleeper Player Stats Integration Tests
     runs-on: ubuntu-latest
     if: github.actor == 'amolrairikar'
-    # The test invokes the deployed dev Lambda and reads/writes the dev bucket, so
-    # it needs AWS creds but no deploy. ENVIRONMENT=dev selects the dev function
-    # name and the dev bucket (leagueql-dev-bucket-east-*).
+    # The test runs the deployed dev Fargate task and reads/writes the dev bucket, so
+    # it needs AWS creds but no deploy. ENVIRONMENT=dev selects the dev cluster +
+    # task definition and the dev bucket (leagueql-dev-bucket-east-*).
     env:
       ENVIRONMENT: dev
 

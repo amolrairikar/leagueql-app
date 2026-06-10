@@ -61,13 +61,45 @@ process_lambda() {
 
     FUNCTION_NAME="$(basename "$SOURCE_DIR")"
     ZIP_NAME="${FUNCTION_NAME}-lambda.zip"
-    BUILD_DIR="$(mktemp -d)"
     ZIP_PATH="$OUTPUT_DIR/$ZIP_NAME"
+    KEY="lambda-code-artifacts/${ZIP_NAME}"
+
+    # Content hash of the build inputs: this function's source dir (which includes its
+    # handler + requirements.txt) and the vendored shared common/ package. Computed from
+    # the committed git tree objects, so it changes only when a file inside changes.
+    local DIR_PATH="${SOURCE_DIR#./}"
+    local SRC_HASH
+    SRC_HASH="$( { git rev-parse "HEAD:$DIR_PATH"; git rev-parse "HEAD:src/common"; } \
+        | sha256sum | cut -c1-12 )"
 
     echo "──────────────────────────────────────────────"
     echo "==> Function : $FUNCTION_NAME"
     echo "    Source   : $SOURCE_DIR"
     echo "    Output   : $ZIP_NAME"
+    echo "    Hash     : $SRC_HASH"
+
+    # Skip any region whose existing artifact already carries this source hash. Because
+    # the Lambda tracks the S3 object version, not re-uploading means no new version and
+    # therefore no redeploy of unchanged code.
+    local REGIONS_TO_UPLOAD=()
+    for REGION in "${REGIONS[@]}"; do
+        local BUCKET="${S3_BUCKET}-$(region_suffix "$REGION")-${AWS_ACCOUNT_ID}"
+        local EXISTING
+        EXISTING="$(aws s3api head-object --bucket "$BUCKET" --key "$KEY" \
+            --region "$REGION" --query 'Metadata."source-hash"' --output text 2>/dev/null || echo "")"
+        if [[ "$EXISTING" == "$SRC_HASH" ]]; then
+            echo "    ✓ $REGION already up to date (hash $SRC_HASH) — skipping"
+        else
+            REGIONS_TO_UPLOAD+=("$REGION")
+        fi
+    done
+
+    if [[ ${#REGIONS_TO_UPLOAD[@]} -eq 0 ]]; then
+        echo "    No source changes — nothing to package or upload for $FUNCTION_NAME."
+        return 0
+    fi
+
+    BUILD_DIR="$(mktemp -d)"
 
     # 1. Install dependencies
     if [[ -f "$SOURCE_DIR/requirements.txt" ]]; then
@@ -107,13 +139,15 @@ process_lambda() {
     rm -rf "$BUILD_DIR"
     echo "    Packaged: $ZIP_NAME ($(du -sh "$ZIP_PATH" | cut -f1))"
 
-    # 4. Upload to each region in parallel
+    # 4. Upload (in parallel) only to the regions that need it, stamping the source hash
+    #    as object metadata so the next run can tell whether anything changed.
     UPLOAD_PIDS=()
-    for REGION in "${REGIONS[@]}"; do
+    for REGION in "${REGIONS_TO_UPLOAD[@]}"; do
         (
-            S3_URI="s3://${S3_BUCKET}-$(region_suffix "$REGION")-${AWS_ACCOUNT_ID}/lambda-code-artifacts/${ZIP_NAME}"
+            S3_URI="s3://${S3_BUCKET}-$(region_suffix "$REGION")-${AWS_ACCOUNT_ID}/${KEY}"
             echo "    Uploading to $S3_URI ..."
-            if aws s3 cp "$ZIP_PATH" "$S3_URI" --region "$REGION" --no-progress; then
+            if aws s3 cp "$ZIP_PATH" "$S3_URI" --region "$REGION" --no-progress \
+                 --metadata "source-hash=$SRC_HASH"; then
                 echo "    ✓ $REGION"
             else
                 echo "    ✗ Upload failed: $S3_URI"
