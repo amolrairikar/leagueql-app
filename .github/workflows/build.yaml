@@ -172,19 +172,40 @@ jobs:
         env:
           AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
         run: |
-          SHA="$(git rev-parse --short HEAD)"
+          # Content-addressed tag: a hash of the image's build inputs — the refresher
+          # directory (which includes the Dockerfile + requirements.txt) and the vendored
+          # common/ package. git rev-parse HEAD:<dir> is that directory's tree object, so
+          # the tag only changes when a file inside changes. As a result the task
+          # definition is re-registered only when the image content actually changes, not
+          # on every unrelated commit.
+          TAG="$( { git rev-parse "HEAD:src/sleeper_player_stats_refresher"; \
+                    git rev-parse "HEAD:src/common"; } | sha256sum | cut -c1-12 )"
           REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com"
           REPO="leagueql-sleeper-player-stats-refresher-${ENVIRONMENT}"
-          echo "image_tag=$SHA" >> "$GITHUB_OUTPUT"
+          echo "image_tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "registry=$REGISTRY" >> "$GITHUB_OUTPUT"
           echo "repo=$REPO" >> "$GITHUB_OUTPUT"
 
+      - name: Check whether image already exists in ECR
+        id: exists
+        run: |
+          if aws ecr describe-images --region us-east-1 \
+               --repository-name "${{ steps.meta.outputs.repo }}" \
+               --image-ids imageTag="${{ steps.meta.outputs.image_tag }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Image tag ${{ steps.meta.outputs.image_tag }} already in ECR — skipping build/push."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Log in to Amazon ECR
+        if: steps.exists.outputs.exists == 'false'
         run: |
           aws ecr get-login-password --region us-east-1 \
             | docker login --username AWS --password-stdin "${{ steps.meta.outputs.registry }}"
 
       - name: Build, tag, and push image
+        if: steps.exists.outputs.exists == 'false'
         run: |
           IMAGE="${{ steps.meta.outputs.registry }}/${{ steps.meta.outputs.repo }}"
           docker build \
@@ -230,26 +251,14 @@ jobs:
       - name: Make packaging script executable
         run: chmod +x scripts/deployment_scripts/build_lambda_zip.sh
 
-      - name: Make changed files check script executable
-        run: chmod +x scripts/deployment_scripts/check_changed_files.sh
-
-      - name: Check for Lambda code changes
-        id: changed
-        env:
-          GITHUB_EVENT_NAME: ${{ github.event_name }}
-          GITHUB_EVENT_PULL_REQUEST_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          GITHUB_EVENT_BEFORE: ${{ github.event.before }}
-        run: |
-          # TODO: Remove this temporary workaround
-          echo "any_changed=true" >> $GITHUB_OUTPUT
-          # bash scripts/deployment_scripts/check_changed_files.sh "src/**"
-
       - name: Package and upload Lambda functions
-        if: steps.changed.outputs.any_changed == 'true'
         env:
           S3_BUCKET: leagueql-${{ env.ENVIRONMENT }}-bucket
           AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
-        # NOTE: The script here handles us-east-1 and us-west-2
+        # The script self-gates per function: it packages and uploads a Lambda only when
+        # the source hash (its dir + the vendored common/) differs from the artifact
+        # already in S3, so unchanged functions are neither re-uploaded nor redeployed.
+        # NOTE: The script here handles us-east-1 and us-west-2.
         run: bash scripts/deployment_scripts/build_lambda_zip.sh ./src/onboarder ./src/processor ./src/api ./src/player_metadata ./src/sleeper_refresh ./src/stripe_webhook
 
   deploy-regional:
