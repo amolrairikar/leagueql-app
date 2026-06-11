@@ -65,9 +65,15 @@ event-driven webhook.
   metadata. Documented in `docs/db/dynamodb_spec.md`.
 - **Secrets & environment mode:** the Stripe secret key and webhook signing secret are stored
   as **SecureString SSM Parameter Store** parameters (`/leagueql/{env}/stripe/secret_key` and
-  `/leagueql/{env}/stripe/webhook_secret`) and fetched at Lambda **cold start** by parameter
+  `/leagueql/{env}/stripe/webhook_secret`) and fetched at runtime by parameter
   *name* — the name is passed via the non-sensitive `STRIPE_SECRET_KEY_SSM_PARAM` /
-  `STRIPE_WEBHOOK_SECRET_SSM_PARAM` env vars (`src/common/secrets.py`). The secret **value**
+  `STRIPE_WEBHOOK_SECRET_SSM_PARAM` env vars (`src/common/secrets.py`). The **API** Lambda
+  resolves its secret key **lazily on the first Stripe-touching request** (via
+  `main.ensure_stripe_api_key`, cached for the execution environment's lifetime) rather than at
+  module import — this keeps the synchronous SSM round-trip **off the cold-start init path**
+  (init latency was dominated by it) and avoids freezing the secret into a Lambda **SnapStart**
+  snapshot. The **webhook** Lambda still resolves its signing secret at import (its handler
+  needs it to verify the very first event). The secret **value**
   never appears in Lambda environment variables, Terraform state, or CI. The values are set
   out-of-band via the AWS CLI (per region); Terraform only grants the API and webhook Lambda
   roles `ssm:GetParameter` on the specific parameter ARNs and never reads or writes the values.

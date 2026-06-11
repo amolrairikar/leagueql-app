@@ -40,7 +40,8 @@ REGION = "us-east-1"
 # this user as the league owner so owner-gated endpoints pass (LQL-01 / BE-016).
 DEFAULT_USER = "owner_user"
 # Stripe secrets are sourced from SecureString SSM params by name (BE-015); the
-# Lambdas fetch them at import, so the params must exist (in moto) before load.
+# webhook fetches its secret at import and the API resolves its key lazily on the
+# first billing request, so the params must exist (in moto) before load/requests.
 STRIPE_SECRET_KEY_PARAM = "/leagueql/test/stripe/secret_key"
 STRIPE_WEBHOOK_SECRET_PARAM = "/leagueql/test/stripe/webhook_secret"
 
@@ -120,8 +121,9 @@ def _create_table() -> None:
 
 
 def _create_ssm_params() -> None:
-    # BE-015: the API + webhook Lambdas read the Stripe secret key / signing secret
-    # from these SecureString params at import. moto backs SSM like real AWS.
+    # BE-015: the webhook reads its signing secret from SSM at import and the API
+    # resolves its secret key lazily on first billing use; both go through these
+    # SecureString params. moto backs SSM like real AWS.
     client = boto3.client("ssm", region_name=REGION)
     client.put_parameter(
         Name=STRIPE_SECRET_KEY_PARAM, Value="sk_test_dummy", Type="SecureString"

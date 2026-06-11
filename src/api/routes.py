@@ -230,6 +230,7 @@ def create_billing_portal_session(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No billing account found",
         )
+    main.ensure_stripe_api_key()
     session = main.stripe.billing_portal.Session.create(
         customer=customer_id,
         return_url=main.STRIPE_BILLING_PORTAL_RETURN_URL,

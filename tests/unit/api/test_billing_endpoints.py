@@ -51,6 +51,46 @@ class TestGetAuthenticatedUser:
         assert exc.value.status_code == 401
 
 
+class TestEnsureStripeApiKey:
+    """The Stripe secret key is resolved lazily (BE-015) — off the cold-start init
+    path — and cached per execution environment."""
+
+    def test_resolves_and_sets_api_key_from_ssm(self):
+        import main
+
+        main._resolve_stripe_api_key.cache_clear()
+        try:
+            with (
+                patch(
+                    "main.get_secret_from_env_param", return_value="sk_test_x"
+                ) as mock_get,
+                patch("main.stripe") as mock_stripe,
+            ):
+                main.ensure_stripe_api_key()
+                assert mock_stripe.api_key == "sk_test_x"
+                mock_get.assert_called_once_with("STRIPE_SECRET_KEY_SSM_PARAM")
+        finally:
+            main._resolve_stripe_api_key.cache_clear()
+
+    def test_caches_resolution_so_ssm_is_fetched_once(self):
+        import main
+
+        main._resolve_stripe_api_key.cache_clear()
+        try:
+            with (
+                patch(
+                    "main.get_secret_from_env_param", return_value="sk_test_y"
+                ) as mock_get,
+                patch("main.stripe") as mock_stripe,
+            ):
+                main.ensure_stripe_api_key()
+                main.ensure_stripe_api_key()
+                assert mock_stripe.api_key == "sk_test_y"
+                mock_get.assert_called_once()
+        finally:
+            main._resolve_stripe_api_key.cache_clear()
+
+
 class TestCheckoutSessionEndpoint:
     def test_creates_session_with_trial(
         self,
