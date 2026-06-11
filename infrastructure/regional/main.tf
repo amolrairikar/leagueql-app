@@ -106,11 +106,14 @@ module "api_lambda" {
   function_description = "Lambda function containing API handler for fantasy football recap app"
   role_arn             = local.api_role_arn
   handler              = "main.handler"
-  memory_size          = 1024
-  timeout              = 15
-  log_retention        = 7
-  s3_bucket            = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
-  s3_key               = "lambda-code-artifacts/api-lambda.zip"
+  # 2048 MB ≈ a full vCPU; cold-start init here is CPU-bound (imports), so more
+  # CPU shortens both init and warm-request latency. Per-ms cost is higher but
+  # duration drops, and the API runs well under its 15s timeout.
+  memory_size   = 2048
+  timeout       = 15
+  log_retention = 7
+  s3_bucket     = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
+  s3_key        = "lambda-code-artifacts/api-lambda.zip"
 
   environment_variables = {
     DYNAMODB_TABLE_NAME   = "leagueql-table-${var.environment}"

@@ -6,6 +6,7 @@ route handlers in ``routes.py``; both are wired together here. Helper functions
 are re-exported from this module so ``main.<helper>`` remains the public surface.
 """
 
+import functools
 import os
 from enum import Enum
 from typing import Any, Optional
@@ -160,12 +161,18 @@ S3_BUCKET = os.environ["S3_BUCKET_NAME"]
 
 # Stripe billing (BE-015). Config is environment-specific: DEV is wired with
 # sandbox (test) mode credentials/Price IDs and PROD with live mode. The secret
-# key is a SecureString SSM parameter fetched at cold start by parameter *name*
-# (the value never lands in a Lambda env var / TF state / CI); the non-sensitive
-# Price ID and other config stay plain env vars. ``get_secret_from_env_param``
-# returns ``""`` when unconfigured so the module still imports in contexts where
-# billing is not set up (e.g. unit tests, which patch ``main.stripe``).
-stripe.api_key = get_secret_from_env_param("STRIPE_SECRET_KEY_SSM_PARAM")
+# key is a SecureString SSM parameter fetched by parameter *name* (the value never
+# lands in a Lambda env var / TF state / CI); the non-sensitive Price ID and other
+# config stay plain env vars.
+#
+# The key is resolved **lazily on the first Stripe-touching request** rather than
+# at module import: the synchronous SSM round-trip dominated cold-start init
+# latency, and resolving it at import would also freeze the secret into a SnapStart
+# snapshot. ``ensure_stripe_api_key`` is called at each Stripe SDK call site; the
+# resolution is cached (``lru_cache``) so warm requests in the same execution
+# environment never re-fetch. ``get_secret_from_env_param`` returns ``""`` when
+# unconfigured so the module still imports / runs in contexts where billing is not
+# set up (e.g. unit tests, which patch ``main.stripe``).
 STRIPE_PRICE_ID = os.environ.get("STRIPE_PRICE_ID", "")
 STRIPE_TRIAL_PERIOD_DAYS = int(os.environ.get("STRIPE_TRIAL_PERIOD_DAYS", "14"))
 STRIPE_CHECKOUT_SUCCESS_URL = os.environ.get(
@@ -177,6 +184,29 @@ STRIPE_CHECKOUT_CANCEL_URL = os.environ.get(
 STRIPE_BILLING_PORTAL_RETURN_URL = os.environ.get(
     "STRIPE_BILLING_PORTAL_RETURN_URL", "https://leagueql.com/home"
 )
+
+
+@functools.lru_cache(maxsize=1)
+def _resolve_stripe_api_key() -> str:
+    """Fetch the Stripe secret key from SSM once per execution environment.
+
+    Cached so only the first Stripe-touching request pays the SSM round-trip;
+    every later call returns the memoized value. ``cache_clear()`` resets it (used
+    by tests).
+    """
+    return get_secret_from_env_param("STRIPE_SECRET_KEY_SSM_PARAM")
+
+
+def ensure_stripe_api_key() -> None:
+    """Set ``stripe.api_key`` from SSM on first use (BE-015).
+
+    Called at each Stripe SDK call site instead of resolving the key at module
+    import, keeping the synchronous SSM fetch off the cold-start init path (and out
+    of any SnapStart snapshot). The underlying fetch is memoized, so repeated calls
+    within an execution environment are effectively free.
+    """
+    stripe.api_key = _resolve_stripe_api_key()
+
 
 # How long a claimed in-flight checkout marker blocks a second checkout before it
 # self-heals (BE-015 Idempotency Layer 1). Configurable per environment

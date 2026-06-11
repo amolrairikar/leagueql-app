@@ -688,6 +688,7 @@ def get_or_create_stripe_customer(clerk_user_id: str) -> str:
     if existing:
         return existing
 
+    main.ensure_stripe_api_key()
     customer = main.stripe.Customer.create(
         metadata={"clerk_user_id": clerk_user_id},
         idempotency_key=f"customer:{clerk_user_id}",
@@ -743,6 +744,7 @@ def recreate_stripe_customer(clerk_user_id: str) -> str:
     Returns:
         The new Stripe customer ID.
     """
+    main.ensure_stripe_api_key()
     customer = main.stripe.Customer.create(
         metadata={"clerk_user_id": clerk_user_id},
         idempotency_key=f"customer:{clerk_user_id}:{uuid.uuid4().hex}",
@@ -792,6 +794,8 @@ def create_subscription_checkout_session(
     Returns:
         The created Stripe Checkout Session object.
     """
+
+    main.ensure_stripe_api_key()
 
     def _create(cust_id: str, idempotency_key: str) -> Any:
         return main.stripe.checkout.Session.create(
@@ -858,6 +862,7 @@ def cancel_league_subscription(stripe_subscription_id: str | None) -> None:
     """
     if not stripe_subscription_id:
         return
+    main.ensure_stripe_api_key()
     try:
         main.stripe.Subscription.cancel(
             stripe_subscription_id,
