@@ -7,9 +7,15 @@ flag name to ``{"enabled": <bool>}``; toggling a flag is a one-line edit to that
 JSON followed by a redeploy. See
 ``docs/requirements/backend/BE-017-feature-flags.md``.
 
-A single ``billing`` flag currently gates all Stripe billing behavior (BE-014 /
-BE-015): when it is OFF, ``require_active_subscription`` is a no-op, the checkout
-and billing-portal endpoints return 404, and the Stripe webhook no-ops.
+A ``billing`` master flag gates all Stripe billing behavior (BE-014 / BE-015):
+when it is OFF, ``require_active_subscription`` is a no-op, the checkout and
+billing-portal endpoints return 404, and the Stripe webhook no-ops.
+
+On top of it, per-feature ``paywall_*`` flags implement the freemium model: a
+premium feature is paywalled only when **both** ``billing`` and that feature's
+flag are ON (see ``is_feature_paywalled``). No production endpoint is gated yet —
+``paywall_test_feature`` is a placeholder kept so the mechanism, pricing table,
+and config are wired and ready for the first real premium feature.
 
 Evaluation goes through OpenFeature's in-memory provider so the rest of the app
 depends only on the vendor-neutral OpenFeature client. Anything that cannot be
@@ -27,6 +33,10 @@ from openfeature.provider.in_memory_provider import InMemoryFlag, InMemoryProvid
 logger = logging.getLogger(__name__)
 
 _CONFIG_PATH = Path(__file__).with_name("feature_flags.json")
+
+# Per-feature paywall flag names (freemium model; see BE-014 / BE-017).
+# Placeholder premium feature; not wired to any production endpoint yet.
+PAYWALL_TEST_FEATURE = "paywall_test_feature"
 
 # The variant names are cosmetic; what matters is the boolean each maps to.
 _ON = "on"
@@ -75,6 +85,16 @@ def is_enabled(flag_name: str) -> bool:
 def is_billing_enabled() -> bool:
     """Return whether Stripe billing (BE-014 / BE-015) is enabled."""
     return is_enabled("billing")
+
+
+def is_feature_paywalled(flag_name: str) -> bool:
+    """Return whether a premium feature is paywalled (freemium model; BE-014).
+
+    A feature is paywalled only when **both** the ``billing`` master flag and the
+    feature's own ``flag_name`` are ON. With billing off (the default) this is
+    always ``False``, so every feature is free.
+    """
+    return is_billing_enabled() and is_enabled(flag_name)
 
 
 def _override_for_testing(flags: dict[str, bool]) -> None:

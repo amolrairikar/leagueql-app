@@ -83,9 +83,9 @@ def step_clear_subscription(context, canonical):
 
 @given("billing is disabled")
 def step_billing_disabled(context):
-    # Flip the BE-017 billing flag off for this scenario (before_scenario defaults
-    # it on). All handlers read the same OpenFeature provider, so this affects the
-    # API gate, the billing endpoints, and the webhook.
+    # Flip the BE-017 billing master flag off for this scenario (before_scenario
+    # defaults it on). All handlers read the same OpenFeature provider, so this
+    # affects every premium gate, the billing endpoints, and the webhook.
     from common import feature_flags
 
     feature_flags._override_for_testing({"billing": False})

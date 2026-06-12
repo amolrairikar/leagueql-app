@@ -66,7 +66,6 @@ from helpers import (
     is_job_in_progress,
     lookup_league,
     record_league_access,
-    require_active_subscription,
     require_league_member,
     require_league_owner,
     set_active_job,
@@ -321,7 +320,6 @@ def onboard_league(
 
     if requestType == RequestType.REFRESH and canonical_league_id:
         league_metadata = get_league_metadata(canonical_league_id)
-        require_active_subscription(canonical_league_id, metadata=league_metadata)
         require_league_owner(
             canonical_league_id, clerk_user_id, metadata=league_metadata
         )
@@ -430,7 +428,6 @@ def get_espn_members(
     canonical_league_id = lookup_league(league_id=leagueId, platform=platform)
     metadata = get_league_metadata(canonical_league_id=canonical_league_id)
     require_league_owner(canonical_league_id, clerk_user_id, metadata=metadata)
-    require_active_subscription(canonical_league_id, metadata=metadata)
 
     espn_url = (
         f"https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl"
@@ -496,7 +493,6 @@ def migrate_league(
 
     league_metadata = get_league_metadata(canonical_league_id)
     require_league_owner(canonical_league_id, clerk_user_id, metadata=league_metadata)
-    require_active_subscription(canonical_league_id, metadata=league_metadata)
     if is_job_in_progress(league_metadata):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -678,7 +674,6 @@ def query_league(
     require_league_member(
         canonical_league_id, clerk_user_id, platform, metadata=metadata
     )
-    require_active_subscription(canonical_league_id, metadata=metadata)
     pk = f"LEAGUE#{canonical_league_id}"
 
     try:

@@ -48,13 +48,14 @@ def aws_env_vars():
 
 @pytest.fixture(autouse=True)
 def enable_billing_flag():
-    """Billing ships feature-flagged OFF (BE-017), but the billing endpoints and
-    the subscription gate tests in this suite assume it is ON. Enable it for every
-    api test; the OFF-path tests flip it back within the test via
-    ``feature_flags._override_for_testing({"billing": False})``."""
+    """Billing ships feature-flagged OFF (BE-017), but the billing endpoints in
+    this suite assume it is ON. Enable it — along with the ``paywall_test_feature``
+    placeholder flag so the generic ``require_active_subscription`` gate (BE-014)
+    is exercisable — for every api test; the OFF-path tests flip a flag back within
+    the test via ``feature_flags._override_for_testing``."""
     from common import feature_flags
 
-    feature_flags._override_for_testing({"billing": True})
+    feature_flags._override_for_testing({"billing": True, "paywall_test_feature": True})
     yield
     feature_flags._override_for_testing({"billing": False})
 

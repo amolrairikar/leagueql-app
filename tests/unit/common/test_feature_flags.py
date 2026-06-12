@@ -17,7 +17,8 @@ def restore_default_flags():
 
 class TestBillingFlag:
     def test_ships_off_by_default(self):
-        # The bundled feature_flags.json sets billing to disabled.
+        # The bundled feature_flags.json ships billing disabled (BE-017), so every
+        # feature — premium included — is free until the flag is flipped on.
         ff._set_provider_from_config(ff._load_config())
         assert ff.is_billing_enabled() is False
 
@@ -28,6 +29,26 @@ class TestBillingFlag:
     def test_override_off(self):
         ff._override_for_testing({"billing": False})
         assert ff.is_billing_enabled() is False
+
+
+class TestIsFeaturePaywalled:
+    def test_both_flags_on_is_paywalled(self):
+        ff._override_for_testing({"billing": True, "paywall_test_feature": True})
+        assert ff.is_feature_paywalled("paywall_test_feature") is True
+
+    def test_billing_off_is_not_paywalled(self):
+        # Master flag off ⇒ no feature is paywalled, even if its own flag is on.
+        ff._override_for_testing({"billing": False, "paywall_test_feature": True})
+        assert ff.is_feature_paywalled("paywall_test_feature") is False
+
+    def test_feature_flag_off_is_not_paywalled(self):
+        # Billing on but the feature's own flag off ⇒ the feature is free.
+        ff._override_for_testing({"billing": True, "paywall_test_feature": False})
+        assert ff.is_feature_paywalled("paywall_test_feature") is False
+
+    def test_unknown_feature_flag_is_not_paywalled(self):
+        ff._override_for_testing({"billing": True})
+        assert ff.is_feature_paywalled("does-not-exist") is False
 
 
 class TestIsEnabled:

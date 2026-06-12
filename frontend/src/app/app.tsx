@@ -9,7 +9,6 @@ import {
 } from 'react-router-dom';
 
 import { ErrorBoundary } from '@/components/error-boundary';
-import Footer from '@/components/footer';
 import Header from '@/components/header';
 import { ModeToggle } from '@/components/mode-toggle';
 import { NavLink } from '@/components/nav-link';
@@ -42,7 +41,6 @@ import PrivacyPage from '@/features/privacy/privacy-page';
 import SeasonStandings from '@/features/season_standings/season-standings';
 import { AppSidebar } from '@/features/sidebar/app-sidebar';
 import { HeaderAccount } from '@/features/sidebar/header-account';
-import { SubscriptionGuard } from '@/features/subscription/subscription-guard';
 import { isDemoMode } from '@/lib/cookie-handler';
 
 function AppLayout({ children }: { children: React.ReactNode }) {
@@ -78,11 +76,8 @@ function AppLayout({ children }: { children: React.ReactNode }) {
             </div>
           </header>
           <ErrorBoundary resetKeys={[location.pathname]}>
-            <MembershipGuard>
-              <SubscriptionGuard>{children}</SubscriptionGuard>
-            </MembershipGuard>
+            <MembershipGuard>{children}</MembershipGuard>
           </ErrorBoundary>
-          <Footer className="py-3 shrink-0" />
         </SidebarInset>
       </SidebarProvider>
     </TooltipProvider>
@@ -138,7 +133,6 @@ function App() {
                 <div className="pt-1">
                   <LeagueConnect />
                 </div>
-                <Footer />
               </ProtectedRoute>
             }
           />
@@ -150,7 +144,6 @@ function App() {
                 <div className="pt-1">
                   <MigrateLeague />
                 </div>
-                <Footer />
               </ProtectedRoute>
             }
           />

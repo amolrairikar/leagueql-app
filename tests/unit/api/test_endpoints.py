@@ -1364,74 +1364,22 @@ class TestEspnMembersEndpoint:
 
 
 class TestSubscriptionGate:
-    """Gated endpoints return 402 when the league's subscription is expired/absent."""
+    """No production endpoint is subscription-gated (freemium, BE-014): the
+    generic ``require_active_subscription`` gate exists and is unit-tested in
+    isolation (see ``tests/unit/api/test_utils.py``), but no route calls it yet.
+    These cases assert representative endpoints stay reachable regardless of
+    subscription state."""
 
     @pytest.fixture
     def expired_metadata_item(self):
-        # No subscription_end_time → treated as expired by the gate. The owner
-        # matches the default authed user so the owner gate passes first and the
-        # subscription (402) gate is what's exercised here (LQL-01 / BE-016).
+        # No subscription_end_time. The owner matches the default authed user so
+        # owner-gated endpoints pass (LQL-01 / BE-016).
         return {
             "PK": "LEAGUE#canonical-abc",
             "SK": "METADATA",
             "league_name": "Test League",
             "owner_user_id": "user_1",
         }
-
-    def test_query_blocked_when_expired(
-        self, client, mock_table, league_lookup_item, expired_metadata_item
-    ):
-        mock_table.get_item.side_effect = [
-            {"Item": league_lookup_item},
-            {"Item": expired_metadata_item},
-        ]
-        response = client.get("/leagues/123/query?platform=SLEEPER&queryType=MATCHUPS")
-        assert response.status_code == 402
-        assert response.json()["detail"] == "Subscription required"
-
-    def test_espn_members_blocked_when_expired(
-        self, client, mock_table, league_lookup_item, expired_metadata_item
-    ):
-        mock_table.get_item.side_effect = [
-            {"Item": league_lookup_item},
-            {"Item": expired_metadata_item},
-        ]
-        response = client.post(
-            "/leagues/123/espn_members?platform=ESPN&espnLeagueId=99&season=2024",
-            json={"swid": "{abc}", "s2": "s2-token"},
-        )
-        assert response.status_code == 402
-
-    def test_migrate_blocked_when_expired(
-        self, client, mock_table, league_lookup_item, expired_metadata_item
-    ):
-        mock_table.get_item.side_effect = [
-            {"Item": league_lookup_item},
-            {"Item": expired_metadata_item},
-        ]
-        response = client.post(
-            "/leagues/123/migrate?platform=SLEEPER",
-            json={
-                "newPlatformLeagueId": "456",
-                "newPlatform": "ESPN",
-                "season": "2024",
-                "managerMapping": [],
-            },
-        )
-        assert response.status_code == 402
-
-    def test_refresh_blocked_when_expired(
-        self, client, mock_table, league_lookup_item, expired_metadata_item
-    ):
-        mock_table.get_item.side_effect = [
-            {"Item": league_lookup_item},
-            {"Item": expired_metadata_item},
-        ]
-        response = client.post(
-            "/leagues?requestType=REFRESH",
-            json={"leagueId": "123", "platform": "SLEEPER"},
-        )
-        assert response.status_code == 402
 
     def test_new_onboard_not_blocked(self, client, mock_table, mock_lambda_client):
         # New-league onboarding has no existing subscription to check.

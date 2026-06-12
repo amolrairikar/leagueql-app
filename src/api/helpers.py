@@ -20,7 +20,7 @@ from boto3.dynamodb.conditions import Key
 from fastapi import HTTPException, status
 
 import main
-from common.feature_flags import is_billing_enabled
+from common.feature_flags import is_feature_paywalled
 from common.job_status import JOB_TTL_SECONDS
 from common.sns import publish_failure as _publish_failure
 from main import (
@@ -447,10 +447,10 @@ def update_league_count(delta: int) -> None:
 
 
 def require_active_subscription(
-    canonical_league_id: str, metadata: dict | None = None
+    canonical_league_id: str, paywall_flag: str, metadata: dict | None = None
 ) -> None:
     """
-    Gate access to a league based on its subscription.
+    Gate access to a premium feature based on the league's subscription.
 
     A league's subscription is active while ``now < subscription_end_time``.
     An absent or past ``subscription_end_time`` is treated as expired and raises
@@ -458,6 +458,10 @@ def require_active_subscription(
 
     Args:
         canonical_league_id: The canonical league ID.
+        paywall_flag: The per-feature paywall flag for the gated premium feature
+            (e.g. ``PAYWALL_TEST_FEATURE``). The gate is a no-op unless this
+            feature is paywalled (billing on **and** this flag on; BE-017). No
+            production endpoint calls this yet — it is retained infrastructure.
         metadata: Optional pre-fetched METADATA item; when omitted it is read
             from DynamoDB. Pass it to avoid a redundant read when the caller has
             already loaded the league's metadata.
@@ -465,9 +469,10 @@ def require_active_subscription(
     Raises:
         HTTPException: 402 when the subscription is expired or absent.
     """
-    # Billing is feature-flagged (BE-017). When off, every league has full access
-    # and this gate is a no-op.
-    if not is_billing_enabled():
+    # Freemium gating (BE-014 / BE-017). The gate is a no-op unless this feature
+    # is paywalled — i.e. billing is on AND this feature's flag is on. With
+    # billing off (the default), every feature has full access.
+    if not is_feature_paywalled(paywall_flag):
         return
     if metadata is None:
         metadata = get_league_metadata(canonical_league_id)

@@ -25,9 +25,3 @@ Feature: Query precomputed views API (BE-005)
   Scenario: A valid query with no stored data returns 404
     When I GET "/leagues/100/query?platform=SLEEPER&queryType=DRAFT#2024"
     Then the API responds with status 404
-
-  Scenario: An expired subscription is gated with 402
-    Given league "canon-1" has subscription_end_time "2000-01-01T00:00:00+00:00"
-    And league "canon-1" has a "MATCHUPS#2024#WEEK#01" view with 1 row(s)
-    When I GET "/leagues/100/query?platform=SLEEPER&queryType=MATCHUPS"
-    Then the API responds with status 402
