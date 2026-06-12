@@ -65,6 +65,7 @@ criteria. Frontend, backend, and extension features are kept separate.
 | [FE-025](frontend/FE-025-ownership-transfer-owner-gated-actions.md) | Ownership Transfer & Owner-Gated Actions |
 | [FE-026](frontend/FE-026-feature-flags.md) | Feature Flags (OpenFeature) |
 | [FE-027](frontend/FE-027-transactions.md) | Transactions |
+| [FE-028](frontend/FE-028-changelog-page.md) | Changelog Page |
 
 ## Extension (`extension/`)
 | ID | Feature |
