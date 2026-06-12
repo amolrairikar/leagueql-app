@@ -65,7 +65,6 @@ const TRANSACTIONS: TransactionItem[] = [
         season: '2024',
         from_roster_id: '1',
         to_roster_id: '2',
-        player_name: 'Tight End',
       },
     ],
     waiver_bid: null,

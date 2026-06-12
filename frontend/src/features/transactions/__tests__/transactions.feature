@@ -8,7 +8,7 @@ Feature: Transactions (FE-027)
     When I open the transactions page
     Then I see the received player "Run Back"
     And I see the received player "Pat Quarterback"
-    And I see the traded pick "2024 Round 2 pick (Tight End)"
+    And I see the traded pick "2024 Round 2 pick"
     And "Pat Quarterback" is shown only once
 
   Scenario: A waiver shows both the add and the drop

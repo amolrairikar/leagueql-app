@@ -169,13 +169,7 @@
         "adds": { "p1": 2, "p2": 1 },
         "drops": { "p1": 1, "p2": 2 },
         "draft_picks": [
-          {
-            "round": 2,
-            "season": "2024",
-            "roster_id": 1,
-            "owner_id": 2,
-            "previous_owner_id": 1
-          }
+          { "round": 3, "season": "2025", "owner_id": 2, "previous_owner_id": 1 }
         ],
         "settings": null
       },
@@ -202,17 +196,6 @@
         "drops": null,
         "draft_picks": [],
         "settings": { "waiver_bid": 3 }
-      }
-    ]
-  },
-  {
-    "season": "2024",
-    "data_type": "drafts",
-    "data": [
-      {
-        "draft_id": "d2024",
-        "season": "2024",
-        "slot_to_roster_id": { "1": 1, "2": 2 }
       }
     ]
   },

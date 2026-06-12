@@ -4,7 +4,6 @@ import { Suspense, use, useMemo, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import SeasonSelect from '@/features/season_select/season-select';
 import {
-  type TransactionDraftPick,
   type TransactionItem,
   type TransactionPlayer,
   getTransactions,
@@ -37,12 +36,6 @@ function typeLabel(type: string): string {
 function playerLabel(player: TransactionPlayer): string {
   const name = player.player_name ?? `Player ${player.player_id}`;
   return player.position ? `${name} (${player.position})` : name;
-}
-
-function pickLabel(pick: TransactionDraftPick): string {
-  const base = `${pick.season} Round ${pick.round} pick`;
-  // When the pick has already been used, show the player it became.
-  return pick.player_name ? `${base} (${pick.player_name})` : base;
 }
 
 function teamLabel(txn: TransactionItem, rosterId: string | null): string {
@@ -130,7 +123,7 @@ function TransactionCard({ txn }: { txn: TransactionItem }) {
                     className="flex items-center gap-1.5 text-[12px] text-emerald-600 dark:text-emerald-400"
                   >
                     <ArrowUp className="w-3 h-3 shrink-0" />
-                    {pickLabel(p)}
+                    {p.season} Round {p.round} pick
                   </li>
                 ))}
                 {drops.map((p) => (
@@ -148,7 +141,7 @@ function TransactionCard({ txn }: { txn: TransactionItem }) {
                     className="flex items-center gap-1.5 text-[12px] text-red-600 dark:text-red-400"
                   >
                     <ArrowDown className="w-3 h-3 shrink-0" />
-                    {pickLabel(p)}
+                    {p.season} Round {p.round} pick
                   </li>
                 ))}
                 {adds.length === 0 &&

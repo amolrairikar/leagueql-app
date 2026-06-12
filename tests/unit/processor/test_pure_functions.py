@@ -532,71 +532,10 @@ class TestCompileSleeperTransactions:
             "season": "2028",
             "from_roster_id": "1",
             "to_roster_id": "9",
-            # No draft lookup passed and a future season, so the pick is unresolved.
-            "player_name": None,
         }
         assert rows[0]["adds"] == []
         assert rows[0]["drops"] == []
         assert rows[0]["waiver_bid"] is None
-
-    def test_trade_pick_resolves_drafted_player(self, processor_handler):
-        txn = {
-            "transaction_id": "t4",
-            "type": "trade",
-            "status": "complete",
-            "leg": 1,
-            "created": 400,
-            "roster_ids": [7, 9],
-            "adds": None,
-            "drops": None,
-            "draft_picks": [
-                {
-                    "round": 1,
-                    "season": "2024",
-                    "roster_id": 7,  # original slot owner
-                    "owner_id": 9,
-                    "previous_owner_id": 7,
-                }
-            ],
-            "settings": None,
-        }
-        # roster 7 owns draft seat 3; (round 1, seat 3) drafted "Joe Burrow".
-        roster_slot = {"2024": {"7": 3}}
-        drafted = {"2024": {(1, 3): "Joe Burrow"}}
-        rows = processor_handler.compile_sleeper_transactions(
-            [(txn, "2024")], {}, {}, roster_slot, drafted
-        )
-        assert rows[0]["draft_picks"][0]["player_name"] == "Joe Burrow"
-
-    def test_trade_pick_unresolved_for_future_season(self, processor_handler):
-        txn = {
-            "transaction_id": "t5",
-            "type": "trade",
-            "status": "complete",
-            "leg": 1,
-            "created": 500,
-            "roster_ids": [7, 9],
-            "adds": None,
-            "drops": None,
-            "draft_picks": [
-                {
-                    "round": 1,
-                    "season": "2028",
-                    "roster_id": 7,
-                    "owner_id": 9,
-                    "previous_owner_id": 7,
-                }
-            ],
-            "settings": None,
-        }
-        rows = processor_handler.compile_sleeper_transactions(
-            [(txn, "2024")],
-            {},
-            {},
-            {"2024": {"7": 3}},
-            {"2024": {(1, 3): "Joe Burrow"}},
-        )
-        assert rows[0]["draft_picks"][0]["player_name"] is None
 
     def test_free_agent_drop_only_and_unresolved_team(self, processor_handler):
         txn = {
@@ -620,57 +559,6 @@ class TestCompileSleeperTransactions:
         ]
         assert rows[0]["drops"] == []
         assert len(rows[0]["adds"]) == 1
-
-
-class TestBuildSleeperDraftLookup:
-    def test_builds_roster_slot_and_drafted_player_maps(self, processor_handler):
-        all_draft_picks = [
-            {
-                "round": 1,
-                "draft_slot": 3,
-                "player_id": "px",
-                "season": "2024",
-                "metadata": {"first_name": "Joe", "last_name": "Burrow"},
-            }
-        ]
-        drafts_by_season = {"2024": [{"slot_to_roster_id": {"3": 7, "5": 9}}]}
-        roster_slot, drafted = processor_handler.build_sleeper_draft_lookup(
-            all_draft_picks, drafts_by_season, {}
-        )
-        assert roster_slot["2024"]["7"] == 3
-        assert roster_slot["2024"]["9"] == 5
-        # Falls back to the pick's own metadata when player_metadata lacks the player.
-        assert drafted["2024"][(1, 3)] == "Joe Burrow"
-
-    def test_prefers_player_metadata_over_pick_metadata(self, processor_handler):
-        all_draft_picks = [
-            {
-                "round": 2,
-                "draft_slot": 1,
-                "player_id": "p9",
-                "season": "2024",
-                "metadata": {"first_name": "Stale", "last_name": "Name"},
-            }
-        ]
-        player_metadata = {
-            "p9": {"first_name": "Fresh", "last_name": "Name", "position": "WR"}
-        }
-        _, drafted = processor_handler.build_sleeper_draft_lookup(
-            all_draft_picks, {}, player_metadata
-        )
-        assert drafted["2024"][(2, 1)] == "Fresh Name"
-
-    def test_skips_null_slots_and_malformed_picks(self, processor_handler):
-        drafts_by_season = {"2024": [{"slot_to_roster_id": {"1": None, "2": 4}}]}
-        all_draft_picks = [
-            {"round": None, "draft_slot": 1, "player_id": "p1", "season": "2024"},
-        ]
-        roster_slot, drafted = processor_handler.build_sleeper_draft_lookup(
-            all_draft_picks, drafts_by_season, {}
-        )
-        assert "1" not in roster_slot["2024"]  # null roster slot skipped
-        assert roster_slot["2024"]["4"] == 2
-        assert drafted["2024"] == {}  # malformed pick (round None) skipped
 
 
 class TestDataframeToDynamoItems:

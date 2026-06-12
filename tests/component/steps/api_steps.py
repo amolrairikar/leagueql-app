@@ -230,15 +230,6 @@ def step_query_rows(context, count):
     assert len(data) == count, f"expected {count} rows, got {len(data)}: {data}"
 
 
-@then('the query response has a draft pick for player "{name}"')
-def step_query_draft_pick_player(context, name):
-    data = context.response.json()["data"]
-    names = [
-        pick.get("player_name") for row in data for pick in row.get("draft_picks", [])
-    ]
-    assert name in names, f"expected a draft pick for {name!r}, got {names}"
-
-
 @then('the response data field "{field}" equals "{value}"')
 def step_data_field(context, field, value):
     actual = context.response.json()["data"].get(field)

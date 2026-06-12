@@ -627,7 +627,7 @@ Sleeper-only ([BE-019](../requirements/backend/BE-019-sleeper-transactions.md)).
 | `teams` | List\<Object\> | Involved teams: `{roster_id, team_name, display_name}` (`team_name`/`display_name` null if unresolved) |
 | `adds` | List\<Object\> | Players added: `{player_id, player_name, position, roster_id}` (`player_name`/`position` null if unknown) |
 | `drops` | List\<Object\> | Players dropped: same shape as `adds` |
-| `draft_picks` | List\<Object\> | Picks exchanged: `{round, season, from_roster_id, to_roster_id, player_name}` — `player_name` is the player drafted with the pick (resolved via the draft's `slot_to_roster_id`), or null if the draft has not happened |
+| `draft_picks` | List\<Object\> | Picks exchanged: `{round, season, from_roster_id, to_roster_id}` |
 | `waiver_bid` | Integer \| null | FAAB bid amount for waiver claims; null otherwise |
 
 **Example:**

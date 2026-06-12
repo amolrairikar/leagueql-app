@@ -80,8 +80,6 @@ export interface TransactionDraftPick {
   season: string;
   from_roster_id: string | null;
   to_roster_id: string | null;
-  /** The player drafted with this pick, if the draft has happened; null otherwise. */
-  player_name: string | null;
 }
 
 /** A completed Sleeper transaction (waiver, trade, free agent, commissioner). BE-019 / FE-027. */
