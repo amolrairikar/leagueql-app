@@ -22,7 +22,7 @@ Rendered with the marketing `Header` (not the app sidebar layout).
   CTA runs the same connect-league flow as the hero CTA. The whole table is feature-flagged on
   `billing` ([FE-026](FE-026-feature-flags.md)): it is hidden when billing is OFF (premium
   features are free then, so there is nothing to sell).
-- Nav links: Changelog (external — `CHANGELOG.md` on GitHub), Docs (`/docs`).
+- Nav links: Changelog (in-app `/changelog`, [FE-028](FE-028-changelog-page.md)), Docs (`/docs`).
 
 ## Edge Cases
 - **Counts endpoint fails/slow:** the league-count figure degrades gracefully (placeholder
@@ -47,8 +47,8 @@ Rendered with the marketing `Header` (not the app sidebar layout).
 - [ ] With `billing` ON, a pricing table below the feature grid shows the Monthly ($4/month) and
       Yearly ($30/year) plans and lists the premium features (placeholder "Test feature"); with
       `billing` OFF it is hidden.
-- [ ] The Docs nav link resolves to `/docs`; the Changelog nav link opens the GitHub
-      `CHANGELOG.md` in a new tab.
+- [ ] The Docs nav link resolves to `/docs`; the Changelog nav link resolves to the in-app
+      `/changelog` page ([FE-028](FE-028-changelog-page.md)).
 - [ ] Layout is responsive on mobile and desktop.
 
 ## Sources

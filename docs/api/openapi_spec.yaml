@@ -188,7 +188,8 @@ paths:
           description: >
             The precomputed view to retrieve. Season-scoped views require
             a season suffix (e.g. SEASON_STANDINGS#2024). Cross-season views
-            such as ALL_TIME_STANDINGS do not require a suffix.
+            such as ALL_TIME_STANDINGS do not require a suffix. TRANSACTIONS#{season}
+            is Sleeper-only (ESPN leagues have no transaction data and return 404).
           schema:
             type: string
             # TODO: Fill this out as the list of views evolves
@@ -196,6 +197,7 @@ paths:
               - TEAMS
               - MATCHUPS
               - SEASON_STANDINGS
+              - TRANSACTIONS
             example: "SEASON_STANDINGS"
       responses:
         "200":

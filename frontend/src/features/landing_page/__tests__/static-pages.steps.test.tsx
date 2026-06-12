@@ -2,6 +2,7 @@ import { screen } from '@testing-library/react';
 import { defineFeature, loadFeature } from 'jest-cucumber';
 import { http, HttpResponse } from 'msw';
 
+import ChangelogPage from '@/features/changelog/changelog-page';
 import InstructionsPage from '@/features/instructions/instructions-page';
 import LeagueQLLanding from '@/features/landing_page/landing-page';
 import PrivacyPage from '@/features/privacy/privacy-page';
@@ -46,6 +47,18 @@ defineFeature(feature, (test) => {
       await renderRoute(<PrivacyPage />, { route: '/privacy' });
     });
     then(/^I see the heading "(.*)"$/, async (text) => {
+      expect((await screen.findAllByText(text)).length).toBeGreaterThan(0);
+    });
+  });
+
+  test('The changelog page renders', ({ when, then, and }) => {
+    when('I open the changelog page', async () => {
+      await renderRoute(<ChangelogPage />, { route: '/changelog' });
+    });
+    then(/^I see the heading "(.*)"$/, async (text) => {
+      expect((await screen.findAllByText(text)).length).toBeGreaterThan(0);
+    });
+    and(/^I see "(.*)"$/, async (text) => {
       expect((await screen.findAllByText(text)).length).toBeGreaterThan(0);
     });
   });

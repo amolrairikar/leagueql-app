@@ -157,6 +157,50 @@
   },
   {
     "season": "2024",
+    "data_type": "transactions_week1",
+    "data": [
+      {
+        "transaction_id": "txn-trade-1",
+        "type": "trade",
+        "status": "complete",
+        "leg": 1,
+        "created": 1700000000000,
+        "roster_ids": [1, 2],
+        "adds": { "p1": 2, "p2": 1 },
+        "drops": { "p1": 1, "p2": 2 },
+        "draft_picks": [
+          { "round": 3, "season": "2025", "owner_id": 2, "previous_owner_id": 1 }
+        ],
+        "settings": null
+      },
+      {
+        "transaction_id": "txn-waiver-1",
+        "type": "waiver",
+        "status": "complete",
+        "leg": 1,
+        "created": 1700000100000,
+        "roster_ids": [1],
+        "adds": { "p3": 1 },
+        "drops": null,
+        "draft_picks": [],
+        "settings": { "waiver_bid": 7 }
+      },
+      {
+        "transaction_id": "txn-waiver-failed",
+        "type": "waiver",
+        "status": "failed",
+        "leg": 1,
+        "created": 1700000200000,
+        "roster_ids": [2],
+        "adds": { "p4": 2 },
+        "drops": null,
+        "draft_picks": [],
+        "settings": { "waiver_bid": 3 }
+      }
+    ]
+  },
+  {
+    "season": "2024",
     "data_type": "league_settings",
     "data": {
       "name": "Component Test League",

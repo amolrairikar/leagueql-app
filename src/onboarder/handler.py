@@ -159,6 +159,7 @@ def lambda_handler(event, context) -> dict[str, str | int]:
             canonical_league_id=canonical_league_id,
             is_new_season_refresh=is_new_season_refresh,
             owner_user_id=event.get("ownerUserId"),
+            reprocess_all=bool(event.get("reprocessAll")),
         )
     except KeyError as e:
         logger.error("Missing required field in request body: %s", e)

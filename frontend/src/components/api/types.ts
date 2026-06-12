@@ -58,6 +58,46 @@ export interface SeasonStandingsItem {
   champion: string;
 }
 
+/** A team involved in a transaction, resolved from a Sleeper roster_id (BE-019 / FE-027). */
+export interface TransactionTeam {
+  roster_id: string;
+  team_name: string | null;
+  display_name: string | null;
+}
+
+/** A player added or dropped in a transaction, with name resolved from player metadata. */
+export interface TransactionPlayer {
+  player_id: string;
+  /** Null when the player ID is not present in the cached Sleeper player metadata. */
+  player_name: string | null;
+  position: string | null;
+  roster_id: string;
+}
+
+/** A draft pick exchanged in a trade. */
+export interface TransactionDraftPick {
+  round: number;
+  season: string;
+  from_roster_id: string | null;
+  to_roster_id: string | null;
+}
+
+/** A completed Sleeper transaction (waiver, trade, free agent, commissioner). BE-019 / FE-027. */
+export interface TransactionItem {
+  season: string;
+  transaction_id: string;
+  type: 'waiver' | 'trade' | 'free_agent' | 'commissioner';
+  week: number;
+  /** Unix epoch milliseconds; used to order transactions newest-first. */
+  created: number;
+  roster_ids: string[];
+  teams: TransactionTeam[];
+  adds: TransactionPlayer[];
+  drops: TransactionPlayer[];
+  draft_picks: TransactionDraftPick[];
+  waiver_bid: number | null;
+}
+
 export interface GetLeagueResponse {
   detail: string;
   data: {

@@ -1,0 +1,189 @@
+import { screen } from '@testing-library/react';
+import { defineFeature, loadFeature } from 'jest-cucumber';
+
+import type { TransactionItem } from '../api-calls';
+import Transactions from '../transactions';
+
+import { leagueQuery, leagueQueryError, server } from '@/test/msw/server';
+import { renderRoute } from '@/test/render';
+
+const feature = loadFeature(
+  'src/features/transactions/__tests__/transactions.feature',
+);
+
+const league = {
+  leagueId: '100',
+  platform: 'SLEEPER' as const,
+  seasons: ['2024'],
+};
+
+const TRANSACTIONS: TransactionItem[] = [
+  {
+    season: '2024',
+    transaction_id: 't1',
+    type: 'trade',
+    week: 1,
+    created: 1700000000000,
+    roster_ids: ['1', '2'],
+    teams: [
+      { roster_id: '1', team_name: 'Team Alice', display_name: 'Alice' },
+      { roster_id: '2', team_name: 'Team Bob', display_name: 'Bob' },
+    ],
+    // Bob receives Pat Quarterback; Alice receives Run Back. The mirrored drops
+    // (Alice drops Pat, Bob drops Run) must NOT be rendered for a trade.
+    adds: [
+      {
+        player_id: 'p1',
+        player_name: 'Pat Quarterback',
+        position: 'QB',
+        roster_id: '2',
+      },
+      {
+        player_id: 'p2',
+        player_name: 'Run Back',
+        position: 'RB',
+        roster_id: '1',
+      },
+    ],
+    drops: [
+      {
+        player_id: 'p1',
+        player_name: 'Pat Quarterback',
+        position: 'QB',
+        roster_id: '1',
+      },
+      {
+        player_id: 'p2',
+        player_name: 'Run Back',
+        position: 'RB',
+        roster_id: '2',
+      },
+    ],
+    draft_picks: [
+      {
+        round: 2,
+        season: '2024',
+        from_roster_id: '1',
+        to_roster_id: '2',
+      },
+    ],
+    waiver_bid: null,
+  },
+  {
+    season: '2024',
+    transaction_id: 't2',
+    type: 'waiver',
+    week: 2,
+    created: 1700000100000,
+    roster_ids: ['1'],
+    teams: [{ roster_id: '1', team_name: 'Team Alice', display_name: 'Alice' }],
+    adds: [
+      {
+        player_id: 'p3',
+        player_name: 'Wide Receiver',
+        position: 'WR',
+        roster_id: '1',
+      },
+    ],
+    drops: [
+      {
+        player_id: 'p4',
+        player_name: 'Bench Guy',
+        position: 'TE',
+        roster_id: '1',
+      },
+    ],
+    draft_picks: [],
+    waiver_bid: 7,
+  },
+];
+
+defineFeature(feature, (test) => {
+  test('A trade shows only what each team received', ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    given('transactions data is available', () => {
+      server.use(leagueQuery({ TRANSACTIONS }));
+    });
+    when('I open the transactions page', async () => {
+      await renderRoute(<Transactions />, { route: '/transactions', league });
+    });
+    then(/^I see the received player "(.*)"$/, async (name) => {
+      expect(
+        (await screen.findAllByText(name, { exact: false })).length,
+      ).toBeGreaterThan(0);
+    });
+    and(/^I see the received player "(.*)"$/, async (name) => {
+      expect(
+        (await screen.findAllByText(name, { exact: false })).length,
+      ).toBeGreaterThan(0);
+    });
+    and(/^I see the traded pick "(.*)"$/, async (label) => {
+      expect(
+        (await screen.findAllByText(label, { exact: false })).length,
+      ).toBeGreaterThan(0);
+    });
+    and(/^"(.*)" is shown only once$/, async (name) => {
+      // The trade's mirrored drop is hidden, so the player appears exactly once.
+      expect((await screen.findAllByText(name, { exact: false })).length).toBe(
+        1,
+      );
+    });
+  });
+
+  test('A waiver shows both the add and the drop', ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    given('transactions data is available', () => {
+      server.use(leagueQuery({ TRANSACTIONS }));
+    });
+    when('I open the transactions page', async () => {
+      await renderRoute(<Transactions />, { route: '/transactions', league });
+    });
+    then(/^I see the received player "(.*)"$/, async (name) => {
+      expect(
+        (await screen.findAllByText(name, { exact: false })).length,
+      ).toBeGreaterThan(0);
+    });
+    and(/^I see the received player "(.*)"$/, async (name) => {
+      expect(
+        (await screen.findAllByText(name, { exact: false })).length,
+      ).toBeGreaterThan(0);
+    });
+  });
+
+  test('A season with no transactions shows an empty state', ({
+    given,
+    when,
+    then,
+  }) => {
+    given('the league has no transactions', () => {
+      // No TRANSACTIONS key → the query 404s, which getTransactions maps to empty.
+      server.use(leagueQuery({}));
+    });
+    when('I open the transactions page', async () => {
+      await renderRoute(<Transactions />, { route: '/transactions', league });
+    });
+    then(/^I see the message "(.*)"$/, async (text) => {
+      expect((await screen.findAllByText(text)).length).toBeGreaterThan(0);
+    });
+  });
+
+  test('A failed load surfaces an inline error', ({ given, when, then }) => {
+    given('the transactions data fails to load', () => {
+      server.use(leagueQueryError(500));
+    });
+    when('I open the transactions page', async () => {
+      await renderRoute(<Transactions />, { route: '/transactions', league });
+    });
+    then(/^I see the message "(.*)"$/, async (text) => {
+      expect((await screen.findAllByText(text)).length).toBeGreaterThan(0);
+    });
+  });
+});

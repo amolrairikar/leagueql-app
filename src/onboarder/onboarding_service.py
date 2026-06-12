@@ -25,6 +25,8 @@ class OnboardingService:
         canonical_league_id: The unique ID for the league, generated when initially onboarding a league. If none,
             the league has not been onboarded before. If provided, will be used to write raw refreshed data to the same
             S3 location as the original data and update the same DynamoDB metadata item as the original.
+        reprocess_all: When True, tags the manifest so the processor rebuilds every
+            season's views (used by the BE-019 backfill); default False.
 
     Methods:
         __init__(league_id, platform, request_type, latest_season, espn_s2_cookie, swid_cookie, canonical_league_id): Constructor.
@@ -44,6 +46,7 @@ class OnboardingService:
         canonical_league_id: str | None = None,
         is_new_season_refresh: bool = False,
         owner_user_id: str | None = None,
+        reprocess_all: bool = False,
     ):
         """Constructor."""
         self.league_id = league_id
@@ -51,6 +54,7 @@ class OnboardingService:
         self.request_type = request_type
         self.is_new_season_refresh = is_new_season_refresh
         self.owner_user_id = owner_user_id
+        self.reprocess_all = reprocess_all
         self.latest_season = str(latest_season) if latest_season else None
         self.client = self._build_client(
             league_id=league_id,
@@ -94,6 +98,7 @@ class OnboardingService:
             bucket_name=os.environ["S3_BUCKET_NAME"],
             prefix=f"raw-api-data/{self.canonical_league_id}",
             platform=self.platform,
+            reprocess_all=self.reprocess_all,
         )
         logger.info("Wrote raw data to S3")
 

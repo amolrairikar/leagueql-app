@@ -11,7 +11,8 @@ only ever reads these precomputed items via [BE-005](BE-005-query-precomputed-vi
 - Processor Lambda: `src/processor/` (`handler.py`, `queries.py`, `utils.py`).
 - SQL transforms: `src/processor/queries.py` (`QUERIES`, keyed by entity type and platform).
 - Entity types (`EntityType`): `TEAMS`, `MATCHUPS`, `STANDINGS`, `WEEKLY_STANDINGS`,
-  `PLAYOFF_BRACKET`, `DRAFT`.
+  `PLAYOFF_BRACKET`, `DRAFT`, `TRANSACTIONS` (Sleeper-only; see
+  [BE-019](BE-019-sleeper-transactions.md)).
 - Output schema: `docs/db/dynamodb_spec.md`.
 
 ## Computed Views
@@ -26,6 +27,9 @@ only ever reads these precomputed items via [BE-005](BE-005-query-precomputed-vi
   (`team_*_from`), placement positions, winners/losers.
 - **DRAFT** (`DRAFT#{season}`): every pick with computed analytics — `drafted_position_rank`,
   `actual_position_rank`, `draft_rank_delta`, `vorp`, plus keeper/auction fields.
+- **TRANSACTIONS** (`TRANSACTIONS#{season}`): Sleeper-only; completed waivers, trades, and
+  free-agent moves with player names and team labels resolved. See
+  [BE-019](BE-019-sleeper-transactions.md).
 
 ## Edge Cases
 - **Platform-specific schemas:** ESPN and Sleeper raw payloads differ; transforms are
@@ -48,6 +52,10 @@ only ever reads these precomputed items via [BE-005](BE-005-query-precomputed-vi
   rather than collapsing every non-PPR-offense slot to `FLEX`.
 - **Large leagues:** processor runs up to ~120s; writes parallelized across views.
 - **Refresh:** views are overwritten in place (idempotent per `(canonical_league_id, SK)`).
+- **Season selection / `reprocess_all`:** a normal refresh recomputes only the latest
+  season (`resolve_seasons_to_process`). When the manifest carries the `reprocess_all=true`
+  metadata flag (set by the BE-019 backfill re-onboard), the processor recomputes **every**
+  season in the manifest from the raw season files already in S3 instead.
 
 ## Acceptance Criteria
 - [ ] For each onboarded season, the processor writes `TEAMS`, `MATCHUPS#{season}#WEEK#{week}`,

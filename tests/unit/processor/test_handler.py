@@ -315,6 +315,61 @@ class TestRegisterSleeperRawDataBranches:
         assert len(result["rosters"]) == 1
         assert result["rosters"][0]["season"] == "2024"
 
+    def test_transactions_branch_keeps_only_completed(self, processor_handler):
+        raw = [
+            {
+                "season": "2024",
+                "data_type": "users",
+                "data": [
+                    {
+                        "user_id": "u1",
+                        "display_name": "alice",
+                        "metadata": {"team_name": "Alice"},
+                    }
+                ],
+            },
+            {
+                "season": "2024",
+                "data_type": "rosters",
+                "data": [{"roster_id": 8, "owner_id": "u1"}],
+            },
+            {
+                "season": "2024",
+                "data_type": "transactions_week1",
+                "data": [
+                    {
+                        "transaction_id": "ok",
+                        "type": "waiver",
+                        "status": "complete",
+                        "leg": 1,
+                        "created": 1,
+                        "roster_ids": [8],
+                        "adds": {"9504": 8},
+                        "drops": None,
+                        "draft_picks": [],
+                        "settings": {"waiver_bid": 5},
+                    },
+                    {
+                        "transaction_id": "failed",
+                        "type": "waiver",
+                        "status": "failed",
+                        "leg": 1,
+                        "created": 2,
+                        "roster_ids": [8],
+                        "adds": {"9504": 8},
+                        "drops": None,
+                        "draft_picks": [],
+                        "settings": {},
+                    },
+                ],
+            },
+        ]
+        result = processor_handler._register_sleeper_raw_data(raw, {}, {})
+        assert len(result["transactions"]) == 1
+        txn = result["transactions"][0]
+        assert txn["transaction_id"] == "ok"
+        assert txn["teams"][0]["team_name"] == "Alice"
+
     def test_league_settings_roster_positions_collected(self, processor_handler):
         # Covers the roster_positions pre-pass assignment and team_b-wins matchup.
         raw = [
@@ -534,6 +589,111 @@ class TestLambdaHandlerImpl:
         # Refresh: count is not incremented and refresh flag is set.
         update_count.assert_not_called()
         assert write_meta.call_args[1]["refresh"] is True
+
+    def test_reprocess_all_processes_every_season_and_skips_previous_manifest(
+        self, processor_handler
+    ):
+        mock_s3 = MagicMock()
+        manifest = _manifest_response({"SLEEPER": ["2023", "2024"]})
+        manifest["Metadata"]["reprocess_all"] = "true"
+        mock_s3.get_object.return_value = manifest
+        read_keys: list = []
+
+        def fake_read(bucket, key, version_id=None):
+            read_keys.append((key, version_id))
+            if key.endswith("players.json") or key.endswith("player_stats.json"):
+                return {}
+            return [{"data_type": "users", "data": []}]
+
+        with patch.multiple(
+            processor_handler,
+            s3_client=mock_s3,
+            get_previous_version_id=MagicMock(return_value="v-prev"),
+            read_s3_object=MagicMock(side_effect=fake_read),
+            register_raw_data=MagicMock(return_value={}),
+            dataframe_to_dynamo_items=MagicMock(return_value=[]),
+            write_items=MagicMock(),
+            write_metadata_items=MagicMock(),
+            update_league_count=MagicMock(),
+            QUERIES=_FAKE_QUERIES,
+        ):
+            with patch.object(
+                processor_handler.duckdb, "connect", return_value=MagicMock()
+            ):
+                processor_handler._lambda_handler_impl(_s3_event(), MagicMock())
+
+        # No versioned (previous-manifest) read happened, and both seasons were read.
+        assert all(version_id is None for _, version_id in read_keys)
+        season_files = {key for key, _ in read_keys if key.endswith(".json")}
+        assert any(k.endswith("/2023.json") for k in season_files)
+        assert any(k.endswith("/2024.json") for k in season_files)
+
+    def test_sleeper_transactions_schema_written_when_present(self, processor_handler):
+        mock_s3 = MagicMock()
+        mock_s3.get_object.return_value = _manifest_response({"SLEEPER": ["2024"]})
+        df_to_items = MagicMock(return_value=[])
+        fake_queries = {
+            **_FAKE_QUERIES,
+            "TRANSACTIONS": {"SLEEPER": "SELECT 1"},
+        }
+
+        def fake_read(bucket, key, version_id=None):
+            if key.endswith("players.json") or key.endswith("player_stats.json"):
+                return {}
+            return [{"data_type": "users", "data": []}]
+
+        with patch.multiple(
+            processor_handler,
+            s3_client=mock_s3,
+            get_previous_version_id=MagicMock(return_value=None),
+            read_s3_object=MagicMock(side_effect=fake_read),
+            register_raw_data=MagicMock(
+                return_value={"transactions": [{"season": "2024"}]}
+            ),
+            dataframe_to_dynamo_items=df_to_items,
+            write_items=MagicMock(),
+            write_metadata_items=MagicMock(),
+            update_league_count=MagicMock(),
+            QUERIES=fake_queries,
+        ):
+            with patch.object(
+                processor_handler.duckdb, "connect", return_value=MagicMock()
+            ):
+                processor_handler._lambda_handler_impl(_s3_event(), MagicMock())
+
+        entity_types = {
+            call.kwargs["schema"].entity_type for call in df_to_items.call_args_list
+        }
+        assert processor_handler.EntityType.TRANSACTIONS in entity_types
+
+    def test_espn_never_writes_transactions_schema(self, processor_handler):
+        mock_s3 = MagicMock()
+        mock_s3.get_object.return_value = _manifest_response({"ESPN": ["2024"]})
+        df_to_items = MagicMock(return_value=[])
+        # Even if a (hypothetical) transactions group were present, ESPN must not
+        # produce a TRANSACTIONS view — the schema is Sleeper-gated.
+        with patch.multiple(
+            processor_handler,
+            s3_client=mock_s3,
+            get_previous_version_id=MagicMock(return_value=None),
+            read_s3_object=MagicMock(return_value=[{"data_type": "users", "data": {}}]),
+            register_raw_data=MagicMock(
+                return_value={"transactions": [{"season": "2024"}]}
+            ),
+            dataframe_to_dynamo_items=df_to_items,
+            write_items=MagicMock(),
+            write_metadata_items=MagicMock(),
+            update_league_count=MagicMock(),
+            QUERIES=_FAKE_QUERIES,
+        ):
+            with patch.object(
+                processor_handler.duckdb, "connect", return_value=MagicMock()
+            ):
+                processor_handler._lambda_handler_impl(_s3_event(), MagicMock())
+        entity_types = {
+            call.kwargs["schema"].entity_type for call in df_to_items.call_args_list
+        }
+        assert processor_handler.EntityType.TRANSACTIONS not in entity_types
 
     def test_sleeper_missing_player_metadata_and_stats_warns(self, processor_handler):
         mock_s3 = MagicMock()

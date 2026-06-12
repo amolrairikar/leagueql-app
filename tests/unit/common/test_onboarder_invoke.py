@@ -32,7 +32,23 @@ def test_invoke_onboarder_builds_payload_and_invokes():
         "canonicalLeagueId": "canonical-abc",
         "correlation_id": "corr-1",
         "ownerUserId": "user_1",
+        "reprocessAll": False,
     }
+
+
+def test_invoke_onboarder_passes_reprocess_all():
+    client = MagicMock()
+    invoke_onboarder(
+        lambda_client=client,
+        function_name="onboarder-fn",
+        body={"leagueId": "123", "platform": "SLEEPER"},
+        request_type="REFRESH",
+        canonical_league_id="canonical-abc",
+        correlation_id="corr-1",
+        reprocess_all=True,
+    )
+    payload = json.loads(client.invoke.call_args.kwargs["Payload"])
+    assert payload["reprocessAll"] is True
 
 
 def test_invoke_onboarder_defaults_owner_to_none():

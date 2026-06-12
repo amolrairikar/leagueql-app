@@ -57,6 +57,7 @@ class TestQueryTypeEnum:
             ("WEEKLY_STANDINGS", "WEEKLY_STANDINGS"),
             ("PLAYOFF_BRACKET", "PLAYOFF_BRACKET"),
             ("DRAFT", "DRAFT"),
+            ("TRANSACTIONS", "TRANSACTIONS"),
         ],
     )
     def test_valid_values(self, value, expected):

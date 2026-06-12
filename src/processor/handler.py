@@ -72,6 +72,7 @@ class EntityType(str, Enum):
     WEEKLY_STANDINGS = "WEEKLY_STANDINGS"
     PLAYOFF_BRACKET = "PLAYOFF_BRACKET"
     DRAFT = "DRAFT"
+    TRANSACTIONS = "TRANSACTIONS"
 
 
 @dataclass(frozen=True)
@@ -256,6 +257,138 @@ def compile_sleeper_bench_stats(
             }
         )
     return result
+
+
+def build_sleeper_roster_team_map(
+    all_users: list[dict], all_rosters: list[dict]
+) -> dict[str, dict[str, dict]]:
+    """
+    Build a season → roster_id → {team_name, display_name} lookup for Sleeper leagues.
+
+    Sleeper transactions reference teams by ``roster_id`` only; this resolves each
+    roster to its owner's display name and team name (the same join the TEAMS view
+    performs) so transactions can be shown with human-readable team labels.
+
+    Args:
+        all_users: Sleeper user rows (each with user_id, display_name, metadata, season).
+        all_rosters: Sleeper roster rows (each with roster_id, owner_id, season).
+
+    Returns:
+        Mapping of season → roster_id (str) → {"team_name", "display_name"}.
+    """
+    user_by_season: dict[tuple[str, str], dict] = {}
+    for user in all_users:
+        user_by_season[(user["season"], user["user_id"])] = {
+            "display_name": user.get("display_name"),
+            "team_name": (user.get("metadata") or {}).get("team_name"),
+        }
+
+    roster_team_map: dict[str, dict[str, dict]] = defaultdict(dict)
+    for roster in all_rosters:
+        season = roster["season"]
+        roster_id = str(roster["roster_id"])
+        info = user_by_season.get((season, roster.get("owner_id")), {})
+        roster_team_map[season][roster_id] = {
+            "team_name": info.get("team_name"),
+            "display_name": info.get("display_name"),
+        }
+    return roster_team_map
+
+
+def _resolve_sleeper_transaction_players(
+    player_to_roster: dict | None, player_metadata: dict
+) -> list[dict]:
+    """
+    Flatten a Sleeper ``adds``/``drops`` map into resolved player rows.
+
+    Args:
+        player_to_roster: Sleeper ``adds``/``drops`` map (player_id → roster_id), or None.
+        player_metadata: Mapping of player_id → metadata dict (first_name, last_name, position).
+
+    Returns:
+        List of dicts with player_id, player_name (None if unknown), position, and roster_id.
+    """
+    resolved = []
+    for player_id, roster_id in (player_to_roster or {}).items():
+        full_name, position = sleeper_player_display_fields(
+            player_metadata.get(player_id, {})
+        )
+        resolved.append(
+            {
+                "player_id": player_id,
+                "player_name": full_name or None,
+                "position": position,
+                "roster_id": str(roster_id),
+            }
+        )
+    return resolved
+
+
+def compile_sleeper_transactions(
+    raw_transactions: list[tuple[dict, str]],
+    player_metadata: dict,
+    roster_team_map: dict[str, dict[str, dict]],
+) -> list[dict]:
+    """
+    Build resolved transaction rows from raw Sleeper transaction payloads.
+
+    Only completed transactions are passed in (failed/incomplete ones are filtered
+    upstream). Player IDs are resolved to names/positions and roster IDs to team labels.
+
+    Args:
+        raw_transactions: List of (transaction payload, season) tuples.
+        player_metadata: Mapping of player_id → metadata dict.
+        roster_team_map: season → roster_id → {team_name, display_name} (see
+            build_sleeper_roster_team_map).
+
+    Returns:
+        List of resolved transaction row dicts.
+    """
+    rows = []
+    for txn, season in raw_transactions:
+        season_rosters = roster_team_map.get(season, {})
+        roster_ids = [str(r) for r in (txn.get("roster_ids") or [])]
+        teams = [
+            {
+                "roster_id": rid,
+                "team_name": season_rosters.get(rid, {}).get("team_name"),
+                "display_name": season_rosters.get(rid, {}).get("display_name"),
+            }
+            for rid in roster_ids
+        ]
+        draft_picks = [
+            {
+                "round": pick.get("round"),
+                "season": pick.get("season"),
+                "from_roster_id": str(pick["previous_owner_id"])
+                if pick.get("previous_owner_id") is not None
+                else None,
+                "to_roster_id": str(pick["owner_id"])
+                if pick.get("owner_id") is not None
+                else None,
+            }
+            for pick in (txn.get("draft_picks") or [])
+        ]
+        rows.append(
+            {
+                "season": season,
+                "transaction_id": txn.get("transaction_id"),
+                "type": txn.get("type"),
+                "week": txn.get("leg"),
+                "created": txn.get("created"),
+                "roster_ids": roster_ids,
+                "teams": teams,
+                "adds": _resolve_sleeper_transaction_players(
+                    txn.get("adds"), player_metadata
+                ),
+                "drops": _resolve_sleeper_transaction_players(
+                    txn.get("drops"), player_metadata
+                ),
+                "draft_picks": draft_picks,
+                "waiver_bid": (txn.get("settings") or {}).get("waiver_bid"),
+            }
+        )
+    return rows
 
 
 def compile_sleeper_player_scoring_totals(
@@ -771,6 +904,9 @@ def _register_sleeper_raw_data(
                 playoff_week_start_by_season[item["season"]] = pws
 
     all_users, all_rosters, all_matchups, all_draft_picks = [], [], [], []
+    # Completed transactions paired with their season, resolved after the loop once
+    # all_users/all_rosters are fully built (needed for roster → team resolution).
+    raw_transactions: list[tuple[dict, str]] = []
     league_name_by_season: dict[str, str] = {}
     scoring_settings_by_season: dict[str, dict] = {}
     for item in raw_data:
@@ -865,6 +1001,12 @@ def _register_sleeper_raw_data(
                         "team_a_season": item["season"],
                     }
                 )
+        elif item["data_type"].startswith("transactions"):
+            # Only completed transactions are surfaced (BE-019); failed waiver
+            # claims and other non-complete records are dropped.
+            for record in item["data"]:
+                if record.get("status") == "complete":
+                    raw_transactions.append((record, item["season"]))
         elif item["data_type"] == "draft_picks":
             for record in item["data"]:
                 record_copy = record.copy()
@@ -884,6 +1026,12 @@ def _register_sleeper_raw_data(
         player_metadata=player_metadata,
     )
 
+    transactions = compile_sleeper_transactions(
+        raw_transactions=raw_transactions,
+        player_metadata=player_metadata,
+        roster_team_map=build_sleeper_roster_team_map(all_users, all_rosters),
+    )
+
     return {
         "users": all_users,
         "rosters": all_rosters,
@@ -891,6 +1039,7 @@ def _register_sleeper_raw_data(
         "brackets": all_brackets,
         "draft_picks": all_draft_picks,
         "player_scoring_totals": player_scoring_totals,
+        "transactions": transactions,
         "league_name_by_season": league_name_by_season,
     }
 
@@ -1091,13 +1240,17 @@ def _lambda_handler_impl(event, context) -> None:
 
     manifest_metadata = manifest_response.get("Metadata", {})
     correlation_id_var.set(manifest_metadata.get("correlation_id", ""))
+    # A backfill re-onboard (BE-019) sets reprocess_all so every season in the manifest
+    # is rebuilt from the raw season files already in S3, rather than only the latest
+    # season the normal refresh diff would select.
+    reprocess_all = manifest_metadata.get("reprocess_all") == "true"
 
     platform = next(iter(manifest))
     all_seasons = manifest[platform]
     prefix = "/".join(key.split("/")[:2])
 
     previous_seasons = None
-    if previous_version_id:
+    if previous_version_id and not reprocess_all:
         previous_manifest = read_s3_object(
             bucket=bucket, key=key, version_id=previous_version_id
         )
@@ -1233,6 +1386,17 @@ def _lambda_handler_impl(event, context) -> None:
         PLAYOFF_BRACKET_SCHEMA,
         DRAFT_SCHEMA,
     ]
+
+    # Transactions are Sleeper-only (ESPN exposes no equivalent data) and skipped when a
+    # league has no completed transactions, so the view is built conditionally (BE-019).
+    if platform == "SLEEPER" and grouped.get("transactions"):
+        TRANSACTIONS_SCHEMA = KeySchema(
+            pk=f"LEAGUE#{canonical_league_id}",
+            sk=lambda row: f"TRANSACTIONS#{row['season']}",
+            entity_type=EntityType.TRANSACTIONS,
+        )
+        schemas.append(TRANSACTIONS_SCHEMA)
+        platform_specific_schemas.append(TRANSACTIONS_SCHEMA)
 
     for schema in schemas:
         logger.info("Converting %s data to DynamoDB items.", schema.entity_type)

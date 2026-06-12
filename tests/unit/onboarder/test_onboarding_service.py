@@ -190,3 +190,38 @@ class TestOnboardingServiceRun:
             svc.run()
 
         assert mock_ddb.call_args.kwargs["owner_user_id"] == "user_1"
+
+    def test_run_forwards_reprocess_all_to_writer(
+        self,
+        onboarder_onboarding_service,
+        monkeypatch,
+    ):
+        # BE-019: the backfill flag threads through to the S3 manifest writer.
+        monkeypatch.setenv("S3_BUCKET_NAME", "test-bucket")
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = {"status": {"previousSeasons": []}}
+        with patch("requests.get", return_value=mock_resp):
+            svc = onboarder_onboarding_service.OnboardingService(
+                league_id="123",
+                platform="ESPN",
+                request_type="REFRESH",
+                latest_season="2024",
+                canonical_league_id="canonical-abc",
+                reprocess_all=True,
+            )
+
+        async def fake_fetch():
+            return [{"season": "2024", "data_type": "users", "data": {}}]
+
+        svc.client.fetch_all = fake_fetch
+
+        with (
+            patch.object(onboarder_onboarding_service, "write_league_records"),
+            patch.object(
+                onboarder_onboarding_service, "upload_results_to_s3"
+            ) as mock_s3,
+        ):
+            svc.run()
+
+        assert mock_s3.call_args.kwargs["reprocess_all"] is True

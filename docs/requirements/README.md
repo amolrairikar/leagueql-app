@@ -34,6 +34,7 @@ criteria. Frontend, backend, and extension features are kept separate.
 | [BE-016](backend/BE-016-league-ownership-authorization.md) | League Ownership & Authorization |
 | [BE-017](backend/BE-017-feature-flags.md) | Feature Flags (OpenFeature) |
 | [BE-018](backend/BE-018-league-access-tracking.md) | League Access Tracking |
+| [BE-019](backend/BE-019-sleeper-transactions.md) | Sleeper Transactions (Waivers, Trades, Free Agents) |
 
 ## Frontend (`frontend/`)
 | ID | Feature |
@@ -63,6 +64,8 @@ criteria. Frontend, backend, and extension features are kept separate.
 | [FE-024](frontend/FE-024-security-headers.md) | Security Response Headers & Content-Security-Policy |
 | [FE-025](frontend/FE-025-ownership-transfer-owner-gated-actions.md) | Ownership Transfer & Owner-Gated Actions |
 | [FE-026](frontend/FE-026-feature-flags.md) | Feature Flags (OpenFeature) |
+| [FE-027](frontend/FE-027-transactions.md) | Transactions |
+| [FE-028](frontend/FE-028-changelog-page.md) | Changelog Page |
 
 ## Extension (`extension/`)
 | ID | Feature |
