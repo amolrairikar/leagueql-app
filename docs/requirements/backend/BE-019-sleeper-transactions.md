@@ -52,6 +52,11 @@ Each row: `season`, `transaction_id`, `type` (`waiver` | `trade` | `free_agent` 
 - **Trade variants:** trades may carry players only, draft picks only, or both;
   `draft_picks` map Sleeper `previous_owner_id → from_roster_id` and `owner_id →
   to_roster_id`.
+- **Traded pick → drafted player:** a traded pick is matched to the player drafted with
+  it via the pick's original slot owner (`roster_id`) → the draft's `slot_to_roster_id`
+  seat → the draft pick at that `(round, draft_slot)`. `player_name` is null when the
+  pick's draft has not happened yet (e.g. a future-season pick) or the draft data is
+  unavailable.
 - **Free agents / drop-only:** `adds` or `drops` may be empty; a `null` Sleeper map becomes
   `[]`.
 - **Multi-roster transactions:** all rosters in `roster_ids` are resolved to team labels;

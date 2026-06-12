@@ -25,6 +25,8 @@ Feature: Onboard-to-processed pipeline (BE-001, BE-004)
     When I GET "/leagues/100/query?platform=SLEEPER&queryType=TRANSACTIONS#2024"
     Then the API responds with status 200
     And the query response has 2 row(s)
+    # The traded 2024 round-2 pick (roster 1's seat) resolves to the player drafted there.
+    And the query response has a draft pick for player "Tight End"
 
   Scenario: An upstream auth failure records a FAILED job and writes no METADATA
     When the onboarder fails to reach the platform

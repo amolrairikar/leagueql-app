@@ -1,0 +1,56 @@
+- generic [ref=e2]:
+  - navigation [ref=e3]:
+    - link "LeagueQL" [ref=e4] [cursor=pointer]:
+      - /url: /
+      - generic [ref=e5]: LeagueQL
+    - generic [ref=e6]:
+      - link "Changelog" [ref=e7] [cursor=pointer]:
+        - /url: https://github.com/amolrairikar/leagueql-app/blob/main/CHANGELOG.md
+        - img [ref=e8]
+        - generic [ref=e11]: Changelog
+      - link "Docs" [ref=e12] [cursor=pointer]:
+        - /url: /docs
+        - img [ref=e13]
+        - generic [ref=e15]: Docs
+      - button "Toggle theme" [ref=e17] [cursor=pointer]:
+        - img
+        - generic [ref=e18]: Toggle theme
+  - generic [ref=e19]:
+    - generic [ref=e20]:
+      - heading "Your league's story, beautifully told" [level=1] [ref=e21]:
+        - text: Your league's story,
+        - emphasis [ref=e22]: beautifully told
+      - paragraph [ref=e23]: Explore every season, rivalry, and record across your league's full history — from the first draft pick to the last championship.
+      - generic [ref=e24]:
+        - button "Connect Your League" [ref=e25] [cursor=pointer]
+        - button "View Demo" [ref=e26] [cursor=pointer]
+    - generic [ref=e28]:
+      - generic [ref=e29]:
+        - generic [ref=e30]: 📜
+        - heading "Complete History" [level=3] [ref=e31]
+        - paragraph [ref=e32]: Every season, every week, every score. Currently supported integrations include ESPN and Sleeper.
+      - generic [ref=e33]:
+        - generic [ref=e34]: ⚔️
+        - heading "Rivalry Tracker" [level=3] [ref=e35]
+        - paragraph [ref=e36]: See your all-time head-to-head record against every manager, from the guaranteed win to the manager who always has your number.
+      - generic [ref=e37]:
+        - generic [ref=e38]: 🏆
+        - heading "Championship Timeline" [level=3] [ref=e39]
+        - paragraph [ref=e40]: A visual hall of fame showing every champion across all seasons.
+      - generic [ref=e41]:
+        - generic [ref=e42]: 📈
+        - heading "Team Trends" [level=3] [ref=e43]
+        - paragraph [ref=e44]: Chart how your team rankings have fluctuated throughout the years. Drill into your matchups for a particular season.
+      - generic [ref=e45]:
+        - generic [ref=e46]: 🔖
+        - heading "League Records" [level=3] [ref=e47]
+        - paragraph [ref=e48]: "Every record tracked and ranked automatically: single-week high scores, biggest blowouts, most unlucky losses."
+      - generic [ref=e49]:
+        - generic [ref=e50]: 🔀
+        - heading "Platform Migration" [level=3] [ref=e51]
+        - paragraph [ref=e52]: Switched fantasy platforms? Follow our migration wizard to preserve your full all-time history across platforms.
+    - contentinfo [ref=e53]:
+      - generic [ref=e54]:
+        - button "About" [ref=e55] [cursor=pointer]
+        - button "Privacy" [ref=e56] [cursor=pointer]
+        - button "GitHub" [ref=e57] [cursor=pointer]

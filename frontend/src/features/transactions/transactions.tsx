@@ -4,6 +4,7 @@ import { Suspense, use, useMemo, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import SeasonSelect from '@/features/season_select/season-select';
 import {
+  type TransactionDraftPick,
   type TransactionItem,
   type TransactionPlayer,
   getTransactions,
@@ -38,6 +39,12 @@ function playerLabel(player: TransactionPlayer): string {
   return player.position ? `${name} (${player.position})` : name;
 }
 
+function pickLabel(pick: TransactionDraftPick): string {
+  const base = `${pick.season} Round ${pick.round} pick`;
+  // When the pick has already been used, show the player it became.
+  return pick.player_name ? `${base} (${pick.player_name})` : base;
+}
+
 function teamLabel(txn: TransactionItem, rosterId: string | null): string {
   if (rosterId === null) return 'Unknown team';
   const team = txn.teams.find((t) => t.roster_id === rosterId);
@@ -63,6 +70,11 @@ function TransactionCard({ txn }: { txn: TransactionItem }) {
     day: 'numeric',
   });
 
+  // In a trade, every drop is the other side's add, so showing both per team is
+  // redundant — each team's card shows only what it received. Waivers and free
+  // agents are a single roster's own add/drop, so both are shown there.
+  const isTrade = txn.type === 'trade';
+
   return (
     <div className="bg-card border border-border/50 rounded-lg p-4">
       <div className="flex items-center justify-between mb-3">
@@ -85,13 +97,15 @@ function TransactionCard({ txn }: { txn: TransactionItem }) {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {involvedRosterIds(txn).map((rosterId) => {
           const adds = txn.adds.filter((a) => a.roster_id === rosterId);
-          const drops = txn.drops.filter((d) => d.roster_id === rosterId);
+          const drops = isTrade
+            ? []
+            : txn.drops.filter((d) => d.roster_id === rosterId);
           const picksIn = txn.draft_picks.filter(
             (p) => p.to_roster_id === rosterId,
           );
-          const picksOut = txn.draft_picks.filter(
-            (p) => p.from_roster_id === rosterId,
-          );
+          const picksOut = isTrade
+            ? []
+            : txn.draft_picks.filter((p) => p.from_roster_id === rosterId);
           return (
             <div
               key={rosterId}
@@ -116,7 +130,7 @@ function TransactionCard({ txn }: { txn: TransactionItem }) {
                     className="flex items-center gap-1.5 text-[12px] text-emerald-600 dark:text-emerald-400"
                   >
                     <ArrowUp className="w-3 h-3 shrink-0" />
-                    {p.season} Round {p.round} pick
+                    {pickLabel(p)}
                   </li>
                 ))}
                 {drops.map((p) => (
@@ -134,7 +148,7 @@ function TransactionCard({ txn }: { txn: TransactionItem }) {
                     className="flex items-center gap-1.5 text-[12px] text-red-600 dark:text-red-400"
                   >
                     <ArrowDown className="w-3 h-3 shrink-0" />
-                    {p.season} Round {p.round} pick
+                    {pickLabel(p)}
                   </li>
                 ))}
                 {adds.length === 0 &&
@@ -224,8 +238,8 @@ export default function Transactions() {
   );
 
   return (
-    <div className="flex flex-1 flex-col p-6 overflow-auto">
-      <div className="max-w-225 mx-auto w-full">
+    <div className="flex flex-1 flex-col p-6 overflow-hidden">
+      <div className="max-w-225 mx-auto w-full flex flex-1 flex-col min-h-0">
         <div className="flex flex-wrap items-center gap-3 mb-4">
           {seasons.length > 0 && (
             <SeasonSelect
@@ -256,12 +270,16 @@ export default function Transactions() {
           Transactions
         </p>
 
-        <Suspense fallback={<SkeletonList />}>
-          <TransactionsBody
-            promise={transactionsPromise}
-            typeFilter={typeFilter}
-          />
-        </Suspense>
+        {/* Only the list scrolls, so the season/type controls stay pinned and the
+            page itself never grows past the viewport. */}
+        <div className="flex-1 min-h-0 overflow-auto pb-2">
+          <Suspense fallback={<SkeletonList />}>
+            <TransactionsBody
+              promise={transactionsPromise}
+              typeFilter={typeFilter}
+            />
+          </Suspense>
+        </div>
       </div>
     </div>
   );

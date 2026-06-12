@@ -324,26 +324,111 @@ def _resolve_sleeper_transaction_players(
     return resolved
 
 
+def build_sleeper_draft_lookup(
+    all_draft_picks: list[dict],
+    drafts_by_season: dict[str, list[dict]],
+    player_metadata: dict,
+) -> tuple[dict[str, dict[str, int]], dict[str, dict[tuple[int, int], str]]]:
+    """
+    Build the lookups needed to resolve a traded draft pick to the player drafted with it.
+
+    A traded pick references its **original** slot owner (`roster_id`); the player taken
+    with it is the one drafted at that roster's draft seat (`draft_slot`) in the given
+    round. Sleeper's per-draft `slot_to_roster_id` provides the seat → roster mapping.
+
+    Args:
+        all_draft_picks: Resolved draft pick rows (round, draft_slot, player_id, metadata, season).
+        drafts_by_season: season → list of Sleeper draft objects (each with slot_to_roster_id).
+        player_metadata: Mapping of player_id → metadata dict.
+
+    Returns:
+        Tuple of (roster_slot_by_season, drafted_player_by_season):
+        - roster_slot_by_season: season → roster_id (str) → draft seat (int).
+        - drafted_player_by_season: season → (round, draft_slot) → player name.
+    """
+    roster_slot_by_season: dict[str, dict[str, int]] = defaultdict(dict)
+    for season, drafts in drafts_by_season.items():
+        for draft in drafts:
+            for slot, roster_id in (draft.get("slot_to_roster_id") or {}).items():
+                if roster_id is None:
+                    continue
+                try:
+                    roster_slot_by_season[season][str(roster_id)] = int(slot)
+                except (TypeError, ValueError):
+                    continue
+
+    drafted_player_by_season: dict[str, dict[tuple[int, int], str]] = defaultdict(dict)
+    for pick in all_draft_picks:
+        try:
+            key = (int(pick["round"]), int(pick["draft_slot"]))
+        except (KeyError, TypeError, ValueError):
+            continue
+        meta = player_metadata.get(str(pick.get("player_id")), {})
+        full_name, _ = sleeper_player_display_fields(meta)
+        if not full_name:
+            pick_meta = pick.get("metadata") or {}
+            full_name = (
+                (pick_meta.get("first_name") or "")
+                + " "
+                + (pick_meta.get("last_name") or "")
+            ).strip()
+        if full_name:
+            drafted_player_by_season[pick["season"]][key] = full_name
+    return roster_slot_by_season, drafted_player_by_season
+
+
+def _resolve_traded_pick_player(
+    pick: dict,
+    roster_slot_by_season: dict[str, dict[str, int]],
+    drafted_player_by_season: dict[str, dict[tuple[int, int], str]],
+) -> str | None:
+    """
+    Resolve the player drafted with a traded pick, or None if it cannot be matched.
+
+    None is the common case for future-season picks that have not been drafted yet.
+    """
+    pick_season = pick.get("season")
+    slot_owner = pick.get("roster_id")
+    if pick_season is None or slot_owner is None or pick.get("round") is None:
+        return None
+    slot = roster_slot_by_season.get(pick_season, {}).get(str(slot_owner))
+    if slot is None:
+        return None
+    try:
+        key = (int(pick["round"]), int(slot))
+    except (TypeError, ValueError):
+        return None
+    return drafted_player_by_season.get(pick_season, {}).get(key)
+
+
 def compile_sleeper_transactions(
     raw_transactions: list[tuple[dict, str]],
     player_metadata: dict,
     roster_team_map: dict[str, dict[str, dict]],
+    roster_slot_by_season: dict[str, dict[str, int]] | None = None,
+    drafted_player_by_season: dict[str, dict[tuple[int, int], str]] | None = None,
 ) -> list[dict]:
     """
     Build resolved transaction rows from raw Sleeper transaction payloads.
 
     Only completed transactions are passed in (failed/incomplete ones are filtered
     upstream). Player IDs are resolved to names/positions and roster IDs to team labels.
+    Traded draft picks are matched to the player eventually drafted with them when the
+    relevant draft has happened (see build_sleeper_draft_lookup).
 
     Args:
         raw_transactions: List of (transaction payload, season) tuples.
         player_metadata: Mapping of player_id → metadata dict.
         roster_team_map: season → roster_id → {team_name, display_name} (see
             build_sleeper_roster_team_map).
+        roster_slot_by_season: season → roster_id → draft seat (see build_sleeper_draft_lookup).
+        drafted_player_by_season: season → (round, seat) → player name.
 
     Returns:
         List of resolved transaction row dicts.
     """
+    roster_slot_by_season = roster_slot_by_season or {}
+    drafted_player_by_season = drafted_player_by_season or {}
     rows = []
     for txn, season in raw_transactions:
         season_rosters = roster_team_map.get(season, {})
@@ -366,6 +451,9 @@ def compile_sleeper_transactions(
                 "to_roster_id": str(pick["owner_id"])
                 if pick.get("owner_id") is not None
                 else None,
+                "player_name": _resolve_traded_pick_player(
+                    pick, roster_slot_by_season, drafted_player_by_season
+                ),
             }
             for pick in (txn.get("draft_picks") or [])
         ]
@@ -907,6 +995,9 @@ def _register_sleeper_raw_data(
     # Completed transactions paired with their season, resolved after the loop once
     # all_users/all_rosters are fully built (needed for roster → team resolution).
     raw_transactions: list[tuple[dict, str]] = []
+    # Sleeper draft objects per season (carry slot_to_roster_id), used to resolve
+    # traded draft picks to the player drafted with them (BE-019).
+    drafts_by_season: dict[str, list[dict]] = defaultdict(list)
     league_name_by_season: dict[str, str] = {}
     scoring_settings_by_season: dict[str, dict] = {}
     for item in raw_data:
@@ -1012,6 +1103,9 @@ def _register_sleeper_raw_data(
                 record_copy = record.copy()
                 record_copy["season"] = item["season"]
                 all_draft_picks.append(record_copy)
+        elif item["data_type"] == "drafts":
+            drafts = item["data"] if isinstance(item["data"], list) else []
+            drafts_by_season[item["season"]].extend(drafts)
         elif item["data_type"] == "league_settings":
             league_name = item["data"].get("name")
             if league_name:
@@ -1026,10 +1120,17 @@ def _register_sleeper_raw_data(
         player_metadata=player_metadata,
     )
 
+    roster_slot_by_season, drafted_player_by_season = build_sleeper_draft_lookup(
+        all_draft_picks=all_draft_picks,
+        drafts_by_season=drafts_by_season,
+        player_metadata=player_metadata,
+    )
     transactions = compile_sleeper_transactions(
         raw_transactions=raw_transactions,
         player_metadata=player_metadata,
         roster_team_map=build_sleeper_roster_team_map(all_users, all_rosters),
+        roster_slot_by_season=roster_slot_by_season,
+        drafted_player_by_season=drafted_player_by_season,
     )
 
     return {
