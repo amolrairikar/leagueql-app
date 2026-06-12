@@ -1,3 +1,4 @@
 {
-  "billing": { "enabled": false }
+  "billing": { "enabled": false },
+  "paywall_test_feature": { "enabled": true }
 }

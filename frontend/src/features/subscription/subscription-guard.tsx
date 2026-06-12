@@ -1,10 +1,13 @@
 import { Spinner } from '@/components/spinner';
 import { SubscriptionRequired } from '@/features/subscription/subscription-required';
 import { useSubscription } from '@/features/subscription/use-subscription';
-import { isBillingEnabled } from '@/lib/feature-flags';
+import { isBillingEnabled, isEnabled } from '@/lib/feature-flags';
 
 /**
- * Gates the analytics pages on an active subscription for the current league.
+ * Gates a premium feature's route on an active subscription for the current
+ * league (freemium model, FE-021/FE-026). No production route uses it yet — it is
+ * retained infrastructure for the first real premium feature; wrap a route with
+ * `featureFlag="paywall_<feature>"` to gate it.
  *
  * Reads the current league's subscription state via {@link useSubscription},
  * which bypasses demo mode and the "no league connected" case (reporting active)
@@ -13,14 +16,31 @@ import { isBillingEnabled } from '@/lib/feature-flags';
  * is activating after returning from Checkout (FE-022) — it shows a spinner;
  * otherwise it shows the inline paywall when the subscription is expired/absent.
  */
-export function SubscriptionGuard({ children }: { children: React.ReactNode }) {
-  // Billing is feature-flagged (FE-026). When off, the paywall and the
-  // subscription polling in {@link useSubscription} are skipped entirely.
-  if (!isBillingEnabled()) return <>{children}</>;
-  return <SubscriptionGate>{children}</SubscriptionGate>;
+export function SubscriptionGuard({
+  children,
+  featureFlag,
+  featureLabel,
+}: {
+  children: React.ReactNode;
+  featureFlag: string;
+  featureLabel?: string;
+}) {
+  // A premium feature is paywalled only when the `billing` master flag AND the
+  // feature's own flag are on (FE-026). Otherwise the guard — and the
+  // subscription polling in {@link useSubscription} — is skipped entirely.
+  if (!isBillingEnabled() || !isEnabled(featureFlag)) return <>{children}</>;
+  return (
+    <SubscriptionGate featureLabel={featureLabel}>{children}</SubscriptionGate>
+  );
 }
 
-function SubscriptionGate({ children }: { children: React.ReactNode }) {
+function SubscriptionGate({
+  children,
+  featureLabel,
+}: {
+  children: React.ReactNode;
+  featureLabel?: string;
+}) {
   const { loading, isActive, activating, activationFailed } = useSubscription();
 
   if (loading || activating)
@@ -36,7 +56,12 @@ function SubscriptionGate({ children }: { children: React.ReactNode }) {
     );
 
   if (!isActive)
-    return <SubscriptionRequired activationFailed={activationFailed} />;
+    return (
+      <SubscriptionRequired
+        activationFailed={activationFailed}
+        featureLabel={featureLabel}
+      />
+    );
 
   return <>{children}</>;
 }

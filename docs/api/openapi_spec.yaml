@@ -146,8 +146,6 @@ paths:
       responses:
         "201":
           $ref: "#/components/responses/OnboardSuccessResponse"
-        "402":
-          $ref: "#/components/responses/SubscriptionRequiredError"
         "422":
           $ref: "#/components/responses/ValidationError"
         "500":
@@ -204,8 +202,6 @@ paths:
           $ref: "#/components/responses/QuerySuccessResponse"
         "400":
           $ref: "#/components/responses/BadRequestError"
-        "402":
-          $ref: "#/components/responses/SubscriptionRequiredError"
         "403":
           $ref: "#/components/responses/ForbiddenError"
         "404":
@@ -270,8 +266,6 @@ paths:
       responses:
         "200":
           $ref: "#/components/responses/EspnMembersResponse"
-        "402":
-          $ref: "#/components/responses/SubscriptionRequiredError"
         "403":
           $ref: "#/components/responses/ForbiddenError"
         "404":
@@ -322,8 +316,6 @@ paths:
       responses:
         "202":
           $ref: "#/components/responses/MigrateSuccessResponse"
-        "402":
-          $ref: "#/components/responses/SubscriptionRequiredError"
         "403":
           $ref: "#/components/responses/ForbiddenError"
         "404":

@@ -28,11 +28,11 @@ wordmark and theme toggle.
 - **Demo mode:** show the demo banner; refresh/connect actions adjust accordingly
   ([FE-015](FE-015-demo-mode.md)).
 - **No league connected:** navigation behaves sensibly when there's no active league.
-- **Footer is fixed-height and bottom-pinned:** the layout is a full-height flex column; the
-  content region grows to fill (`flex-1`) and the footer is `shrink-0`, so the footer keeps a
-  constant height pinned to the bottom regardless of the content state — full dashboard, the
-  subscription paywall, or the loading/activating spinner all fill the area the same way (so the
-  footer never shifts or compresses between states).
+- **No page footer in the app layout:** the in-app pages do not render the marketing footer
+  (About / Privacy / GitHub) — it was removed to reclaim vertical space on data-dense visual
+  pages. The layout is a full-height (`h-svh`) flex column with the content region filling the
+  inset; the marketing footer appears only on the public pages (landing, privacy, docs). The
+  account menu still lives in the sidebar footer (desktop) / header (mobile).
 
 ## Acceptance Criteria
 - [ ] The sidebar links to all ten analytics pages and they route correctly.
@@ -44,8 +44,8 @@ wordmark and theme toggle.
 - [ ] The header wordmark links home and the theme toggle is present.
 - [ ] The account menu (sign out) is reachable and functional on both desktop (sidebar footer)
       and mobile (header) — on mobile it is not rendered inside the modal sidebar sheet.
-- [ ] The footer stays a constant height pinned to the bottom of the viewport across content
-      states (dashboard, paywall, loading) — it does not shift or resize.
+- [ ] The in-app app layout does not render the marketing page footer (it appears only on the
+      public landing / privacy / docs pages).
 
 ## Authorization (FE-025)
 Owner-only actions (Refresh, Migrate, Transfer Ownership, Manage Subscription, Delete) are gated on `is_owner` ([FE-025](FE-025-ownership-transfer-owner-gated-actions.md)); non-owners see View Another League and Claim Ownership.

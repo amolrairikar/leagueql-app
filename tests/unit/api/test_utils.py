@@ -329,6 +329,10 @@ class TestClaimPendingCheckout:
 
 
 class TestRequireActiveSubscription:
+    # The premium feature under test (League Migration); both this flag and the
+    # billing master flag are ON in this suite via the enable_billing_flag fixture.
+    FLAG = "paywall_test_feature"
+
     def _meta(self, end_time):
         item = {"PK": "LEAGUE#canonical-abc", "SK": "METADATA"}
         if end_time is not None:
@@ -342,7 +346,7 @@ class TestRequireActiveSubscription:
             "Item": self._meta("2999-01-01T00:00:00+00:00")
         }
         # Should not raise.
-        require_active_subscription("canonical-abc")
+        require_active_subscription("canonical-abc", self.FLAG)
 
     def test_past_end_time_raises_402(self, mock_table):
         from fastapi import HTTPException
@@ -353,7 +357,7 @@ class TestRequireActiveSubscription:
             "Item": self._meta("2000-01-01T00:00:00+00:00")
         }
         with pytest.raises(HTTPException) as exc:
-            require_active_subscription("canonical-abc")
+            require_active_subscription("canonical-abc", self.FLAG)
         assert exc.value.status_code == 402
 
     def test_absent_end_time_raises_402(self, mock_table):
@@ -363,7 +367,7 @@ class TestRequireActiveSubscription:
 
         mock_table.get_item.return_value = {"Item": self._meta(None)}
         with pytest.raises(HTTPException) as exc:
-            require_active_subscription("canonical-abc")
+            require_active_subscription("canonical-abc", self.FLAG)
         assert exc.value.status_code == 402
 
     def test_unparseable_end_time_raises_402(self, mock_table):
@@ -373,7 +377,7 @@ class TestRequireActiveSubscription:
 
         mock_table.get_item.return_value = {"Item": self._meta("not-a-date")}
         with pytest.raises(HTTPException) as exc:
-            require_active_subscription("canonical-abc")
+            require_active_subscription("canonical-abc", self.FLAG)
         assert exc.value.status_code == 402
 
     def test_uses_provided_metadata_without_fetching(self, mock_table):
@@ -381,18 +385,34 @@ class TestRequireActiveSubscription:
 
         # Pre-fetched metadata short-circuits the DynamoDB read.
         require_active_subscription(
-            "canonical-abc", metadata=self._meta("2999-01-01T00:00:00+00:00")
+            "canonical-abc",
+            self.FLAG,
+            metadata=self._meta("2999-01-01T00:00:00+00:00"),
         )
         mock_table.get_item.assert_not_called()
 
     def test_noop_when_billing_disabled(self, mock_table):
-        # Billing feature-flagged off (BE-017): the gate is a no-op, so an expired
+        # Billing master flag off (BE-017): the gate is a no-op, so an expired
         # (here absent) subscription does not raise and no METADATA read happens.
         from common import feature_flags
         from main import require_active_subscription
 
-        feature_flags._override_for_testing({"billing": False})
-        require_active_subscription("canonical-abc")
+        feature_flags._override_for_testing(
+            {"billing": False, "paywall_test_feature": True}
+        )
+        require_active_subscription("canonical-abc", self.FLAG)
+        mock_table.get_item.assert_not_called()
+
+    def test_noop_when_feature_flag_disabled(self, mock_table):
+        # Billing on but this feature's paywall flag off (freemium, BE-014): the
+        # feature is free, so the gate is a no-op even for an expired subscription.
+        from common import feature_flags
+        from main import require_active_subscription
+
+        feature_flags._override_for_testing(
+            {"billing": True, "paywall_test_feature": False}
+        )
+        require_active_subscription("canonical-abc", self.FLAG)
         mock_table.get_item.assert_not_called()
 
 

@@ -11,27 +11,42 @@ OpenFeature's in-memory provider so call sites depend only on the neutral OpenFe
 (`common.feature_flags.is_enabled` / `is_billing_enabled`), not on the config format or any
 flag vendor.
 
-A single `billing` flag currently exists and **gates all Stripe billing behavior**
+A `billing` **master** flag gates all Stripe billing behavior
 ([BE-014](BE-014-subscription-access-control.md), [BE-015](BE-015-stripe-billing.md)). It ships
 **OFF**. When OFF:
-- `require_active_subscription` is a no-op — every league reaches the gated data/write
-  endpoints regardless of `subscription_end_time` (full access).
+- `require_active_subscription` is a no-op for every feature — every league reaches all
+  endpoints (premium included) regardless of `subscription_end_time` (full access).
 - `POST /leagues/{id}/checkout-session` and `POST /billing-portal-session` return `404`.
 - The Stripe webhook Lambda returns `200` without processing (no subscription-state writes).
 
-Flipping `billing` back to `enabled: true` (and redeploying) restores the BE-014/BE-015
-behavior with no other change. The frontend has its own mirror config
+On top of the master flag, **per-feature paywall flags** implement the freemium model
+([BE-014](BE-014-subscription-access-control.md)): a premium feature is gated only when **both**
+`billing` and that feature's flag are ON. There is **no real premium feature yet** —
+`paywall_test_feature` is a placeholder that ships `enabled: true` but gates nothing (no endpoint
+calls the gate with it). The helper `is_feature_paywalled(flag_name)` returns
+`is_billing_enabled() and is_enabled(flag_name)`, and `require_active_subscription` short-circuits
+to a no-op when it is false. Adding the first real premium feature is a new `paywall_*` flag plus
+one call site.
+
+Flipping `billing` to `enabled: true` (and redeploying) restores the BE-014/BE-015 behavior,
+with the subscription gate then applying **only** to premium features whose `paywall_*` flag is
+ON. The frontend has its own mirror config
 ([FE-026](../frontend/FE-026-feature-flags.md)); the two files are kept in sync manually.
 
 ## Scope
 - Module: `src/common/feature_flags.py` — loads `feature_flags.json` (relative to the module),
-  registers an OpenFeature `InMemoryProvider`, and exposes `is_enabled(name)` and
-  `is_billing_enabled()`. A test-only `_override_for_testing({...})` swaps the active flag map.
-- Config: `src/common/feature_flags.json` — `{ "billing": { "enabled": false } }`.
-- Call sites (all guard on `is_billing_enabled()`):
-  - `src/api/helpers.py` — `require_active_subscription` returns early when billing is off.
-  - `src/api/routes.py` — `create_checkout_session`, `create_billing_portal_session` raise
-    `404` when billing is off.
+  registers an OpenFeature `InMemoryProvider`, and exposes `is_enabled(name)`,
+  `is_billing_enabled()`, and `is_feature_paywalled(flag_name)` (= `is_billing_enabled() and
+  is_enabled(flag_name)`), plus the `PAYWALL_TEST_FEATURE` placeholder flag-name constant. A
+  test-only `_override_for_testing({...})` swaps the active flag map.
+- Config: `src/common/feature_flags.json` —
+  `{ "billing": { "enabled": false }, "paywall_test_feature": { "enabled": true } }`.
+- Call sites:
+  - `src/api/helpers.py` — `require_active_subscription(canonical_league_id, paywall_flag)`
+    returns early when `is_feature_paywalled(paywall_flag)` is false (billing off or the
+    feature's flag off). No production endpoint calls it yet.
+  - `src/api/routes.py` — `create_checkout_session`, `create_billing_portal_session` raise `404`
+    when billing is off.
   - `src/stripe_webhook/handler.py` — `lambda_handler` returns a `200` no-op when billing is off.
 - Dependency: `openfeature-sdk` (added to `src/api/requirements.txt`,
   `src/stripe_webhook/requirements.txt`, and the root `Pipfile`).
@@ -54,14 +69,15 @@ behavior with no other change. The frontend has its own mirror config
   a change requires a redeploy.
 
 ## Acceptance Criteria
-- [ ] With `billing` OFF (default), gated endpoints (`GET /leagues/{id}/query`,
-      `POST /leagues/{id}/migrate`, `POST /leagues/{id}/espn_members`, REFRESH) succeed
-      regardless of `subscription_end_time`.
+- [ ] With `billing` OFF (default), all endpoints succeed regardless of `subscription_end_time`
+      (no endpoint is subscription-gated; [BE-014](BE-014-subscription-access-control.md)).
 - [ ] With `billing` OFF, `POST /leagues/{id}/checkout-session` and `POST /billing-portal-session`
       return `404`.
 - [ ] With `billing` OFF, the Stripe webhook returns `200` and writes no subscription state.
-- [ ] With `billing` ON, BE-014/BE-015 behavior is unchanged (paywall `402`, working
-      checkout/portal, webhook processing).
+- [ ] `is_feature_paywalled` is true only when both the master `billing` flag and the named
+      per-feature flag are ON.
+- [ ] `paywall_test_feature` gates nothing today — it is a placeholder kept so the mechanism and
+      pricing table stay wired for the first real premium feature.
 - [ ] A missing or malformed `feature_flags.json` causes all flags to read as off (fail-safe),
       not an import error.
 

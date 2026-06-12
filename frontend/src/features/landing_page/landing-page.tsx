@@ -21,10 +21,12 @@ import { onboardLeague } from '@/features/connect_league/api-calls';
 import { JoinLeagueDialog } from '@/features/connect_league/join-league-dialog';
 import { pollForCompletion } from '@/features/connect_league/poll';
 import { FEATURES } from '@/features/landing_page/constants';
+import { PricingTable } from '@/features/landing_page/pricing-table';
 import type { Feature } from '@/features/landing_page/types';
 import { ApiError } from '@/lib/api-client';
 import { setDemoMode, setLeagueCookies } from '@/lib/cookie-handler';
 import { DEMO_SEASONS } from '@/lib/demo-constants';
+import { isBillingEnabled } from '@/lib/feature-flags';
 
 const LOADING_PHASES = [
   { upToSeconds: 10, toProgress: 33, message: "Fetching your league's data" },
@@ -376,7 +378,7 @@ export default function LeagueQLLanding() {
         leagueId={joinLeagueId ?? ''}
       />
 
-      <section className="relative z-10 px-6 pb-24">
+      <section className="relative z-10 px-6 pb-16">
         <div
           className="
           max-w-215 mx-auto
@@ -390,6 +392,11 @@ export default function LeagueQLLanding() {
           ))}
         </div>
       </section>
+
+      {/* Pricing only matters when premium features are actually paywalled. */}
+      {isBillingEnabled() && (
+        <PricingTable onGetStarted={handleConnectLeague} />
+      )}
 
       <Footer />
 

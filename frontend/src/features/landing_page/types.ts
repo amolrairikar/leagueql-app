@@ -19,3 +19,19 @@ export interface Feature {
   title: string;
   desc: string;
 }
+
+export interface PricingPlan {
+  name: string;
+  price: string;
+  period: string;
+  billedAs: string;
+  /** Visually emphasize this plan as the recommended / best-value option. */
+  highlight?: boolean;
+  /** Optional badge text (e.g. "Best value"). */
+  badge?: string;
+}
+
+export interface PremiumFeature {
+  title: string;
+  desc: string;
+}

@@ -284,11 +284,12 @@ def before_scenario(context, scenario):
     # scoped to the scenario under test.
     context.main.lambda_client.reset_mock()
     # Billing ships feature-flagged OFF (BE-017); default it ON for component
-    # scenarios since the billing/subscription features assume it. The
-    # "billing is disabled" step flips it back within a scenario.
+    # scenarios since the billing features assume it, along with the placeholder
+    # ``paywall_test_feature`` flag (BE-014). The "billing is disabled" step flips
+    # billing back within a scenario.
     from common import feature_flags
 
-    feature_flags._override_for_testing({"billing": True})
+    feature_flags._override_for_testing({"billing": True, "paywall_test_feature": True})
     # Per-scenario ``mock.patch`` handles (started in steps) to stop on teardown.
     context._patches = []
     # Every league route now sits behind the Clerk JWT dependency (LQL-01 /
