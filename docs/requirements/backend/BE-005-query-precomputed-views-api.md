@@ -10,7 +10,8 @@ and concatenates all matching items.
 ## Scope
 - Endpoint: `GET /leagues/{leagueId}/query?platform=&queryType=` (`src/api/routes.py::query_league`).
 - Query types (`QueryType`): `TEAMS`, `MATCHUPS`, `SEASON_STANDINGS`, `WEEKLY_STANDINGS`,
-  `PLAYOFF_BRACKET`, `DRAFT`, `PLATFORM_MIGRATION`.
+  `PLAYOFF_BRACKET`, `DRAFT`, `TRANSACTIONS` (Sleeper-only;
+  [BE-019](BE-019-sleeper-transactions.md)), `PLATFORM_MIGRATION`.
 - Mapping: `QUERY_TYPE_TO_SK_BASE` (`src/api/main.py`).
 
 ## Edge Cases

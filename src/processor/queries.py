@@ -602,4 +602,14 @@ QUERIES = {
         ORDER BY ds.season, ds.pick_no
         """,
     },
+    "TRANSACTIONS": {
+        # Sleeper only — ESPN exposes no transaction data (BE-019). Player/roster
+        # resolution already happened in Python (compile_sleeper_transactions), so this
+        # is a passthrough; rows are ordered newest-first within each season.
+        "SLEEPER": """
+        SELECT *
+        FROM transactions
+        ORDER BY season DESC, created DESC
+        """,
+    },
 }

@@ -19,6 +19,7 @@ def upload_results_to_s3(
     bucket_name: str,
     prefix: str,
     platform: str,
+    reprocess_all: bool = False,
 ) -> None:
     """
     Uploads raw API data to S3 as per-season files plus a manifest.
@@ -31,6 +32,9 @@ def upload_results_to_s3(
         bucket_name: Name of the S3 bucket to upload data to.
         prefix: Key prefix within the S3 bucket (e.g. "raw-api-data/{league_id}").
         platform: The platform (e.g., ESPN, SLEEPER) that the league is on.
+        reprocess_all: When True, stamps ``reprocess_all=true`` on the manifest metadata
+            so the processor rebuilds every season's views instead of only the latest
+            (BE-019 backfill). Default False.
     """
     try:
         seasons_data: dict[str, list[dict[str, Any]]] = {}
@@ -78,6 +82,8 @@ def upload_results_to_s3(
         full_manifest[platform] = sorted(existing_seasons.union(new_seasons))
 
         metadata = {"correlation_id": correlation_id_var.get()}
+        if reprocess_all:
+            metadata["reprocess_all"] = "true"
 
         _s3.put_object(
             Bucket=bucket_name,

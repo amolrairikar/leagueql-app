@@ -41,6 +41,7 @@ import PrivacyPage from '@/features/privacy/privacy-page';
 import SeasonStandings from '@/features/season_standings/season-standings';
 import { AppSidebar } from '@/features/sidebar/app-sidebar';
 import { HeaderAccount } from '@/features/sidebar/header-account';
+import Transactions from '@/features/transactions/transactions';
 import { isDemoMode } from '@/lib/cookie-handler';
 
 function AppLayout({ children }: { children: React.ReactNode }) {
@@ -108,6 +109,7 @@ const APP_LAYOUT_ROUTES: { path: string; element: React.ReactNode }[] = [
   { path: '/matchup_records', element: <MatchupRecords /> },
   { path: '/draft_recap', element: <DraftRecap /> },
   { path: '/draft_grades', element: <DraftGrades /> },
+  { path: '/transactions', element: <Transactions /> },
 ];
 
 function App() {

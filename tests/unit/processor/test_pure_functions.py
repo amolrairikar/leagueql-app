@@ -394,6 +394,173 @@ class TestCompileSleeperPlayerScoringTotals:
         assert rows[0]["position"] == "D/ST"
 
 
+class TestBuildSleeperRosterTeamMap:
+    def test_maps_roster_to_owner_team_and_display(self, processor_handler):
+        users = [
+            {
+                "user_id": "u1",
+                "display_name": "alice",
+                "metadata": {"team_name": "Alice's Team"},
+                "season": "2024",
+            }
+        ]
+        rosters = [{"roster_id": 1, "owner_id": "u1", "season": "2024"}]
+        result = processor_handler.build_sleeper_roster_team_map(users, rosters)
+        assert result["2024"]["1"] == {
+            "team_name": "Alice's Team",
+            "display_name": "alice",
+        }
+
+    def test_missing_owner_yields_none_fields(self, processor_handler):
+        rosters = [{"roster_id": 2, "owner_id": "ghost", "season": "2024"}]
+        result = processor_handler.build_sleeper_roster_team_map([], rosters)
+        assert result["2024"]["2"] == {"team_name": None, "display_name": None}
+
+    def test_user_without_metadata_team_name(self, processor_handler):
+        users = [
+            {
+                "user_id": "u1",
+                "display_name": "bob",
+                "metadata": None,
+                "season": "2024",
+            }
+        ]
+        rosters = [{"roster_id": 1, "owner_id": "u1", "season": "2024"}]
+        result = processor_handler.build_sleeper_roster_team_map(users, rosters)
+        assert result["2024"]["1"]["team_name"] is None
+        assert result["2024"]["1"]["display_name"] == "bob"
+
+
+class TestResolveSleeperTransactionPlayers:
+    def test_resolves_name_and_position(self, processor_handler):
+        metadata = {
+            "9504": {"first_name": "Joe", "last_name": "Mixon", "position": "RB"}
+        }
+        result = processor_handler._resolve_sleeper_transaction_players(
+            {"9504": 8}, metadata
+        )
+        assert result == [
+            {
+                "player_id": "9504",
+                "player_name": "Joe Mixon",
+                "position": "RB",
+                "roster_id": "8",
+            }
+        ]
+
+    def test_none_map_returns_empty(self, processor_handler):
+        assert processor_handler._resolve_sleeper_transaction_players(None, {}) == []
+
+    def test_unknown_player_has_null_name(self, processor_handler):
+        result = processor_handler._resolve_sleeper_transaction_players(
+            {"99999": 3}, {}
+        )
+        assert result[0]["player_name"] is None
+        assert result[0]["position"] is None
+        assert result[0]["roster_id"] == "3"
+
+
+class TestCompileSleeperTransactions:
+    def _meta(self):
+        return {
+            "1": {"first_name": "Joe", "last_name": "Burrow", "position": "QB"},
+            "2": {"first_name": "Ja'Marr", "last_name": "Chase", "position": "WR"},
+        }
+
+    def _roster_map(self):
+        return {
+            "2024": {
+                "8": {"team_name": "Team Eight", "display_name": "user8"},
+                "9": {"team_name": "Team Nine", "display_name": "user9"},
+            }
+        }
+
+    def test_waiver_resolves_players_and_team(self, processor_handler):
+        txn = {
+            "transaction_id": "t1",
+            "type": "waiver",
+            "status": "complete",
+            "leg": 1,
+            "created": 100,
+            "roster_ids": [8],
+            "adds": {"1": 8},
+            "drops": {"2": 8},
+            "draft_picks": [],
+            "settings": {"waiver_bid": 17},
+        }
+        rows = processor_handler.compile_sleeper_transactions(
+            [(txn, "2024")], self._meta(), self._roster_map()
+        )
+        row = rows[0]
+        assert row["season"] == "2024"
+        assert row["type"] == "waiver"
+        assert row["week"] == 1
+        assert row["roster_ids"] == ["8"]
+        assert row["teams"] == [
+            {"roster_id": "8", "team_name": "Team Eight", "display_name": "user8"}
+        ]
+        assert row["adds"][0]["player_name"] == "Joe Burrow"
+        assert row["drops"][0]["player_name"] == "Ja'Marr Chase"
+        assert row["waiver_bid"] == 17
+
+    def test_trade_with_draft_picks(self, processor_handler):
+        txn = {
+            "transaction_id": "t2",
+            "type": "trade",
+            "status": "complete",
+            "leg": 1,
+            "created": 200,
+            "roster_ids": [1, 9],
+            "adds": None,
+            "drops": None,
+            "draft_picks": [
+                {
+                    "round": 15,
+                    "season": "2028",
+                    "owner_id": 9,
+                    "previous_owner_id": 1,
+                }
+            ],
+            "settings": None,
+        }
+        rows = processor_handler.compile_sleeper_transactions(
+            [(txn, "2024")], self._meta(), self._roster_map()
+        )
+        pick = rows[0]["draft_picks"][0]
+        assert pick == {
+            "round": 15,
+            "season": "2028",
+            "from_roster_id": "1",
+            "to_roster_id": "9",
+        }
+        assert rows[0]["adds"] == []
+        assert rows[0]["drops"] == []
+        assert rows[0]["waiver_bid"] is None
+
+    def test_free_agent_drop_only_and_unresolved_team(self, processor_handler):
+        txn = {
+            "transaction_id": "t3",
+            "type": "free_agent",
+            "status": "complete",
+            "leg": 2,
+            "created": 300,
+            "roster_ids": [12],
+            "adds": {"1": 12},
+            "drops": None,
+            "draft_picks": [],
+            "settings": None,
+        }
+        rows = processor_handler.compile_sleeper_transactions(
+            [(txn, "2024")], self._meta(), self._roster_map()
+        )
+        # roster 12 is not in the roster map → team labels fall back to null.
+        assert rows[0]["teams"] == [
+            {"roster_id": "12", "team_name": None, "display_name": None}
+        ]
+        assert rows[0]["drops"] == []
+        assert len(rows[0]["adds"]) == 1
+
+
 class TestDataframeToDynamoItems:
     def test_groups_rows_by_sk(self, processor_handler):
         con = duckdb.connect()

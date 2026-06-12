@@ -604,6 +604,63 @@ Represents all draft picks across all seasons in the fantasy league. One item pe
 </details>
 
 <details>
+<summary><b>TRANSACTIONS</b></summary>
+
+Sleeper-only ([BE-019](../requirements/backend/BE-019-sleeper-transactions.md)). Represents completed league transactions (waivers, trades, free-agent moves, commissioner moves) for a season. One item per season; each transaction is an element in the `data` list. ESPN leagues have no equivalent data and no `TRANSACTIONS` item is written.
+
+| Attribute | Type | Required | Description |
+|---|---|---|---|
+| `PK` | String | Yes | `LEAGUE#{canonical_league_id}` |
+| `SK` | String | Yes | `TRANSACTIONS#{season}` |
+| `data` | List\<Object\> | Yes | A list of objects, one per completed transaction |
+
+**`data[n]` object:**
+
+| Attribute | Type | Description |
+|---|---|---|
+| `season` | String | Season year (e.g. `"2025"`) |
+| `transaction_id` | String | Sleeper transaction ID |
+| `type` | String | `"waiver"`, `"trade"`, `"free_agent"`, or `"commissioner"` |
+| `week` | Integer | Sleeper `leg` (week of the transaction) |
+| `created` | Integer | Creation time (Unix epoch milliseconds); used to order newest-first |
+| `roster_ids` | List\<String\> | Roster IDs involved in the transaction |
+| `teams` | List\<Object\> | Involved teams: `{roster_id, team_name, display_name}` (`team_name`/`display_name` null if unresolved) |
+| `adds` | List\<Object\> | Players added: `{player_id, player_name, position, roster_id}` (`player_name`/`position` null if unknown) |
+| `drops` | List\<Object\> | Players dropped: same shape as `adds` |
+| `draft_picks` | List\<Object\> | Picks exchanged: `{round, season, from_roster_id, to_roster_id}` |
+| `waiver_bid` | Integer \| null | FAAB bid amount for waiver claims; null otherwise |
+
+**Example:**
+```json
+{
+  "PK": "LEAGUE#uuid-string",
+  "SK": "TRANSACTIONS#2025",
+  "data": [
+    {
+      "season": "2025",
+      "transaction_id": "1271340777452085248",
+      "type": "waiver",
+      "week": 1,
+      "created": 1757473771015,
+      "roster_ids": ["8"],
+      "teams": [
+        { "roster_id": "8", "team_name": "Team X", "display_name": "user8" }
+      ],
+      "adds": [
+        { "player_id": "9504", "player_name": "Player A", "position": "RB", "roster_id": "8" }
+      ],
+      "drops": [
+        { "player_id": "10219", "player_name": "Player B", "position": "WR", "roster_id": "8" }
+      ],
+      "draft_picks": [],
+      "waiver_bid": 0
+    }
+  ]
+}
+```
+</details>
+
+<details>
 <summary><b>PLATFORM_MIGRATION</b></summary>
 
 Stores the manager identity mapping created when a league migrates from one platform to another (e.g. ESPN → Sleeper). Written by the API at migration initiation and read by the onboarder Lambda to resolve cross-platform owner IDs during data processing.

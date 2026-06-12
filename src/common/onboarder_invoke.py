@@ -17,6 +17,7 @@ def invoke_onboarder(
     canonical_league_id: str | None,
     correlation_id: str,
     owner_user_id: str | None = None,
+    reprocess_all: bool = False,
 ) -> dict:
     """
     Asynchronously invoke the onboarder Lambda with the standard payload contract.
@@ -31,6 +32,9 @@ def invoke_onboarder(
         owner_user_id: Clerk user ID of the onboarding owner, recorded on the
             league's METADATA on first ONBOARD (LQL-01 / BE-016). ``None`` for the
             Sleeper auto-refresh job and other system-initiated invocations.
+        reprocess_all: When True, flag the run as a backfill so the processor rebuilds
+            every season's views (not just the latest). Used by the Sleeper backfill
+            script (BE-019); default False leaves normal onboards/refreshes unchanged.
 
     Returns:
         The boto3 ``invoke`` response.
@@ -41,6 +45,7 @@ def invoke_onboarder(
         "canonicalLeagueId": canonical_league_id,
         "correlation_id": correlation_id,
         "ownerUserId": owner_user_id,
+        "reprocessAll": reprocess_all,
     }
     return lambda_client.invoke(
         FunctionName=function_name,

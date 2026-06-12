@@ -56,6 +56,45 @@ class TestUploadResultsToS3:
         assert "2022" in written["SLEEPER"]
         assert "2024" in written["SLEEPER"]
 
+    def test_reprocess_all_stamps_manifest_metadata(self, onboarder_writer):
+        mock_s3 = MagicMock()
+        mock_s3.get_object.side_effect = botocore.exceptions.ClientError(
+            {"Error": {"Code": "NoSuchKey"}}, "GetObject"
+        )
+        with patch.object(onboarder_writer, "_s3", mock_s3):
+            onboarder_writer.upload_results_to_s3(
+                results=self._make_results(),
+                bucket_name="test-bucket",
+                prefix="raw-api-data/league-abc",
+                platform="SLEEPER",
+                reprocess_all=True,
+            )
+        manifest_call = next(
+            c
+            for c in mock_s3.put_object.call_args_list
+            if "manifest.json" in c[1]["Key"]
+        )
+        assert manifest_call[1]["Metadata"]["reprocess_all"] == "true"
+
+    def test_reprocess_all_absent_by_default(self, onboarder_writer):
+        mock_s3 = MagicMock()
+        mock_s3.get_object.side_effect = botocore.exceptions.ClientError(
+            {"Error": {"Code": "NoSuchKey"}}, "GetObject"
+        )
+        with patch.object(onboarder_writer, "_s3", mock_s3):
+            onboarder_writer.upload_results_to_s3(
+                results=self._make_results(),
+                bucket_name="test-bucket",
+                prefix="raw-api-data/league-abc",
+                platform="SLEEPER",
+            )
+        manifest_call = next(
+            c
+            for c in mock_s3.put_object.call_args_list
+            if "manifest.json" in c[1]["Key"]
+        )
+        assert "reprocess_all" not in manifest_call[1]["Metadata"]
+
     def test_s3_client_error_non_nosuchkey_propagates(self, onboarder_writer):
         mock_s3 = MagicMock()
         mock_s3.put_object.side_effect = botocore.exceptions.ClientError(

@@ -187,6 +187,22 @@ class TestLambdaHandlerRunErrors:
             result = onboarder_handler.lambda_handler(event, MagicMock())
         assert result["statusCode"] == 500
 
+    def test_reprocess_all_forwarded_to_service(self, onboarder_handler):
+        # BE-019: the backfill flag on the invoke payload reaches OnboardingService.
+        event = {
+            "requestType": "REFRESH",
+            "canonicalLeagueId": "canonical-abc",
+            "reprocessAll": True,
+            "body": {"leagueId": "123", "platform": "SLEEPER"},
+        }
+        svc = MagicMock()
+        svc.canonical_league_id = "canonical-abc"
+        with patch.object(
+            onboarder_handler, "OnboardingService", return_value=svc
+        ) as mock_cls:
+            onboarder_handler.lambda_handler(event, MagicMock())
+        assert mock_cls.call_args.kwargs["reprocess_all"] is True
+
 
 class TestLambdaHandlerNoStartedSeasons:
     """A league that resolves to no started seasons (only pre_draft/drafting) is a

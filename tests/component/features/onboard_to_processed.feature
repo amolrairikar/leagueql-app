@@ -18,8 +18,13 @@ Feature: Onboard-to-processed pipeline (BE-001, BE-004)
     And the league has at least one "WEEKLY_STANDINGS#2024" item
     And the league has at least one "PLAYOFF_BRACKET#2024" item
     And the league has at least one "DRAFT#2024" item
+    And the league has at least one "TRANSACTIONS#2024" item
     And the standings show "Team Alice" as champion
     And the LEAGUE_COUNT is 1
+    # BE-019: only the two completed transactions are stored (the failed waiver is dropped).
+    When I GET "/leagues/100/query?platform=SLEEPER&queryType=TRANSACTIONS#2024"
+    Then the API responds with status 200
+    And the query response has 2 row(s)
 
   Scenario: An upstream auth failure records a FAILED job and writes no METADATA
     When the onboarder fails to reach the platform

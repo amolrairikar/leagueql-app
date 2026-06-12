@@ -9,6 +9,7 @@ import {
   LogIn,
   LogOut,
   RefreshCw,
+  Repeat,
   Scroll,
   Search,
   Star,
@@ -74,6 +75,12 @@ const navItems = [
   { title: 'Matchup Records', url: '/matchup_records', icon: Zap },
 ];
 
+// Transactions (waivers/trades/free agents) only exist for Sleeper leagues — ESPN
+// exposes no equivalent data — so the nav entry is Sleeper-gated (BE-019 / FE-027).
+const sleeperOnlyNavItems = [
+  { title: 'Transactions', url: '/transactions', icon: Repeat },
+];
+
 export function AppSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -98,6 +105,10 @@ export function AppSidebar() {
   // league the user is currently viewing.
   const { leagueId: currentLeagueId, platform: currentPlatform } =
     getLeagueCookies();
+  const visibleNavItems =
+    currentPlatform === 'SLEEPER'
+      ? [...navItems, ...sleeperOnlyNavItems]
+      : navItems;
   const refreshLeagueUrl = currentLeagueId
     ? `/connect_league?leagueId=${encodeURIComponent(currentLeagueId)}&platform=${currentPlatform.toLowerCase()}`
     : '/connect_league';
@@ -139,7 +150,7 @@ export function AppSidebar() {
           <SidebarGroup>
             <SidebarGroupContent>
               <SidebarMenu>
-                {navItems.map((item) => (
+                {visibleNavItems.map((item) => (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton
                       asChild
