@@ -18,6 +18,11 @@ onboarding and decremented on deletion. The public landing page reads this count
 - **Refresh / migrate:** must NOT change the count (same canonical league).
 - **Counter underflow:** deletion must not drive the count below zero in normal operation.
 - **Counts endpoint unavailable:** the landing page must degrade gracefully (hide/placeholder).
+- **CORS preflight:** the `/counts` Cloudflare Worker must answer `OPTIONS` preflights with
+  `Access-Control-Allow-Headers` covering `traceparent`/`tracestate`, because the browser OTel
+  SDK ([FE-029](../frontend/FE-029-frontend-observability.md)) injects those W3C trace-context
+  headers on every API-origin call, turning the landing-page fetch into a preflighted request.
+  The preflight response must not be edge-cached as the `GET` body.
 
 ## Acceptance Criteria
 - [ ] `LEAGUE_COUNT` increments by exactly 1 per successful new onboarding.
@@ -25,6 +30,10 @@ onboarding and decremented on deletion. The public landing page reads this count
 - [ ] Refresh and migration leave the count unchanged.
 - [ ] Updates are atomic under concurrency.
 - [ ] The counts endpoint returns the current value for the landing page.
+- [ ] An `OPTIONS` preflight to `/counts` (carrying `traceparent`/`tracestate`) returns a
+      `204` with `Access-Control-Allow-Headers` permitting those headers, so the landing-page
+      fetch is not blocked by CORS once OTel propagation is on.
 
 ## Sources
-`docs/db/dynamodb_spec.md` (LEAGUE_COUNT), `src/api/routes.py` (`update_league_count`).
+`docs/db/dynamodb_spec.md` (LEAGUE_COUNT), `src/api/routes.py` (`update_league_count`),
+`workers/get-counts/index.js` (counts endpoint + CORS).
