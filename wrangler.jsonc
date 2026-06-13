@@ -2,14 +2,26 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "leagueql-app",
   "compatibility_date": "2025-09-27",
+  // Worker entry: serves static assets via the ASSETS binding and adds the
+  // same-origin /ingest/traces → Axiom proxy (FE-029). Static asset requests are
+  // served directly; only non-asset routes (e.g. /ingest/traces) invoke the Worker.
+  "main": "workers/leagueql-app/index.js",
   "observability": {
     "enabled": true
   },
   "assets": {
     "directory": "frontend",
-    "not_found_handling": "single-page-application"
+    "not_found_handling": "single-page-application",
+    "binding": "ASSETS"
   },
   "compatibility_flags": [
     "nodejs_compat"
-  ]
+  ],
+  // Runtime vars for the /ingest/traces → Axiom proxy (FE-029). The dataset name is
+  // not sensitive, so it lives here; the ingest token is a Worker *secret*
+  // (AXIOM_API_TOKEN), set out-of-band via `wrangler secret put` / the dashboard and
+  // never committed. AXIOM_TRACES_URL is optional (worker defaults to api.axiom.co).
+  "vars": {
+    "AXIOM_DATASET": "leagueql-prod"
+  }
 }
