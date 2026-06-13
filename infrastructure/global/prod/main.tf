@@ -557,6 +557,19 @@ module "api-lambda-role" {
           "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/stripe/secret_key",
           "arn:aws:ssm:us-west-2:${var.account_id}:parameter/leagueql/${var.environment}/stripe/secret_key"
         ]
+      },
+      {
+        # BE-020: the API Lambda exports OpenTelemetry traces to Axiom; the ingest
+        # token is a SecureString SSM parameter (set out-of-band, never in TF state).
+        Sid    = "ReadAxiomSsmParameter"
+        Effect = "Allow"
+        Action = [
+          "ssm:GetParameter"
+        ]
+        Resource = [
+          "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/axiom/api_token",
+          "arn:aws:ssm:us-west-2:${var.account_id}:parameter/leagueql/${var.environment}/axiom/api_token"
+        ]
       }
     ]
   })

@@ -1,4 +1,5 @@
 import { useUser } from '@clerk/react';
+import { useEffect } from 'react';
 import {
   BrowserRouter,
   Routes,
@@ -44,6 +45,16 @@ import { AppSidebar } from '@/features/sidebar/app-sidebar';
 import { HeaderAccount } from '@/features/sidebar/header-account';
 import Transactions from '@/features/transactions/transactions';
 import { isDemoMode } from '@/lib/cookie-handler';
+import { recordRouteChange } from '@/lib/telemetry';
+
+/** Emits a lightweight route-change span on navigation (FE-029); renders nothing. */
+function RouteChangeTracker() {
+  const location = useLocation();
+  useEffect(() => {
+    recordRouteChange(location.pathname);
+  }, [location.pathname]);
+  return null;
+}
 
 function AppLayout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
@@ -118,6 +129,7 @@ function App() {
     <ErrorBoundary>
       <BrowserRouter>
         <ScrollToTop />
+        <RouteChangeTracker />
         <Routes>
           <Route
             path="/"

@@ -2,6 +2,7 @@ import { Component, type ErrorInfo, type ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { logger } from '@/lib/logger';
+import { recordException } from '@/lib/telemetry';
 
 interface Props {
   children: ReactNode;
@@ -34,6 +35,9 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     logger.error('Uncaught render error', error, info.componentStack);
+    recordException(error, {
+      'error.component_stack': info.componentStack ?? '',
+    });
   }
 
   componentDidUpdate(prevProps: Props) {

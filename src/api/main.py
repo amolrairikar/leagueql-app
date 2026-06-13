@@ -143,7 +143,10 @@ app.add_middleware(
     allow_origins=ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST", "DELETE"],
-    allow_headers=["Authorization", "Content-Type"],
+    # ``traceparent``/``tracestate`` allow the browser OTel SDK (FE-029) to send W3C
+    # trace context cross-origin so the API span continues the browser's trace
+    # (BE-020); kept in lockstep with the API Gateway CORS config.
+    allow_headers=["Authorization", "Content-Type", "traceparent", "tracestate"],
 )
 
 REFRESH_COOLDOWN_MINUTES = 30
@@ -258,5 +261,13 @@ from helpers import (  # noqa: E402, F401
 from routes import delete_league, router  # noqa: E402, F401
 
 app.include_router(router)
+
+# OpenTelemetry distributed tracing → Axiom (BE-020). A no-op unless the Axiom
+# token (SSM) + dataset are configured, so tests / local / unconfigured envs are
+# unaffected. Must run before Mangum wraps the app so request-flush middleware and
+# FastAPI instrumentation are in place.
+from telemetry import init_tracing  # noqa: E402
+
+init_tracing(app)
 
 handler = Mangum(app)

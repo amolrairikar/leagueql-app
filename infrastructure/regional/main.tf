@@ -142,6 +142,15 @@ module "api_lambda" {
     # Abandoned-checkout self-heal window (BE-015 Layer 1). Shorter in dev for
     # faster manual-testing retries.
     CHECKOUT_PENDING_TTL_MINUTES = var.environment == "prod" ? "30" : "5"
+
+    # OpenTelemetry tracing → Axiom (BE-020). A no-op unless these are set, so it's
+    # safe in every environment. The ingest token is fetched at runtime from SSM by
+    # *name* (value never lands here / in TF state / in CI); dataset is per-env so
+    # dev/test traffic never pollutes prod. ENVIRONMENT tags spans' deployment.environment.
+    ENVIRONMENT               = var.environment
+    AXIOM_API_TOKEN_SSM_PARAM = "/leagueql/${var.environment}/axiom/api_token"
+    AXIOM_DATASET             = "leagueql-${var.environment}"
+    AXIOM_TRACES_URL          = "https://api.axiom.co/v1/traces"
   }
 
   tags = {
