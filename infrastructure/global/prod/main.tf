@@ -443,6 +443,45 @@ module "player-metadata-lambda-role" {
   }
 }
 
+# Feature-flag source of truth (BE-017 / FE-026). Created in both regions so each
+# regional API/webhook Lambda resolves its own region's AppConfig. Flag values are
+# set in the AppConfig console (runtime toggle), not in TF.
+module "appconfig_flags_east" {
+  source = "../../modules/appconfig"
+  providers = {
+    aws = aws.primary
+  }
+  application_name = "leagueql-${var.environment}"
+  environment_name = var.environment
+  environment      = var.environment
+  region           = "us-east-1"
+  account_id       = var.account_id
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    component   = "feature-flags"
+    managed-by  = "terraform"
+  }
+}
+
+module "appconfig_flags_west" {
+  source = "../../modules/appconfig"
+  providers = {
+    aws = aws.replica
+  }
+  application_name = "leagueql-${var.environment}"
+  environment_name = var.environment
+  environment      = var.environment
+  region           = "us-west-2"
+  account_id       = var.account_id
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    component   = "feature-flags"
+    managed-by  = "terraform"
+  }
+}
+
 module "api-lambda-role" {
   source           = "../../modules/iam-role"
   role_name        = "leagueql-${var.environment}-api-role"
@@ -570,6 +609,21 @@ module "api-lambda-role" {
           "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/axiom/api_token",
           "arn:aws:ssm:us-west-2:${var.account_id}:parameter/leagueql/${var.environment}/axiom/api_token"
         ]
+      },
+      {
+        # BE-017: feature flags are resolved at runtime from AWS AppConfig via the
+        # appconfigdata Data API (IAM-role access, no secret). Grant read on both
+        # regions' feature-flag configuration.
+        Sid    = "ReadAppConfigFeatureFlags"
+        Effect = "Allow"
+        Action = [
+          "appconfig:StartConfigurationSession",
+          "appconfig:GetLatestConfiguration"
+        ]
+        Resource = [
+          module.appconfig_flags_east.configuration_resource_arn,
+          module.appconfig_flags_west.configuration_resource_arn
+        ]
       }
     ]
   })
@@ -651,6 +705,20 @@ module "stripe-webhook-lambda-role" {
           "arn:aws:ssm:us-west-2:${var.account_id}:parameter/leagueql/${var.environment}/stripe/secret_key",
           "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/stripe/webhook_secret",
           "arn:aws:ssm:us-west-2:${var.account_id}:parameter/leagueql/${var.environment}/stripe/webhook_secret"
+        ]
+      },
+      {
+        # BE-017: the webhook reads the global `billing` flag from AWS AppConfig to
+        # no-op when billing is off. Same feature-flag configuration as the API.
+        Sid    = "ReadAppConfigFeatureFlags"
+        Effect = "Allow"
+        Action = [
+          "appconfig:StartConfigurationSession",
+          "appconfig:GetLatestConfiguration"
+        ]
+        Resource = [
+          module.appconfig_flags_east.configuration_resource_arn,
+          module.appconfig_flags_west.configuration_resource_arn
         ]
       }
     ]

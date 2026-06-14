@@ -3,6 +3,7 @@ import { dark } from '@clerk/ui/themes';
 
 import App from './app.tsx';
 import { AuthTokenBridge } from './auth-token-bridge.tsx';
+import { FeatureFlagProvider } from './feature-flags-provider.tsx';
 
 import { useTheme } from '@/hooks/use-theme';
 
@@ -24,7 +25,9 @@ export default function ClerkWithTheme() {
       appearance={{ theme: isDark ? dark : undefined }}
     >
       <AuthTokenBridge />
-      <App />
+      <FeatureFlagProvider>
+        <App />
+      </FeatureFlagProvider>
     </ClerkProvider>
   );
 }

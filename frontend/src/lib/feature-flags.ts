@@ -1,23 +1,23 @@
 /**
  * Feature-flag evaluation backed by OpenFeature (FE-026).
  *
- * Flag state is read at build time from `src/config/feature-flags.json`, which
- * maps a flag name to `{ "enabled": <bool> }`. The config is baked into the
- * bundle, so toggling a flag is a one-line edit to that JSON followed by a
- * frontend rebuild/redeploy. Keep it in sync with the backend's
- * `src/common/feature_flags.json`.
+ * Flag state lives in **AWS AppConfig** (global, per environment) and is resolved
+ * at runtime from the backend's public `GET /feature-flags` endpoint — so a
+ * console toggle reaches the SPA without a rebuild. There is no bundled config:
+ * until {@link initFeatureFlags} resolves (and any time the backend is
+ * unreachable) every flag fails safe to `false` (feature off).
  *
- * A single `billing` flag currently gates all subscription UI (FE-021/022/023):
- * when it is off, `SubscriptionGuard` is a pass-through and the "Manage
- * Subscription" sidebar entry is hidden.
+ * A `billing` flag currently gates all subscription UI (FE-021/022/023): when it
+ * is off, `SubscriptionGuard` is a pass-through and the "Manage Subscription"
+ * sidebar entry is hidden.
  *
  * Evaluation goes through OpenFeature's in-memory provider so the rest of the app
  * depends only on the vendor-neutral OpenFeature client. An unknown flag fails
- * safe to `false` (feature off).
+ * safe to `false`.
  */
 import { OpenFeature, InMemoryProvider } from '@openfeature/web-sdk';
 
-import flagConfig from '@/config/feature-flags.json';
+import { API_BASE_URL } from '@/lib/api-client';
 
 interface FlagSpec {
   enabled?: boolean;
@@ -37,11 +37,15 @@ function toFlagConfiguration(config: Record<string, FlagSpec>) {
   );
 }
 
-OpenFeature.setProvider(
-  new InMemoryProvider(
-    toFlagConfiguration(flagConfig as Record<string, FlagSpec>),
-  ),
-);
+/** Build the `InMemoryProvider` for a flag config and register it globally. */
+function setProviderFromConfig(config: Record<string, FlagSpec>): void {
+  OpenFeature.setProvider(new InMemoryProvider(toFlagConfiguration(config)));
+}
+
+// Until initFeatureFlags() resolves the real values from the backend, every flag
+// is off — there is no bundled config to fall back on. Also the fail-safe state
+// whenever the flags endpoint is unreachable.
+setProviderFromConfig({});
 
 const client = OpenFeature.getClient();
 
@@ -55,18 +59,71 @@ export function isBillingEnabled(): boolean {
   return isEnabled('billing');
 }
 
+/** Vitest sets this sentinel (see vite.config.ts); flag fetching stays off in tests. */
+function isTestEnv(): boolean {
+  return import.meta.env.VITE_API_URL === 'http://test.local';
+}
+
+/** Shape of the public `GET /feature-flags` payload (`{ name: enabled }` under `data`). */
+interface FeatureFlagsPayload {
+  data?: Record<string, boolean>;
+}
+
+/**
+ * Fetch the global flags and register them. Any failure (non-200, network error,
+ * unreachable backend) leaves the current provider in place, so the app keeps the
+ * last-known — or the fail-safe all-off — flags rather than throwing.
+ *
+ * Exported for tests (the mapping seam); production code calls it via
+ * {@link initFeatureFlags}, which gates it behind the Vitest check.
+ */
+export async function refreshFlags(): Promise<void> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/feature-flags`);
+    if (!res.ok) return;
+    const body = (await res.json()) as FeatureFlagsPayload;
+    const flags = body.data ?? {};
+    setProviderFromConfig(
+      Object.fromEntries(
+        Object.entries(flags).map(([name, enabled]) => [name, { enabled }]),
+      ),
+    );
+  } catch {
+    // Keep the fail-safe provider; a transient outage must not flip flags on.
+  }
+}
+
+// How often the SPA re-polls the flags so a console toggle is picked up without a
+// reload. Paired with a refresh whenever the tab regains focus.
+const REFRESH_INTERVAL_MS = 60_000;
+
+let refreshStarted = false;
+
+/**
+ * Resolve feature flags from the backend and keep them fresh. Called once at
+ * bootstrap (see `app/main.tsx`) before first render. A no-op under Vitest so
+ * component tests never hit the network (MSW runs `onUnhandledRequest: 'error'`);
+ * those drive flags via {@link setFlagsForTesting} instead.
+ */
+export async function initFeatureFlags(): Promise<void> {
+  if (isTestEnv()) return;
+  await refreshFlags();
+  if (refreshStarted) return;
+  refreshStarted = true;
+  setInterval(() => void refreshFlags(), REFRESH_INTERVAL_MS);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') void refreshFlags();
+  });
+}
+
 /**
  * Replace the active provider with an explicit flag map (tests only). Lets a test
- * exercise the billing-on path without editing the bundled config file.
+ * exercise the billing-on path without standing up the backend flags endpoint.
  */
 export function setFlagsForTesting(flags: Record<string, boolean>): void {
-  OpenFeature.setProvider(
-    new InMemoryProvider(
-      toFlagConfiguration(
-        Object.fromEntries(
-          Object.entries(flags).map(([name, enabled]) => [name, { enabled }]),
-        ),
-      ),
+  setProviderFromConfig(
+    Object.fromEntries(
+      Object.entries(flags).map(([name, enabled]) => [name, { enabled }]),
     ),
   );
 }

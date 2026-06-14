@@ -151,6 +151,15 @@ module "api_lambda" {
     AXIOM_API_TOKEN_SSM_PARAM = "/leagueql/${var.environment}/axiom/api_token"
     AXIOM_DATASET             = "leagueql-${var.environment}"
     AXIOM_TRACES_URL          = "https://api.axiom.co/v1/traces"
+
+    # Feature flags via AWS AppConfig (BE-017). Flags are resolved at runtime from
+    # the feature-flag profile via the appconfigdata Data API (IAM-role access, no
+    # secret). Identifiers are AppConfig *names* (stable across regions); the flag
+    # values are set in the AppConfig console (runtime toggle, no redeploy). With
+    # these unset, all flags default off.
+    APPCONFIG_APPLICATION = "leagueql-${var.environment}"
+    APPCONFIG_ENVIRONMENT = var.environment
+    APPCONFIG_PROFILE     = "feature-flags"
   }
 
   tags = {
@@ -180,6 +189,12 @@ module "stripe_webhook_lambda" {
     # values never land here / in TF state / in CI.
     STRIPE_SECRET_KEY_SSM_PARAM     = "/leagueql/${var.environment}/stripe/secret_key"
     STRIPE_WEBHOOK_SECRET_SSM_PARAM = "/leagueql/${var.environment}/stripe/webhook_secret"
+
+    # Feature flags via AWS AppConfig (BE-017). The webhook reads the global
+    # `billing` flag to no-op when billing is off; same AppConfig source as the API.
+    APPCONFIG_APPLICATION = "leagueql-${var.environment}"
+    APPCONFIG_ENVIRONMENT = var.environment
+    APPCONFIG_PROFILE     = "feature-flags"
   }
 
   tags = {

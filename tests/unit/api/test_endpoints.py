@@ -14,6 +14,41 @@ class TestRootEndpoint:
         assert response.json()["detail"] == "Healthy!"
 
 
+class TestFeatureFlagsEndpoint:
+    """GET /feature-flags is public (no auth) and returns the global flag map."""
+
+    def test_returns_resolved_flag_map(self, client):
+        # The autouse enable_billing_flag fixture sets both flags ON for this suite.
+        response = client.get("/feature-flags")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["detail"] == "Feature flags"
+        assert body["data"] == {"billing": True, "paywall_test_feature": True}
+        assert response.headers["Cache-Control"] == "no-store"
+
+    def test_reflects_flag_state(self, client):
+        from common import feature_flags
+
+        feature_flags._override_for_testing(
+            {"billing": True, "paywall_test_feature": False}
+        )
+        response = client.get("/feature-flags")
+        assert response.json()["data"] == {
+            "billing": True,
+            "paywall_test_feature": False,
+        }
+
+    def test_defaults_off_when_unset(self, client):
+        from common import feature_flags
+
+        feature_flags._override_for_testing({})
+        response = client.get("/feature-flags")
+        assert response.json()["data"] == {
+            "billing": False,
+            "paywall_test_feature": False,
+        }
+
+
 class TestParseCorsOrigins:
     """CORS allow-list parsing must fail closed and exclude the dev origin in prod."""
 
