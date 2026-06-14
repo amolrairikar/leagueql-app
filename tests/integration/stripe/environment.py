@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 
 import boto3
+import requests
 
 _HERE = Path(__file__).parent
 _SRC = Path(__file__).parents[3] / "src"
@@ -42,15 +43,22 @@ def before_all(context):
     if str(_SRC) not in sys.path:
         sys.path.insert(0, str(_SRC))
 
-    # Stripe billing is feature-flagged (BE-017). This suite exercises the deployed
-    # billing endpoints + webhook, which only behave as tested when billing is ON;
-    # with the flag OFF they 404 / no-op, so the whole suite is not applicable.
-    # Read the same ``feature_flags.json`` that ships in the Lambda zips and, when
-    # it is off, skip every scenario (see ``before_scenario``) without requiring
-    # the Stripe/Clerk env or resolving any SSM secrets.
-    from common.feature_flags import is_billing_enabled
-
-    context.billing_enabled = is_billing_enabled()
+    # Stripe billing is feature-flagged (BE-017) and the flag now lives in AWS
+    # AppConfig (runtime, no redeploy). This suite exercises the deployed billing
+    # endpoints + webhook, which only behave as tested when billing is ON; with the
+    # flag OFF they 404 / no-op, so the whole suite is not applicable. Ask the
+    # deployment itself via the public ``GET /feature-flags`` endpoint (the same
+    # resolved AppConfig state the Lambdas enforce) and, when billing is off, skip
+    # every scenario (see ``before_scenario``) without resolving any SSM secrets.
+    api_base_url = os.environ.get("API_BASE_URL", "").rstrip("/")
+    context.billing_enabled = False
+    if api_base_url:
+        try:
+            resp = requests.get(f"{api_base_url}/feature-flags", timeout=10)
+            resp.raise_for_status()
+            context.billing_enabled = bool(resp.json().get("data", {}).get("billing"))
+        except requests.RequestException:
+            context.billing_enabled = False
     if not context.billing_enabled:
         return
 

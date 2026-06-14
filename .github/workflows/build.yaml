@@ -500,14 +500,16 @@ jobs:
           fi
           echo "API_BASE_URL=$API_BASE_URL" >> "$GITHUB_ENV"
 
-      # Stripe billing is feature-flagged (BE-017). When the deployed config has
-      # billing OFF, the endpoints 404 / the webhook no-ops, so the suite is not
-      # applicable — skip running it entirely (the suite also self-skips in
-      # tests/integration/stripe/environment.py as a local safety net).
+      # Stripe billing is feature-flagged (BE-017) and the flag lives in AWS
+      # AppConfig (runtime). When the deployed config has billing OFF, the
+      # endpoints 404 / the webhook no-ops, so the suite is not applicable — skip
+      # running it entirely (the suite also self-skips in
+      # tests/integration/stripe/environment.py as a local safety net). Ask the
+      # deployment itself via the public GET /feature-flags endpoint.
       - name: Check billing feature flag
         id: billing_flag
         run: |
-          ENABLED=$(jq -r '.billing.enabled' src/common/feature_flags.json)
+          ENABLED=$(curl -fsS "$API_BASE_URL/feature-flags" | jq -r '.data.billing')
           echo "enabled=$ENABLED" >> "$GITHUB_OUTPUT"
           echo "Billing feature flag enabled=$ENABLED"
 

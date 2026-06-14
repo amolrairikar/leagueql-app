@@ -29,7 +29,11 @@ from fastapi import (
 )
 
 import main
-from common.feature_flags import is_billing_enabled
+from common.feature_flags import (
+    PAYWALL_TEST_FEATURE,
+    is_billing_enabled,
+    is_enabled,
+)
 from common.onboarder_invoke import invoke_onboarder
 from main import (
     QUERY_TYPE_TO_SK_BASE,
@@ -80,6 +84,26 @@ router = APIRouter()
 def root() -> APIResponse:
     """Makes health check to API root URL."""
     return APIResponse(detail="Healthy!")
+
+
+@router.get("/feature-flags", status_code=status.HTTP_200_OK)
+def get_feature_flags(response: Response) -> APIResponse:
+    """Return the resolved global feature-flag map for the SPA (BE-017 / FE-026).
+
+    Unauthenticated (no Clerk dependency) so it loads before sign-in. The payload
+    is only the non-sensitive global booleans the frontend already shipped — the
+    same flags the backend itself enforces — so public exposure is fine. The SPA
+    fetches this to build its OpenFeature provider; never cache it so a console
+    toggle is picked up on the next load.
+    """
+    response.headers["Cache-Control"] = "no-store"
+    return APIResponse(
+        detail="Feature flags",
+        data={
+            "billing": is_billing_enabled(),
+            PAYWALL_TEST_FEATURE: is_enabled(PAYWALL_TEST_FEATURE),
+        },
+    )
 
 
 def get_authenticated_user(request: Request) -> str:

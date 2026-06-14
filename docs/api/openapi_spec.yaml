@@ -33,6 +33,28 @@ paths:
         uri: "arn:aws:apigateway:${aws_region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations"
         payloadFormatVersion: "2.0"
 
+  /feature-flags:
+    get:
+      summary: Global feature flags
+      description: >
+        Returns the resolved global feature-flag map (BE-017 / FE-026) the SPA
+        uses to build its OpenFeature provider. Resolved from AWS AppConfig at
+        runtime. Unauthenticated — no Clerk authorizer — so it loads before
+        sign-in; the payload is only non-sensitive global booleans.
+      operationId: getFeatureFlags
+      responses:
+        "200":
+          description: Resolved global feature flags
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeatureFlagsResponse"
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        httpMethod: POST
+        uri: "arn:aws:apigateway:${aws_region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations"
+        payloadFormatVersion: "2.0"
+
   /leagues/{leagueId}:
     get:
       summary: Get league metadata
@@ -706,6 +728,24 @@ components:
         data:
           description: Present on success responses that return data; absent otherwise.
           nullable: true
+
+    FeatureFlagsResponse:
+      type: object
+      required: [detail, data]
+      properties:
+        detail:
+          type: string
+          example: "Feature flags"
+        data:
+          type: object
+          description: Global feature-flag map (flag name → enabled boolean).
+          properties:
+            billing:
+              type: boolean
+              example: false
+            paywall_test_feature:
+              type: boolean
+              example: false
 
     OnboardRequest:
       type: object
