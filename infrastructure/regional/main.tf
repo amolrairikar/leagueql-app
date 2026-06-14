@@ -18,12 +18,13 @@ locals {
   account_id = data.aws_caller_identity.current.account_id
 
   # Role ARNs constructed from global role names
-  onboarder_role_arn       = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-onboarder-role"
-  processor_role_arn       = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-onboarding-processor-role"
-  api_role_arn             = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-api-role"
-  player_metadata_role_arn = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-sleeper-player-metadata-fetcher-role"
-  sleeper_refresh_role_arn = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-sleeper-league-refresh-role"
-  stripe_webhook_role_arn  = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-stripe-webhook-role"
+  onboarder_role_arn        = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-onboarder-role"
+  processor_role_arn        = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-onboarding-processor-role"
+  api_role_arn              = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-api-role"
+  player_metadata_role_arn  = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-sleeper-player-metadata-fetcher-role"
+  sleeper_refresh_role_arn  = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-sleeper-league-refresh-role"
+  stripe_webhook_role_arn   = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-stripe-webhook-role"
+  discord_notifier_role_arn = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-discord-notifier-role"
 
   # Sleeper player stats refresher runs as a Fargate task (see BE-011). Roles are
   # created in infrastructure/global; ARNs are reconstructed here from their names.
@@ -507,11 +508,52 @@ resource "aws_sns_topic" "lambda_alerts" {
   }
 }
 
-resource "aws_sns_topic_subscription" "lambda_alerts_email" {
+# Infra/error alerts are forwarded to a private Discord channel by a small Lambda
+# subscriber (below) instead of email. A Lambda is required because Discord webhooks
+# accept only a specific JSON body and cannot complete SNS's HTTPS subscription
+# confirmation handshake. Deployed per-region so each region's topic feeds Discord.
+module "discord_notifier_lambda" {
+  source = "../modules/lambda"
+  count  = var.environment == "prod" ? 1 : 0
+
+  function_name        = "leagueql-discord-notifier-${var.environment}-${local.region}"
+  function_description = "Forwards SNS infra/error alerts to a Discord channel webhook"
+  role_arn             = local.discord_notifier_role_arn
+  handler              = "handler.lambda_handler"
+  memory_size          = 256
+  timeout              = 10
+  log_retention        = 7
+  s3_bucket            = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
+  s3_key               = "lambda-code-artifacts/discord_notifier-lambda.zip"
+
+  environment_variables = {
+    # Discord webhook URL fetched at runtime from SSM by *name* (the value never
+    # lands here / in TF state / in CI), mirroring the Stripe secret pattern.
+    DISCORD_WEBHOOK_URL_SSM_PARAM = "/leagueql/${var.environment}/discord/webhook_url"
+  }
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    component   = "monitoring"
+    managed-by  = "terraform"
+  }
+}
+
+resource "aws_lambda_permission" "discord_notifier_sns_invoke" {
+  count         = var.environment == "prod" ? 1 : 0
+  statement_id  = "AllowSNSInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = module.discord_notifier_lambda[0].lambda_arn
+  principal     = "sns.amazonaws.com"
+  source_arn    = aws_sns_topic.lambda_alerts[0].arn
+}
+
+resource "aws_sns_topic_subscription" "lambda_alerts_discord" {
   count     = var.environment == "prod" ? 1 : 0
   topic_arn = aws_sns_topic.lambda_alerts[0].arn
-  protocol  = "email"
-  endpoint  = "arairikar1@gmail.com"
+  protocol  = "lambda"
+  endpoint  = module.discord_notifier_lambda[0].lambda_arn
 }
 
 # Dead-letter queue for onboarder async invocations. The API and the scheduled

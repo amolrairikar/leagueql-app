@@ -689,6 +689,75 @@ module "stripe-webhook-lambda-role" {
   }
 }
 
+# Execution role for the SNS-to-Discord alert forwarder. It only consumes SNS (no
+# sns:Publish) and reads the Discord webhook URL from a SecureString SSM parameter.
+module "discord-notifier-lambda-role" {
+  source           = "../../modules/iam-role"
+  role_name        = "leagueql-${var.environment}-discord-notifier-role"
+  role_description = "Execution role for the SNS-to-Discord alert forwarder lambda."
+  trust_policy_json = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+      }
+    ]
+  })
+  role_policy_json = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "CreateLogGroups"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup"
+        ]
+        Resource = [
+          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/lambda/leagueql-discord-notifier-${var.environment}-east",
+          "arn:aws:logs:us-west-2:${var.account_id}:log-group:/aws/lambda/leagueql-discord-notifier-${var.environment}-west"
+        ]
+      },
+      {
+        Sid    = "CreateLogEvents"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = [
+          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/lambda/leagueql-discord-notifier-${var.environment}-east:*",
+          "arn:aws:logs:us-west-2:${var.account_id}:log-group:/aws/lambda/leagueql-discord-notifier-${var.environment}-west:*"
+        ]
+      },
+      {
+        # The Discord webhook URL lives as a SecureString SSM parameter (set
+        # out-of-band, never in TF state). Grant read on both regions' copies; the
+        # value is fetched by the Lambda at cold start.
+        Sid    = "ReadDiscordWebhookSsmParameter"
+        Effect = "Allow"
+        Action = [
+          "ssm:GetParameter"
+        ]
+        Resource = [
+          "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/discord/webhook_url",
+          "arn:aws:ssm:us-west-2:${var.account_id}:parameter/leagueql/${var.environment}/discord/webhook_url"
+        ]
+      }
+    ]
+  })
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    component   = "monitoring"
+    managed-by  = "terraform"
+  }
+}
+
 module "api-gateway-role" {
   source           = "../../modules/iam-role"
   role_name        = "leagueql-api-gateway-${var.environment}-role"
