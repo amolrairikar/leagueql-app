@@ -17,6 +17,18 @@ export interface ChangelogRelease {
 // Newest release first.
 export const CHANGELOG: ChangelogRelease[] = [
   {
+    version: '1.1.1',
+    date: 'June 14, 2026',
+    sections: [
+      {
+        title: 'Added',
+        items: [
+          'Owner summary table on the Transactions page: see each owner’s waiver, free-agent, and trade counts for the season at a glance, with a combined total and rows ranked by who was most active.',
+        ],
+      },
+    ],
+  },
+  {
     version: '1.1.0',
     date: 'June 12, 2026',
     sections: [
