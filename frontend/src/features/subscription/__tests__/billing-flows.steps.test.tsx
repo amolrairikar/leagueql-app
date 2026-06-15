@@ -28,11 +28,11 @@ function isoIn(days: number): string {
 // jsdom's `location.assign` is non-configurable, so replace `window.location`
 // wholesale with a stub exposing an `assign` mock, then restore it afterward.
 const realLocation = window.location;
-function mockNavigation() {
+function mockNavigation(pathname = '/', search = '') {
   const assign = vi.fn();
   Object.defineProperty(window, 'location', {
     configurable: true,
-    value: { assign, search: '', pathname: '/', href: 'http://localhost/' },
+    value: { assign, search, pathname, href: `http://localhost${pathname}` },
   });
   return assign;
 }
@@ -95,6 +95,39 @@ defineFeature(feature, (test) => {
     then('the checkout request used the yearly plan', () => {
       expect(new URL(capturedUrl).searchParams.get('plan')).toBe('YEARLY');
     });
+  });
+
+  test('Subscribe sends the originating page as the cancel path', ({
+    given,
+    when,
+    then,
+  }) => {
+    let capturedUrl = '';
+    given('a checkout session will be created', () => {
+      // Start checkout from the schedule-swap page so the cancel ("back") URL
+      // should return the user here rather than /home (FE-022).
+      assignSpy = mockNavigation('/schedule-swap');
+    });
+    when('I click Subscribe from the schedule-swap page', async () => {
+      server.use(leagueMetadata({ is_owner: true }));
+      server.use(
+        http.post('*/leagues/100/checkout-session', ({ request }) => {
+          capturedUrl = request.url;
+          return HttpResponse.json({ data: { url: STRIPE_URL } });
+        }),
+      );
+      await renderRoute(<SubscriptionRequired />, { league });
+      await userEvent.click(screen.getByRole('button', { name: /subscribe/i }));
+    });
+    then(
+      'the checkout request sent the schedule-swap page as the cancel path',
+      () => {
+        expect(new URL(capturedUrl).searchParams.get('cancelPath')).toBe(
+          '/schedule-swap',
+        );
+        expect(assignSpy).toHaveBeenCalledWith(STRIPE_URL);
+      },
+    );
   });
 
   test('A 409 on checkout shows an inline error', ({ given, when, then }) => {

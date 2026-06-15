@@ -36,7 +36,13 @@ event-driven webhook.
   `trial_used` — checked against **both** the `METADATA` marker and the durable
   `(platform, native_league_id)` record; see the trial edge case), sets
   `allow_promotion_codes=True` so the Stripe-hosted
-  page renders an "Add promotion code" field, and returns the session URL. Customers redeem a
+  page renders an "Add promotion code" field, and returns the session URL. It also accepts an
+  optional `cancelPath` query param — the in-app path the user started checkout from — used to
+  build the Checkout `cancel_url` ("back" button) so cancelling returns the user to that page
+  rather than the dashboard home. To avoid an open redirect the path is honored only when it is a
+  **safe same-origin relative path** (a single leading `/`, no protocol-relative `//`, no
+  backslashes or whitespace); otherwise (or when absent) the `cancel_url` falls back to `…/home`.
+  Customers redeem a
   **promotion code** (a customer-facing code mapped to a Stripe coupon — e.g. the founders
   100%-off coupon), not a bare coupon, which has no redeemable code. The session also sets
   `managed_payments={"enabled": True}` so Stripe acts as **merchant of record** (Managed
@@ -296,9 +302,11 @@ provisioning, not duplicate charging.)
   (no Clerk security scheme — Stripe signature verification is the auth); API Gateway is granted
   invoke permission on the webhook Lambda in `regional/main.tf`. Stripe config reaches both
   Lambdas as environment variables; the return URLs are derived from `environment` (prod →
-  `https://leagueql.com`, dev → `http://localhost:5173`). Checkout **success**, **cancel**, and
-  the Billing Portal **return** all target the in-app dashboard home (`…/home`, under the
-  SubscriptionGuard). Success carries `?checkout=success`, which drives the activation poll in
+  `https://leagueql.com`, dev → `http://localhost:5173`). Checkout **success** and the Billing
+  Portal **return** target the in-app dashboard home (`…/home`, under the SubscriptionGuard);
+  **cancel** returns to the page checkout was started from (the `cancelPath` query param appended to
+  the configured cancel URL's origin), falling back to `…/home`. Success carries `?checkout=success`,
+  which drives the activation poll in
   `useSubscription` ([FE-022](../frontend/FE-022-subscription-checkout.md)); cancel has no param,
   so it never polls. CI builds/zips the new Lambda and passes the non-sensitive
   `stripe_price_id_monthly` / `stripe_price_id_yearly` as `TF_VAR_*` (mode-selected by

@@ -28,7 +28,24 @@ describe('billing api', () => {
     expect(url).toContain('/leagues/123/checkout-session');
     expect(url).toContain('platform=SLEEPER');
     expect(url).toContain('plan=YEARLY');
+    expect(url).not.toContain('cancelPath');
     expect(init.method).toBe('POST');
+  });
+
+  it('createCheckoutSession includes the cancelPath when provided', async () => {
+    const fetchMock = mockFetchOk({ detail: 'ok', data: { url: 'https://c' } });
+
+    await createCheckoutSession(
+      '123',
+      'SLEEPER',
+      'MONTHLY',
+      '/schedule-swap?x=1',
+    );
+
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain(
+      `cancelPath=${encodeURIComponent('/schedule-swap?x=1')}`,
+    );
   });
 
   it('createBillingPortalSession POSTs to the portal endpoint', async () => {

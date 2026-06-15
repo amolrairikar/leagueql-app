@@ -75,6 +75,7 @@ from helpers import (
     record_league_access,
     require_league_member,
     require_league_owner,
+    resolve_checkout_cancel_url,
     set_active_job,
     trial_used_for_league,
     update_league_count,
@@ -186,6 +187,16 @@ def create_checkout_session(
         SubscriptionPlan, Query(description="The subscription plan (monthly or yearly)")
     ],
     clerk_user_id: Annotated[str, Depends(get_authenticated_user)],
+    cancelPath: Annotated[
+        str | None,
+        Query(
+            description=(
+                "In-app relative path the user started checkout from; used to build "
+                "the Checkout cancel ('back') URL so cancelling returns them here "
+                "instead of the dashboard home (FE-022)."
+            )
+        ),
+    ] = None,
 ) -> APIResponse:
     """Create a Stripe Checkout Session to subscribe a league (BE-015).
 
@@ -235,6 +246,7 @@ def create_checkout_session(
         subscription_data=subscription_data,
         token=token,
         price_id=stripe_price_id_for_plan(plan),
+        cancel_url=resolve_checkout_cancel_url(cancelPath),
     )
     logger.info(
         "Created checkout session for league %s (plan=%s, trial=%s)",

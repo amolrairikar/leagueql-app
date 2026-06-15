@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from functools import partial
 from typing import Any
+from urllib.parse import urlparse
 
 import botocore.exceptions
 import requests as http_requests
@@ -772,12 +773,45 @@ def recreate_stripe_customer(clerk_user_id: str) -> str:
     return customer_id
 
 
+def _is_safe_relative_path(path: str) -> bool:
+    """Whether ``path`` is a same-origin relative path safe to redirect to.
+
+    Guards the caller-supplied checkout ``cancelPath`` against open redirects: it
+    must be a single-leading-slash relative path (no protocol-relative ``//``, no
+    backslashes, no whitespace/control chars) so that appending it to our own
+    origin can never escape to another host.
+    """
+    return (
+        path.startswith("/")
+        and not path.startswith("//")
+        and "\\" not in path
+        and not any(c.isspace() for c in path)
+    )
+
+
+def resolve_checkout_cancel_url(cancel_path: str | None) -> str:
+    """Build the Checkout ``cancel_url`` from a caller-supplied relative path (FE-022).
+
+    The Checkout "back" button should return the user to the page they started
+    checkout from rather than the dashboard home. ``cancel_path`` is client-supplied,
+    so it is honored only when it is a safe same-origin relative path
+    (:func:`_is_safe_relative_path`); it is then appended to the configured cancel
+    URL's origin. Anything else (absent or unsafe) falls back to the default
+    ``STRIPE_CHECKOUT_CANCEL_URL``.
+    """
+    if not cancel_path or not _is_safe_relative_path(cancel_path):
+        return main.STRIPE_CHECKOUT_CANCEL_URL
+    parsed = urlparse(main.STRIPE_CHECKOUT_CANCEL_URL)
+    return f"{parsed.scheme}://{parsed.netloc}{cancel_path}"
+
+
 def create_subscription_checkout_session(
     customer_id: str,
     clerk_user_id: str,
     subscription_data: dict[str, Any],
     token: str,
     price_id: str,
+    cancel_url: str,
 ) -> Any:
     """Open a subscription-mode Checkout Session, recovering from a deleted customer.
 
@@ -798,6 +832,9 @@ def create_subscription_checkout_session(
         token: The per-attempt nonce used as the Stripe idempotency key.
         price_id: The Stripe recurring price ID for the chosen plan (monthly or
             yearly); resolved by the caller from the request's ``plan``.
+        cancel_url: The URL Stripe returns the user to when they cancel ("back")
+            out of Checkout; resolved by the caller via
+            :func:`resolve_checkout_cancel_url`.
 
     Returns:
         The created Stripe Checkout Session object.
@@ -814,7 +851,7 @@ def create_subscription_checkout_session(
             allow_promotion_codes=True,
             managed_payments={"enabled": True},
             success_url=main.STRIPE_CHECKOUT_SUCCESS_URL,
-            cancel_url=main.STRIPE_CHECKOUT_CANCEL_URL,
+            cancel_url=cancel_url,
             idempotency_key=idempotency_key,
         )
 

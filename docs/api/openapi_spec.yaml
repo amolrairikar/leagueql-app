@@ -423,6 +423,17 @@ paths:
             type: string
             enum: [MONTHLY, YEARLY]
             example: "MONTHLY"
+        - name: cancelPath
+          in: query
+          required: false
+          description: >
+            In-app relative path the user started checkout from; used to build the
+            Checkout cancel ("back") URL so cancelling returns them here instead of
+            the dashboard home (FE-022). Honored only as a safe same-origin relative
+            path; otherwise the cancel URL falls back to /home.
+          schema:
+            type: string
+            example: "/schedule-swap"
       responses:
         "200":
           $ref: "#/components/responses/BillingSessionResponse"

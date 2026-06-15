@@ -123,6 +123,34 @@ class TestCheckoutSessionEndpoint:
         assert kwargs["mode"] == "subscription"
         assert kwargs["allow_promotion_codes"] is True
         assert kwargs["managed_payments"] == {"enabled": True}
+        # No cancelPath supplied → cancel_url falls back to the dashboard home.
+        assert kwargs["cancel_url"] == "https://leagueql.com/home"
+
+    def test_cancel_path_returns_user_to_originating_page(
+        self,
+        client,
+        mock_table,
+        league_lookup_item,
+        league_metadata_item,
+        override_user,
+    ):
+        # A safe same-origin cancelPath builds a cancel_url back to that page so the
+        # Checkout "back" button returns the user where they started (FE-022).
+        league_metadata_item["trial_used"] = True
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+            {"Item": {"stripe_customer_id": "cus_1"}},
+        ]
+        with patch("main.stripe") as mock_stripe:
+            mock_stripe.checkout.Session.create.return_value = {"url": "https://c"}
+            resp = client.post(
+                "/leagues/123/checkout-session"
+                "?platform=SLEEPER&plan=MONTHLY&cancelPath=/schedule-swap"
+            )
+        assert resp.status_code == 200
+        _, kwargs = mock_stripe.checkout.Session.create.call_args
+        assert kwargs["cancel_url"] == "https://leagueql.com/schedule-swap"
 
     def test_omits_trial_when_durable_marker_present(
         self,
@@ -444,3 +472,30 @@ class TestBillingPortalEndpoint:
         feature_flags._override_for_testing({"billing": False})
         resp = client.post("/billing-portal-session")
         assert resp.status_code == 404
+
+
+class TestResolveCheckoutCancelUrl:
+    """Open-redirect guard for the caller-supplied checkout cancelPath (FE-022)."""
+
+    @pytest.mark.parametrize(
+        "cancel_path,expected",
+        [
+            # Safe same-origin relative paths are appended to the cancel origin.
+            ("/schedule-swap", "https://leagueql.com/schedule-swap"),
+            ("/home?tab=stats", "https://leagueql.com/home?tab=stats"),
+            ("/", "https://leagueql.com/"),
+            # Absent / unsafe paths fall back to the default cancel URL.
+            (None, "https://leagueql.com/home"),
+            ("", "https://leagueql.com/home"),
+            ("//evil.com/phish", "https://leagueql.com/home"),  # protocol-relative
+            ("https://evil.com", "https://leagueql.com/home"),  # absolute URL
+            ("schedule-swap", "https://leagueql.com/home"),  # no leading slash
+            ("/foo\\bar", "https://leagueql.com/home"),  # backslash
+            ("/foo bar", "https://leagueql.com/home"),  # whitespace
+            ("/foo\nbar", "https://leagueql.com/home"),  # control char
+        ],
+    )
+    def test_resolves_cancel_url(self, cancel_path, expected):
+        from main import resolve_checkout_cancel_url
+
+        assert resolve_checkout_cancel_url(cancel_path) == expected
