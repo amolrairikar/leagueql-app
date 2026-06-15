@@ -12,7 +12,7 @@ import { isBannerEnabled } from '@/lib/feature-flags';
 // LINK_URL empty for a link-less, message-only banner.
 const BANNER_MESSAGE_PREFIX = 'Join the LeagueQL Discord ';
 const BANNER_LINK_LABEL = 'community';
-const BANNER_MESSAGE_SUFFIX = '';
+const BANNER_MESSAGE_SUFFIX = '!';
 const BANNER_LINK_URL = 'https://discord.gg/QZcxhYcY9';
 
 // localStorage key remembering a dismissal so the banner stays hidden for this
