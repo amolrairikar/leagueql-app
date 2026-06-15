@@ -15,6 +15,13 @@ import { isBillingEnabled, isEnabled } from '@/lib/feature-flags';
  * gate applies independently). While the status loads — or while a subscription
  * is activating after returning from Checkout (FE-022) — it shows a spinner;
  * otherwise it shows the inline paywall when the subscription is expired/absent.
+ *
+ * When the `billing` master flag is off the whole premium section is **hidden**
+ * (renders nothing) rather than shown for free (FE-026): with the subscription
+ * system disabled there is no way to pay for it, so a premium feature must not
+ * leak out unpaywalled. Callers that render their own section header around the
+ * guard should gate it on {@link isBillingEnabled} too so they don't leave an
+ * orphan header above the hidden section.
  */
 export function SubscriptionGuard({
   children,
@@ -25,10 +32,12 @@ export function SubscriptionGuard({
   featureFlag: string;
   featureLabel?: string;
 }) {
-  // A premium feature is paywalled only when the `billing` master flag AND the
-  // feature's own flag are on (FE-026). Otherwise the guard — and the
-  // subscription polling in {@link useSubscription} — is skipped entirely.
-  if (!isBillingEnabled() || !isEnabled(featureFlag)) return <>{children}</>;
+  // Billing master flag off: premium features don't exist yet — hide the section
+  // entirely rather than render it for free (FE-026).
+  if (!isBillingEnabled()) return null;
+  // Billing is on but this feature isn't flagged premium: render it free, with no
+  // paywall and no subscription polling in {@link useSubscription}.
+  if (!isEnabled(featureFlag)) return <>{children}</>;
   return (
     <SubscriptionGate featureLabel={featureLabel}>{children}</SubscriptionGate>
   );

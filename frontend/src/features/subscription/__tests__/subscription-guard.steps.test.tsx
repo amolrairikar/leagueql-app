@@ -61,7 +61,7 @@ defineFeature(feature, (test) => {
     });
   });
 
-  test('Billing disabled renders the page without a paywall (FE-026)', ({
+  test('Billing disabled hides the premium section entirely (FE-026)', ({
     given,
     and,
     when,
@@ -74,8 +74,8 @@ defineFeature(feature, (test) => {
       server.use(leagueMetadata({ subscription_end_time: isoIn(-1) }));
     });
     when('I open a gated page behind the subscription guard', openGatedPage);
-    then(/^I see the gated content "(.*)"$/, async (text) => {
-      expect(await screen.findByText(text)).toBeInTheDocument();
+    then(/^the gated content "(.*)" is not shown$/, (text) => {
+      expect(screen.queryByText(text)).not.toBeInTheDocument();
     });
   });
 

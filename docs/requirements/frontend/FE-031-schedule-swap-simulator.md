@@ -24,11 +24,13 @@ reading its own row at a glance sees whether it was schedule-lucky or schedule-u
   (`MATCHUPS#{season}#`, [BE-005](../backend/BE-005-query-precomputed-views-api.md)).
 - **Premium-gated:** wrapped in `SubscriptionGuard` with the shared `premium_feature`
   flag ([FE-021](FE-021-subscription-access-control.md) /
-  [FE-026](FE-026-feature-flags.md)). While `billing` or `premium_feature` is off the guard
-  is a pass-through and the section renders for everyone. When gated and the subscription is
+  [FE-026](FE-026-feature-flags.md)). While `billing` is off the whole section — its header and
+  the gated matrix — is **hidden**; with `billing` on but `premium_feature` off the guard is a
+  pass-through and the section renders for everyone. When gated and the subscription is
   expired/absent, the guard renders a **blurred lock overlay** in place of the matrix and the
   `ScheduleSwap` component is **not mounted**, so its `MATCHUPS` data is never fetched while
-  locked (the rest of the standings page still loads normally).
+  locked (the rest of the standings page still loads normally). The section header is gated on
+  `isBillingEnabled` so it disappears with the section when `billing` is off.
 
 ## Swap algorithm
 - Only **regular-season** matchups count (`playoff_tier_type` is `NONE`/absent); playoff and
@@ -63,8 +65,9 @@ reading its own row at a glance sees whether it was schedule-lucky or schedule-u
 - [ ] Switching the season selector recomputes the matrix.
 - [ ] When `premium_feature` (and `billing`) is enabled and the league subscription is
       expired/absent, the section shows a blurred lock overlay (with a Subscribe CTA for the
-      owner) instead of the matrix, and **does not fetch** the `MATCHUPS` data; when either flag
-      is off it renders for everyone.
+      owner) instead of the matrix, and **does not fetch** the `MATCHUPS` data. With `billing` off
+      the section and its header are hidden; with `billing` on but `premium_feature` off it renders
+      for everyone.
 - [ ] A `MATCHUPS` load failure or fewer-than-two-teams season renders a message, not a crash.
 
 ## Sources

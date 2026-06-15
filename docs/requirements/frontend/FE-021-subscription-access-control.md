@@ -5,7 +5,8 @@
 > premium section only when **both** the `billing` master flag **and** the shared `premium_feature`
 > flag are ON. The schedule-swap simulator ([FE-031](FE-031-schedule-swap-simulator.md)) is the
 > first wrapped premium section; every premium feature shares the `premium_feature` flag and is
-> gated identically. When `billing` is OFF (the current default) the guard is a pass-through.
+> gated identically. When `billing` is OFF (the current default) the guard hides the section
+> entirely; with `billing` ON but `premium_feature` OFF the guard renders the section for free.
 
 ## Description
 Provides the `SubscriptionGuard` used to gate a **premium** route on an active subscription, plus
@@ -37,8 +38,9 @@ handling.
   `getLeagueCookies()` for `leagueId`/`platform`, and derives `loading` / `isActive` /
   `expiringSoon`.
 - Guard: `frontend/src/features/subscription/subscription-guard.tsx` takes a `featureFlag` (and
-  optional `featureLabel`) prop; it is a pass-through when `billing` is off **or** the named flag
-  is off, otherwise it consumes `useSubscription` and renders the locked overlay when expired
+  optional `featureLabel`) prop; it renders nothing when `billing` is off, is a pass-through when
+  `billing` is on but the named flag is off, otherwise it consumes `useSubscription` and renders
+  the locked overlay when expired
   **instead of** the gated children (so the premium feature is never mounted and its data is not
   fetched). The schedule-swap simulator (FE-031) renders it with `featureFlag="premium_feature"`;
   every premium section uses the same shared flag. Also exercised by component tests in isolation.
@@ -54,10 +56,12 @@ handling.
 
 ## Edge Cases
 - **Schedule-swap wrapped (FE-031):** the simulator is paywalled only when both flags are ON; with
-  either OFF the guard is a pass-through and the section renders for everyone.
-- **Billing master flag OFF (current default):** the guard is a pass-through everywhere a section
-  is wrapped.
-- **Premium feature flag OFF:** even with `billing` ON, the guard is a pass-through (e.g.
+  `billing` OFF the section (including its header) is hidden, and with `billing` ON but
+  `premium_feature` OFF it renders for everyone.
+- **Billing master flag OFF (current default):** the guard renders nothing everywhere a section is
+  wrapped; the wrapped section is hidden rather than shown for free (a caller's own section header
+  is gated on `isBillingEnabled` too, so nothing is left orphaned).
+- **Premium feature flag OFF:** with `billing` ON, the guard is a pass-through (e.g.
   `premium_feature` off ⇒ the wrapped section is free).
 - **Loading (wrapped, both flags ON):** while `getLeague` resolves, show a spinner rather than
   the locked overlay (the gated component stays unmounted, so it does not fetch).
@@ -80,15 +84,16 @@ handling.
 
 ## Acceptance Criteria
 - [ ] The schedule-swap simulator (FE-031) is paywalled only when both `billing` and
-      `premium_feature` are ON; with either OFF it renders for everyone.
+      `premium_feature` are ON; with `billing` OFF the section (and its header) is hidden, and with
+      `billing` ON but `premium_feature` OFF it renders for everyone.
 - [ ] When a section is wrapped with both `billing` and `premium_feature` ON, it shows the blurred
       lock overlay when the subscription is expired or `subscription_end_time` is absent, and
       renders the gated component normally when it is in the future.
 - [ ] While locked, the gated component is not mounted and its data is not fetched (only the rest
       of the page loads); the overlay shows a Subscribe CTA to the owner and an "ask the league
       owner" message to a non-owner.
-- [ ] When a section is wrapped, the guard is a pass-through if `billing` is OFF **or**
-      `premium_feature` is OFF.
+- [ ] When a section is wrapped, the guard renders nothing if `billing` is OFF, and is a
+      pass-through if `billing` is ON but `premium_feature` is OFF.
 - [ ] A spinner is shown while the subscription state is loading on a paywalled (wrapped) section.
 - [ ] Demo mode bypasses the subscription gate.
 - [ ] The sidebar shows "Manage Subscription" (replacing "Request a Feature") and clicking it

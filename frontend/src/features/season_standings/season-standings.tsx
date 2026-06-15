@@ -30,6 +30,7 @@ import { SubscriptionGuard } from '@/features/subscription/subscription-guard';
 import { avatarColor } from '@/lib/color-constants';
 import { POSITION_COLORS, UI_COLORS } from '@/lib/color-constants';
 import { getLeagueCookies } from '@/lib/cookie-handler';
+import { isBillingEnabled } from '@/lib/feature-flags';
 import { type Result, toResult } from '@/lib/result';
 
 type StandingsResult = Result<SeasonStandingsItem[]>;
@@ -588,38 +589,45 @@ export default function SeasonStandings() {
           </Suspense>
         </div>
 
-        <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mt-6 mb-2.5">
-          <span className="inline-flex items-center gap-1.5">
-            Schedule-swap simulator
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Info className="w-3 h-3 shrink-0 cursor-default" />
-                </TooltipTrigger>
-                <TooltipContent
-                  side="top"
-                  className="max-w-72 text-center leading-relaxed bg-popover text-popover-foreground border border-border shadow-md [&>svg]:fill-popover [&>svg]:bg-popover"
-                >
-                  Each column is one manager&apos;s schedule: a cell is the
-                  number of wins that row&apos;s team would have had if it had
-                  played that manager&apos;s opponents each week, using its own
-                  weekly scores. The highlighted diagonal is each team&apos;s
-                  actual record.
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </span>
-        </p>
-        <SubscriptionGuard
-          featureFlag="premium_feature"
-          featureLabel="Schedule-swap simulator"
-        >
-          <ScheduleSwap
-            leagueId={leagueId}
-            platform={platform}
-            season={selectedSeason}
-          />
-        </SubscriptionGuard>
+        {/* The whole schedule-swap section (header + gated content) only exists
+            when billing is on; the guard hides the content when billing is off,
+            so gate the header here too to avoid an orphan label (FE-026). */}
+        {isBillingEnabled() && (
+          <>
+            <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mt-6 mb-2.5">
+              <span className="inline-flex items-center gap-1.5">
+                Schedule-swap simulator
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info className="w-3 h-3 shrink-0 cursor-default" />
+                    </TooltipTrigger>
+                    <TooltipContent
+                      side="top"
+                      className="max-w-72 text-center leading-relaxed bg-popover text-popover-foreground border border-border shadow-md [&>svg]:fill-popover [&>svg]:bg-popover"
+                    >
+                      Each column is one manager&apos;s schedule: a cell is the
+                      number of wins that row&apos;s team would have had if it
+                      had played that manager&apos;s opponents each week, using
+                      its own weekly scores. The highlighted diagonal is each
+                      team&apos;s actual record.
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </span>
+            </p>
+            <SubscriptionGuard
+              featureFlag="premium_feature"
+              featureLabel="Schedule-swap simulator"
+            >
+              <ScheduleSwap
+                leagueId={leagueId}
+                platform={platform}
+                season={selectedSeason}
+              />
+            </SubscriptionGuard>
+          </>
+        )}
       </div>
     </div>
   );

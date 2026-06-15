@@ -15,19 +15,23 @@ A `billing` **master** flag gates all subscription UI
 [FE-022](FE-022-subscription-checkout.md),
 [FE-023](FE-023-subscription-management.md)) and the billing guidance in the user guide
 ([FE-016](FE-016-instructions-docs-page.md)). It defaults **OFF** (fail-safe). When OFF:
-- `SubscriptionGuard` is a pass-through — every page (premium included) renders with no paywall,
-  and the `useSubscription` polling is skipped entirely (the gate never mounts the subscription
-  logic).
+- `SubscriptionGuard` **hides** the premium section entirely (renders nothing) — with the
+  subscription system disabled there is no way to pay for it, so a premium feature must not leak
+  out unpaywalled. The `useSubscription` polling is likewise skipped (the gate never mounts the
+  subscription logic). A caller that renders its own section header around the guard gates that
+  header on `isBillingEnabled` too, so the section disappears as a whole rather than leaving an
+  orphan label.
 - The owner-only "Manage Subscription" sidebar entry and its `ManageSubscriptionDialog` are
   hidden (the `useSubscription` "expiring soon" poll behind them does not run).
 - The `/docs` user guide hides its Subscribing, Free Trial, and Managing Billing sections (and
   their TOC entries), the subscription FAQ, and inline billing mentions.
 
 On top of the master flag, the **`premium_feature`** flag implements the freemium model
-([FE-021](FE-021-subscription-access-control.md)): a premium section's `SubscriptionGuard` gates
-only when **both** `billing` and `premium_feature` are ON. Every premium feature shares this one
-flag. The schedule-swap simulator ([FE-031](FE-031-schedule-swap-simulator.md)) is the first
-section wrapped with it.
+([FE-021](FE-021-subscription-access-control.md)). With `billing` ON, a premium section's
+`SubscriptionGuard` paywalls when `premium_feature` is **ON** and renders the feature free when it
+is **OFF** (rolled out, not yet paywalled). With `billing` OFF the section is hidden regardless of
+`premium_feature`. Every premium feature shares this one flag. The schedule-swap simulator
+([FE-031](FE-031-schedule-swap-simulator.md)) is the first section wrapped with it.
 
 The backend resolves the same flags from the same AppConfig source and is the real enforcement
 boundary ([BE-014](../backend/BE-014-subscription-access-control.md)), so even with the UI flag
@@ -56,10 +60,10 @@ momentarily stale the API gate still governs access.
   checked-in JSON.
 - Call sites (unchanged):
   - `frontend/src/features/subscription/subscription-guard.tsx` — `SubscriptionGuard` takes a
-    `featureFlag` prop and returns its children directly when billing is off **or** the named
-    feature flag is off; otherwise renders the inner `SubscriptionGate` that runs
-    `useSubscription`. The schedule-swap simulator (FE-031) wraps it with
-    `featureFlag="premium_feature"`.
+    `featureFlag` prop and renders **nothing** when billing is off; with billing on it returns its
+    children directly when the named feature flag is off, otherwise renders the inner
+    `SubscriptionGate` that runs `useSubscription`. The schedule-swap simulator (FE-031) wraps it
+    with `featureFlag="premium_feature"` and gates its own section header on `isBillingEnabled`.
   - `frontend/src/features/sidebar/app-sidebar.tsx` — the "Manage Subscription" item and
     `ManageSubscriptionDialog` render only when billing is on.
   - `frontend/src/features/instructions/instructions-page.tsx` — filters the billing TOC entries
@@ -79,8 +83,9 @@ momentarily stale the API gate still governs access.
   only controls what is shown.
 
 ## Acceptance Criteria
-- [ ] With `billing` OFF (default / fail-safe), every page renders with no paywall and no
-      subscription spinner.
+- [ ] With `billing` OFF (default / fail-safe), every premium section (the guard's content and
+      any caller-rendered section header) is hidden — never rendered for free — and no
+      subscription spinner shows.
 - [ ] With `billing` OFF, the sidebar shows no "Manage Subscription" entry and the dialog is
       not mounted.
 - [ ] With `billing` OFF, the `/docs` user guide hides the Subscribing, Free Trial, and
