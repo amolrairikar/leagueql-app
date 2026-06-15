@@ -6,11 +6,14 @@ import { isBannerEnabled } from '@/lib/feature-flags';
 // Current banner content. This is the one place to edit for any banner update —
 // swap the message/link to promote whatever the active campaign is (Discord
 // today). The banner only shows once the `banner` feature flag (FE-030) is on.
-// Leave LINK_URL empty for a link-less, message-only banner.
-// TODO: replace the placeholder invite with the real discord.gg/... link.
-const BANNER_MESSAGE = 'Join the LeagueQL Discord community';
-const BANNER_LINK_LABEL = 'join now';
-const BANNER_LINK_URL = 'https://discord.gg/REPLACE_ME';
+// The message is rendered as PREFIX + LINK_LABEL + SUFFIX, with LINK_LABEL turned
+// into the link when LINK_URL is set — so the link lives inline within the
+// sentence (today: the word "community" links to the Discord invite). Leave
+// LINK_URL empty for a link-less, message-only banner.
+const BANNER_MESSAGE_PREFIX = 'Join the LeagueQL Discord ';
+const BANNER_LINK_LABEL = 'community';
+const BANNER_MESSAGE_SUFFIX = '';
+const BANNER_LINK_URL = 'https://discord.gg/QZcxhYcY9';
 
 // localStorage key remembering a dismissal so the banner stays hidden for this
 // browser (FE-030). Mirrors the direct localStorage pattern in theme-provider.tsx.
@@ -55,20 +58,20 @@ export function Banner() {
     <div className="relative flex h-8 shrink-0 items-center justify-center gap-2 border-b border-primary/50 bg-primary/40 px-4">
       <Megaphone className="size-3.5 text-white" aria-hidden="true" />
       <span className="text-[0.72rem] font-medium tracking-wide text-white">
-        {BANNER_MESSAGE}
-        {BANNER_LINK_URL && (
-          <>
-            {' — '}
-            <a
-              href={BANNER_LINK_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline underline-offset-2 hover:no-underline"
-            >
-              {BANNER_LINK_LABEL}
-            </a>
-          </>
+        {BANNER_MESSAGE_PREFIX}
+        {BANNER_LINK_URL ? (
+          <a
+            href={BANNER_LINK_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline underline-offset-2 hover:no-underline"
+          >
+            {BANNER_LINK_LABEL}
+          </a>
+        ) : (
+          BANNER_LINK_LABEL
         )}
+        {BANNER_MESSAGE_SUFFIX}
       </span>
       <button
         type="button"

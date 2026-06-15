@@ -17,10 +17,13 @@ change, not a structural one.
 - Placement: rendered in `AppLayout` (`src/app/app.tsx`) immediately below the in-app
   header. **Main app only** — it does not appear on the public/marketing routes that use the
   shared `<Header>` (landing, changelog, privacy, docs).
-- Content: `BANNER_MESSAGE`, `BANNER_LINK_LABEL`, `BANNER_LINK_URL` constants. The current
-  campaign is the Discord invite; `BANNER_LINK_URL` ships as a clearly-marked placeholder
-  (`https://discord.gg/REPLACE_ME`) to be replaced before the flag is turned on. An empty
-  `BANNER_LINK_URL` renders a message-only banner.
+- Content: `BANNER_MESSAGE_PREFIX`, `BANNER_LINK_LABEL`, `BANNER_MESSAGE_SUFFIX`, and
+  `BANNER_LINK_URL` constants. The message reads PREFIX + LINK_LABEL + SUFFIX, with the link
+  rendered inline on `BANNER_LINK_LABEL`, so the link lives within the sentence rather than as
+  a trailing call-to-action. The current campaign is the Discord invite — "Join the LeagueQL
+  Discord community" with the word "community" linking to the invite
+  (`https://discord.gg/QZcxhYcY9`). An empty `BANNER_LINK_URL` renders the label as plain text
+  (a message-only banner).
 - Dismissal persistence: `localStorage` key `leagueql.bannerDismissed` (read/written
   defensively so storage failures never crash the app).
 
@@ -31,8 +34,8 @@ change, not a structural one.
 - **Dismissed:** clicking the close (X) button hides the banner and writes the
   `localStorage` flag, so it stays hidden across reloads/navigations for that browser.
 - **Main app only:** the banner never appears on landing/docs/privacy/changelog routes.
-- **Placeholder/link-less content:** until the campaign link is real, the flag should stay
-  OFF in production; a banner with no `BANNER_LINK_URL` shows just the message.
+- **Link-less content:** a banner with no `BANNER_LINK_URL` shows just the message (the label
+  renders as plain text).
 - **localStorage unavailable:** a storage read/write failure (private browsing, disabled
   storage) is swallowed — the banner still renders and dismisses for the session.
 
