@@ -1,5 +1,5 @@
 import { Trophy } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, use, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   getPlayoffBracket,
@@ -7,13 +7,15 @@ import {
   getWeeklyStandings,
   type BracketMatch,
   type Matchup,
+  type WeeklyStandingItem,
 } from './api-calls';
 
+import type { Platform } from '@/components/api/types';
 import { BoxScoreCard } from '@/components/box-score-card';
 import SeasonSelect from '@/features/season_select/season-select';
 import { AVATAR_COLORS, UI_COLORS } from '@/lib/color-constants';
 import { getLeagueCookies } from '@/lib/cookie-handler';
-import { logger } from '@/lib/logger';
+import { type Result, toResult } from '@/lib/result';
 
 interface Team {
   team_id: string;
@@ -232,6 +234,103 @@ function ByeCard({ team }: { team: Team }) {
   );
 }
 
+const PLAYOFF_FALLBACK = 'Failed to load playoff bracket data.';
+const NO_LEAGUE_MESSAGE = 'No league selected. Please connect a league first.';
+
+interface BracketData {
+  matches: BracketMatch[];
+  matchups: Matchup[];
+  recordMap: Record<string, string>;
+  championshipWeek: number;
+  maxRound: number;
+}
+
+type BracketResult = Result<BracketData>;
+
+// Championship week derived from actual playoff matchup data (handles week-17,
+// week-18, etc.), falling back to the league's historical default when none is
+// present.
+function championshipWeekFor(matchups: Matchup[], season: string): number {
+  const playoffWeeks = matchups
+    .filter((m) => m.playoff_tier_type && m.playoff_tier_type !== 'NONE')
+    .map((m) => parseInt(m.week, 10))
+    .filter((w) => !isNaN(w));
+  return playoffWeeks.length > 0
+    ? Math.max(...playoffWeeks)
+    : parseInt(season, 10) < 2021
+      ? 16
+      : 17;
+}
+
+// Join the bracket, season matchups, and weekly standings into the shape the
+// bracket renders: each bracket match paired with its matchup scores, plus the
+// end-of-regular-season record per team.
+function processBracketData(
+  bracketMatches: BracketMatch[],
+  matchupsData: Matchup[],
+  standingsData: WeeklyStandingItem[],
+  season: string,
+): BracketData {
+  // Derive end-of-regular-season record per team from the last standings snapshot week
+  const recordsByWeek: Record<number, Record<string, string>> = {};
+  for (const s of standingsData) {
+    const week = parseInt(s.snapshot_week, 10);
+    if (!isNaN(week)) (recordsByWeek[week] ??= {})[s.team_id] = s.record;
+  }
+  const snapshotWeeks = Object.keys(recordsByWeek).map(Number);
+  const recordMap =
+    snapshotWeeks.length > 0 ? recordsByWeek[Math.max(...snapshotWeeks)] : {};
+
+  const championshipWeek = championshipWeekFor(matchupsData, season);
+  const maxRound =
+    bracketMatches.length > 0
+      ? Math.max(...bracketMatches.map((m) => m.round))
+      : 0;
+
+  // Match each bracket match with its corresponding matchup to get scores
+  const matches = bracketMatches.map((bracketMatch) => {
+    const week = championshipWeek - (maxRound - bracketMatch.round);
+    const matchup = matchupsData.find(
+      (m) =>
+        m.season === bracketMatch.season &&
+        parseInt(m.week, 10) === week &&
+        ((m.team_a_id === bracketMatch.team_1_id &&
+          m.team_b_id === bracketMatch.team_2_id) ||
+          (m.team_a_id === bracketMatch.team_2_id &&
+            m.team_b_id === bracketMatch.team_1_id)),
+    );
+
+    if (matchup) {
+      // Match found, assign scores (handle team order)
+      const team1IsA = matchup.team_a_id === bracketMatch.team_1_id;
+      return {
+        ...bracketMatch,
+        team_1_score: team1IsA ? matchup.team_a_score : matchup.team_b_score,
+        team_2_score: team1IsA ? matchup.team_b_score : matchup.team_a_score,
+      };
+    }
+
+    // No matchup found, return bracket match without scores
+    return bracketMatch;
+  });
+
+  return {
+    matches,
+    matchups: matchupsData,
+    recordMap,
+    championshipWeek,
+    maxRound,
+  };
+}
+
+function BracketLoading() {
+  return (
+    <div className="text-center py-12">
+      <p className="text-muted-foreground">Loading playoff bracket...</p>
+    </div>
+  );
+}
+
 export default function PlayoffBracket() {
   const {
     leagueId,
@@ -242,12 +341,68 @@ export default function PlayoffBracket() {
   const [selectedSeason, setSelectedSeason] = useState(() =>
     allSeasons.length > 0 ? allSeasons[allSeasons.length - 1] : '2025',
   );
-  const [matches, setMatches] = useState<BracketMatch[]>([]);
-  const [matchups, setMatchups] = useState<Matchup[]>([]);
-  const [recordMap, setRecordMap] = useState<Record<string, string>>({});
   const [selectedMatchId, setSelectedMatchId] = useState<number | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+
+  const bracketPromise = useMemo(
+    (): Promise<BracketResult> =>
+      leagueId
+        ? toResult(
+            Promise.all([
+              getPlayoffBracket(leagueId, platform, selectedSeason),
+              getMatchups(leagueId, platform, selectedSeason),
+              getWeeklyStandings(leagueId, platform, selectedSeason),
+            ]).then(([bracketRes, matchupsRes, standingsRes]) =>
+              processBracketData(
+                bracketRes.data,
+                matchupsRes.data,
+                standingsRes.data,
+                selectedSeason,
+              ),
+            ),
+            PLAYOFF_FALLBACK,
+          )
+        : Promise.resolve({ ok: false as const, error: NO_LEAGUE_MESSAGE }),
+    [leagueId, platform, selectedSeason],
+  );
+
+  return (
+    <div className="flex flex-1 flex-col p-6 overflow-auto">
+      <div className="max-w-262.5 mx-auto w-full">
+        {allSeasons.length > 0 && (
+          <div className="mb-7">
+            <SeasonSelect
+              seasons={allSeasons}
+              value={selectedSeason}
+              onValueChange={setSelectedSeason}
+            />
+          </div>
+        )}
+
+        <Suspense fallback={<BracketLoading />}>
+          <BracketContent
+            promise={bracketPromise}
+            platform={platform}
+            selectedMatchId={selectedMatchId}
+            onSelectMatch={setSelectedMatchId}
+          />
+        </Suspense>
+      </div>
+    </div>
+  );
+}
+
+function BracketContent({
+  promise,
+  platform,
+  selectedMatchId,
+  onSelectMatch,
+}: {
+  promise: Promise<BracketResult>;
+  platform: Platform;
+  selectedMatchId: number | null;
+  onSelectMatch: (id: number | null) => void;
+}) {
+  const result = use(promise);
   const boxScoreRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -259,107 +414,17 @@ export default function PlayoffBracket() {
     }
   }, [selectedMatchId]);
 
-  useEffect(() => {
-    if (!leagueId) {
-      setError('No league selected. Please connect a league first.');
-      setLoading(false);
-      return;
-    }
+  if (!result.ok) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-destructive">{result.error}</p>
+      </div>
+    );
+  }
 
-    async function fetchBracketData() {
-      setLoading(true);
-      setError(null);
-      try {
-        const [bracketResponse, matchupsResponse, standingsResponse] =
-          await Promise.all([
-            getPlayoffBracket(leagueId, platform, selectedSeason),
-            getMatchups(leagueId, platform, selectedSeason),
-            getWeeklyStandings(leagueId, platform, selectedSeason),
-          ]);
+  const { matches, matchups, recordMap, championshipWeek, maxRound } =
+    result.data;
 
-        const bracketMatches = bracketResponse.data;
-        const matchupsData: Matchup[] = matchupsResponse.data;
-
-        // Derive end-of-regular-season record per team from the last standings snapshot week
-        const standingsData = standingsResponse.data;
-        const recordsByWeek: Record<number, Record<string, string>> = {};
-        for (const s of standingsData) {
-          const week = parseInt(s.snapshot_week, 10);
-          if (!isNaN(week)) (recordsByWeek[week] ??= {})[s.team_id] = s.record;
-        }
-        const snapshotWeeks = Object.keys(recordsByWeek).map(Number);
-        const lastWeekRecords =
-          snapshotWeeks.length > 0
-            ? recordsByWeek[Math.max(...snapshotWeeks)]
-            : {};
-        setRecordMap(lastWeekRecords);
-
-        // Store matchups in state for later use
-        setMatchups(matchupsData);
-
-        // Derive championship week from actual playoff matchup data (handles week-17, week-18, etc.)
-        const playoffWeeks = matchupsData
-          .filter((m) => m.playoff_tier_type && m.playoff_tier_type !== 'NONE')
-          .map((m) => parseInt(m.week, 10))
-          .filter((w) => !isNaN(w));
-        const champWeek =
-          playoffWeeks.length > 0
-            ? Math.max(...playoffWeeks)
-            : parseInt(selectedSeason, 10) < 2021
-              ? 16
-              : 17;
-        const maxRound =
-          bracketMatches.length > 0
-            ? Math.max(...bracketMatches.map((m) => m.round))
-            : 0;
-
-        // Match each bracket match with its corresponding matchup to get scores
-        const matchesWithScores = bracketMatches.map((bracketMatch) => {
-          const week = champWeek - (maxRound - bracketMatch.round);
-          const matchup = matchupsData.find(
-            (m) =>
-              m.season === bracketMatch.season &&
-              parseInt(m.week, 10) === week &&
-              ((m.team_a_id === bracketMatch.team_1_id &&
-                m.team_b_id === bracketMatch.team_2_id) ||
-                (m.team_a_id === bracketMatch.team_2_id &&
-                  m.team_b_id === bracketMatch.team_1_id)),
-          );
-
-          if (matchup) {
-            // Match found, assign scores (handle team order)
-            const team1IsA = matchup.team_a_id === bracketMatch.team_1_id;
-            return {
-              ...bracketMatch,
-              team_1_score: team1IsA
-                ? matchup.team_a_score
-                : matchup.team_b_score,
-              team_2_score: team1IsA
-                ? matchup.team_b_score
-                : matchup.team_a_score,
-            };
-          }
-
-          // No matchup found, return bracket match without scores
-          return bracketMatch;
-        });
-
-        setMatches(matchesWithScores);
-      } catch (err) {
-        logger.error('Failed to fetch playoff bracket', err);
-        setError('Failed to load playoff bracket data.');
-        setMatches([]);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    void fetchBracketData();
-  }, [leagueId, platform, selectedSeason]);
-
-  // Parse matches from DynamoDB format
-  const maxRound =
-    matches.length > 0 ? Math.max(...matches.map((m) => m.round)) : 0;
   const championship = matches.find((m) => m.position === 1);
   const semifinals = matches.filter(
     (m) => m.round === maxRound - 1 && m.position === null,
@@ -414,21 +479,6 @@ export default function PlayoffBracket() {
     return { byeTeam, wildcardMatch };
   });
 
-  const seasonOptions = allSeasons;
-
-  // Derive championship week from matchup state (same logic as fetchBracketData)
-  const championshipWeek = useMemo(() => {
-    const playoffWeeks = matchups
-      .filter((m) => m.playoff_tier_type && m.playoff_tier_type !== 'NONE')
-      .map((m) => parseInt(m.week, 10))
-      .filter((w) => !isNaN(w));
-    return playoffWeeks.length > 0
-      ? Math.max(...playoffWeeks)
-      : parseInt(selectedSeason, 10) < 2021
-        ? 16
-        : 17;
-  }, [matchups, selectedSeason]);
-
   // Helper function to find the corresponding matchup data for a selected bracket match
   const findMatchupForBracketMatch = (
     bracketMatch: BracketMatch,
@@ -456,261 +506,227 @@ export default function PlayoffBracket() {
     ? findMatchupForBracketMatch(selectedMatch)
     : null;
 
-  if (loading) {
-    return (
-      <div className="flex flex-1 flex-col p-6 overflow-auto">
-        <div className="max-w-262.5 mx-auto w-full">
-          <div className="text-center py-12">
-            <p className="text-muted-foreground">Loading playoff bracket...</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex flex-1 flex-col p-6 overflow-auto">
-        <div className="max-w-262.5 mx-auto w-full">
-          <div className="text-center py-12">
-            <p className="text-destructive">{error}</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="flex flex-1 flex-col p-6 overflow-auto">
-      <div className="max-w-262.5 mx-auto w-full">
-        <div className="mb-7">
-          <SeasonSelect
-            seasons={seasonOptions}
-            value={selectedSeason}
-            onValueChange={setSelectedSeason}
-          />
-        </div>
-
-        {/* Main bracket */}
-        <div className="overflow-x-auto -mx-6 px-6 mb-6">
-          <div
-            className={`grid ${maxRound >= 3 ? 'grid-cols-[1fr_8px_1fr_8px_1fr]' : 'grid-cols-[1fr_8px_1fr]'} gap-0 items-stretch ${maxRound >= 3 ? 'min-w-[560px]' : 'min-w-[380px]'}`}
-          >
-            {/* Wild Card Round (6-team+ formats only) */}
-            {maxRound >= 3 && (
-              <div className="flex flex-col">
-                <div className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground text-center pb-2.5 border-b border-border/20 mb-0">
-                  Wild card
-                </div>
-                <div className="flex-1 flex flex-col justify-around">
-                  {wildcardRoundItems.map((item, idx) => (
-                    <div key={idx} className="flex flex-col gap-2.5">
-                      {item.byeTeam && <ByeCard team={item.byeTeam} />}
-                      {item.wildcardMatch && (
-                        <MatchupCard
-                          match={item.wildcardMatch}
-                          played={true}
-                          onClick={() =>
-                            setSelectedMatchId(
-                              item.wildcardMatch?.match_id === selectedMatchId
-                                ? null
-                                : (item.wildcardMatch?.match_id ?? null),
-                            )
-                          }
-                          record1={
-                            recordMap[item.wildcardMatch.team_1_id] ?? null
-                          }
-                          record2={
-                            recordMap[item.wildcardMatch.team_2_id] ?? null
-                          }
-                        />
-                      )}
-                      {idx === 0 && <div className="h-8" />}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Connector 1 (6-team+ formats only) */}
-            {maxRound >= 3 && (
-              <div className="flex flex-col justify-around pt-11">
-                <svg
-                  width="20"
-                  height="58"
-                  viewBox="0 0 20 58"
-                  overflow="visible"
-                  className="block"
-                >
-                  <path
-                    d="M0,15 H10 V43 H0"
-                    stroke="hsl(var(--border))"
-                    strokeWidth="1"
-                    fill="none"
-                  />
-                  <line
-                    x1="10"
-                    y1="29"
-                    x2="20"
-                    y2="29"
-                    stroke="hsl(var(--border))"
-                    strokeWidth="1"
-                  />
-                </svg>
-                <svg
-                  width="20"
-                  height="58"
-                  viewBox="0 0 20 58"
-                  overflow="visible"
-                  className="block"
-                >
-                  <path
-                    d="M0,15 H10 V43 H0"
-                    stroke="hsl(var(--border))"
-                    strokeWidth="1"
-                    fill="none"
-                  />
-                  <line
-                    x1="10"
-                    y1="29"
-                    x2="20"
-                    y2="29"
-                    stroke="hsl(var(--border))"
-                    strokeWidth="1"
-                  />
-                </svg>
-              </div>
-            )}
-
-            {/* Semifinals */}
+    <>
+      {/* Main bracket */}
+      <div className="overflow-x-auto -mx-6 px-6 mb-6">
+        <div
+          className={`grid ${maxRound >= 3 ? 'grid-cols-[1fr_8px_1fr_8px_1fr]' : 'grid-cols-[1fr_8px_1fr]'} gap-0 items-stretch ${maxRound >= 3 ? 'min-w-[560px]' : 'min-w-[380px]'}`}
+        >
+          {/* Wild Card Round (6-team+ formats only) */}
+          {maxRound >= 3 && (
             <div className="flex flex-col">
               <div className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground text-center pb-2.5 border-b border-border/20 mb-0">
-                Semifinals
+                Wild card
               </div>
               <div className="flex-1 flex flex-col justify-around">
-                {semifinals.map((match) => (
-                  <MatchupCard
-                    key={match.match_id}
-                    match={match}
-                    played={true}
-                    onClick={() =>
-                      setSelectedMatchId(
-                        match.match_id === selectedMatchId
-                          ? null
-                          : match.match_id,
-                      )
-                    }
-                    record1={recordMap[match.team_1_id] ?? null}
-                    record2={recordMap[match.team_2_id] ?? null}
-                  />
+                {wildcardRoundItems.map((item, idx) => (
+                  <div key={idx} className="flex flex-col gap-2.5">
+                    {item.byeTeam && <ByeCard team={item.byeTeam} />}
+                    {item.wildcardMatch && (
+                      <MatchupCard
+                        match={item.wildcardMatch}
+                        played={true}
+                        onClick={() =>
+                          onSelectMatch(
+                            item.wildcardMatch?.match_id === selectedMatchId
+                              ? null
+                              : (item.wildcardMatch?.match_id ?? null),
+                          )
+                        }
+                        record1={
+                          recordMap[item.wildcardMatch.team_1_id] ?? null
+                        }
+                        record2={
+                          recordMap[item.wildcardMatch.team_2_id] ?? null
+                        }
+                      />
+                    )}
+                    {idx === 0 && <div className="h-8" />}
+                  </div>
                 ))}
               </div>
             </div>
+          )}
 
-            {/* Connector 2 */}
+          {/* Connector 1 (6-team+ formats only) */}
+          {maxRound >= 3 && (
             <div className="flex flex-col justify-around pt-11">
               <svg
                 width="20"
-                height="130"
-                viewBox="0 0 20 130"
+                height="58"
+                viewBox="0 0 20 58"
                 overflow="visible"
                 className="block"
               >
                 <path
-                  d="M0,25 H10 V105 H0"
+                  d="M0,15 H10 V43 H0"
                   stroke="hsl(var(--border))"
                   strokeWidth="1"
                   fill="none"
                 />
                 <line
                   x1="10"
-                  y1="65"
+                  y1="29"
                   x2="20"
-                  y2="65"
+                  y2="29"
+                  stroke="hsl(var(--border))"
+                  strokeWidth="1"
+                />
+              </svg>
+              <svg
+                width="20"
+                height="58"
+                viewBox="0 0 20 58"
+                overflow="visible"
+                className="block"
+              >
+                <path
+                  d="M0,15 H10 V43 H0"
+                  stroke="hsl(var(--border))"
+                  strokeWidth="1"
+                  fill="none"
+                />
+                <line
+                  x1="10"
+                  y1="29"
+                  x2="20"
+                  y2="29"
                   stroke="hsl(var(--border))"
                   strokeWidth="1"
                 />
               </svg>
             </div>
+          )}
 
-            {/* Championship */}
-            <div className="flex flex-col">
-              <div className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground text-center pb-2.5 border-b border-border/20 mb-0">
-                Championship
-              </div>
-              <div className="flex-1 flex flex-col justify-around">
-                {championship && (
-                  <MatchupCard
-                    match={championship}
-                    extraClass={`border-2`}
-                    extraStyle={{ borderColor: UI_COLORS.gold }}
-                    played={true}
-                    onClick={() =>
-                      setSelectedMatchId(
-                        championship.match_id === selectedMatchId
-                          ? null
-                          : championship.match_id,
-                      )
-                    }
-                    record1={recordMap[championship.team_1_id] ?? null}
-                    record2={recordMap[championship.team_2_id] ?? null}
-                    championId={championship.winner}
-                  />
-                )}
-              </div>
+          {/* Semifinals */}
+          <div className="flex flex-col">
+            <div className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground text-center pb-2.5 border-b border-border/20 mb-0">
+              Semifinals
+            </div>
+            <div className="flex-1 flex flex-col justify-around">
+              {semifinals.map((match) => (
+                <MatchupCard
+                  key={match.match_id}
+                  match={match}
+                  played={true}
+                  onClick={() =>
+                    onSelectMatch(
+                      match.match_id === selectedMatchId
+                        ? null
+                        : match.match_id,
+                    )
+                  }
+                  record1={recordMap[match.team_1_id] ?? null}
+                  record2={recordMap[match.team_2_id] ?? null}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Connector 2 */}
+          <div className="flex flex-col justify-around pt-11">
+            <svg
+              width="20"
+              height="130"
+              viewBox="0 0 20 130"
+              overflow="visible"
+              className="block"
+            >
+              <path
+                d="M0,25 H10 V105 H0"
+                stroke="hsl(var(--border))"
+                strokeWidth="1"
+                fill="none"
+              />
+              <line
+                x1="10"
+                y1="65"
+                x2="20"
+                y2="65"
+                stroke="hsl(var(--border))"
+                strokeWidth="1"
+              />
+            </svg>
+          </div>
+
+          {/* Championship */}
+          <div className="flex flex-col">
+            <div className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground text-center pb-2.5 border-b border-border/20 mb-0">
+              Championship
+            </div>
+            <div className="flex-1 flex flex-col justify-around">
+              {championship && (
+                <MatchupCard
+                  match={championship}
+                  extraClass={`border-2`}
+                  extraStyle={{ borderColor: UI_COLORS.gold }}
+                  played={true}
+                  onClick={() =>
+                    onSelectMatch(
+                      championship.match_id === selectedMatchId
+                        ? null
+                        : championship.match_id,
+                    )
+                  }
+                  record1={recordMap[championship.team_1_id] ?? null}
+                  record2={recordMap[championship.team_2_id] ?? null}
+                  championId={championship.winner}
+                />
+              )}
             </div>
           </div>
         </div>
-
-        {selectedMatchupData && selectedMatch && (
-          <>
-            <div className="mt-6 mb-2 border-t border-border/50" />
-            <div ref={boxScoreRef}>
-              <BoxScoreCard
-                left={{
-                  teamLogo: selectedMatch.team_1_team_logo,
-                  teamName:
-                    selectedMatch.team_1_team_name ||
-                    `Team ${selectedMatch.team_1_display_name}`,
-                  ownerUsername: selectedMatch.team_1_display_name,
-                  color: getTeamColor(selectedMatch.team_1_id),
-                  score: selectedMatch.team_1_score ?? 0,
-                  starters:
-                    selectedMatchupData.team_a_id === selectedMatch.team_1_id
-                      ? selectedMatchupData.team_a_starters
-                      : selectedMatchupData.team_b_starters,
-                  bench:
-                    selectedMatchupData.team_a_id === selectedMatch.team_1_id
-                      ? selectedMatchupData.team_a_bench
-                      : selectedMatchupData.team_b_bench,
-                  isWinner: selectedMatch.winner === selectedMatch.team_1_id,
-                }}
-                right={{
-                  teamLogo: selectedMatch.team_2_team_logo,
-                  teamName:
-                    selectedMatch.team_2_team_name ||
-                    `Team ${selectedMatch.team_2_display_name}`,
-                  ownerUsername: selectedMatch.team_2_display_name,
-                  color: getTeamColor(selectedMatch.team_2_id),
-                  score: selectedMatch.team_2_score ?? 0,
-                  starters:
-                    selectedMatchupData.team_a_id === selectedMatch.team_2_id
-                      ? selectedMatchupData.team_a_starters
-                      : selectedMatchupData.team_b_starters,
-                  bench:
-                    selectedMatchupData.team_a_id === selectedMatch.team_2_id
-                      ? selectedMatchupData.team_a_bench
-                      : selectedMatchupData.team_b_bench,
-                  isWinner: selectedMatch.winner === selectedMatch.team_2_id,
-                }}
-                platform={platform}
-                season={selectedMatch.season}
-                onClose={() => setSelectedMatchId(null)}
-              />
-            </div>
-          </>
-        )}
       </div>
-    </div>
+
+      {selectedMatchupData && selectedMatch && (
+        <>
+          <div className="mt-6 mb-2 border-t border-border/50" />
+          <div ref={boxScoreRef}>
+            <BoxScoreCard
+              left={{
+                teamLogo: selectedMatch.team_1_team_logo,
+                teamName:
+                  selectedMatch.team_1_team_name ||
+                  `Team ${selectedMatch.team_1_display_name}`,
+                ownerUsername: selectedMatch.team_1_display_name,
+                color: getTeamColor(selectedMatch.team_1_id),
+                score: selectedMatch.team_1_score ?? 0,
+                starters:
+                  selectedMatchupData.team_a_id === selectedMatch.team_1_id
+                    ? selectedMatchupData.team_a_starters
+                    : selectedMatchupData.team_b_starters,
+                bench:
+                  selectedMatchupData.team_a_id === selectedMatch.team_1_id
+                    ? selectedMatchupData.team_a_bench
+                    : selectedMatchupData.team_b_bench,
+                isWinner: selectedMatch.winner === selectedMatch.team_1_id,
+              }}
+              right={{
+                teamLogo: selectedMatch.team_2_team_logo,
+                teamName:
+                  selectedMatch.team_2_team_name ||
+                  `Team ${selectedMatch.team_2_display_name}`,
+                ownerUsername: selectedMatch.team_2_display_name,
+                color: getTeamColor(selectedMatch.team_2_id),
+                score: selectedMatch.team_2_score ?? 0,
+                starters:
+                  selectedMatchupData.team_a_id === selectedMatch.team_2_id
+                    ? selectedMatchupData.team_a_starters
+                    : selectedMatchupData.team_b_starters,
+                bench:
+                  selectedMatchupData.team_a_id === selectedMatch.team_2_id
+                    ? selectedMatchupData.team_a_bench
+                    : selectedMatchupData.team_b_bench,
+                isWinner: selectedMatch.winner === selectedMatch.team_2_id,
+              }}
+              platform={platform}
+              season={selectedMatch.season}
+              onClose={() => onSelectMatch(null)}
+            />
+          </div>
+        </>
+      )}
+    </>
   );
 }
