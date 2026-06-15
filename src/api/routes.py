@@ -30,6 +30,7 @@ from fastapi import (
 
 import main
 from common.feature_flags import (
+    BANNER,
     PAYWALL_TEST_FEATURE,
     is_billing_enabled,
     is_enabled,
@@ -102,6 +103,7 @@ def get_feature_flags(response: Response) -> APIResponse:
         data={
             "billing": is_billing_enabled(),
             PAYWALL_TEST_FEATURE: is_enabled(PAYWALL_TEST_FEATURE),
+            BANNER: is_enabled(BANNER),
         },
     )
 

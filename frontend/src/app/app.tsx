@@ -9,6 +9,7 @@ import {
   useLocation,
 } from 'react-router-dom';
 
+import { Banner } from '@/components/banner';
 import { ErrorBoundary } from '@/components/error-boundary';
 import Header from '@/components/header';
 import { ModeToggle } from '@/components/mode-toggle';
@@ -88,6 +89,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
               <HeaderAccount />
             </div>
           </header>
+          <Banner />
           <ErrorBoundary resetKeys={[location.pathname]}>
             <MembershipGuard>{children}</MembershipGuard>
           </ErrorBoundary>

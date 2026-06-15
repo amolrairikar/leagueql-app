@@ -68,6 +68,7 @@ criteria. Frontend, backend, and extension features are kept separate.
 | [FE-027](frontend/FE-027-transactions.md) | Transactions |
 | [FE-028](frontend/FE-028-changelog-page.md) | Changelog Page |
 | [FE-029](frontend/FE-029-frontend-observability.md) | Frontend Observability (OpenTelemetry + RUM → Axiom) |
+| [FE-030](frontend/FE-030-informational-banner.md) | Informational Banner |
 
 ## Extension (`extension/`)
 | ID | Feature |

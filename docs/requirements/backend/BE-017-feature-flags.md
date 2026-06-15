@@ -31,6 +31,11 @@ The helper `is_feature_paywalled(flag_name)` returns `is_billing_enabled() and i
 and `require_active_subscription` short-circuits to a no-op when it is false. Adding the first real
 premium feature is a new `paywall_*` flag plus one call site.
 
+Beyond billing, the same mechanism carries **non-billing global flags** that gate frontend-only
+UI. `banner` is one such flag: it gates the in-app informational banner
+([FE-030](../frontend/FE-030-informational-banner.md)). The backend enforces nothing for it —
+it is resolved like any other flag and surfaced to the SPA via `GET /feature-flags`.
+
 The frontend resolves the same flags at runtime via the public `GET /feature-flags` endpoint
 ([FE-026](../frontend/FE-026-feature-flags.md)); both tiers read the same AppConfig source, so
 they always agree.
@@ -38,7 +43,9 @@ they always agree.
 ## Public endpoint — `GET /feature-flags`
 - **Unauthenticated** (no Clerk authorizer) so the SPA can load it before sign-in. Returns the
   resolved global flag map under the standard envelope:
-  `{ "detail": "Feature flags", "data": { "billing": <bool>, "paywall_test_feature": <bool> } }`.
+  `{ "detail": "Feature flags", "data": { "billing": <bool>, "paywall_test_feature": <bool>, "banner": <bool> } }`.
+  The payload **whitelists** the flags it exposes, so a new frontend-consumed flag must be added
+  to `get_feature_flags` explicitly.
 - The payload is only non-sensitive global booleans (the same flags the frontend already shipped),
   so public exposure is fine. Served `Cache-Control: no-store` so a console toggle is picked up on
   the next load.
@@ -50,7 +57,8 @@ they always agree.
   `APPCONFIG_TTL_SECONDS`, default 45s), registers an OpenFeature `InMemoryProvider`, and exposes
   `is_enabled(name)`, `is_billing_enabled()`, and `is_feature_paywalled(flag_name)` (=
   `is_billing_enabled() and is_enabled(flag_name)`), plus the `PAYWALL_TEST_FEATURE` placeholder
-  flag-name constant. A test-only `_override_for_testing({...})` swaps the active flag map.
+  and `BANNER` (FE-030) flag-name constants. A test-only `_override_for_testing({...})`
+  swaps the active flag map.
 - Source of truth: AWS AppConfig feature-flag profile (per environment), serving the same
   `{ "billing": { "enabled": false }, ... }` shape the module parses. Flag values + deployments are
   set in the AppConfig console (the runtime toggle); the AppConfig application / environment /

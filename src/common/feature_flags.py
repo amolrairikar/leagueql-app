@@ -42,6 +42,11 @@ logger = logging.getLogger(__name__)
 # Placeholder premium feature; not wired to any production endpoint yet.
 PAYWALL_TEST_FEATURE = "paywall_test_feature"
 
+# Global, non-billing flag gating the in-app informational banner (FE-030) — a
+# generic toggle reused for whatever the current banner promotes (Discord today).
+# Surfaced to the SPA via GET /feature-flags; the backend enforces nothing.
+BANNER = "banner"
+
 # The variant names are cosmetic; what matters is the boolean each maps to.
 _ON = "on"
 _OFF = "off"
