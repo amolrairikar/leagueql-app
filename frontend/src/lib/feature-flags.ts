@@ -59,6 +59,11 @@ export function isBillingEnabled(): boolean {
   return isEnabled('billing');
 }
 
+/** Whether the in-app informational banner (FE-030) is enabled. */
+export function isBannerEnabled(): boolean {
+  return isEnabled('banner');
+}
+
 /** Vitest sets this sentinel (see vite.config.ts); flag fetching stays off in tests. */
 function isTestEnv(): boolean {
   return import.meta.env.VITE_API_URL === 'http://test.local';

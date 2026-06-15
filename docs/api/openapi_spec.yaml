@@ -746,6 +746,9 @@ components:
             paywall_test_feature:
               type: boolean
               example: false
+            banner:
+              type: boolean
+              example: false
 
     OnboardRequest:
       type: object

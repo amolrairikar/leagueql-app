@@ -18,24 +18,34 @@ class TestFeatureFlagsEndpoint:
     """GET /feature-flags is public (no auth) and returns the global flag map."""
 
     def test_returns_resolved_flag_map(self, client):
-        # The autouse enable_billing_flag fixture sets both flags ON for this suite.
+        # The autouse enable_billing_flag fixture sets billing + paywall_test_feature
+        # ON for this suite; banner is unset and so defaults OFF.
         response = client.get("/feature-flags")
         assert response.status_code == 200
         body = response.json()
         assert body["detail"] == "Feature flags"
-        assert body["data"] == {"billing": True, "paywall_test_feature": True}
+        assert body["data"] == {
+            "billing": True,
+            "paywall_test_feature": True,
+            "banner": False,
+        }
         assert response.headers["Cache-Control"] == "no-store"
 
     def test_reflects_flag_state(self, client):
         from common import feature_flags
 
         feature_flags._override_for_testing(
-            {"billing": True, "paywall_test_feature": False}
+            {
+                "billing": True,
+                "paywall_test_feature": False,
+                "banner": True,
+            }
         )
         response = client.get("/feature-flags")
         assert response.json()["data"] == {
             "billing": True,
             "paywall_test_feature": False,
+            "banner": True,
         }
 
     def test_defaults_off_when_unset(self, client):
@@ -46,6 +56,7 @@ class TestFeatureFlagsEndpoint:
         assert response.json()["data"] == {
             "billing": False,
             "paywall_test_feature": False,
+            "banner": False,
         }
 
 
