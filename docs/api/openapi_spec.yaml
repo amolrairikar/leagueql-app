@@ -415,6 +415,14 @@ paths:
             type: string
             enum: [ESPN, SLEEPER]
             example: "SLEEPER"
+        - name: plan
+          in: query
+          required: true
+          description: The subscription plan (billing cadence); selects the Stripe price
+          schema:
+            type: string
+            enum: [MONTHLY, YEARLY]
+            example: "MONTHLY"
       responses:
         "200":
           $ref: "#/components/responses/BillingSessionResponse"

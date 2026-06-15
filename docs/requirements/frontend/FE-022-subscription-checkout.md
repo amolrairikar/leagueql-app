@@ -18,13 +18,18 @@ the app therefore refreshes subscription state with the cache bypassed and shows
 "activating" state, polling for a bounded interval before falling back to the paywall.
 
 ## Scope
-- **API accessor:** `createCheckoutSession(leagueId, platform)` in a new billing client module
-  (`src/components/api/billing.ts`), POSTing to `/leagues/{leagueId}/checkout-session?platform=…`
-  and returning `{ data: { url } }`. Uses `apiClient.post` (auth via the `__session` cookie;
-  POSTs are not cached).
-- **Subscribe trigger:** a "Subscribe" button in `subscription-required.tsx` (paywall) and in the
-  Manage Subscription dialog when the subscription is not active. On click → call the accessor →
-  `window.location.assign(url)`.
+- **API accessor:** `createCheckoutSession(leagueId, platform, plan)` in a new billing client
+  module (`src/components/api/billing.ts`), POSTing to
+  `/leagues/{leagueId}/checkout-session?platform=…&plan=…` and returning `{ data: { url } }`. The
+  `plan` is `MONTHLY` or `YEARLY` (BE-015 selects the matching Stripe price). Uses `apiClient.post`
+  (auth via the `__session` cookie; POSTs are not cached).
+- **Plan picker:** a monthly/yearly **toggle** (`plan-toggle.tsx`) rendered above the Subscribe
+  CTA, defaulting to `MONTHLY`. Both plans unlock the same premium features; the toggle only
+  chooses the billing cadence sent to checkout. Existing subscribers switch plans via the Stripe
+  Billing Portal ([FE-023](FE-023-subscription-management.md)).
+- **Subscribe trigger:** a "Subscribe" button in `subscription-required.tsx` (the locked overlay)
+  and in the Manage Subscription dialog when the subscription is not active. On click → call the
+  accessor with the toggled `plan` → `window.location.assign(url)`.
 - **Return destination:** Stripe `success_url` and `cancel_url` both land the user on the in-app
   **dashboard home** (`/home`, under the `SubscriptionGuard`). Success carries `?checkout=success`;
   cancel has no param.
@@ -64,8 +69,9 @@ the app therefore refreshes subscription state with the cache bypassed and shows
 ## Acceptance Criteria
 - [ ] A "Subscribe" action appears for a league with no active subscription (paywall + dialog) and
       is hidden in demo mode / when no league is connected.
-- [ ] Clicking Subscribe calls `POST /leagues/{id}/checkout-session` and redirects to the returned
-      Stripe URL.
+- [ ] A monthly/yearly toggle (default monthly) is shown with the Subscribe action; clicking
+      Subscribe calls `POST /leagues/{id}/checkout-session` with the selected `plan` and redirects
+      to the returned Stripe URL.
 - [ ] The button shows a loading state while the session is created and returns to idle on error.
 - [ ] A `409` response shows an "already active" message and refreshes subscription state instead
       of redirecting.

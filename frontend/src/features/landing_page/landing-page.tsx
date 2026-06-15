@@ -394,9 +394,7 @@ export default function LeagueQLLanding() {
       </section>
 
       {/* Pricing only matters when premium features are actually paywalled. */}
-      {isBillingEnabled() && (
-        <PricingTable onGetStarted={handleConnectLeague} />
-      )}
+      {isBillingEnabled() && <PricingTable />}
 
       <Footer />
 

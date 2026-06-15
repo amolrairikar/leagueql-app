@@ -1,5 +1,8 @@
 export type Platform = 'ESPN' | 'SLEEPER';
 
+/** Subscription billing cadence chosen at checkout (BE-015 / FE-022). */
+export type SubscriptionPlan = 'MONTHLY' | 'YEARLY';
+
 export interface PlayerStat {
   player_id: number;
   full_name: string;

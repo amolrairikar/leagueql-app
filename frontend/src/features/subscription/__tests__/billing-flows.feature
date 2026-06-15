@@ -7,6 +7,11 @@ Feature: Subscription checkout and billing portal (FE-022, FE-023)
     When I click Subscribe on the paywall
     Then the browser is redirected to the Stripe URL
 
+  Scenario: Subscribing on the yearly plan sends the yearly plan
+    Given a checkout session will be created
+    When I pick the yearly plan and click Subscribe
+    Then the checkout request used the yearly plan
+
   Scenario: A 409 on checkout shows an inline error
     Given checkout is rejected because a subscription already exists
     When I click Subscribe on the paywall

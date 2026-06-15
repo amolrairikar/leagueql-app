@@ -777,6 +777,7 @@ def create_subscription_checkout_session(
     clerk_user_id: str,
     subscription_data: dict[str, Any],
     token: str,
+    price_id: str,
 ) -> Any:
     """Open a subscription-mode Checkout Session, recovering from a deleted customer.
 
@@ -795,6 +796,8 @@ def create_subscription_checkout_session(
         subscription_data: ``subscription_data`` for the Checkout Session (metadata
             and optional trial).
         token: The per-attempt nonce used as the Stripe idempotency key.
+        price_id: The Stripe recurring price ID for the chosen plan (monthly or
+            yearly); resolved by the caller from the request's ``plan``.
 
     Returns:
         The created Stripe Checkout Session object.
@@ -806,7 +809,7 @@ def create_subscription_checkout_session(
         return main.stripe.checkout.Session.create(
             mode="subscription",
             customer=cust_id,
-            line_items=[{"price": main.STRIPE_PRICE_ID, "quantity": 1}],
+            line_items=[{"price": price_id, "quantity": 1}],
             subscription_data=subscription_data,
             allow_promotion_codes=True,
             managed_payments={"enabled": True},

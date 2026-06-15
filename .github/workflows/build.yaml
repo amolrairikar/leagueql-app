@@ -324,8 +324,10 @@ jobs:
           # The sensitive secret key + webhook signing secret are NOT in CI — they
           # live as SecureString SSM parameters (/leagueql/{env}/stripe/*), set
           # out-of-band and fetched by the Lambdas at runtime. Only the
-          # non-sensitive Price ID flows through Terraform (TF_VAR_*, no -var flag).
-          TF_VAR_stripe_price_id: ${{ env.ENVIRONMENT == 'prod' && secrets.STRIPE_PRICE_ID_PROD || secrets.STRIPE_PRICE_ID_DEV }}
+          # non-sensitive Price IDs flow through Terraform (TF_VAR_*, no -var flag).
+          # One recurring price per plan (monthly / yearly), mode-selected by env.
+          TF_VAR_stripe_price_id_monthly: ${{ env.ENVIRONMENT == 'prod' && secrets.STRIPE_PRICE_ID_MONTHLY_PROD || secrets.STRIPE_PRICE_ID_MONTHLY_DEV }}
+          TF_VAR_stripe_price_id_yearly: ${{ env.ENVIRONMENT == 'prod' && secrets.STRIPE_PRICE_ID_YEARLY_PROD || secrets.STRIPE_PRICE_ID_YEARLY_DEV }}
         run: |
           terraform init \
             -backend-config="bucket=$TF_STATE_BUCKET" \
@@ -523,5 +525,6 @@ jobs:
           TEST_CLERK_USER_ID: ${{ secrets.TEST_CLERK_USER_ID_DEV }}
           CLERK_JWT_TEMPLATE: integration-tests
           STRIPE_SECRET_KEY_SSM_PARAM: /leagueql/${{ env.ENVIRONMENT }}/stripe/secret_key
-          STRIPE_PRICE_ID: ${{ secrets.STRIPE_PRICE_ID_DEV }}
+          STRIPE_PRICE_ID_MONTHLY: ${{ secrets.STRIPE_PRICE_ID_MONTHLY_DEV }}
+          STRIPE_PRICE_ID_YEARLY: ${{ secrets.STRIPE_PRICE_ID_YEARLY_DEV }}
         run: pipenv run behave tests/integration/stripe

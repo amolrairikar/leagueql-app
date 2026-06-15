@@ -18,15 +18,16 @@ afterEach(() => {
 });
 
 describe('billing api', () => {
-  it('createCheckoutSession POSTs to the checkout endpoint with platform', async () => {
+  it('createCheckoutSession POSTs to the checkout endpoint with platform and plan', async () => {
     const fetchMock = mockFetchOk({ detail: 'ok', data: { url: 'https://c' } });
 
-    const res = await createCheckoutSession('123', 'SLEEPER');
+    const res = await createCheckoutSession('123', 'SLEEPER', 'YEARLY');
 
     expect(res.data.url).toBe('https://c');
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toContain('/leagues/123/checkout-session');
     expect(url).toContain('platform=SLEEPER');
+    expect(url).toContain('plan=YEARLY');
     expect(init.method).toBe('POST');
   });
 

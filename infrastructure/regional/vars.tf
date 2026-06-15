@@ -31,8 +31,13 @@ variable "clerk_jwt_audience" {
 # (/leagueql/{env}/stripe/{secret_key,webhook_secret}) set out-of-band and fetched
 # by the Lambdas at runtime; the Lambda roles are granted ssm:GetParameter in
 # infrastructure/global/{dev,prod}/main.tf.
-variable "stripe_price_id" {
-  description = "Stripe Price ID for the league subscription (mode-specific)"
+variable "stripe_price_id_monthly" {
+  description = "Stripe recurring Price ID for the monthly plan (mode-specific)"
+  type        = string
+}
+
+variable "stripe_price_id_yearly" {
+  description = "Stripe recurring Price ID for the yearly plan (mode-specific)"
   type        = string
 }
 

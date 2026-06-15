@@ -1,10 +1,13 @@
 import { Lock } from 'lucide-react';
+import { useState } from 'react';
 
+import type { SubscriptionPlan } from '@/components/api/types';
 import { Spinner } from '@/components/spinner';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useIsOwner } from '@/features/ownership/use-is-owner';
+import { PlanToggle } from '@/features/subscription/plan-toggle';
 import { useStripeBilling } from '@/features/subscription/use-stripe-billing';
 import { getLeagueCookies } from '@/lib/cookie-handler';
 import { ErrorAlert } from '@/lib/error-alert';
@@ -39,6 +42,7 @@ export function SubscriptionRequired({
   // Only the owner can subscribe (BE-016); non-owners are pointed at the owner
   // instead of a dead-end Subscribe button (FE-025).
   const { isOwner } = useIsOwner();
+  const [plan, setPlan] = useState<SubscriptionPlan>('MONTHLY');
 
   return (
     <div className="relative overflow-hidden rounded-lg border border-border/50">
@@ -84,10 +88,15 @@ export function SubscriptionRequired({
                 ? `Subscribe to unlock ${featureLabel.toLowerCase()} for your league.`
                 : "Subscribe to gain access to your league's analytics."}
             </p>
+            <PlanToggle
+              value={plan}
+              onChange={setPlan}
+              disabled={checkoutLoading}
+            />
             <Button
               className="cursor-pointer"
               disabled={checkoutLoading || !leagueId}
-              onClick={() => void startCheckout(leagueId, platform)}
+              onClick={() => void startCheckout(leagueId, platform, plan)}
             >
               {checkoutLoading && <Spinner className="size-4" />}
               Subscribe

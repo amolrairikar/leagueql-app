@@ -1,6 +1,7 @@
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { defineFeature, loadFeature } from 'jest-cucumber';
+import { http, HttpResponse } from 'msw';
 import { afterEach, vi } from 'vitest';
 
 import { ManageSubscriptionDialog } from '../manage-subscription-dialog';
@@ -64,6 +65,35 @@ defineFeature(feature, (test) => {
     });
     then('the browser is redirected to the Stripe URL', () => {
       expect(assignSpy).toHaveBeenCalledWith(STRIPE_URL);
+    });
+  });
+
+  test('Subscribing on the yearly plan sends the yearly plan', ({
+    given,
+    when,
+    then,
+  }) => {
+    let capturedUrl = '';
+    given('a checkout session will be created', () => {
+      assignSpy = mockNavigation();
+    });
+    when('I pick the yearly plan and click Subscribe', async () => {
+      // Only the owner sees the Subscribe CTA + plan toggle (FE-025).
+      server.use(leagueMetadata({ is_owner: true }));
+      // Capturing handler (registered last → takes precedence) records the URL so
+      // we can assert the selected plan is sent through to the API.
+      server.use(
+        http.post('*/leagues/100/checkout-session', ({ request }) => {
+          capturedUrl = request.url;
+          return HttpResponse.json({ data: { url: STRIPE_URL } });
+        }),
+      );
+      await renderRoute(<SubscriptionRequired />, { league });
+      await userEvent.click(screen.getByRole('radio', { name: /yearly/i }));
+      await userEvent.click(screen.getByRole('button', { name: /subscribe/i }));
+    });
+    then('the checkout request used the yearly plan', () => {
+      expect(new URL(capturedUrl).searchParams.get('plan')).toBe('YEARLY');
     });
   });
 

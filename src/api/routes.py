@@ -49,8 +49,10 @@ from main import (
     QueryResponse,
     QueryType,
     RequestType,
+    SubscriptionPlan,
     correlation_id_var,
     logger,
+    stripe_price_id_for_plan,
 )
 from helpers import (
     _is_conditional_check_failure,
@@ -180,16 +182,20 @@ def create_checkout_session(
         str, Path(description="The ID of the fantasy league", pattern=r"^\d+$")
     ],
     platform: Annotated[Platform, Query(description="The platform the league is on")],
+    plan: Annotated[
+        SubscriptionPlan, Query(description="The subscription plan (monthly or yearly)")
+    ],
     clerk_user_id: Annotated[str, Depends(get_authenticated_user)],
 ) -> APIResponse:
     """Create a Stripe Checkout Session to subscribe a league (BE-015).
 
     Resolves/creates the caller's Stripe customer, claims a synchronous
     ``pending_checkout`` marker (one winner under concurrency), and opens a
-    subscription-mode Checkout Session whose subscription carries the league's
-    canonical ID. The trial is included only on the league's first subscription.
-    Returns 409 when the league already has a subscription or an unexpired
-    in-flight checkout. Returns 404 when billing is disabled (BE-017).
+    subscription-mode Checkout Session for the requested ``plan``'s Stripe price
+    whose subscription carries the league's canonical ID. The trial is included
+    only on the league's first subscription. Returns 409 when the league already
+    has a subscription or an unexpired in-flight checkout. Returns 404 when
+    billing is disabled (BE-017).
     """
     if not is_billing_enabled():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
@@ -228,10 +234,12 @@ def create_checkout_session(
         clerk_user_id=clerk_user_id,
         subscription_data=subscription_data,
         token=token,
+        price_id=stripe_price_id_for_plan(plan),
     )
     logger.info(
-        "Created checkout session for league %s (trial=%s)",
+        "Created checkout session for league %s (plan=%s, trial=%s)",
         canonical_league_id,
+        plan.value,
         not trial_used,
     )
     return APIResponse(detail="Checkout session created", data={"url": session["url"]})

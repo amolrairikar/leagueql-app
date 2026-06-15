@@ -23,10 +23,13 @@ and per-request in BE-014 — this feature introduces **no scheduled job or poll
 event-driven webhook.
 
 ## Scope
-- **Checkout endpoint** (Clerk-authed): `POST /leagues/{id}/checkout-session` — resolves or
-  creates the user's Stripe Customer, claims a synchronous `pending_checkout` marker on the
-  league `METADATA` (conditional write — see Idempotency Layer 1), creates a Stripe Checkout
-  Session in `subscription` mode with `subscription_data.metadata` carrying
+- **Checkout endpoint** (Clerk-authed): `POST /leagues/{id}/checkout-session` — takes a required
+  `plan` query param (`MONTHLY` or `YEARLY`) that selects the Stripe recurring price
+  (`STRIPE_PRICE_ID_MONTHLY` / `STRIPE_PRICE_ID_YEARLY`; both gate the same premium features
+  identically). Resolves or creates the user's Stripe Customer, claims a synchronous
+  `pending_checkout` marker on the league `METADATA` (conditional write — see Idempotency
+  Layer 1), creates a Stripe Checkout Session in `subscription` mode for the selected price with
+  `subscription_data.metadata` carrying
   `canonical_league_id` **plus the native `platform` and `native_league_id`** (so the webhook
   can write the durable trial record without a reverse lookup — see the trial edge case) and
   `subscription_data.trial_period_days` (included only when the league has no recorded
@@ -77,8 +80,8 @@ event-driven webhook.
   never appears in Lambda environment variables, Terraform state, or CI. The values are set
   out-of-band via the AWS CLI (per region); Terraform only grants the API and webhook Lambda
   roles `ssm:GetParameter` on the specific parameter ARNs and never reads or writes the values.
-  The non-sensitive `stripe_price_id` remains an ordinary Terraform var / env var. Never
-  committed or logged.
+  The non-sensitive `stripe_price_id_monthly` / `stripe_price_id_yearly` remain ordinary
+  Terraform vars / env vars (one recurring price per plan). Never committed or logged.
   **DEV uses Stripe sandbox (test) mode and PROD uses live mode** — each environment is
   configured with its own mode-specific credentials (`sk_test_…`/`sk_live_…`, the matching
   `whsec_…` webhook signing secret) and its own mode-specific Price/Product IDs. Test- and
@@ -222,8 +225,11 @@ provisioning, not duplicate charging.)
 
 ## Acceptance Criteria
 - [ ] `POST /leagues/{id}/checkout-session` returns a Stripe Checkout URL for the
-      authenticated user, with the league's `canonical_league_id` in the subscription
+      authenticated user, using the recurring price for the requested `plan`
+      (`MONTHLY`/`YEARLY`), with the league's `canonical_league_id` in the subscription
       metadata and the configured trial applied.
+- [ ] A missing or invalid `plan` query param returns `422` (request validation) and creates
+      no Stripe session.
 - [ ] A Checkout Session opened against a **deleted** Stripe Customer recovers by minting a new
       Customer, overwriting the stored `USER#{clerk_user_id}` mapping, and retrying once; any
       other Stripe error returns a `502` with a JSON `detail` rather than an uncaught `500`.
@@ -294,8 +300,9 @@ provisioning, not duplicate charging.)
   the Billing Portal **return** all target the in-app dashboard home (`…/home`, under the
   SubscriptionGuard). Success carries `?checkout=success`, which drives the activation poll in
   `useSubscription` ([FE-022](../frontend/FE-022-subscription-checkout.md)); cancel has no param,
-  so it never polls. CI builds/zips the new Lambda and passes the non-sensitive `stripe_price_id`
-  as `TF_VAR_*` (mode-selected by environment); the secret key and webhook signing secret are
+  so it never polls. CI builds/zips the new Lambda and passes the non-sensitive
+  `stripe_price_id_monthly` / `stripe_price_id_yearly` as `TF_VAR_*` (mode-selected by
+  environment); the secret key and webhook signing secret are
   **no longer in CI** — they live in SSM Parameter Store (see *Secrets & environment mode* and
   the one-time setup below) and are fetched at runtime via `src/common/secrets.py`.
 - **`pending_checkout` self-heal window is configurable** via the `CHECKOUT_PENDING_TTL_MINUTES`
@@ -322,7 +329,8 @@ fetch), `src/common/subscription.py`
 `docs/api/openapi_spec.yaml` (checkout, billing-portal, `POST /stripe/webhook`),
 `docs/db/dynamodb_spec.md` (`stripe_subscription_id`, `pending_checkout`, `trial_used` on
 METADATA; `USER` item; `WEBHOOK_EVENT` dedup item),
-`infrastructure/regional/main.tf` + `vars.tf` (webhook Lambda, invoke permission, `stripe_price_id`
+`infrastructure/regional/main.tf` + `vars.tf` (webhook Lambda, invoke permission,
+`stripe_price_id_monthly` / `stripe_price_id_yearly`
 + SSM param-name env vars, alarm), `infrastructure/global/{dev,prod}/main.tf` (API + webhook IAM
 roles, incl. `ssm:GetParameter` on the Stripe parameter ARNs),
 `.github/workflows/build.yaml` (build + `TF_VAR_*` wiring),

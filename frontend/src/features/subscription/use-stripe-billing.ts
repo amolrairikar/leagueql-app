@@ -4,7 +4,7 @@ import {
   createBillingPortalSession,
   createCheckoutSession,
 } from '@/components/api/billing';
-import type { Platform } from '@/components/api/types';
+import type { Platform, SubscriptionPlan } from '@/components/api/types';
 import { ApiError, clearApiCache } from '@/lib/api-client';
 
 /**
@@ -23,12 +23,13 @@ export function useStripeBilling() {
   async function startCheckout(
     leagueId: string,
     platform: Platform,
+    plan: SubscriptionPlan,
   ): Promise<void> {
     if (checkoutLoading) return;
     setError(null);
     setCheckoutLoading(true);
     try {
-      const res = await createCheckoutSession(leagueId, platform);
+      const res = await createCheckoutSession(leagueId, platform, plan);
       // On return, Stripe's success_url carries `?checkout=success`, which drives
       // the activation poll in useSubscription.
       window.location.assign(res.data.url);

@@ -13,9 +13,9 @@ Feature: Landing page connect routing (FE-001 / FE-002 / FE-025)
   Scenario: The pricing table shows the plans and premium features
     Given billing is enabled
     When I open the landing page
-    Then I see the "Monthly" plan priced "$4"
-    And I see the "Yearly" plan priced "$30"
-    And I see "Test feature" listed as a premium feature
+    Then I see the "Monthly" plan priced "$2.99"
+    And I see the "Yearly" plan priced "$14.99"
+    And I see "Schedule-swap simulator" listed as a premium feature
 
   Scenario: With billing disabled the pricing table is hidden
     Given billing is disabled

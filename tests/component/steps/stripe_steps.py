@@ -110,7 +110,7 @@ def step_start_checkout(context, user_id, league_id, platform):
     context._patches.append(recreate)
 
     context.response = context.api.post(
-        f"/leagues/{league_id}/checkout-session?platform={platform}"
+        f"/leagues/{league_id}/checkout-session?platform={platform}&plan=MONTHLY"
     )
 
 

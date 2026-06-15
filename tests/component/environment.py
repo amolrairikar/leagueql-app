@@ -59,7 +59,8 @@ _ENV = {
     "AWS_SESSION_TOKEN": "testing",
     "STRIPE_SECRET_KEY_SSM_PARAM": STRIPE_SECRET_KEY_PARAM,
     "STRIPE_WEBHOOK_SECRET_SSM_PARAM": STRIPE_WEBHOOK_SECRET_PARAM,
-    "STRIPE_PRICE_ID": "price_test_dummy",
+    "STRIPE_PRICE_ID_MONTHLY": "price_test_monthly",
+    "STRIPE_PRICE_ID_YEARLY": "price_test_yearly",
     "STRIPE_TRIAL_PERIOD_DAYS": "14",
 }
 

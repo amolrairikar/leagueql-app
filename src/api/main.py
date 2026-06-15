@@ -80,6 +80,14 @@ class Platform(CaseInsensitiveEnum):
     ESPN = "ESPN"
 
 
+class SubscriptionPlan(CaseInsensitiveEnum):
+    """Billing cadence chosen at checkout (BE-015). Each maps to its own Stripe
+    recurring price; both gate the same premium features identically."""
+
+    MONTHLY = "MONTHLY"
+    YEARLY = "YEARLY"
+
+
 class RequestType(CaseInsensitiveEnum):
     ONBOARD = "ONBOARD"
     REFRESH = "REFRESH"
@@ -178,8 +186,19 @@ S3_BUCKET = os.environ["S3_BUCKET_NAME"]
 # environment never re-fetch. ``get_secret_from_env_param`` returns ``""`` when
 # unconfigured so the module still imports / runs in contexts where billing is not
 # set up (e.g. unit tests, which patch ``main.stripe``).
-STRIPE_PRICE_ID = os.environ.get("STRIPE_PRICE_ID", "")
+STRIPE_PRICE_ID_MONTHLY = os.environ.get("STRIPE_PRICE_ID_MONTHLY", "")
+STRIPE_PRICE_ID_YEARLY = os.environ.get("STRIPE_PRICE_ID_YEARLY", "")
 STRIPE_TRIAL_PERIOD_DAYS = int(os.environ.get("STRIPE_TRIAL_PERIOD_DAYS", "14"))
+
+
+def stripe_price_id_for_plan(plan: SubscriptionPlan) -> str:
+    """Return the Stripe recurring price ID for a checkout plan (BE-015)."""
+    return {
+        SubscriptionPlan.MONTHLY: STRIPE_PRICE_ID_MONTHLY,
+        SubscriptionPlan.YEARLY: STRIPE_PRICE_ID_YEARLY,
+    }[plan]
+
+
 STRIPE_CHECKOUT_SUCCESS_URL = os.environ.get(
     "STRIPE_CHECKOUT_SUCCESS_URL", "https://leagueql.com/home?checkout=success"
 )

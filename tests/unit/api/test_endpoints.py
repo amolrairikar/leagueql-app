@@ -1521,7 +1521,9 @@ class TestOwnerGate:
     ):
         mock_table.get_item.return_value = {"Item": league_lookup_item}
         _as_user("intruder")
-        response = client.post("/leagues/123/checkout-session?platform=SLEEPER")
+        response = client.post(
+            "/leagues/123/checkout-session?platform=SLEEPER&plan=MONTHLY"
+        )
         assert response.status_code == 403
 
 

@@ -109,7 +109,9 @@ class TestCheckoutSessionEndpoint:
         ]
         with patch("main.stripe") as mock_stripe:
             mock_stripe.checkout.Session.create.return_value = {"url": "https://c"}
-            resp = client.post("/leagues/123/checkout-session?platform=SLEEPER")
+            resp = client.post(
+                "/leagues/123/checkout-session?platform=SLEEPER&plan=MONTHLY"
+            )
         assert resp.status_code == 200
         assert resp.json()["data"]["url"] == "https://c"
         _, kwargs = mock_stripe.checkout.Session.create.call_args
@@ -146,7 +148,9 @@ class TestCheckoutSessionEndpoint:
         ]
         with patch("main.stripe") as mock_stripe:
             mock_stripe.checkout.Session.create.return_value = {"url": "https://c"}
-            resp = client.post("/leagues/123/checkout-session?platform=SLEEPER")
+            resp = client.post(
+                "/leagues/123/checkout-session?platform=SLEEPER&plan=MONTHLY"
+            )
         assert resp.status_code == 200
         _, kwargs = mock_stripe.checkout.Session.create.call_args
         assert "trial_period_days" not in kwargs["subscription_data"]
@@ -167,10 +171,56 @@ class TestCheckoutSessionEndpoint:
         ]
         with patch("main.stripe") as mock_stripe:
             mock_stripe.checkout.Session.create.return_value = {"url": "https://c"}
-            resp = client.post("/leagues/123/checkout-session?platform=SLEEPER")
+            resp = client.post(
+                "/leagues/123/checkout-session?platform=SLEEPER&plan=MONTHLY"
+            )
         assert resp.status_code == 200
         _, kwargs = mock_stripe.checkout.Session.create.call_args
         assert "trial_period_days" not in kwargs["subscription_data"]
+
+    @pytest.mark.parametrize(
+        "plan,expected_price",
+        [("MONTHLY", "price_monthly"), ("YEARLY", "price_yearly")],
+    )
+    def test_uses_the_price_for_the_selected_plan(
+        self,
+        client,
+        mock_table,
+        league_lookup_item,
+        league_metadata_item,
+        override_user,
+        monkeypatch,
+        plan,
+        expected_price,
+    ):
+        import main
+
+        monkeypatch.setattr(main, "STRIPE_PRICE_ID_MONTHLY", "price_monthly")
+        monkeypatch.setattr(main, "STRIPE_PRICE_ID_YEARLY", "price_yearly")
+        league_metadata_item["trial_used"] = True
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+            {"Item": {"stripe_customer_id": "cus_1"}},
+        ]
+        with patch("main.stripe") as mock_stripe:
+            mock_stripe.checkout.Session.create.return_value = {"url": "https://c"}
+            resp = client.post(
+                f"/leagues/123/checkout-session?platform=SLEEPER&plan={plan}"
+            )
+        assert resp.status_code == 200
+        _, kwargs = mock_stripe.checkout.Session.create.call_args
+        assert kwargs["line_items"] == [{"price": expected_price, "quantity": 1}]
+
+    @pytest.mark.parametrize("query", ["", "&plan=weekly"])
+    def test_returns_422_for_missing_or_invalid_plan(
+        self, client, override_user, query
+    ):
+        # Query-param validation runs before the handler, so no Stripe call is made.
+        with patch("main.stripe") as mock_stripe:
+            resp = client.post(f"/leagues/123/checkout-session?platform=SLEEPER{query}")
+        assert resp.status_code == 422
+        mock_stripe.checkout.Session.create.assert_not_called()
 
     def test_returns_409_when_checkout_slot_taken(
         self,
@@ -189,7 +239,9 @@ class TestCheckoutSessionEndpoint:
         ]
         mock_table.update_item.side_effect = _conditional_error()  # claim loses
         with patch("main.stripe") as mock_stripe:
-            resp = client.post("/leagues/123/checkout-session?platform=SLEEPER")
+            resp = client.post(
+                "/leagues/123/checkout-session?platform=SLEEPER&plan=MONTHLY"
+            )
         assert resp.status_code == 409
         mock_stripe.checkout.Session.create.assert_not_called()
 
@@ -218,7 +270,9 @@ class TestCheckoutSessionEndpoint:
                 {"url": "https://c"},
             ]
             mock_stripe.Customer.create.return_value = {"id": "cus_new"}
-            resp = client.post("/leagues/123/checkout-session?platform=SLEEPER")
+            resp = client.post(
+                "/leagues/123/checkout-session?platform=SLEEPER&plan=MONTHLY"
+            )
         assert resp.status_code == 200
         assert resp.json()["data"]["url"] == "https://c"
         # A new customer was minted and the retry targeted it.
@@ -253,7 +307,9 @@ class TestCheckoutSessionEndpoint:
             mock_stripe.checkout.Session.create.side_effect = (
                 stripe.error.InvalidRequestError("Bad price", "line_items")
             )
-            resp = client.post("/leagues/123/checkout-session?platform=SLEEPER")
+            resp = client.post(
+                "/leagues/123/checkout-session?platform=SLEEPER&plan=MONTHLY"
+            )
         assert resp.status_code == 502
         mock_stripe.Customer.create.assert_not_called()
 
@@ -277,7 +333,9 @@ class TestCheckoutSessionEndpoint:
             mock_stripe.checkout.Session.create.side_effect = (
                 stripe.error.APIConnectionError("network down")
             )
-            resp = client.post("/leagues/123/checkout-session?platform=SLEEPER")
+            resp = client.post(
+                "/leagues/123/checkout-session?platform=SLEEPER&plan=MONTHLY"
+            )
         assert resp.status_code == 502
         mock_stripe.Customer.create.assert_not_called()
 
@@ -303,7 +361,9 @@ class TestCheckoutSessionEndpoint:
                 stripe.error.APIConnectionError("network down"),
             ]
             mock_stripe.Customer.create.return_value = {"id": "cus_new"}
-            resp = client.post("/leagues/123/checkout-session?platform=SLEEPER")
+            resp = client.post(
+                "/leagues/123/checkout-session?platform=SLEEPER&plan=MONTHLY"
+            )
         assert resp.status_code == 502
         mock_stripe.Customer.create.assert_called_once()
 
@@ -330,7 +390,9 @@ class TestCheckoutSessionEndpoint:
                 stripe.error.InvalidRequestError("No such customer", "customer")
             )
             mock_stripe.Customer.create.return_value = {"id": "cus_new"}
-            resp = client.post("/leagues/123/checkout-session?platform=SLEEPER")
+            resp = client.post(
+                "/leagues/123/checkout-session?platform=SLEEPER&plan=MONTHLY"
+            )
         assert resp.status_code == 500
 
     def test_requires_authentication(
@@ -342,7 +404,9 @@ class TestCheckoutSessionEndpoint:
         import routes
 
         main.app.dependency_overrides.pop(routes.get_authenticated_user, None)
-        resp = client.post("/leagues/123/checkout-session?platform=SLEEPER")
+        resp = client.post(
+            "/leagues/123/checkout-session?platform=SLEEPER&plan=MONTHLY"
+        )
         assert resp.status_code == 401
 
     def test_returns_404_when_billing_disabled(self, client, override_user):
@@ -350,7 +414,9 @@ class TestCheckoutSessionEndpoint:
         from common import feature_flags
 
         feature_flags._override_for_testing({"billing": False})
-        resp = client.post("/leagues/123/checkout-session?platform=SLEEPER")
+        resp = client.post(
+            "/leagues/123/checkout-session?platform=SLEEPER&plan=MONTHLY"
+        )
         assert resp.status_code == 404
 
 
