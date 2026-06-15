@@ -57,6 +57,74 @@ function involvedRosterIds(txn: TransactionItem): string[] {
   return [...ids];
 }
 
+/** The type columns the summary table tracks (commissioner moves are excluded). */
+type SummaryType = 'waiver' | 'free_agent' | 'trade';
+
+interface OwnerSummaryRow {
+  rosterId: string;
+  name: string;
+  waiver: number;
+  free_agent: number;
+  trade: number;
+  total: number;
+}
+
+/**
+ * Per-owner activity for the season, counted per transaction: each waiver, free-agent, or
+ * trade transaction adds 1 to the matching column for every owner it involves. Only owners
+ * that appear in at least one transaction are included; rows are sorted by total descending,
+ * then owner name ascending. Commissioner transactions are ignored.
+ */
+function buildOwnerSummary(transactions: TransactionItem[]): OwnerSummaryRow[] {
+  // Resolve display names from every team mentioned across the season's transactions.
+  const names = new Map<string, string>();
+  for (const txn of transactions) {
+    for (const team of txn.teams) {
+      const name =
+        [team.display_name, team.team_name].find((n) => n) ??
+        `Roster ${team.roster_id}`;
+      names.set(team.roster_id, name);
+    }
+  }
+
+  const rows = new Map<string, OwnerSummaryRow>();
+  const rowFor = (rosterId: string): OwnerSummaryRow => {
+    let row = rows.get(rosterId);
+    if (!row) {
+      row = {
+        rosterId,
+        name: names.get(rosterId) ?? `Roster ${rosterId}`,
+        waiver: 0,
+        free_agent: 0,
+        trade: 0,
+        total: 0,
+      };
+      rows.set(rosterId, row);
+    }
+    return row;
+  };
+
+  for (const txn of transactions) {
+    if (
+      txn.type !== 'waiver' &&
+      txn.type !== 'free_agent' &&
+      txn.type !== 'trade'
+    ) {
+      continue;
+    }
+    const type: SummaryType = txn.type;
+    for (const rosterId of involvedRosterIds(txn)) {
+      const row = rowFor(rosterId);
+      row[type] += 1;
+      row.total += 1;
+    }
+  }
+
+  return [...rows.values()].sort(
+    (a, b) => b.total - a.total || a.name.localeCompare(b.name),
+  );
+}
+
 function TransactionCard({ txn }: { txn: TransactionItem }) {
   const date = new Date(txn.created).toLocaleDateString(undefined, {
     month: 'short',
@@ -161,6 +229,56 @@ function TransactionCard({ txn }: { txn: TransactionItem }) {
   );
 }
 
+function SummaryTable({ promise }: { promise: Promise<TransactionsResult> }) {
+  const result = use(promise);
+
+  // The wire below renders the error / empty state, so the table stays out of the way.
+  if (!result.ok) return null;
+  const rows = buildOwnerSummary(result.data);
+  if (rows.length === 0) return null;
+
+  const headCell =
+    'text-[10px] font-medium uppercase tracking-[0.07em] text-muted-foreground px-3.5 py-2.5 border-b border-border/50 bg-muted';
+
+  return (
+    <table className="w-full border-collapse text-[13px]">
+      <thead className="sticky top-0 z-20">
+        <tr>
+          <th className={`${headCell} text-left`}>Owner</th>
+          <th className={`${headCell} text-right`}>Waivers</th>
+          <th className={`${headCell} text-right`}>Free Agents</th>
+          <th className={`${headCell} text-right`}>Trades</th>
+          <th className={`${headCell} text-right`}>Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row) => (
+          <tr
+            key={row.rosterId}
+            className="border-b border-border/50 last:border-0 bg-card"
+          >
+            <td className="px-3.5 py-2.5 text-left text-foreground">
+              {row.name}
+            </td>
+            <td className="px-3.5 py-2.5 text-right text-muted-foreground">
+              {row.waiver}
+            </td>
+            <td className="px-3.5 py-2.5 text-right text-muted-foreground">
+              {row.free_agent}
+            </td>
+            <td className="px-3.5 py-2.5 text-right text-muted-foreground">
+              {row.trade}
+            </td>
+            <td className="px-3.5 py-2.5 text-right font-medium text-foreground">
+              {row.total}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 function TransactionsBody({
   promise,
   typeFilter,
@@ -209,6 +327,16 @@ function SkeletonList() {
   );
 }
 
+function TableSkeleton() {
+  return (
+    <div className="flex flex-col gap-1.5">
+      {Array.from({ length: 4 }).map((_, i) => (
+        <Skeleton key={i} className="h-9 w-full rounded-md" />
+      ))}
+    </div>
+  );
+}
+
 export default function Transactions() {
   const { leagueId, platform, seasons } = useMemo(() => getLeagueCookies(), []);
 
@@ -231,8 +359,8 @@ export default function Transactions() {
   );
 
   return (
-    <div className="flex flex-1 flex-col p-6 overflow-hidden">
-      <div className="max-w-225 mx-auto w-full flex flex-1 flex-col min-h-0">
+    <div className="flex flex-1 flex-col p-6 overflow-auto">
+      <div className="max-w-225 mx-auto w-full">
         <div className="flex flex-wrap items-center gap-3 mb-4">
           {seasons.length > 0 && (
             <SeasonSelect
@@ -241,31 +369,42 @@ export default function Transactions() {
               onValueChange={setSelectedSeason}
             />
           )}
-          <div className="flex items-center gap-1">
-            {TYPE_FILTERS.map((f) => (
-              <button
-                key={f.value}
-                type="button"
-                onClick={() => setTypeFilter(f.value)}
-                className={`text-[12px] px-2.5 py-1 rounded-md border transition-colors cursor-pointer ${
-                  typeFilter === f.value
-                    ? 'bg-foreground text-background border-foreground'
-                    : 'bg-card text-muted-foreground border-border/50 hover:text-foreground'
-                }`}
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
+        </div>
+
+        <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-2.5">
+          Summary
+        </p>
+        <div className="mb-4 overflow-x-auto">
+          <Suspense fallback={<TableSkeleton />}>
+            <SummaryTable promise={transactionsPromise} />
+          </Suspense>
+        </div>
+
+        <div className="flex items-center gap-1 mb-4">
+          {TYPE_FILTERS.map((f) => (
+            <button
+              key={f.value}
+              type="button"
+              onClick={() => setTypeFilter(f.value)}
+              className={`text-[12px] px-2.5 py-1 rounded-md border transition-colors cursor-pointer ${
+                typeFilter === f.value
+                  ? 'bg-foreground text-background border-foreground'
+                  : 'bg-card text-muted-foreground border-border/50 hover:text-foreground'
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
         </div>
 
         <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-2.5">
           Transactions
         </p>
 
-        {/* Only the list scrolls, so the season/type controls stay pinned and the
-            page itself never grows past the viewport. */}
-        <div className="flex-1 min-h-0 overflow-auto pb-2">
+        {/* The wire scrolls in its own bounded container so a long season can't make
+            the page infinitely tall; the outer overflow-auto is a safety net so the
+            section stays reachable on short viewports. */}
+        <div className="max-h-[70vh] overflow-y-auto pb-2">
           <Suspense fallback={<SkeletonList />}>
             <TransactionsBody
               promise={transactionsPromise}

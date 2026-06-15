@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import { defineFeature, loadFeature } from 'jest-cucumber';
 
 import type { TransactionItem } from '../api-calls';
@@ -96,6 +96,49 @@ const TRANSACTIONS: TransactionItem[] = [
     draft_picks: [],
     waiver_bid: 7,
   },
+  // Two free-agent pickups for Bob. Combined with the trade above, Bob's totals
+  // (FA 2, trade 1, total 3) outrank Alice's (waiver 1, trade 1, total 2), so the
+  // summary table must list Bob first despite "Bob" sorting after "Alice" by name.
+  {
+    season: '2024',
+    transaction_id: 't3',
+    type: 'free_agent',
+    week: 3,
+    created: 1700000200000,
+    roster_ids: ['2'],
+    teams: [{ roster_id: '2', team_name: 'Team Bob', display_name: 'Bob' }],
+    adds: [
+      {
+        player_id: 'p5',
+        player_name: 'Free Agent One',
+        position: 'RB',
+        roster_id: '2',
+      },
+    ],
+    drops: [],
+    draft_picks: [],
+    waiver_bid: null,
+  },
+  {
+    season: '2024',
+    transaction_id: 't4',
+    type: 'free_agent',
+    week: 4,
+    created: 1700000300000,
+    roster_ids: ['2'],
+    teams: [{ roster_id: '2', team_name: 'Team Bob', display_name: 'Bob' }],
+    adds: [
+      {
+        player_id: 'p6',
+        player_name: 'Free Agent Two',
+        position: 'WR',
+        roster_id: '2',
+      },
+    ],
+    drops: [],
+    draft_picks: [],
+    waiver_bid: null,
+  },
 ];
 
 defineFeature(feature, (test) => {
@@ -156,6 +199,55 @@ defineFeature(feature, (test) => {
         (await screen.findAllByText(name, { exact: false })).length,
       ).toBeGreaterThan(0);
     });
+  });
+
+  test('The summary table breaks down activity per owner', ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    given('transactions data is available', () => {
+      server.use(leagueQuery({ TRANSACTIONS }));
+    });
+    when('I open the transactions page', async () => {
+      await renderRoute(<Transactions />, { route: '/transactions', league });
+    });
+    const checkRow = async (
+      name: string,
+      waivers: string,
+      freeAgents: string,
+      trades: string,
+      total: string,
+    ) => {
+      const ownerCell = await screen.findByRole('cell', { name });
+      const cells = within(ownerCell.closest('tr')!).getAllByRole('cell');
+      expect(cells[1].textContent).toBe(waivers);
+      expect(cells[2].textContent).toBe(freeAgents);
+      expect(cells[3].textContent).toBe(trades);
+      expect(cells[4].textContent).toBe(total);
+    };
+    then(
+      /^the summary row for "(.*)" shows waivers "(.*)", free agents "(.*)", trades "(.*)", total "(.*)"$/,
+      checkRow,
+    );
+    and(
+      /^the summary row for "(.*)" shows waivers "(.*)", free agents "(.*)", trades "(.*)", total "(.*)"$/,
+      checkRow,
+    );
+    and(
+      /^owner "(.*)" is listed above owner "(.*)" in the summary table$/,
+      async (first, second) => {
+        const firstRow = (
+          await screen.findByRole('cell', { name: first })
+        ).closest('tr')!;
+        const secondRow = (
+          await screen.findByRole('cell', { name: second })
+        ).closest('tr')!;
+        const rows = screen.getAllByRole('row');
+        expect(rows.indexOf(firstRow)).toBeLessThan(rows.indexOf(secondRow));
+      },
+    );
   });
 
   test('A season with no transactions shows an empty state', ({
