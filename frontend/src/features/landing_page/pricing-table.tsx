@@ -1,6 +1,5 @@
 import { Check } from 'lucide-react';
 
-import { Button } from '@/components/ui/button';
 import {
   PREMIUM_FEATURES,
   PRICING_PLANS,
@@ -14,12 +13,13 @@ import { cn } from '@/lib/utils';
 /**
  * Pricing table on the landing page (FE-001), rendered below the feature grid.
  *
- * Shows the subscription plans (`PRICING_PLANS`) and the premium features a
- * subscription unlocks (`PREMIUM_FEATURES`). Each plan's CTA runs the same
- * connect-league flow as the hero CTA via `onGetStarted`. The caller only mounts
- * this when the `billing` flag is on (premium features are free otherwise).
+ * Informational only: shows the subscription plans (`PRICING_PLANS`) and the
+ * premium features a subscription unlocks (`PREMIUM_FEATURES`). There is no
+ * per-plan CTA — checkout needs a connected league, so the plan is chosen in-app
+ * after connecting (the Subscribe flow's plan toggle, FE-022). The caller only
+ * mounts this when the `billing` flag is on (premium features are free otherwise).
  */
-export function PricingTable({ onGetStarted }: { onGetStarted: () => void }) {
+export function PricingTable() {
   return (
     <section className="relative z-10 px-6 pb-24">
       <div className="max-w-215 mx-auto">
@@ -27,9 +27,10 @@ export function PricingTable({ onGetStarted }: { onGetStarted: () => void }) {
           <h2 className="font-heading text-foreground text-2xl mb-3">
             Pricing
           </h2>
-          <p className="text-sm text-muted-foreground max-w-120 mx-auto leading-relaxed">
+          <p className="text-sm text-muted-foreground leading-relaxed">
             LeagueQL is free to use. A subscription unlocks premium features for
-            your league. All subscriptions come with a 14 day trial.
+            your league. All subscriptions come with a 14 day trial. You can
+            select a subscription after connecting your league.
           </p>
         </div>
 
@@ -61,13 +62,6 @@ export function PricingTable({ onGetStarted }: { onGetStarted: () => void }) {
               <p className="text-xs text-muted-foreground mt-1">
                 {plan.billedAs}
               </p>
-              <Button
-                className="w-full mt-5 cursor-pointer"
-                variant={plan.highlight ? 'default' : 'outline'}
-                onClick={onGetStarted}
-              >
-                Get started
-              </Button>
             </div>
           ))}
         </div>

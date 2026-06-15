@@ -42,13 +42,13 @@ describe('feature-flags runtime resolution', () => {
       http.get(`${API}/feature-flags`, () =>
         HttpResponse.json({
           detail: 'Feature flags',
-          data: { billing: false, paywall_test_feature: true },
+          data: { billing: false, premium_feature: true },
         }),
       ),
     );
     await refreshFlags();
     expect(isBillingEnabled()).toBe(false);
-    expect(isEnabled('paywall_test_feature')).toBe(true);
+    expect(isEnabled('premium_feature')).toBe(true);
   });
 
   it('keeps current flags when the endpoint errors (fail-safe)', async () => {

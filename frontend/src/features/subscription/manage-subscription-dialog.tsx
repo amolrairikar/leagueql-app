@@ -1,3 +1,6 @@
+import { useState } from 'react';
+
+import type { SubscriptionPlan } from '@/components/api/types';
 import { Spinner } from '@/components/spinner';
 import { Button } from '@/components/ui/button';
 import {
@@ -8,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { PlanToggle } from '@/features/subscription/plan-toggle';
 import { useStripeBilling } from '@/features/subscription/use-stripe-billing';
 import { useSubscription } from '@/features/subscription/use-subscription';
 import { ApiError } from '@/lib/api-client';
@@ -55,13 +59,14 @@ export function ManageSubscriptionDialog({
   // Evidence of an existing Stripe customer: a subscription_end_time has been
   // written for this league at some point. A 404 from the portal corrects this.
   const hasCustomer = Boolean(endTime);
+  const [plan, setPlan] = useState<SubscriptionPlan>('MONTHLY');
 
   async function handleManageBilling() {
     try {
       await openBillingPortal();
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) {
-        await startCheckout(leagueId, platform);
+        await startCheckout(leagueId, platform, plan);
       }
     }
   }
@@ -103,13 +108,20 @@ export function ManageSubscriptionDialog({
             <DialogDescription>
               {hasCustomer
                 ? "This league's subscription has expired. Subscribe again to restore access, or update your billing details."
-                : 'Subscribe to unlock your league analytics.'}
+                : 'Subscribe to unlock premium features.'}
             </DialogDescription>
+            <div className="flex justify-center py-1">
+              <PlanToggle
+                value={plan}
+                onChange={setPlan}
+                disabled={checkoutLoading}
+              />
+            </div>
             <DialogFooter>
               <Button
                 className="cursor-pointer"
                 disabled={checkoutLoading || !leagueId}
-                onClick={() => void startCheckout(leagueId, platform)}
+                onClick={() => void startCheckout(leagueId, platform, plan)}
               >
                 {checkoutLoading && <Spinner className="size-4" />}
                 Subscribe

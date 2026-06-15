@@ -106,31 +106,29 @@ export const FEATURES: Feature[] = [
 ];
 
 // Subscription plans shown in the landing-page pricing table (FE-001). A yearly
-// subscription is $30 vs. $48 for 12 monthly payments — ~37% cheaper.
+// subscription is $14.99 vs. $35.88 for 12 monthly payments — ~58% cheaper.
 export const PRICING_PLANS: PricingPlan[] = [
   {
     name: 'Monthly',
-    price: '$4',
+    price: '$2.99',
     period: '/month',
     billedAs: 'Billed monthly',
   },
   {
     name: 'Yearly',
-    price: '$30',
+    price: '$14.99',
     period: '/year',
-    billedAs: 'Billed annually — save ~37%',
+    billedAs: 'Billed annually — save ~58%',
     highlight: true,
     badge: 'Best value',
   },
 ];
 
 // Features unlocked by a subscription (freemium model). Everything else is free.
-// Placeholder entry until the first real premium feature ships — the pricing
-// table and gating mechanism are wired and ready.
 export const PREMIUM_FEATURES: PremiumFeature[] = [
   {
-    title: 'Test feature',
-    desc: 'A placeholder premium feature. Real premium features will be listed here as they ship.',
+    title: 'Schedule-swap simulator',
+    desc: "See what every team's record would be under each other manager's schedule — find out who was schedule-lucky and who got robbed.",
   },
 ];
 

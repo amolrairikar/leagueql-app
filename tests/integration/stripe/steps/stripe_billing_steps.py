@@ -19,7 +19,7 @@ def _authed_headers(context):
 def _post_checkout(context, headers):
     return requests.post(
         f"{context.api_base_url}/leagues/{context.test_league_id}/checkout-session",
-        params={"platform": context.platform},
+        params={"platform": context.platform, "plan": "MONTHLY"},
         headers=headers,
         timeout=REQUEST_TIMEOUT,
     )

@@ -66,12 +66,10 @@ beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
 
 // Billing ships feature-flagged OFF (FE-026), but historically the subscription
 // UI always rendered, and most tests assume it. Default the master flag ON —
-// along with the `paywall_test_feature` placeholder per-feature flag so the
-// generic premium gate (FE-021) is exercisable — for every test; OFF-path tests
-// flip a flag back within the test via setFlagsForTesting.
-beforeEach(() =>
-  setFlagsForTesting({ billing: true, paywall_test_feature: true }),
-);
+// along with the shared `premium_feature` flag so the premium gate (FE-021) is
+// exercisable — for every test; OFF-path tests flip a flag back within the test
+// via setFlagsForTesting.
+beforeEach(() => setFlagsForTesting({ billing: true, premium_feature: true }));
 
 afterEach(async () => {
   server.resetHandlers();

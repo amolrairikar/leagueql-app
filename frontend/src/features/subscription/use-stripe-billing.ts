@@ -4,7 +4,7 @@ import {
   createBillingPortalSession,
   createCheckoutSession,
 } from '@/components/api/billing';
-import type { Platform } from '@/components/api/types';
+import type { Platform, SubscriptionPlan } from '@/components/api/types';
 import { ApiError, clearApiCache } from '@/lib/api-client';
 
 /**
@@ -23,12 +23,21 @@ export function useStripeBilling() {
   async function startCheckout(
     leagueId: string,
     platform: Platform,
+    plan: SubscriptionPlan,
   ): Promise<void> {
     if (checkoutLoading) return;
     setError(null);
     setCheckoutLoading(true);
     try {
-      const res = await createCheckoutSession(leagueId, platform);
+      // Send the current in-app path so a cancel ("back") at Stripe returns the
+      // user to the page they started checkout from rather than /home (FE-022).
+      const cancelPath = window.location.pathname + window.location.search;
+      const res = await createCheckoutSession(
+        leagueId,
+        platform,
+        plan,
+        cancelPath,
+      );
       // On return, Stripe's success_url carries `?checkout=success`, which drives
       // the activation poll in useSubscription.
       window.location.assign(res.data.url);

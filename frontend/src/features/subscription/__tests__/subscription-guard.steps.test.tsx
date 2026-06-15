@@ -1,7 +1,5 @@
 import { screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { defineFeature, loadFeature } from 'jest-cucumber';
-import { Route, Routes } from 'react-router-dom';
 
 import { SubscriptionGuard } from '../subscription-guard';
 
@@ -19,7 +17,7 @@ const league = {
   seasons: ['2024'],
 };
 
-const FEATURE_FLAG = 'paywall_test_feature';
+const FEATURE_FLAG = 'premium_feature';
 
 function isoIn(days: number): string {
   return new Date(Date.now() + days * 86400000).toISOString();
@@ -35,7 +33,7 @@ async function openGatedPage() {
 }
 
 defineFeature(feature, (test) => {
-  test('An active subscription renders the gated page', ({
+  test('An active subscription renders the gated content', ({
     given,
     when,
     then,
@@ -49,7 +47,7 @@ defineFeature(feature, (test) => {
     });
   });
 
-  test('An expired subscription shows the inline paywall', ({
+  test('An expired subscription shows the locked overlay', ({
     given,
     when,
     then,
@@ -63,43 +61,7 @@ defineFeature(feature, (test) => {
     });
   });
 
-  test('From the paywall a user can return to the dashboard', ({
-    given,
-    when,
-    then,
-  }) => {
-    given('the current league subscription has expired', () => {
-      server.use(leagueMetadata({ subscription_end_time: isoIn(-1) }));
-    });
-    when(
-      'I open a gated page behind the guard and click back to dashboard',
-      async () => {
-        const user = userEvent.setup();
-        await renderRoute(
-          <Routes>
-            <Route
-              path="/premium"
-              element={
-                <SubscriptionGuard featureFlag={FEATURE_FLAG}>
-                  <div>Protected analytics</div>
-                </SubscriptionGuard>
-              }
-            />
-            <Route path="/home" element={<div>HOME PAGE</div>} />
-          </Routes>,
-          { route: '/premium', league },
-        );
-        await user.click(
-          await screen.findByRole('button', { name: /back to dashboard/i }),
-        );
-      },
-    );
-    then('I am routed to the home page', () => {
-      expect(screen.getByText('HOME PAGE')).toBeInTheDocument();
-    });
-  });
-
-  test('Billing disabled renders the page without a paywall (FE-026)', ({
+  test('Billing disabled hides the premium section entirely (FE-026)', ({
     given,
     and,
     when,
@@ -112,8 +74,8 @@ defineFeature(feature, (test) => {
       server.use(leagueMetadata({ subscription_end_time: isoIn(-1) }));
     });
     when('I open a gated page behind the subscription guard', openGatedPage);
-    then(/^I see the gated content "(.*)"$/, async (text) => {
-      expect(await screen.findByText(text)).toBeInTheDocument();
+    then(/^the gated content "(.*)" is not shown$/, (text) => {
+      expect(screen.queryByText(text)).not.toBeInTheDocument();
     });
   });
 
@@ -124,7 +86,7 @@ defineFeature(feature, (test) => {
     then,
   }) => {
     given('the feature paywall flag is disabled', () => {
-      setFlagsForTesting({ billing: true, paywall_test_feature: false });
+      setFlagsForTesting({ billing: true, premium_feature: false });
     });
     and('the current league subscription has expired', () => {
       server.use(leagueMetadata({ subscription_end_time: isoIn(-1) }));

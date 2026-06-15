@@ -14,14 +14,16 @@ Rendered with the marketing `Header` (not the app sidebar layout).
   History, Draft Grades, Player Records, Matchup Records, Complete History, Rivalry Tracker,
   Championship Timeline, Team Trends, League Records, Platform Migration.
 - Pricing table: `src/features/landing_page/pricing-table.tsx`, rendered below the feature grid.
-  Shows two subscription plans — **Monthly $4/month** and **Yearly $30/year** (the yearly plan
-  is highlighted as the best value, ~37% cheaper than 12 monthly payments) — notes that all
+  Shows two subscription plans — **Monthly $2.99/month** and **Yearly $14.99/year** (the yearly
+  plan is highlighted as the best value, ~58% cheaper than 12 monthly payments) — notes that all
   subscriptions come with a 14-day trial, and lists the **premium features** a subscription
-  unlocks (a placeholder **Test feature** for now — no real premium feature ships yet). Plans and
-  premium features come from `PRICING_PLANS` / `PREMIUM_FEATURES` in `constants.ts`. Each plan's
-  CTA runs the same connect-league flow as the hero CTA. The whole table is feature-flagged on
-  `billing` ([FE-026](FE-026-feature-flags.md)): it is hidden when billing is OFF (premium
-  features are free then, so there is nothing to sell).
+  unlocks (the **Schedule-swap simulator**, [FE-031](FE-031-schedule-swap-simulator.md)). Plans
+  and premium features come from `PRICING_PLANS` / `PREMIUM_FEATURES` in `constants.ts`. The table
+  is **informational** — there is no per-plan CTA (checkout needs a connected league), and the
+  blurb notes you select a subscription after connecting your league; the plan is chosen in-app via
+  the Subscribe flow's toggle ([FE-022](FE-022-subscription-checkout.md)). The whole table is
+  feature-flagged on `billing` ([FE-026](FE-026-feature-flags.md)): it is hidden when billing is
+  OFF (premium features are free then, so there is nothing to sell).
 - Nav links: Changelog (in-app `/changelog`, [FE-028](FE-028-changelog-page.md)), Docs (`/docs`).
 
 ## Edge Cases
@@ -44,9 +46,9 @@ Rendered with the marketing `Header` (not the app sidebar layout).
       page still renders if it fails.
 - [ ] CTAs route to sign in / connect league (or into the app for signed-in users) and to
       demo mode.
-- [ ] With `billing` ON, a pricing table below the feature grid shows the Monthly ($4/month) and
-      Yearly ($30/year) plans and lists the premium features (placeholder "Test feature"); with
-      `billing` OFF it is hidden.
+- [ ] With `billing` ON, a pricing table below the feature grid shows the Monthly ($2.99/month) and
+      Yearly ($14.99/year) plans and lists the premium features (the Schedule-swap simulator), with
+      no per-plan CTA; with `billing` OFF it is hidden.
 - [ ] The Docs nav link resolves to `/docs`; the Changelog nav link resolves to the in-app
       `/changelog` page ([FE-028](FE-028-changelog-page.md)).
 - [ ] Layout is responsive on mobile and desktop.

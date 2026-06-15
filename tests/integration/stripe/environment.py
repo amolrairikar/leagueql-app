@@ -19,7 +19,8 @@ _REQUIRED_ENV_VARS = [
     # test-mode subscription, then cancel it) so the deployed webhook converges
     # subscription_end_time onto the league — they need the dev secret key + price.
     "STRIPE_SECRET_KEY_SSM_PARAM",
-    "STRIPE_PRICE_ID",
+    "STRIPE_PRICE_ID_MONTHLY",
+    "STRIPE_PRICE_ID_YEARLY",
 ]
 
 
@@ -89,7 +90,9 @@ def before_all(context):
     context.stripe_secret_key = get_ssm_parameter(
         os.environ["STRIPE_SECRET_KEY_SSM_PARAM"]
     )
-    context.stripe_price_id = os.environ["STRIPE_PRICE_ID"]
+    # Lifecycle scenarios create a test-mode subscription directly via Stripe; the
+    # monthly price is sufficient (the plan/price split is exercised by unit tests).
+    context.stripe_price_id = os.environ["STRIPE_PRICE_ID_MONTHLY"]
 
     # The Stripe suite reads the league the onboarding suites already wrote — it
     # runs after them (CI ``needs``) so the LEAGUE_LOOKUP / METADATA records exist.

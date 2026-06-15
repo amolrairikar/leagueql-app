@@ -11,6 +11,8 @@ selector lets the user switch between onboarded seasons.
 - Season selector: `src/features/season_select/season-select.tsx`.
 - Reads `STANDINGS#{season}` (and supporting views) via
   [BE-005](../backend/BE-005-query-precomputed-views-api.md).
+- Also hosts the premium **Schedule-Swap Simulator**
+  ([FE-031](FE-031-schedule-swap-simulator.md)), scoped to the same season selector.
 
 ## Edge Cases
 - **Season in progress:** standings reflect games played so far; superlatives may be partial.

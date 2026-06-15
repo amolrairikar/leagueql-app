@@ -15,11 +15,11 @@ A ``billing`` master flag gates all Stripe billing behavior (BE-014 / BE-015):
 when it is OFF, ``require_active_subscription`` is a no-op, the checkout and
 billing-portal endpoints return 404, and the Stripe webhook no-ops.
 
-On top of it, per-feature ``paywall_*`` flags implement the freemium model: a
-premium feature is paywalled only when **both** ``billing`` and that feature's
-flag are ON (see ``is_feature_paywalled``). No production endpoint is gated yet —
-``paywall_test_feature`` is a placeholder kept so the mechanism, pricing table,
-and config are wired and ready for the first real premium feature.
+On top of it, the ``premium_feature`` flag implements the freemium model: a
+premium feature is paywalled only when **both** ``billing`` and ``premium_feature``
+are ON (see ``is_feature_paywalled``). Every premium feature shares this one flag,
+so they are all gated identically. The frontend gates the schedule-swap simulator
+(FE-031) on it; no backend endpoint enforces it yet.
 
 Evaluation goes through OpenFeature's in-memory provider so the rest of the app
 depends only on the vendor-neutral OpenFeature client. Anything that cannot be
@@ -38,9 +38,10 @@ from openfeature.provider.in_memory_provider import InMemoryFlag, InMemoryProvid
 
 logger = logging.getLogger(__name__)
 
-# Per-feature paywall flag names (freemium model; see BE-014 / BE-017).
-# Placeholder premium feature; not wired to any production endpoint yet.
-PAYWALL_TEST_FEATURE = "paywall_test_feature"
+# Shared premium-feature flag (freemium model; see BE-014 / BE-017). Every premium
+# feature is gated identically on this one flag. The frontend gates the schedule-swap
+# simulator (FE-031) on it; no backend endpoint enforces it yet.
+PREMIUM_FEATURE = "premium_feature"
 
 # Global, non-billing flag gating the in-app informational banner (FE-030) — a
 # generic toggle reused for whatever the current banner promotes (Discord today).

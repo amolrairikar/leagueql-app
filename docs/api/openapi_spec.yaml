@@ -415,6 +415,25 @@ paths:
             type: string
             enum: [ESPN, SLEEPER]
             example: "SLEEPER"
+        - name: plan
+          in: query
+          required: true
+          description: The subscription plan (billing cadence); selects the Stripe price
+          schema:
+            type: string
+            enum: [MONTHLY, YEARLY]
+            example: "MONTHLY"
+        - name: cancelPath
+          in: query
+          required: false
+          description: >
+            In-app relative path the user started checkout from; used to build the
+            Checkout cancel ("back") URL so cancelling returns them here instead of
+            the dashboard home (FE-022). Honored only as a safe same-origin relative
+            path; otherwise the cancel URL falls back to /home.
+          schema:
+            type: string
+            example: "/schedule-swap"
       responses:
         "200":
           $ref: "#/components/responses/BillingSessionResponse"
@@ -743,7 +762,7 @@ components:
             billing:
               type: boolean
               example: false
-            paywall_test_feature:
+            premium_feature:
               type: boolean
               example: false
             banner:

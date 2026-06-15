@@ -1,12 +1,12 @@
 # BE-014: Subscription Access Control
 
-> **Per-feature paywall, feature-flagged ([BE-017](BE-017-feature-flags.md)).** LeagueQL is
+> **Premium paywall, feature-flagged ([BE-017](BE-017-feature-flags.md)).** LeagueQL is
 > **freemium**: the app is free except for **premium features**. The generic gate
 > `require_active_subscription(canonical_league_id, paywall_flag)` exists and is unit-tested, but
-> **no production endpoint currently calls it** — there is no real premium feature yet. It is
-> retained infrastructure: a placeholder flag `paywall_test_feature` and the pricing table keep
-> the mechanism wired and ready. A future premium endpoint would call the gate; it only enforces
-> when **both** `billing` and that feature's per-feature flag are ON.
+> **no production endpoint currently calls it** — premium gating is enforced client-side today (the
+> frontend gates the schedule-swap simulator on `premium_feature`). The gate is retained
+> infrastructure: a future premium endpoint would call it; it only enforces when **both** `billing`
+> and `premium_feature` are ON.
 
 ## Description
 Provides the per-league subscription gate used by **premium** backend endpoints (none today).
@@ -35,7 +35,7 @@ billing webhook** ([BE-015](BE-015-stripe-billing.md)); this gate only *reads* i
   Stripe billing webhook ([BE-015](BE-015-stripe-billing.md)). (This replaced the earlier
   `update_subscription_end_time` helper, which is removed.)
 - **Gated endpoints:** none currently. To gate a future premium endpoint, call the helper with
-  that feature's `paywall_*` flag.
+  the `premium_feature` flag (`PREMIUM_FEATURE`).
 - **Ungated endpoints:** all of them — including `POST /leagues/{id}/migrate`, `GET /leagues/{id}/query`,
   `POST /leagues/{id}/espn_members`, `POST /leagues` (REFRESH and ONBOARD), `GET /leagues/{id}`,
   `DELETE /leagues/{id}`, and `GET /jobs/{id}`.
@@ -64,5 +64,5 @@ billing webhook** ([BE-015](BE-015-stripe-billing.md)); this gate only *reads* i
 ## Sources
 `src/api/helpers.py` (`require_active_subscription`),
 `src/common/subscription.py` (`record_active_subscription`, `expire_subscription`),
-`src/common/feature_flags.py` (`is_feature_paywalled`, `PAYWALL_TEST_FEATURE`),
+`src/common/feature_flags.py` (`is_feature_paywalled`, `PREMIUM_FEATURE`),
 `docs/db/dynamodb_spec.md` (METADATA `subscription_end_time`), `docs/api/openapi_spec.yaml`.
