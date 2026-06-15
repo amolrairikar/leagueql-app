@@ -34,12 +34,11 @@ import {
   type SleeperUserEntry,
   type TeamEntry,
 } from '@/features/migrate_league/api-calls';
+import { useEspnExtensionReady } from '@/hooks/use-espn-extension-ready';
 import { setLeagueCookies, getLeagueCookies } from '@/lib/cookie-handler';
 import {
   ESPN_EXTENSION_URL,
   EspnExtensionError,
-  isEspnExtensionAvailable,
-  onEspnExtensionReady,
   requestEspnCookies,
 } from '@/lib/espn-extension';
 
@@ -214,18 +213,9 @@ function Step2({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [extensionReady, setExtensionReady] = useState(
-    isEspnExtensionAvailable,
-  );
+  const extensionReady = useEspnExtensionReady();
   const [autofilling, setAutofilling] = useState(false);
   const [autofillError, setAutofillError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (extensionReady) return;
-    return onEspnExtensionReady(() => {
-      setExtensionReady(true);
-    });
-  }, [extensionReady]);
 
   function handlePlatformChange(value: 'ESPN' | 'SLEEPER') {
     setDestinationPlatform(value);

@@ -39,13 +39,12 @@ import {
   leagueConnectSchema,
 } from '@/features/connect_league/league-connect-schema';
 import { pollForCompletion, sleep } from '@/features/connect_league/poll';
+import { useEspnExtensionReady } from '@/hooks/use-espn-extension-ready';
 import { ApiError } from '@/lib/api-client';
 import { clearEspnCookies, setLeagueCookies } from '@/lib/cookie-handler';
 import {
   ESPN_EXTENSION_URL,
   EspnExtensionError,
-  isEspnExtensionAvailable,
-  onEspnExtensionReady,
   requestEspnCookies,
 } from '@/lib/espn-extension';
 
@@ -137,18 +136,9 @@ export default function LeagueConnect() {
   const platform = useWatch({ control, name: 'platform' });
   const espnErrors = errors as FieldErrors<EspnFormValues>;
 
-  const [extensionReady, setExtensionReady] = useState(
-    isEspnExtensionAvailable,
-  );
+  const extensionReady = useEspnExtensionReady();
   const [autofilling, setAutofilling] = useState(false);
   const [autofillError, setAutofillError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (extensionReady) return;
-    return onEspnExtensionReady(() => {
-      setExtensionReady(true);
-    });
-  }, [extensionReady]);
 
   const handleAutofill = async () => {
     setAutofillError(null);
