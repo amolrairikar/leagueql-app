@@ -23,10 +23,11 @@ A `billing` **master** flag gates all subscription UI
 - The `/docs` user guide hides its Subscribing, Free Trial, and Managing Billing sections (and
   their TOC entries), the subscription FAQ, and inline billing mentions.
 
-On top of the master flag, **per-feature paywall flags** implement the freemium model
-([FE-021](FE-021-subscription-access-control.md)): a premium route's `SubscriptionGuard` gates
-only when **both** `billing` and that route's flag are ON. There is **no real premium feature
-yet** — `paywall_test_feature` is a placeholder and no route is wrapped, so it gates nothing.
+On top of the master flag, the **`premium_feature`** flag implements the freemium model
+([FE-021](FE-021-subscription-access-control.md)): a premium section's `SubscriptionGuard` gates
+only when **both** `billing` and `premium_feature` are ON. Every premium feature shares this one
+flag. The schedule-swap simulator ([FE-031](FE-031-schedule-swap-simulator.md)) is the first
+section wrapped with it.
 
 The backend resolves the same flags from the same AppConfig source and is the real enforcement
 boundary ([BE-014](../backend/BE-014-subscription-access-control.md)), so even with the UI flag
@@ -57,7 +58,8 @@ momentarily stale the API gate still governs access.
   - `frontend/src/features/subscription/subscription-guard.tsx` — `SubscriptionGuard` takes a
     `featureFlag` prop and returns its children directly when billing is off **or** the named
     feature flag is off; otherwise renders the inner `SubscriptionGate` that runs
-    `useSubscription`. **No production route wraps it yet.**
+    `useSubscription`. The schedule-swap simulator (FE-031) wraps it with
+    `featureFlag="premium_feature"`.
   - `frontend/src/features/sidebar/app-sidebar.tsx` — the "Manage Subscription" item and
     `ManageSubscriptionDialog` render only when billing is on.
   - `frontend/src/features/instructions/instructions-page.tsx` — filters the billing TOC entries
@@ -84,8 +86,8 @@ momentarily stale the API gate still governs access.
 - [ ] With `billing` OFF, the `/docs` user guide hides the Subscribing, Free Trial, and
       Managing Billing sections while still rendering the rest of the guide.
 - [ ] With `billing` OFF, no `getLeague`-driven subscription poll runs for the guard or sidebar.
-- [ ] `paywall_test_feature` gates nothing today — it is a placeholder kept so the mechanism and
-      pricing table stay wired for the first real premium feature.
+- [ ] `premium_feature` is the shared flag every premium feature gates on; the schedule-swap
+      simulator (FE-031) is wrapped with it.
 - [ ] An unknown flag evaluates to `false`.
 - [ ] Flipping a flag in the AppConfig console changes the UI within the refresh window **without
       a rebuild**.

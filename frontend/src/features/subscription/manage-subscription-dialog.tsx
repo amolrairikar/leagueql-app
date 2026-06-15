@@ -103,7 +103,7 @@ export function ManageSubscriptionDialog({
             <DialogDescription>
               {hasCustomer
                 ? "This league's subscription has expired. Subscribe again to restore access, or update your billing details."
-                : 'Subscribe to unlock your league analytics.'}
+                : 'Subscribe to unlock premium features.'}
             </DialogDescription>
             <DialogFooter>
               <Button

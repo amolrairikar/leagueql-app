@@ -102,18 +102,18 @@ class TestBillingFlag:
 
 class TestIsFeaturePaywalled:
     def test_both_flags_on_is_paywalled(self):
-        ff._override_for_testing({"billing": True, "paywall_test_feature": True})
-        assert ff.is_feature_paywalled("paywall_test_feature") is True
+        ff._override_for_testing({"billing": True, "premium_feature": True})
+        assert ff.is_feature_paywalled("premium_feature") is True
 
     def test_billing_off_is_not_paywalled(self):
         # Master flag off ⇒ no feature is paywalled, even if its own flag is on.
-        ff._override_for_testing({"billing": False, "paywall_test_feature": True})
-        assert ff.is_feature_paywalled("paywall_test_feature") is False
+        ff._override_for_testing({"billing": False, "premium_feature": True})
+        assert ff.is_feature_paywalled("premium_feature") is False
 
     def test_feature_flag_off_is_not_paywalled(self):
         # Billing on but the feature's own flag off ⇒ the feature is free.
-        ff._override_for_testing({"billing": True, "paywall_test_feature": False})
-        assert ff.is_feature_paywalled("paywall_test_feature") is False
+        ff._override_for_testing({"billing": True, "premium_feature": False})
+        assert ff.is_feature_paywalled("premium_feature") is False
 
     def test_unknown_feature_flag_is_not_paywalled(self):
         ff._override_for_testing({"billing": True})

@@ -458,10 +458,10 @@ def require_active_subscription(
 
     Args:
         canonical_league_id: The canonical league ID.
-        paywall_flag: The per-feature paywall flag for the gated premium feature
-            (e.g. ``PAYWALL_TEST_FEATURE``). The gate is a no-op unless this
-            feature is paywalled (billing on **and** this flag on; BE-017). No
-            production endpoint calls this yet — it is retained infrastructure.
+        paywall_flag: The premium-feature flag for the gated premium feature
+            (``PREMIUM_FEATURE``). The gate is a no-op unless this feature is
+            paywalled (billing on **and** this flag on; BE-017). No production
+            endpoint calls this yet — it is retained infrastructure.
         metadata: Optional pre-fetched METADATA item; when omitted it is read
             from DynamoDB. Pass it to avoid a redundant read when the caller has
             already loaded the league's metadata.

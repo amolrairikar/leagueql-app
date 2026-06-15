@@ -23,13 +23,14 @@ A `billing` **master** flag gates all Stripe billing behavior
 - `POST /leagues/{id}/checkout-session` and `POST /billing-portal-session` return `404`.
 - The Stripe webhook Lambda returns `200` without processing (no subscription-state writes).
 
-On top of the master flag, **per-feature paywall flags** implement the freemium model
+On top of the master flag, the **`premium_feature`** flag implements the freemium model
 ([BE-014](BE-014-subscription-access-control.md)): a premium feature is gated only when **both**
-`billing` and that feature's flag are ON. There is **no real premium feature yet** —
-`paywall_test_feature` is a placeholder that gates nothing (no endpoint calls the gate with it).
-The helper `is_feature_paywalled(flag_name)` returns `is_billing_enabled() and is_enabled(flag_name)`,
-and `require_active_subscription` short-circuits to a no-op when it is false. Adding the first real
-premium feature is a new `paywall_*` flag plus one call site.
+`billing` and `premium_feature` are ON. Every premium feature shares this one flag, so they are
+all gated identically. The frontend gates the schedule-swap simulator
+([FE-031](../frontend/FE-031-schedule-swap-simulator.md)) on it; **no backend endpoint enforces it
+yet**. The helper `is_feature_paywalled(flag_name)` returns `is_billing_enabled() and is_enabled(flag_name)`,
+and `require_active_subscription` short-circuits to a no-op when it is false. Gating a backend
+endpoint is one call site with `PREMIUM_FEATURE`.
 
 Beyond billing, the same mechanism carries **non-billing global flags** that gate frontend-only
 UI. `banner` is one such flag: it gates the in-app informational banner
@@ -43,7 +44,7 @@ they always agree.
 ## Public endpoint — `GET /feature-flags`
 - **Unauthenticated** (no Clerk authorizer) so the SPA can load it before sign-in. Returns the
   resolved global flag map under the standard envelope:
-  `{ "detail": "Feature flags", "data": { "billing": <bool>, "paywall_test_feature": <bool>, "banner": <bool> } }`.
+  `{ "detail": "Feature flags", "data": { "billing": <bool>, "premium_feature": <bool>, "banner": <bool> } }`.
   The payload **whitelists** the flags it exposes, so a new frontend-consumed flag must be added
   to `get_feature_flags` explicitly.
 - The payload is only non-sensitive global booleans (the same flags the frontend already shipped),
@@ -56,8 +57,8 @@ they always agree.
   cache (`start_configuration_session` at cold start → `get_latest_configuration` on a TTL,
   `APPCONFIG_TTL_SECONDS`, default 45s), registers an OpenFeature `InMemoryProvider`, and exposes
   `is_enabled(name)`, `is_billing_enabled()`, and `is_feature_paywalled(flag_name)` (=
-  `is_billing_enabled() and is_enabled(flag_name)`), plus the `PAYWALL_TEST_FEATURE` placeholder
-  and `BANNER` (FE-030) flag-name constants. A test-only `_override_for_testing({...})`
+  `is_billing_enabled() and is_enabled(flag_name)`), plus the `PREMIUM_FEATURE` (shared
+  premium-feature) and `BANNER` (FE-030) flag-name constants. A test-only `_override_for_testing({...})`
   swaps the active flag map.
 - Source of truth: AWS AppConfig feature-flag profile (per environment), serving the same
   `{ "billing": { "enabled": false }, ... }` shape the module parses. Flag values + deployments are
@@ -103,8 +104,8 @@ they always agree.
 - [ ] With `billing` OFF, the Stripe webhook returns `200` and writes no subscription state.
 - [ ] `is_feature_paywalled` is true only when both the master `billing` flag and the named
       per-feature flag are ON.
-- [ ] `paywall_test_feature` gates nothing today — it is a placeholder kept so the mechanism and
-      pricing table stay wired for the first real premium feature.
+- [ ] `premium_feature` is the shared flag every premium feature gates on; the frontend gates the
+      schedule-swap simulator (FE-031) on it, and no backend endpoint enforces it yet.
 - [ ] With the `APPCONFIG_*` env vars unset, or AppConfig unreachable, all flags read as off
       (fail-safe), not an import error.
 - [ ] Flipping a flag in the AppConfig console (and deploying it) changes backend behavior within

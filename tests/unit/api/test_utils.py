@@ -329,9 +329,9 @@ class TestClaimPendingCheckout:
 
 
 class TestRequireActiveSubscription:
-    # The premium feature under test (League Migration); both this flag and the
-    # billing master flag are ON in this suite via the enable_billing_flag fixture.
-    FLAG = "paywall_test_feature"
+    # The shared premium-feature flag; both it and the billing master flag are ON
+    # in this suite via the enable_billing_flag fixture.
+    FLAG = "premium_feature"
 
     def _meta(self, end_time):
         item = {"PK": "LEAGUE#canonical-abc", "SK": "METADATA"}
@@ -397,9 +397,7 @@ class TestRequireActiveSubscription:
         from common import feature_flags
         from main import require_active_subscription
 
-        feature_flags._override_for_testing(
-            {"billing": False, "paywall_test_feature": True}
-        )
+        feature_flags._override_for_testing({"billing": False, "premium_feature": True})
         require_active_subscription("canonical-abc", self.FLAG)
         mock_table.get_item.assert_not_called()
 
@@ -409,9 +407,7 @@ class TestRequireActiveSubscription:
         from common import feature_flags
         from main import require_active_subscription
 
-        feature_flags._override_for_testing(
-            {"billing": True, "paywall_test_feature": False}
-        )
+        feature_flags._override_for_testing({"billing": True, "premium_feature": False})
         require_active_subscription("canonical-abc", self.FLAG)
         mock_table.get_item.assert_not_called()
 

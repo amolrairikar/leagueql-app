@@ -20,11 +20,13 @@ import {
   type WeeklyStandingItem,
   getSeasonWeeklyStandings,
 } from '@/features/matchups/api-calls';
+import ScheduleSwap from '@/features/schedule_swap/schedule-swap';
 import SeasonSelect from '@/features/season_select/season-select';
 import {
   type SeasonStandingsItem,
   getSeasonStandings,
 } from '@/features/season_standings/api-calls';
+import { SubscriptionGuard } from '@/features/subscription/subscription-guard';
 import { avatarColor } from '@/lib/color-constants';
 import { POSITION_COLORS, UI_COLORS } from '@/lib/color-constants';
 import { getLeagueCookies } from '@/lib/cookie-handler';
@@ -585,6 +587,39 @@ export default function SeasonStandings() {
             <WinsProgressionChart promise={weeklyStandingsPromise} />
           </Suspense>
         </div>
+
+        <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mt-6 mb-2.5">
+          <span className="inline-flex items-center gap-1.5">
+            Schedule-swap simulator
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Info className="w-3 h-3 shrink-0 cursor-default" />
+                </TooltipTrigger>
+                <TooltipContent
+                  side="top"
+                  className="max-w-72 text-center leading-relaxed bg-popover text-popover-foreground border border-border shadow-md [&>svg]:fill-popover [&>svg]:bg-popover"
+                >
+                  Each column is one manager&apos;s schedule: a cell is the
+                  number of wins that row&apos;s team would have had if it had
+                  played that manager&apos;s opponents each week, using its own
+                  weekly scores. The highlighted diagonal is each team&apos;s
+                  actual record.
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </span>
+        </p>
+        <SubscriptionGuard
+          featureFlag="premium_feature"
+          featureLabel="Schedule-swap simulator"
+        >
+          <ScheduleSwap
+            leagueId={leagueId}
+            platform={platform}
+            season={selectedSeason}
+          />
+        </SubscriptionGuard>
       </div>
     </div>
   );

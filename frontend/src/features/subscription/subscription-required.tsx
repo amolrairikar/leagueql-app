@@ -1,22 +1,27 @@
 import { Lock } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 
 import { Spinner } from '@/components/spinner';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useIsOwner } from '@/features/ownership/use-is-owner';
 import { useStripeBilling } from '@/features/subscription/use-stripe-billing';
 import { getLeagueCookies } from '@/lib/cookie-handler';
 import { ErrorAlert } from '@/lib/error-alert';
 
 /**
- * Inline paywall shown in place of a premium feature when the current league's
- * subscription is expired or absent (freemium model, FE-021). The single primary
- * action starts Stripe Checkout (FE-022).
+ * Locked-feature overlay shown in place of a premium feature when the current
+ * league's subscription is expired or absent (freemium model, FE-021). It renders
+ * a blurred, non-interactive skeleton of "a feature" behind a lock icon and the
+ * Subscribe CTA, so the section reads as present-but-locked rather than missing.
  *
- * `featureLabel` names the gated premium feature (e.g. "League migration") so the
- * copy is feature-specific; when omitted the generic "Subscription required" copy
- * is shown.
+ * The gated component itself is **not** rendered (the guard swaps it for this), so
+ * the premium feature's own data is never fetched while it is locked — only the
+ * rest of the page keeps loading.
+ *
+ * `featureLabel` names the gated premium feature (e.g. "Schedule-swap simulator")
+ * so the copy is feature-specific; when omitted the generic "Subscription
+ * required" copy is shown.
  *
  * `activationFailed` is set when the user returned from Checkout but the
  * subscription never activated within the poll window (e.g. a webhook problem),
@@ -34,61 +39,71 @@ export function SubscriptionRequired({
   // Only the owner can subscribe (BE-016); non-owners are pointed at the owner
   // instead of a dead-end Subscribe button (FE-025).
   const { isOwner } = useIsOwner();
-  const navigate = useNavigate();
 
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
-      {activationFailed && (
-        <Alert variant="destructive" className="max-w-md text-left">
-          <AlertTitle>We couldn&apos;t confirm your subscription</AlertTitle>
-          <AlertDescription>
-            If you just completed payment, it can take a moment — refresh the
-            page in a bit. If this keeps happening, contact support.
-          </AlertDescription>
-        </Alert>
-      )}
-      <div className="bg-muted flex size-12 items-center justify-center rounded-full">
-        <Lock className="size-6 text-muted-foreground" />
+    <div className="relative overflow-hidden rounded-lg border border-border/50">
+      {/* Decorative, non-interactive preview of the locked feature: a blurred
+          skeleton so the section reads as content sitting behind the lock. */}
+      <div
+        aria-hidden
+        className="pointer-events-none select-none space-y-3 p-4 opacity-60 blur-sm"
+      >
+        <Skeleton className="h-7 w-1/3" />
+        <Skeleton className="h-40 w-full" />
+        <div className="grid grid-cols-4 gap-2">
+          <Skeleton className="h-6" />
+          <Skeleton className="h-6" />
+          <Skeleton className="h-6" />
+          <Skeleton className="h-6" />
+        </div>
       </div>
-      <h1 className="text-2xl font-bold">
-        {featureLabel
-          ? `${featureLabel} is a premium feature`
-          : 'Subscription required'}
-      </h1>
-      {isOwner ? (
-        <>
+
+      {/* Lock + Subscribe overlay, centered over the blurred preview. */}
+      <div className="bg-background/40 absolute inset-0 flex flex-col items-center justify-center gap-4 p-8 text-center backdrop-blur-[2px]">
+        {activationFailed && (
+          <Alert variant="destructive" className="max-w-md text-left">
+            <AlertTitle>We couldn&apos;t confirm your subscription</AlertTitle>
+            <AlertDescription>
+              If you just completed payment, it can take a moment — refresh the
+              page in a bit. If this keeps happening, contact support.
+            </AlertDescription>
+          </Alert>
+        )}
+        <div className="bg-muted flex size-12 items-center justify-center rounded-full">
+          <Lock className="size-6 text-muted-foreground" />
+        </div>
+        <h2 className="text-xl font-bold">
+          {featureLabel
+            ? `${featureLabel} is a premium feature`
+            : 'Subscription required'}
+        </h2>
+        {isOwner ? (
+          <>
+            <p className="text-muted-foreground max-w-md">
+              {featureLabel
+                ? `Subscribe to unlock ${featureLabel.toLowerCase()} for your league.`
+                : "Subscribe to gain access to your league's analytics."}
+            </p>
+            <Button
+              className="cursor-pointer"
+              disabled={checkoutLoading || !leagueId}
+              onClick={() => void startCheckout(leagueId, platform)}
+            >
+              {checkoutLoading && <Spinner className="size-4" />}
+              Subscribe
+            </Button>
+            {error && (
+              <ErrorAlert message={error} className="max-w-md text-left" />
+            )}
+          </>
+        ) : (
           <p className="text-muted-foreground max-w-md">
             {featureLabel
-              ? `Subscribe to unlock ${featureLabel.toLowerCase()} for your league.`
-              : "Subscribe to gain access to your league's analytics."}
+              ? `Ask the league owner to subscribe to unlock ${featureLabel.toLowerCase()}.`
+              : "This league's subscription has lapsed. Ask the league owner to subscribe to restore access to its analytics."}
           </p>
-          <Button
-            className="cursor-pointer"
-            disabled={checkoutLoading || !leagueId}
-            onClick={() => void startCheckout(leagueId, platform)}
-          >
-            {checkoutLoading && <Spinner className="size-4" />}
-            Subscribe
-          </Button>
-          {error && (
-            <ErrorAlert message={error} className="max-w-md text-left" />
-          )}
-        </>
-      ) : (
-        <p className="text-muted-foreground max-w-md">
-          {featureLabel
-            ? `Ask the league owner to subscribe to unlock ${featureLabel.toLowerCase()}.`
-            : "This league's subscription has lapsed. Ask the league owner to subscribe to restore access to its analytics."}
-        </p>
-      )}
-      {/* Always offer a way out for a user who does not want to subscribe. */}
-      <Button
-        variant="ghost"
-        className="cursor-pointer"
-        onClick={() => void navigate('/home')}
-      >
-        Back to dashboard
-      </Button>
+        )}
+      </div>
     </div>
   );
 }

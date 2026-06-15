@@ -743,7 +743,7 @@ components:
             billing:
               type: boolean
               example: false
-            paywall_test_feature:
+            premium_feature:
               type: boolean
               example: false
             banner:
