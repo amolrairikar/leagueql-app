@@ -502,8 +502,8 @@ jobs:
           fi
           echo "API_BASE_URL=$API_BASE_URL" >> "$GITHUB_ENV"
 
-      # Stripe billing is feature-flagged (BE-017) and the flag lives in AWS
-      # AppConfig (runtime). When the deployed config has billing OFF, the
+      # Stripe billing is feature-flagged (BE-017) and the flag lives in an SSM
+      # Parameter Store parameter (runtime). When the deployed config has billing OFF, the
       # endpoints 404 / the webhook no-ops, so the suite is not applicable — skip
       # running it entirely (the suite also self-skips in
       # tests/integration/stripe/environment.py as a local safety net). Ask the

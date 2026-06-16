@@ -4,7 +4,7 @@
 A thin, generic informational banner rendered directly **below the in-app header**, used to
 promote whatever the current campaign is (a "join the LeagueQL Discord community" invite
 today). It is gated behind the `banner` global feature flag (FE-026 / BE-017) so it can be
-turned on/off from the AWS AppConfig console with no redeploy, and it is dismissible — a
+turned on/off from the AWS SSM Parameter Store console with no redeploy, and it is dismissible — a
 dismissal is remembered per-browser in `localStorage`. The banner's content (message + link)
 is a single editable config block in the component, so refreshing the campaign is a content
 change, not a structural one.

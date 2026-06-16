@@ -437,44 +437,14 @@ module "player-metadata-lambda-role" {
   }
 }
 
-# Feature-flag source of truth (BE-017 / FE-026). Created in both regions so each
-# regional API/webhook Lambda resolves its own region's AppConfig. Flag values are
-# set in the AppConfig console (runtime toggle), not in TF.
-module "appconfig_flags_east" {
-  source = "../../modules/appconfig"
-  providers = {
-    aws = aws.primary
-  }
-  application_name = "leagueql-${var.environment}"
-  environment_name = var.environment
-  environment      = var.environment
-  region           = "us-east-1"
-  account_id       = var.account_id
-  tags = {
-    environment = var.environment
-    project     = "leagueql"
-    component   = "feature-flags"
-    managed-by  = "terraform"
-  }
-}
-
-module "appconfig_flags_west" {
-  source = "../../modules/appconfig"
-  providers = {
-    aws = aws.replica
-  }
-  application_name = "leagueql-${var.environment}"
-  environment_name = var.environment
-  environment      = var.environment
-  region           = "us-west-2"
-  account_id       = var.account_id
-  tags = {
-    environment = var.environment
-    project     = "leagueql"
-    component   = "feature-flags"
-    managed-by  = "terraform"
-  }
-}
+# Feature-flag source of truth (BE-017 / FE-026) is an SSM Parameter Store parameter
+# named `/leagueql/${var.environment}/feature-flags` in each region (each regional
+# API/webhook Lambda reads its own region's copy), holding the flag JSON. Like the
+# Stripe/Axiom/Discord SSM values, it is created and edited **out-of-band** in the SSM
+# console (a standard-tier `String` — the flags are non-secret booleans) and is never
+# managed in TF, so a toggle never needs a `terraform apply`. The Lambda code reads
+# all flags off when the parameter is missing, so a fresh environment is safe until the
+# value is set. Only the read grant lives in TF (below).
 
 module "api-lambda-role" {
   source           = "../../modules/iam-role"
@@ -594,18 +564,17 @@ module "api-lambda-role" {
         ]
       },
       {
-        # BE-017: feature flags are resolved at runtime from AWS AppConfig via the
-        # appconfigdata Data API (IAM-role access, no secret). Grant read on both
-        # regions' feature-flag configuration.
-        Sid    = "ReadAppConfigFeatureFlags"
+        # BE-017: feature flags are resolved at runtime from an SSM Parameter Store
+        # parameter (IAM-role access, no secret). The parameter is set out-of-band in
+        # the SSM console, never in TF state. Grant read on both regions' copy.
+        Sid    = "ReadFeatureFlagsSsmParameter"
         Effect = "Allow"
         Action = [
-          "appconfig:StartConfigurationSession",
-          "appconfig:GetLatestConfiguration"
+          "ssm:GetParameter"
         ]
         Resource = [
-          module.appconfig_flags_east.configuration_resource_arn,
-          module.appconfig_flags_west.configuration_resource_arn
+          "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/feature-flags",
+          "arn:aws:ssm:us-west-2:${var.account_id}:parameter/leagueql/${var.environment}/feature-flags"
         ]
       }
     ]
@@ -691,17 +660,17 @@ module "stripe-webhook-lambda-role" {
         ]
       },
       {
-        # BE-017: the webhook reads the global `billing` flag from AWS AppConfig to
-        # no-op when billing is off. Same feature-flag configuration as the API.
-        Sid    = "ReadAppConfigFeatureFlags"
+        # BE-017: the webhook reads the global `billing` flag from the SSM
+        # feature-flag parameter (set out-of-band, never in TF state) to no-op when
+        # billing is off. Same source as the API.
+        Sid    = "ReadFeatureFlagsSsmParameter"
         Effect = "Allow"
         Action = [
-          "appconfig:StartConfigurationSession",
-          "appconfig:GetLatestConfiguration"
+          "ssm:GetParameter"
         ]
         Resource = [
-          module.appconfig_flags_east.configuration_resource_arn,
-          module.appconfig_flags_west.configuration_resource_arn
+          "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/feature-flags",
+          "arn:aws:ssm:us-west-2:${var.account_id}:parameter/leagueql/${var.environment}/feature-flags"
         ]
       }
     ]

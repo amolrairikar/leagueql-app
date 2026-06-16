@@ -1,15 +1,16 @@
 """Feature-flag evaluation backed by OpenFeature.
 
-Vendored into every function's deployment zip. Flag state lives in **AWS
-AppConfig** (a feature-flag configuration profile, per environment) and is read
-at runtime through the boto3 ``appconfigdata`` Data API — so toggling a flag is a
-console change + AppConfig deployment, with **no redeploy**. See
+Vendored into every function's deployment zip. Flag state lives in a single **AWS
+SSM Parameter Store** parameter (a standard-tier ``String`` holding the flag JSON,
+one per environment) and is read at runtime through the boto3 ``ssm``
+``GetParameter`` API — so toggling a flag is an edit to the parameter value in the
+SSM console, with **no redeploy**. Standard-tier parameters are free for both
+storage and ``GetParameter`` calls. See
 ``docs/requirements/backend/BE-017-feature-flags.md``.
 
-AppConfig is selected only when ``APPCONFIG_APPLICATION`` / ``APPCONFIG_ENVIRONMENT``
-/ ``APPCONFIG_PROFILE`` are all set (the deployed Lambdas). Otherwise — local dev
-and tests — there is **no flag source** and every flag defaults to ``False``
-(feature off). There is no bundled JSON fallback.
+SSM is selected only when ``FEATURE_FLAGS_SSM_PARAM`` is set (the deployed
+Lambdas). Otherwise — local dev and tests — there is **no flag source** and every
+flag defaults to ``False`` (feature off). There is no bundled JSON fallback.
 
 A ``billing`` master flag gates all Stripe billing behavior (BE-014 / BE-015):
 when it is OFF, ``require_active_subscription`` is a no-op, the checkout and
@@ -23,7 +24,7 @@ so they are all gated identically. The frontend gates the schedule-swap simulato
 
 Evaluation goes through OpenFeature's in-memory provider so the rest of the app
 depends only on the vendor-neutral OpenFeature client. Anything that cannot be
-resolved — AppConfig unreachable, an unknown flag — fails safe to ``False``
+resolved — SSM unreachable, an unknown flag — fails safe to ``False``
 (feature off).
 """
 
@@ -52,24 +53,19 @@ BANNER = "banner"
 _ON = "on"
 _OFF = "off"
 
-# AppConfig wiring (BE-017). When all three identifiers are present the flag JSON
-# is sourced from AWS AppConfig; otherwise (local / tests) every flag defaults off.
-_APPCONFIG_APPLICATION = os.environ.get("APPCONFIG_APPLICATION")
-_APPCONFIG_ENVIRONMENT = os.environ.get("APPCONFIG_ENVIRONMENT")
-_APPCONFIG_PROFILE = os.environ.get("APPCONFIG_PROFILE")
+# SSM wiring (BE-017). When the parameter name is present the flag JSON is sourced
+# from AWS SSM Parameter Store; otherwise (local / tests) every flag defaults off.
+_FEATURE_FLAGS_SSM_PARAM = os.environ.get("FEATURE_FLAGS_SSM_PARAM")
 # How long a fetched configuration is reused before the next poll (seconds). A
-# console toggle is picked up within this window after its AppConfig deployment.
-_APPCONFIG_TTL_SECONDS = int(os.environ.get("APPCONFIG_TTL_SECONDS", "45"))
+# console edit is picked up within this window.
+_FEATURE_FLAGS_TTL_SECONDS = int(os.environ.get("FEATURE_FLAGS_TTL_SECONDS", "45"))
 
-_appconfig_enabled = bool(
-    _APPCONFIG_APPLICATION and _APPCONFIG_ENVIRONMENT and _APPCONFIG_PROFILE
-)
+_flags_enabled = bool(_FEATURE_FLAGS_SSM_PARAM)
 # Module-level boto3 client, mirroring the codebase's ssm/dynamo pattern. Only
-# created when AppConfig is wired, so tests never touch the network.
-_appconfigdata_client = boto3.client("appconfigdata") if _appconfig_enabled else None
+# created when SSM is wired, so tests never touch the network.
+_ssm_client = boto3.client("ssm") if _flags_enabled else None
 
-# Mutable Data API session + TTL cache state.
-_session_token: str | None = None
+# Mutable TTL cache state.
 _cached_config: dict = {}
 _last_refresh_at: float = 0.0
 
@@ -90,69 +86,53 @@ def _set_provider_from_config(config: dict) -> None:
     api.set_provider(InMemoryProvider(_build_flags(config)))
 
 
-def _fetch_appconfig() -> dict | None:
-    """Pull the latest flag JSON from AppConfig, advancing the session token.
+def _fetch_flags() -> dict:
+    """Pull the latest flag JSON from the SSM parameter.
 
-    Returns the parsed flag config, or ``None`` when AppConfig responds with an
-    empty body (no change since the last poll) so the caller keeps the cached
-    value. The feature-flag profile serves the same ``{name: {"enabled": bool}}``
-    shape ``_build_flags`` already parses.
+    The feature-flag parameter holds the same ``{name: {"enabled": bool}}`` shape
+    ``_build_flags`` already parses. A missing parameter raises ``ParameterNotFound``,
+    handled by the caller as a fetch error (fail-safe to the last-known / all-off
+    config).
     """
-    global _session_token
-    if _session_token is None:
-        session = _appconfigdata_client.start_configuration_session(
-            ApplicationIdentifier=_APPCONFIG_APPLICATION,
-            EnvironmentIdentifier=_APPCONFIG_ENVIRONMENT,
-            ConfigurationProfileIdentifier=_APPCONFIG_PROFILE,
-        )
-        _session_token = session["InitialConfigurationToken"]
-
-    response = _appconfigdata_client.get_latest_configuration(
-        ConfigurationToken=_session_token
-    )
-    # Each response carries the token to use on the *next* poll; not advancing it
-    # breaks the session.
-    _session_token = response["NextPollConfigurationToken"]
-    raw = response["Configuration"].read()
+    response = _ssm_client.get_parameter(Name=_FEATURE_FLAGS_SSM_PARAM)
+    raw = response["Parameter"]["Value"]
     if not raw:
-        return None
+        return {}
     return json.loads(raw)
 
 
 def _refresh_if_stale() -> None:
-    """Refresh the cached flags from AppConfig once the TTL has elapsed.
+    """Refresh the cached flags from SSM once the TTL has elapsed.
 
-    A fetch failure (network, expired token, malformed JSON) keeps the last-known
-    flags and drops the session so the next poll re-establishes it — flags never
-    flip to a surprise state because AppConfig hiccuped.
+    A fetch failure (network, missing parameter, malformed JSON) keeps the
+    last-known flags — flags never flip to a surprise state because SSM hiccuped.
     """
-    global _cached_config, _last_refresh_at, _session_token
+    global _cached_config, _last_refresh_at
     now = time.monotonic()
-    if now - _last_refresh_at < _APPCONFIG_TTL_SECONDS:
+    if now - _last_refresh_at < _FEATURE_FLAGS_TTL_SECONDS:
         return
     _last_refresh_at = now
     try:
-        config = _fetch_appconfig()
+        config = _fetch_flags()
     except Exception as exc:
-        logger.warning("AppConfig refresh failed (%s); using last-known flags", exc)
-        _session_token = None
+        logger.warning("Feature-flag refresh failed (%s); using last-known flags", exc)
         return
-    if config is not None and config != _cached_config:
+    if config != _cached_config:
         _cached_config = config
         _set_provider_from_config(config)
 
 
 def _initialize() -> None:
-    """Seed the provider at import: from AppConfig when wired, else all-off."""
+    """Seed the provider at import: from SSM when wired, else all-off."""
     global _cached_config, _last_refresh_at
-    if not _appconfig_enabled:
+    if not _flags_enabled:
         _set_provider_from_config({})
         return
     try:
-        _cached_config = _fetch_appconfig() or {}
+        _cached_config = _fetch_flags()
     except Exception as exc:
         logger.warning(
-            "Initial AppConfig fetch failed (%s); all flags default off", exc
+            "Initial feature-flag fetch failed (%s); all flags default off", exc
         )
         _cached_config = {}
     _last_refresh_at = time.monotonic()
@@ -165,7 +145,7 @@ _client = api.get_client()
 
 def is_enabled(flag_name: str) -> bool:
     """Return whether ``flag_name`` is on, defaulting to ``False`` when unknown."""
-    if _appconfig_enabled:
+    if _flags_enabled:
         _refresh_if_stale()
     return _client.get_boolean_value(flag_name, False)
 
@@ -188,7 +168,7 @@ def is_feature_paywalled(flag_name: str) -> bool:
 def _override_for_testing(flags: dict[str, bool]) -> None:
     """Replace the active provider with an explicit flag map (tests only).
 
-    Lets a test exercise the ON path without standing up AppConfig:
+    Lets a test exercise the ON path without standing up SSM:
     ``_override_for_testing({"billing": True})``.
     """
     _set_provider_from_config({name: {"enabled": on} for name, on in flags.items()})
