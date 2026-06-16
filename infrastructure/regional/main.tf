@@ -62,6 +62,15 @@ module "onboarder_lambda" {
     DYNAMODB_TABLE_NAME = "leagueql-table-${var.environment}"
     S3_BUCKET_NAME      = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
     SNS_TOPIC_ARN       = var.environment == "prod" ? aws_sns_topic.lambda_alerts[0].arn : ""
+
+    # OpenTelemetry trace-context propagation → Axiom (BE-021). A no-op unless set.
+    # The ingest token is fetched at runtime from SSM by *name* (value never lands
+    # here / in TF state / in CI); dataset is per-env so dev traffic never pollutes
+    # prod. ENVIRONMENT tags spans' deployment.environment.
+    ENVIRONMENT               = var.environment
+    AXIOM_API_TOKEN_SSM_PARAM = "/leagueql/${var.environment}/axiom/api_token"
+    AXIOM_DATASET             = "leagueql-${var.environment}"
+    AXIOM_TRACES_URL          = "https://api.axiom.co/v1/traces"
   }
 
   tags = {
@@ -90,6 +99,15 @@ module "processor_lambda" {
     DYNAMODB_TABLE_NAME = "leagueql-table-${var.environment}"
     S3_BUCKET_NAME      = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
     SNS_TOPIC_ARN       = var.environment == "prod" ? aws_sns_topic.lambda_alerts[0].arn : ""
+
+    # OpenTelemetry trace-context propagation → Axiom (BE-021). A no-op unless set.
+    # The ingest token is fetched at runtime from SSM by *name* (value never lands
+    # here / in TF state / in CI); dataset is per-env so dev traffic never pollutes
+    # prod. ENVIRONMENT tags spans' deployment.environment.
+    ENVIRONMENT               = var.environment
+    AXIOM_API_TOKEN_SSM_PARAM = "/leagueql/${var.environment}/axiom/api_token"
+    AXIOM_DATASET             = "leagueql-${var.environment}"
+    AXIOM_TRACES_URL          = "https://api.axiom.co/v1/traces"
   }
 
   tags = {
@@ -290,6 +308,15 @@ module "sleeper_refresh_lambda" {
   environment_variables = {
     DYNAMODB_TABLE_NAME   = "leagueql-table-${var.environment}"
     ONBOARDER_LAMBDA_NAME = "leagueql-onboarder-${var.environment}"
+
+    # OpenTelemetry trace-context propagation → Axiom (BE-021). A no-op unless set.
+    # The ingest token is fetched at runtime from SSM by *name* (value never lands
+    # here / in TF state / in CI); dataset is per-env so dev traffic never pollutes
+    # prod. ENVIRONMENT tags spans' deployment.environment.
+    ENVIRONMENT               = var.environment
+    AXIOM_API_TOKEN_SSM_PARAM = "/leagueql/${var.environment}/axiom/api_token"
+    AXIOM_DATASET             = "leagueql-${var.environment}"
+    AXIOM_TRACES_URL          = "https://api.axiom.co/v1/traces"
   }
 
   tags = {

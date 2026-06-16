@@ -189,6 +189,19 @@ module "onboarding-lambda-role" {
         ]
       },
       {
+        # BE-021: the chain Lambdas continue the OTel trace and export to Axiom; the
+        # ingest token is a SecureString SSM parameter (set out-of-band, never in TF state).
+        Sid    = "ReadAxiomSsmParameter"
+        Effect = "Allow"
+        Action = [
+          "ssm:GetParameter"
+        ]
+        Resource = [
+          "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/axiom/api_token",
+          "arn:aws:ssm:us-west-2:${var.account_id}:parameter/leagueql/${var.environment}/axiom/api_token"
+        ]
+      },
+      {
         Sid    = "S3ListBucket"
         Effect = "Allow"
         Action = [
@@ -281,6 +294,19 @@ module "processing-lambda-role" {
         ],
         Resource = [
           "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/lambda/leagueql-processor-${var.environment}:*"
+        ]
+      },
+      {
+        # BE-021: the chain Lambdas continue the OTel trace and export to Axiom; the
+        # ingest token is a SecureString SSM parameter (set out-of-band, never in TF state).
+        Sid    = "ReadAxiomSsmParameter"
+        Effect = "Allow"
+        Action = [
+          "ssm:GetParameter"
+        ]
+        Resource = [
+          "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/axiom/api_token",
+          "arn:aws:ssm:us-west-2:${var.account_id}:parameter/leagueql/${var.environment}/axiom/api_token"
         ]
       },
       {
@@ -1081,6 +1107,19 @@ module "sleeper-refresh-lambda-role" {
         ],
         Resource = [
           "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/lambda/leagueql-sleeper-refresh-${var.environment}:*"
+        ]
+      },
+      {
+        # BE-021: the chain Lambdas continue the OTel trace and export to Axiom; the
+        # ingest token is a SecureString SSM parameter (set out-of-band, never in TF state).
+        Sid    = "ReadAxiomSsmParameter"
+        Effect = "Allow"
+        Action = [
+          "ssm:GetParameter"
+        ]
+        Resource = [
+          "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/axiom/api_token",
+          "arn:aws:ssm:us-west-2:${var.account_id}:parameter/leagueql/${var.environment}/axiom/api_token"
         ]
       },
       {

@@ -1,7 +1,13 @@
 import json
 import uuid
 
+from common.tracing import init_tracing, traced_handler
 from utils import logger, get_nfl_state, get_sleeper_leagues, invoke_onboarder_lambda
+
+# Originate a trace per refreshed league → Axiom (BE-021); the onboarder/processor
+# continue it. A no-op unless Axiom is configured, so tests / unconfigured envs are
+# unaffected.
+init_tracing("leagueql-sleeper-refresh")
 
 
 def lambda_handler(event, context) -> dict[str, str | int]:
@@ -83,23 +89,28 @@ def lambda_handler(event, context) -> dict[str, str | int]:
 
     for league in sleeper_leagues:
         correlation_id = str(uuid.uuid4())
-        try:
-            invoke_onboarder_lambda(
-                league["league_id"],
-                canonical_league_id=league["canonical_league_id"],
-                correlation_id=correlation_id,
-            )
-            success_count += 1
-            logger.info(
-                "Successfully triggered refresh for league %s with correlation_id %s",
-                league["league_id"],
-                correlation_id,
-            )
-        except Exception as e:
-            failure_count += 1
-            logger.error(
-                "Failed to trigger refresh for league %s: %s", league["league_id"], e
-            )
+        # Each league gets its own root trace (the cron has no inbound context); the
+        # active span is what propagates to the onboarder via the invoke payload.
+        with traced_handler("sleeper_refresh.league", root=True):
+            try:
+                invoke_onboarder_lambda(
+                    league["league_id"],
+                    canonical_league_id=league["canonical_league_id"],
+                    correlation_id=correlation_id,
+                )
+                success_count += 1
+                logger.info(
+                    "Successfully triggered refresh for league %s with correlation_id %s",
+                    league["league_id"],
+                    correlation_id,
+                )
+            except Exception as e:
+                failure_count += 1
+                logger.error(
+                    "Failed to trigger refresh for league %s: %s",
+                    league["league_id"],
+                    e,
+                )
 
     logger.info(
         "Refresh complete: %d succeeded, %d failed",

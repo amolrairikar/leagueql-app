@@ -33,6 +33,9 @@ def test_invoke_onboarder_builds_payload_and_invokes():
         "correlation_id": "corr-1",
         "ownerUserId": "user_1",
         "reprocessAll": False,
+        # Tracing is disabled in unit tests, so the W3C carrier is empty (BE-021):
+        # the contract is otherwise unchanged.
+        "trace_context": {},
     }
 
 
@@ -63,6 +66,26 @@ def test_invoke_onboarder_defaults_owner_to_none():
     )
     payload = json.loads(client.invoke.call_args.kwargs["Payload"])
     assert payload["ownerUserId"] is None
+
+
+def test_invoke_onboarder_includes_trace_context_when_active(monkeypatch):
+    """When tracing is active, the W3C carrier rides the invoke payload (BE-021)."""
+    import common.onboarder_invoke as oi
+
+    monkeypatch.setattr(
+        oi, "inject_context", lambda carrier=None: {"traceparent": "00-abc-def-01"}
+    )
+    client = MagicMock()
+    invoke_onboarder(
+        lambda_client=client,
+        function_name="onboarder-fn",
+        body={"leagueId": "123", "platform": "SLEEPER"},
+        request_type="ONBOARD",
+        canonical_league_id=None,
+        correlation_id="corr-1",
+    )
+    payload = json.loads(client.invoke.call_args.kwargs["Payload"])
+    assert payload["trace_context"] == {"traceparent": "00-abc-def-01"}
 
 
 def test_invoke_onboarder_allows_none_canonical_id():

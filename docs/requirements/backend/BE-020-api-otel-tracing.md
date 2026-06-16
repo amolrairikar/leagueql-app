@@ -8,9 +8,11 @@ span (via FastAPI auto-instrumentation) with child spans for downstream calls �
 ([FE-029](../frontend/FE-029-frontend-observability.md)), the request span **continues that trace**,
 giving a single end-to-end trace from the browser through API Gateway into the Lambda.
 
-This partially reverses the earlier full removal of OTel: it is now **scoped to one Lambda + Axiom**
-(not all 6 Lambdas / Honeycomb). The async onboarding chain (Onboarder → Processor → Sleeper Refresh)
-is **out of scope** and keeps using the lightweight `correlation_id` (`ContextVar` in JSON logs)
+This partially reverses the earlier full removal of OTel: it re-introduces OTel scoped to Axiom
+(not Honeycomb), starting with the API Lambda. Trace context is propagated **onward through the
+async onboarding chain (Onboarder → Processor) and the Sleeper auto-refresh** under
+[BE-021](BE-021-async-chain-otel-propagation.md), so an onboard is a single end-to-end trace; the
+chain continues to also carry the lightweight `correlation_id` (`ContextVar` in JSON logs)
 mechanism. The API Lambda continues to log `correlation_id` exactly as before; additionally the
 active `trace_id` is added to every JSON log line so a trace in Axiom can be pivoted to its
 CloudWatch logs and vice-versa.
@@ -21,10 +23,13 @@ The Axiom ingest token is sensitive and is fetched at runtime from SSM Parameter
 Terraform state, or CI.
 
 ## Scope
-- Tracing init: `src/api/telemetry.py::init_tracing(app)` — `TracerProvider`
-  (`service.name=leagueql-api`, `deployment.environment={env}`), `BatchSpanProcessor` →
+- Tracing init: `src/api/telemetry.py::init_tracing(app)`. The provider/exporter and
+  `botocore`/`requests` instrumentation are built by the shared `src/common/tracing.py::build_provider`
+  (`service.name=leagueql-api`, `deployment.environment={env}`, `BatchSpanProcessor` →
   `OTLPSpanExporter` (HTTP) to `AXIOM_TRACES_URL` with `Authorization: Bearer <token>` +
-  `X-Axiom-Dataset: <AXIOM_DATASET>`. Instruments FastAPI, `botocore`, and `requests`.
+  `X-Axiom-Dataset: <AXIOM_DATASET>`); `telemetry.py` adds the FastAPI-specific
+  `FastAPIInstrumentor.instrument_app(app)` on top. See [BE-021](BE-021-async-chain-otel-propagation.md)
+  for the shared module.
 - Wiring: `src/api/main.py` calls `init_tracing(app)` after the app is built, before `Mangum`.
 - Token: fetched via `src/common/secrets.py::get_secret_from_env_param("AXIOM_API_TOKEN_SSM_PARAM")`.
 - Log cross-linking: `src/common/logging_utils.py::JsonFormatter` adds `trace_id` (and `span_id`)
@@ -51,8 +56,9 @@ Terraform state, or CI.
   in a frozen execution environment and lost.
 - **Cold-start latency:** the SSM token fetch happens once per execution environment (cached); it
   must not be on the hot path of every request.
-- **Scope creep:** only the API Lambda is instrumented. The Stripe webhook and the async chain
-  Lambdas are intentionally left on `correlation_id`-only.
+- **Scope:** this doc covers the API Lambda. The async onboarding chain (Onboarder → Processor) and
+  the Sleeper auto-refresh continue the trace under [BE-021](BE-021-async-chain-otel-propagation.md).
+  The Stripe webhook and other Lambdas remain on `correlation_id`-only.
 - **`correlation_id` preserved:** existing log correlation for the onboard/refresh chain is unchanged;
   `trace_id` is *added*, not a replacement.
 
