@@ -1,19 +1,24 @@
-# BE-017: Feature Flags (OpenFeature + AWS AppConfig)
+# BE-017: Feature Flags (OpenFeature + SSM Parameter Store)
 
 ## Description
 Provides a vendor-neutral feature-flag layer for the backend using
-[OpenFeature](https://openfeature.dev/). Flag state is the source-of-truth in **AWS AppConfig**
-(a feature-flag configuration profile, one per environment) and is read at **runtime** through
-the boto3 `appconfigdata` Data API — so toggling a flag is a change in the AppConfig console + an
-AppConfig deployment, with **no code change and no redeploy**. AppConfig is read via the Lambda's
-**IAM role** (no SSM secret, no API key). Evaluation goes through OpenFeature's in-memory provider
-so call sites depend only on the neutral OpenFeature client
-(`common.feature_flags.is_enabled` / `is_billing_enabled`), not on the flag source.
+[OpenFeature](https://openfeature.dev/). Flag state is the source-of-truth in a single
+**AWS SSM Parameter Store** parameter (a standard-tier `String`, one per environment) holding
+the flag JSON, and is read at **runtime** through the boto3 `ssm` `GetParameter` API — so
+toggling a flag is an edit to the parameter value in the SSM console, with **no code change and
+no redeploy**. The parameter is read via the Lambda's **IAM role** (no API key). Evaluation goes
+through OpenFeature's in-memory provider so call sites depend only on the neutral OpenFeature
+client (`common.feature_flags.is_enabled` / `is_billing_enabled`), not on the flag source.
 
-There is **no bundled JSON config**. The Lambdas select AppConfig only when
-`APPCONFIG_APPLICATION` / `APPCONFIG_ENVIRONMENT` / `APPCONFIG_PROFILE` are all set (the deployed
-functions). Otherwise — local dev and tests — there is no flag source and **every flag defaults
-to `False`** (feature off). The same fail-safe applies if AppConfig is unreachable.
+> Standard-tier SSM parameters are **free** for both storage and `GetParameter` calls, unlike
+> AWS AppConfig (the previous source), which billed per "configuration received" on every
+> Lambda cold start / session reset across both regions. The flag shape and behavior are
+> unchanged; only the storage backend moved.
+
+There is **no bundled JSON config**. The Lambdas select SSM only when `FEATURE_FLAGS_SSM_PARAM`
+is set (the deployed functions). Otherwise — local dev and tests — there is no flag source and
+**every flag defaults to `False`** (feature off). The same fail-safe applies if the parameter is
+missing or unreachable.
 
 A `billing` **master** flag gates all Stripe billing behavior
 ([BE-014](BE-014-subscription-access-control.md), [BE-015](BE-015-stripe-billing.md)). It defaults
@@ -38,7 +43,7 @@ UI. `banner` is one such flag: it gates the in-app informational banner
 it is resolved like any other flag and surfaced to the SPA via `GET /feature-flags`.
 
 The frontend resolves the same flags at runtime via the public `GET /feature-flags` endpoint
-([FE-026](../frontend/FE-026-feature-flags.md)); both tiers read the same AppConfig source, so
+([FE-026](../frontend/FE-026-feature-flags.md)); both tiers read the same SSM source, so
 they always agree.
 
 ## Public endpoint — `GET /feature-flags`
@@ -52,20 +57,20 @@ they always agree.
   the next load.
 
 ## Scope
-- Module: `src/common/feature_flags.py` — selects the AppConfig source (when the three
-  `APPCONFIG_*` env vars are set) via the `appconfigdata` Data API with a small in-process TTL
-  cache (`start_configuration_session` at cold start → `get_latest_configuration` on a TTL,
-  `APPCONFIG_TTL_SECONDS`, default 45s), registers an OpenFeature `InMemoryProvider`, and exposes
-  `is_enabled(name)`, `is_billing_enabled()`, and `is_feature_paywalled(flag_name)` (=
-  `is_billing_enabled() and is_enabled(flag_name)`), plus the `PREMIUM_FEATURE` (shared
-  premium-feature) and `BANNER` (FE-030) flag-name constants. A test-only `_override_for_testing({...})`
-  swaps the active flag map.
-- Source of truth: AWS AppConfig feature-flag profile (per environment), serving the same
-  `{ "billing": { "enabled": false }, ... }` shape the module parses. Flag values + deployments are
-  set in the AppConfig console (the runtime toggle); the AppConfig application / environment /
-  profile / rollout strategy are scaffolded in Terraform (`infrastructure/modules/appconfig`,
-  instantiated per region in `infrastructure/global/{dev,prod}`), but the values are **not** managed
-  in TF (so a toggle never needs a `terraform apply`).
+- Module: `src/common/feature_flags.py` — selects the SSM source (when `FEATURE_FLAGS_SSM_PARAM`
+  is set) via the `ssm` `GetParameter` API with a small in-process TTL cache (an initial fetch at
+  cold start → re-fetch on a TTL, `FEATURE_FLAGS_TTL_SECONDS`, default 45s), registers an
+  OpenFeature `InMemoryProvider`, and exposes `is_enabled(name)`, `is_billing_enabled()`, and
+  `is_feature_paywalled(flag_name)` (= `is_billing_enabled() and is_enabled(flag_name)`), plus the
+  `PREMIUM_FEATURE` (shared premium-feature) and `BANNER` (FE-030) flag-name constants. A test-only
+  `_override_for_testing({...})` swaps the active flag map.
+- Source of truth: an AWS SSM Parameter Store parameter (per environment, per region) named
+  `/leagueql/<env>/feature-flags`, serving the same `{ "billing": { "enabled": false }, ... }` JSON
+  shape the module parses. The flag values are edited in the SSM console (the runtime toggle); the
+  parameter is scaffolded in Terraform with a placeholder value and
+  `lifecycle { ignore_changes = [value] }` (`infrastructure/global/{dev,prod}`), so a toggle never
+  needs a `terraform apply` / causes drift. The parameter is a plain `String` (the flags are
+  non-secret global booleans already exposed via `GET /feature-flags`), not a `SecureString`.
 - Call sites:
   - `src/api/routes.py` — `get_feature_flags` (public `GET /feature-flags`),
     `create_checkout_session` and `create_billing_portal_session` raise `404` when billing is off.
@@ -73,28 +78,28 @@ they always agree.
     returns early when `is_feature_paywalled(paywall_flag)` is false (billing off or the
     feature's flag off). No production endpoint calls it yet.
   - `src/stripe_webhook/handler.py` — `lambda_handler` returns a `200` no-op when billing is off.
-- Dependency: `openfeature-sdk` + `boto3` (boto3/botocore already present). The three `APPCONFIG_*`
-  env vars are set on the API and stripe_webhook Lambdas (`infrastructure/regional/main.tf`); the
-  execution roles grant `appconfig:StartConfigurationSession` + `appconfig:GetLatestConfiguration`
-  on the feature-flag configuration in both regions (`infrastructure/global/{dev,prod}/main.tf`).
+- Dependency: `openfeature-sdk` + `boto3` (boto3/botocore already present). `FEATURE_FLAGS_SSM_PARAM`
+  is set on the API and stripe_webhook Lambdas (`infrastructure/regional/main.tf`); the execution
+  roles grant `ssm:GetParameter` on the feature-flag parameter in both regions
+  (`infrastructure/global/{dev,prod}/main.tf`).
 - Tests: the Stripe **integration** suite (`tests/integration/stripe/`) runs against the deployed
   billing endpoints, which only behave as tested when billing is ON. Its `environment.py` queries
-  the deployed public `GET /feature-flags` (the real resolved AppConfig state) and **skips every
+  the deployed public `GET /feature-flags` (the real resolved flag state) and **skips every
   scenario** when billing is off (and the CI job gates its run step on the same endpoint). The
   ESPN/Sleeper integration suites are unaffected. Unit/component suites default the flag via the
-  `_override_for_testing` seam (no AppConfig env, no network) and add explicit OFF-path cases.
+  `_override_for_testing` seam (no SSM env, no network) and add explicit OFF-path cases.
 
 ## Edge Cases
-- **AppConfig env vars unset (local / tests):** there is no flag source, so every flag (including
-  `billing`) reads `False`, and the `appconfigdata` client is never created (no network).
-- **AppConfig unreachable / fetch error:** a failed refresh keeps the last-known flags (or the
-  empty all-off default on the initial fetch) and drops the session token so the next poll
-  re-establishes it — flags never flip to a surprise state because AppConfig hiccuped.
-- **No deployment yet in AppConfig:** `get_latest_configuration` returns an empty body, treated as
-  "no flags" → all off.
+- **`FEATURE_FLAGS_SSM_PARAM` unset (local / tests):** there is no flag source, so every flag
+  (including `billing`) reads `False`, and the `ssm` client is never created (no network).
+- **Parameter unreachable / fetch error:** a failed refresh keeps the last-known flags (or the
+  empty all-off default on the initial fetch) — flags never flip to a surprise state because SSM
+  hiccuped.
+- **Parameter missing / never populated:** `GetParameter` raises `ParameterNotFound`, treated as a
+  fetch error → all off on the initial load.
 - **Unknown flag name / spec without `enabled`:** `is_enabled` returns the `False` default.
-- **Toggle latency:** a console toggle takes effect after the AppConfig deployment completes + the
-  next TTL refresh (≤ `APPCONFIG_TTL_SECONDS`) — seconds-to-minutes, not instant.
+- **Toggle latency:** a console edit takes effect after the next TTL refresh
+  (≤ `FEATURE_FLAGS_TTL_SECONDS`) — seconds, not instant.
 
 ## Acceptance Criteria
 - [ ] With `billing` OFF (default), all endpoints succeed regardless of `subscription_end_time`
@@ -106,15 +111,15 @@ they always agree.
       per-feature flag are ON.
 - [ ] `premium_feature` is the shared flag every premium feature gates on; the frontend gates the
       schedule-swap simulator (FE-031) on it, and no backend endpoint enforces it yet.
-- [ ] With the `APPCONFIG_*` env vars unset, or AppConfig unreachable, all flags read as off
-      (fail-safe), not an import error.
-- [ ] Flipping a flag in the AppConfig console (and deploying it) changes backend behavior within
+- [ ] With `FEATURE_FLAGS_SSM_PARAM` unset, or the parameter unreachable/missing, all flags read as
+      off (fail-safe), not an import error.
+- [ ] Editing the feature-flag parameter value in the SSM console changes backend behavior within
       the TTL window **without a redeploy**.
 - [ ] `GET /feature-flags` is unauthenticated and returns the resolved global flag map.
 
 ## Sources
 `src/common/feature_flags.py`, `src/api/routes.py` (`get_feature_flags`, billing endpoints),
 `src/api/helpers.py`, `src/stripe_webhook/handler.py`,
-`infrastructure/modules/appconfig`, `infrastructure/regional/main.tf`,
-`infrastructure/global/{dev,prod}/main.tf`, `docs/api/openapi_spec.yaml` (`/feature-flags`),
+`infrastructure/regional/main.tf`, `infrastructure/global/{dev,prod}/main.tf`
+(`aws_ssm_parameter` + `ssm:GetParameter` grants), `docs/api/openapi_spec.yaml` (`/feature-flags`),
 [FE-026](../frontend/FE-026-feature-flags.md) (frontend consumer).

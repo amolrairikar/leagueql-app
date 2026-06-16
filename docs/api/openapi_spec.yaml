@@ -38,8 +38,8 @@ paths:
       summary: Global feature flags
       description: >
         Returns the resolved global feature-flag map (BE-017 / FE-026) the SPA
-        uses to build its OpenFeature provider. Resolved from AWS AppConfig at
-        runtime. Unauthenticated — no Clerk authorizer — so it loads before
+        uses to build its OpenFeature provider. Resolved from AWS SSM Parameter
+        Store at runtime. Unauthenticated — no Clerk authorizer — so it loads before
         sign-in; the payload is only non-sensitive global booleans.
       operationId: getFeatureFlags
       responses:

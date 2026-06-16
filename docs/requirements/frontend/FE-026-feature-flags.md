@@ -1,11 +1,12 @@
-# FE-026: Feature Flags (OpenFeature + AWS AppConfig)
+# FE-026: Feature Flags (OpenFeature + SSM Parameter Store)
 
 ## Description
 Provides a vendor-neutral feature-flag layer for the frontend using
 [OpenFeature](https://openfeature.dev/) (`@openfeature/web-sdk`). Flag state is the source-of-truth
-in **AWS AppConfig** (global, per environment) and is resolved at **runtime** from the backend's
-public `GET /feature-flags` endpoint ([BE-017](../backend/BE-017-feature-flags.md)) — so a console
-toggle reaches the SPA **without a rebuild**. There is **no bundled config**: the app fetches the
+in an **AWS SSM Parameter Store** parameter (global, per environment) and is resolved at **runtime**
+from the backend's public `GET /feature-flags` endpoint
+([BE-017](../backend/BE-017-feature-flags.md)) — so a console toggle reaches the SPA **without a
+rebuild**. There is **no bundled config**: the app fetches the
 flags at bootstrap and fails safe to `false` for every flag until they resolve (and any time the
 backend is unreachable). Evaluation goes through OpenFeature's in-memory provider so call sites
 depend only on the neutral helper (`isEnabled` / `isBillingEnabled` from `@/lib/feature-flags`).
@@ -33,7 +34,7 @@ is **OFF** (rolled out, not yet paywalled). With `billing` OFF the section is hi
 `premium_feature`. Every premium feature shares this one flag. The schedule-swap simulator
 ([FE-031](FE-031-schedule-swap-simulator.md)) is the first section wrapped with it.
 
-The backend resolves the same flags from the same AppConfig source and is the real enforcement
+The backend resolves the same flags from the same SSM source and is the real enforcement
 boundary ([BE-014](../backend/BE-014-subscription-access-control.md)), so even with the UI flag
 momentarily stale the API gate still governs access.
 
@@ -56,8 +57,8 @@ momentarily stale the API gate still governs access.
   exposes `isEnabled(name)` / `isBillingEnabled()`, `initFeatureFlags()` (fetch + refresh), and
   `refreshFlags()` (the mapping seam). A test-only `setFlagsForTesting({...})` swaps the active
   flag map.
-- Source: the public `GET /feature-flags` endpoint (BE-017), resolved from AWS AppConfig. No
-  checked-in JSON.
+- Source: the public `GET /feature-flags` endpoint (BE-017), resolved from AWS SSM Parameter Store.
+  No checked-in JSON.
 - Call sites (unchanged):
   - `frontend/src/features/subscription/subscription-guard.tsx` — `SubscriptionGuard` takes a
     `featureFlag` prop and renders **nothing** when billing is off; with billing on it returns its
@@ -94,8 +95,8 @@ momentarily stale the API gate still governs access.
 - [ ] `premium_feature` is the shared flag every premium feature gates on; the schedule-swap
       simulator (FE-031) is wrapped with it.
 - [ ] An unknown flag evaluates to `false`.
-- [ ] Flipping a flag in the AppConfig console changes the UI within the refresh window **without
-      a rebuild**.
+- [ ] Editing the feature-flag parameter value in the SSM console changes the UI within the refresh
+      window **without a rebuild**.
 - [ ] `initFeatureFlags()` is a no-op under Vitest (no `/feature-flags` fetch in component tests).
 
 ## Sources

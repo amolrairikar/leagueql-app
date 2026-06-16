@@ -172,14 +172,11 @@ module "api_lambda" {
     AXIOM_DATASET             = "leagueql-${var.environment}"
     AXIOM_TRACES_URL          = "https://api.axiom.co/v1/traces"
 
-    # Feature flags via AWS AppConfig (BE-017). Flags are resolved at runtime from
-    # the feature-flag profile via the appconfigdata Data API (IAM-role access, no
-    # secret). Identifiers are AppConfig *names* (stable across regions); the flag
-    # values are set in the AppConfig console (runtime toggle, no redeploy). With
-    # these unset, all flags default off.
-    APPCONFIG_APPLICATION = "leagueql-${var.environment}"
-    APPCONFIG_ENVIRONMENT = var.environment
-    APPCONFIG_PROFILE     = "feature-flags"
+    # Feature flags via SSM Parameter Store (BE-017). Flags are resolved at runtime
+    # from this parameter by *name* via ssm:GetParameter (IAM-role access, no secret);
+    # the flag values are edited in the SSM console (runtime toggle, no redeploy). With
+    # this unset, all flags default off.
+    FEATURE_FLAGS_SSM_PARAM = "/leagueql/${var.environment}/feature-flags"
   }
 
   tags = {
@@ -210,11 +207,9 @@ module "stripe_webhook_lambda" {
     STRIPE_SECRET_KEY_SSM_PARAM     = "/leagueql/${var.environment}/stripe/secret_key"
     STRIPE_WEBHOOK_SECRET_SSM_PARAM = "/leagueql/${var.environment}/stripe/webhook_secret"
 
-    # Feature flags via AWS AppConfig (BE-017). The webhook reads the global
-    # `billing` flag to no-op when billing is off; same AppConfig source as the API.
-    APPCONFIG_APPLICATION = "leagueql-${var.environment}"
-    APPCONFIG_ENVIRONMENT = var.environment
-    APPCONFIG_PROFILE     = "feature-flags"
+    # Feature flags via SSM Parameter Store (BE-017). The webhook reads the global
+    # `billing` flag to no-op when billing is off; same SSM source as the API.
+    FEATURE_FLAGS_SSM_PARAM = "/leagueql/${var.environment}/feature-flags"
   }
 
   tags = {

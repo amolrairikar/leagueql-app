@@ -469,19 +469,23 @@ module "player-metadata-lambda-role" {
   }
 }
 
-# Feature-flag source of truth (BE-017 / FE-026). Created in both regions so each
-# regional API/webhook Lambda resolves its own region's AppConfig. Flag values are
-# set in the AppConfig console (runtime toggle), not in TF.
-module "appconfig_flags_east" {
-  source = "../../modules/appconfig"
-  providers = {
-    aws = aws.primary
+# Feature-flag source of truth (BE-017 / FE-026). A single SSM Parameter Store
+# parameter per region (each regional API/webhook Lambda reads its own region's copy)
+# holding the flag JSON. Standard-tier String parameters are free to store and read,
+# unlike AppConfig (the previous source). The flag *values* are edited in the SSM
+# console (runtime toggle) — `ignore_changes = [value]` keeps a toggle from causing TF
+# drift — so we only scaffold the parameter with a placeholder all-off config here.
+resource "aws_ssm_parameter" "feature_flags_east" {
+  provider    = aws.primary
+  name        = "/leagueql/${var.environment}/feature-flags"
+  description = "LeagueQL feature-flag values (set in the SSM console)"
+  type        = "String"
+  value       = jsonencode({ billing = { enabled = false } })
+
+  lifecycle {
+    ignore_changes = [value]
   }
-  application_name = "leagueql-${var.environment}"
-  environment_name = var.environment
-  environment      = var.environment
-  region           = "us-east-1"
-  account_id       = var.account_id
+
   tags = {
     environment = var.environment
     project     = "leagueql"
@@ -490,16 +494,17 @@ module "appconfig_flags_east" {
   }
 }
 
-module "appconfig_flags_west" {
-  source = "../../modules/appconfig"
-  providers = {
-    aws = aws.replica
+resource "aws_ssm_parameter" "feature_flags_west" {
+  provider    = aws.replica
+  name        = "/leagueql/${var.environment}/feature-flags"
+  description = "LeagueQL feature-flag values (set in the SSM console)"
+  type        = "String"
+  value       = jsonencode({ billing = { enabled = false } })
+
+  lifecycle {
+    ignore_changes = [value]
   }
-  application_name = "leagueql-${var.environment}"
-  environment_name = var.environment
-  environment      = var.environment
-  region           = "us-west-2"
-  account_id       = var.account_id
+
   tags = {
     environment = var.environment
     project     = "leagueql"
@@ -637,18 +642,16 @@ module "api-lambda-role" {
         ]
       },
       {
-        # BE-017: feature flags are resolved at runtime from AWS AppConfig via the
-        # appconfigdata Data API (IAM-role access, no secret). Grant read on both
-        # regions' feature-flag configuration.
-        Sid    = "ReadAppConfigFeatureFlags"
+        # BE-017: feature flags are resolved at runtime from an SSM Parameter Store
+        # parameter (IAM-role access, no secret). Grant read on both regions' copy.
+        Sid    = "ReadFeatureFlagsSsmParameter"
         Effect = "Allow"
         Action = [
-          "appconfig:StartConfigurationSession",
-          "appconfig:GetLatestConfiguration"
+          "ssm:GetParameter"
         ]
         Resource = [
-          module.appconfig_flags_east.configuration_resource_arn,
-          module.appconfig_flags_west.configuration_resource_arn
+          aws_ssm_parameter.feature_flags_east.arn,
+          aws_ssm_parameter.feature_flags_west.arn
         ]
       }
     ]
@@ -734,17 +737,16 @@ module "stripe-webhook-lambda-role" {
         ]
       },
       {
-        # BE-017: the webhook reads the global `billing` flag from AWS AppConfig to
-        # no-op when billing is off. Same feature-flag configuration as the API.
-        Sid    = "ReadAppConfigFeatureFlags"
+        # BE-017: the webhook reads the global `billing` flag from the SSM
+        # feature-flag parameter to no-op when billing is off. Same source as the API.
+        Sid    = "ReadFeatureFlagsSsmParameter"
         Effect = "Allow"
         Action = [
-          "appconfig:StartConfigurationSession",
-          "appconfig:GetLatestConfiguration"
+          "ssm:GetParameter"
         ]
         Resource = [
-          module.appconfig_flags_east.configuration_resource_arn,
-          module.appconfig_flags_west.configuration_resource_arn
+          aws_ssm_parameter.feature_flags_east.arn,
+          aws_ssm_parameter.feature_flags_west.arn
         ]
       }
     ]

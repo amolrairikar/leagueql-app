@@ -1,8 +1,8 @@
 /**
  * Feature-flag evaluation backed by OpenFeature (FE-026).
  *
- * Flag state lives in **AWS AppConfig** (global, per environment) and is resolved
- * at runtime from the backend's public `GET /feature-flags` endpoint — so a
+ * Flag state lives in **AWS SSM Parameter Store** (global, per environment) and is
+ * resolved at runtime from the backend's public `GET /feature-flags` endpoint — so a
  * console toggle reaches the SPA without a rebuild. There is no bundled config:
  * until {@link initFeatureFlags} resolves (and any time the backend is
  * unreachable) every flag fails safe to `false` (feature off).

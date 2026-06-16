@@ -23,7 +23,7 @@ function render() {
   );
 }
 
-// Resolve global feature flags from the backend (AWS AppConfig, FE-026) before
+// Resolve global feature flags from the backend (AWS SSM Parameter Store, FE-026) before
 // first paint so the UI renders with the right flags, then render regardless of
 // the outcome (a failed fetch leaves the fail-safe all-off flags). No-op under
 // Vitest, where initFeatureFlags resolves immediately.

@@ -44,12 +44,12 @@ def before_all(context):
     if str(_SRC) not in sys.path:
         sys.path.insert(0, str(_SRC))
 
-    # Stripe billing is feature-flagged (BE-017) and the flag now lives in AWS
-    # AppConfig (runtime, no redeploy). This suite exercises the deployed billing
-    # endpoints + webhook, which only behave as tested when billing is ON; with the
-    # flag OFF they 404 / no-op, so the whole suite is not applicable. Ask the
-    # deployment itself via the public ``GET /feature-flags`` endpoint (the same
-    # resolved AppConfig state the Lambdas enforce) and, when billing is off, skip
+    # Stripe billing is feature-flagged (BE-017) and the flag now lives in an SSM
+    # Parameter Store parameter (runtime, no redeploy). This suite exercises the
+    # deployed billing endpoints + webhook, which only behave as tested when billing
+    # is ON; with the flag OFF they 404 / no-op, so the whole suite is not applicable.
+    # Ask the deployment itself via the public ``GET /feature-flags`` endpoint (the
+    # same resolved flag state the Lambdas enforce) and, when billing is off, skip
     # every scenario (see ``before_scenario``) without resolving any SSM secrets.
     api_base_url = os.environ.get("API_BASE_URL", "").rstrip("/")
     context.billing_enabled = False

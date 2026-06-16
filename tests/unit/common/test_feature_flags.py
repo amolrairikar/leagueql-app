@@ -9,86 +9,66 @@ import pytest
 
 import common.feature_flags as ff
 
-# AppConfig env vars the module reads at import to decide whether to source flags
-# from AWS AppConfig. Cleared between tests so the default path stays offline.
-_APPCONFIG_ENV = (
-    "APPCONFIG_APPLICATION",
-    "APPCONFIG_ENVIRONMENT",
-    "APPCONFIG_PROFILE",
-    "APPCONFIG_TTL_SECONDS",
+# Env vars the module reads at import to decide whether to source flags from AWS SSM
+# Parameter Store. Cleared between tests so the default path stays offline.
+_FLAGS_ENV = (
+    "FEATURE_FLAGS_SSM_PARAM",
+    "FEATURE_FLAGS_TTL_SECONDS",
 )
 
 
 @pytest.fixture(autouse=True)
 def restore_default_flags():
     """Each test mutates the global OpenFeature provider (and some reload the
-    module with AppConfig env set); restore the clean, no-AppConfig default
-    afterward so state never leaks into other tests."""
+    module with SSM env set); restore the clean, no-SSM default afterward so state
+    never leaks into other tests."""
     yield
-    for key in _APPCONFIG_ENV:
+    for key in _FLAGS_ENV:
         os.environ.pop(key, None)
     importlib.reload(ff)
 
 
-class _FakeStream:
-    """Stand-in for the StreamingBody returned in ``Configuration``."""
+class _FakeSsmClient:
+    """Minimal ``ssm`` client serving a queue of feature-flag parameter values."""
 
-    def __init__(self, raw: bytes):
-        self._raw = raw
-
-    def read(self) -> bytes:
-        return self._raw
-
-
-class _FakeAppConfigClient:
-    """Minimal ``appconfigdata`` client serving a queue of configurations."""
-
-    def __init__(self, configs, start_error=None):
-        # configs: objects to serve in order (dict → JSON bytes, None → empty body).
-        self._configs = list(configs)
-        self._start_error = start_error
+    def __init__(self, values, get_error=None):
+        # values: objects to serve in order (dict → JSON value, None → empty value).
+        # Once the queue drains the last value sticks, mirroring a real parameter that
+        # keeps returning its current value on every GetParameter.
+        self._values = list(values)
+        self._get_error = get_error
         self.fail_next = None
-        self.start_calls = 0
-        self.latest_tokens: list[str] = []
-        self._counter = 0
+        self.calls = 0
+        self._last = None
 
-    def start_configuration_session(self, **kwargs):
-        self.start_calls += 1
-        if self._start_error:
-            raise self._start_error
-        return {"InitialConfigurationToken": "tok-0"}
-
-    def get_latest_configuration(self, ConfigurationToken):
-        self.latest_tokens.append(ConfigurationToken)
+    def get_parameter(self, Name):
+        self.calls += 1
+        if self._get_error is not None:
+            raise self._get_error
         if self.fail_next is not None:
             err = self.fail_next
             self.fail_next = None
             raise err
-        obj = self._configs.pop(0) if self._configs else None
-        raw = b"" if obj is None else json.dumps(obj).encode()
-        self._counter += 1
-        return {
-            "NextPollConfigurationToken": f"tok-{self._counter}",
-            "Configuration": _FakeStream(raw),
-        }
+        if self._values:
+            self._last = self._values.pop(0)
+        value = "" if self._last is None else json.dumps(self._last)
+        return {"Parameter": {"Value": value}}
 
 
-def _reload_with_appconfig(monkeypatch, client, ttl="45"):
-    """Reload the module with AppConfig wired and ``boto3.client`` faked."""
-    monkeypatch.setenv("APPCONFIG_APPLICATION", "leagueql-dev")
-    monkeypatch.setenv("APPCONFIG_ENVIRONMENT", "dev")
-    monkeypatch.setenv("APPCONFIG_PROFILE", "feature-flags")
-    monkeypatch.setenv("APPCONFIG_TTL_SECONDS", ttl)
+def _reload_with_ssm(monkeypatch, client, ttl="45"):
+    """Reload the module with SSM wired and ``boto3.client`` faked."""
+    monkeypatch.setenv("FEATURE_FLAGS_SSM_PARAM", "/leagueql/dev/feature-flags")
+    monkeypatch.setenv("FEATURE_FLAGS_TTL_SECONDS", ttl)
     monkeypatch.setattr(boto3, "client", lambda *a, **k: client)
     return importlib.reload(ff)
 
 
 class TestBillingFlag:
     def test_defaults_off_when_unconfigured(self):
-        # With no AppConfig env vars (local / tests) there is no flag source, so
-        # every flag — billing included — reads off and the Data API is never used.
-        assert ff._appconfig_enabled is False
-        assert ff._appconfigdata_client is None
+        # With no SSM env var (local / tests) there is no flag source, so every flag —
+        # billing included — reads off and the SSM client is never created.
+        assert ff._flags_enabled is False
+        assert ff._ssm_client is None
         assert ff.is_billing_enabled() is False
 
     def test_override_on(self):
@@ -144,60 +124,59 @@ class TestBuildFlags:
         assert flags["x"].default_variant == ff._ON
 
 
-class TestAppConfigSource:
-    def test_initial_load_from_appconfig(self, monkeypatch):
-        client = _FakeAppConfigClient([{"billing": {"enabled": True}}])
-        mod = _reload_with_appconfig(monkeypatch, client)
-        assert mod._appconfig_enabled is True
+class TestSsmSource:
+    def test_initial_load_from_ssm(self, monkeypatch):
+        client = _FakeSsmClient([{"billing": {"enabled": True}}])
+        mod = _reload_with_ssm(monkeypatch, client)
+        assert mod._flags_enabled is True
         assert mod.is_billing_enabled() is True
-        assert client.start_calls == 1
+        assert client.calls == 1
 
-    def test_empty_payload_defaults_off(self, monkeypatch):
-        # An empty body means "no deployment / no change" → all flags off.
-        client = _FakeAppConfigClient([None])
-        mod = _reload_with_appconfig(monkeypatch, client)
+    def test_empty_value_defaults_off(self, monkeypatch):
+        # An empty parameter value means "no flags" → all flags off.
+        client = _FakeSsmClient([None])
+        mod = _reload_with_ssm(monkeypatch, client)
         assert mod.is_billing_enabled() is False
 
     def test_initial_fetch_error_defaults_off(self, monkeypatch):
-        client = _FakeAppConfigClient([], start_error=RuntimeError("boom"))
-        mod = _reload_with_appconfig(monkeypatch, client)
+        # A missing parameter (ParameterNotFound) or any error on the initial fetch
+        # fails safe to all-off.
+        client = _FakeSsmClient([], get_error=RuntimeError("ParameterNotFound"))
+        mod = _reload_with_ssm(monkeypatch, client)
         assert mod.is_billing_enabled() is False
 
     def test_refresh_picks_up_change(self, monkeypatch):
-        client = _FakeAppConfigClient(
+        client = _FakeSsmClient(
             [{"billing": {"enabled": False}}, {"billing": {"enabled": True}}]
         )
-        mod = _reload_with_appconfig(monkeypatch, client, ttl="0")
+        mod = _reload_with_ssm(monkeypatch, client, ttl="0")
         # Initial load saw billing off...
         assert mod._cached_config == {"billing": {"enabled": False}}
         # ...and TTL=0 means the next read refreshes and picks up the new value.
         assert mod.is_billing_enabled() is True
-        # The session token advances between polls (init used tok-0, refresh tok-1).
-        assert client.latest_tokens[:2] == ["tok-0", "tok-1"]
 
     def test_refresh_within_ttl_skips_fetch(self, monkeypatch):
-        client = _FakeAppConfigClient([{"billing": {"enabled": True}}])
-        mod = _reload_with_appconfig(monkeypatch, client, ttl="3600")
-        before = len(client.latest_tokens)
+        client = _FakeSsmClient([{"billing": {"enabled": True}}])
+        mod = _reload_with_ssm(monkeypatch, client, ttl="3600")
+        before = client.calls
         mod.is_billing_enabled()
         mod.is_billing_enabled()
-        assert len(client.latest_tokens) == before
+        assert client.calls == before
 
-    def test_refresh_error_keeps_last_known_and_resets_token(self, monkeypatch):
-        client = _FakeAppConfigClient([{"billing": {"enabled": True}}])
-        mod = _reload_with_appconfig(monkeypatch, client, ttl="0")
+    def test_refresh_error_keeps_last_known(self, monkeypatch):
+        client = _FakeSsmClient([{"billing": {"enabled": True}}])
+        mod = _reload_with_ssm(monkeypatch, client, ttl="0")
         assert mod.is_billing_enabled() is True
         client.fail_next = RuntimeError("transient")
-        # A failed refresh keeps the last-known flags and drops the session so the
-        # next poll re-establishes it.
+        # A failed refresh keeps the last-known flags rather than flipping to a
+        # surprise state.
         assert mod.is_billing_enabled() is True
-        assert mod._session_token is None
 
     def test_unchanged_config_does_not_reset_provider(self, monkeypatch):
-        client = _FakeAppConfigClient(
+        client = _FakeSsmClient(
             [{"billing": {"enabled": True}}, {"billing": {"enabled": True}}]
         )
-        mod = _reload_with_appconfig(monkeypatch, client, ttl="0")
+        mod = _reload_with_ssm(monkeypatch, client, ttl="0")
         calls: list[dict] = []
         original = mod._set_provider_from_config
         monkeypatch.setattr(
