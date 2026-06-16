@@ -437,49 +437,14 @@ module "player-metadata-lambda-role" {
   }
 }
 
-# Feature-flag source of truth (BE-017 / FE-026). A single SSM Parameter Store
-# parameter per region (each regional API/webhook Lambda reads its own region's copy)
-# holding the flag JSON. Standard-tier String parameters are free to store and read,
-# unlike AppConfig (the previous source). The flag *values* are edited in the SSM
-# console (runtime toggle) — `ignore_changes = [value]` keeps a toggle from causing TF
-# drift — so we only scaffold the parameter with a placeholder all-off config here.
-resource "aws_ssm_parameter" "feature_flags_east" {
-  provider    = aws.primary
-  name        = "/leagueql/${var.environment}/feature-flags"
-  description = "LeagueQL feature-flag values (set in the SSM console)"
-  type        = "String"
-  value       = jsonencode({ billing = { enabled = false } })
-
-  lifecycle {
-    ignore_changes = [value]
-  }
-
-  tags = {
-    environment = var.environment
-    project     = "leagueql"
-    component   = "feature-flags"
-    managed-by  = "terraform"
-  }
-}
-
-resource "aws_ssm_parameter" "feature_flags_west" {
-  provider    = aws.replica
-  name        = "/leagueql/${var.environment}/feature-flags"
-  description = "LeagueQL feature-flag values (set in the SSM console)"
-  type        = "String"
-  value       = jsonencode({ billing = { enabled = false } })
-
-  lifecycle {
-    ignore_changes = [value]
-  }
-
-  tags = {
-    environment = var.environment
-    project     = "leagueql"
-    component   = "feature-flags"
-    managed-by  = "terraform"
-  }
-}
+# Feature-flag source of truth (BE-017 / FE-026) is an SSM Parameter Store parameter
+# named `/leagueql/${var.environment}/feature-flags` in each region (each regional
+# API/webhook Lambda reads its own region's copy), holding the flag JSON. Like the
+# Stripe/Axiom/Discord SSM values, it is created and edited **out-of-band** in the SSM
+# console (a standard-tier `String` — the flags are non-secret booleans) and is never
+# managed in TF, so a toggle never needs a `terraform apply`. The Lambda code reads
+# all flags off when the parameter is missing, so a fresh environment is safe until the
+# value is set. Only the read grant lives in TF (below).
 
 module "api-lambda-role" {
   source           = "../../modules/iam-role"
@@ -600,15 +565,16 @@ module "api-lambda-role" {
       },
       {
         # BE-017: feature flags are resolved at runtime from an SSM Parameter Store
-        # parameter (IAM-role access, no secret). Grant read on both regions' copy.
+        # parameter (IAM-role access, no secret). The parameter is set out-of-band in
+        # the SSM console, never in TF state. Grant read on both regions' copy.
         Sid    = "ReadFeatureFlagsSsmParameter"
         Effect = "Allow"
         Action = [
           "ssm:GetParameter"
         ]
         Resource = [
-          aws_ssm_parameter.feature_flags_east.arn,
-          aws_ssm_parameter.feature_flags_west.arn
+          "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/feature-flags",
+          "arn:aws:ssm:us-west-2:${var.account_id}:parameter/leagueql/${var.environment}/feature-flags"
         ]
       }
     ]
@@ -695,15 +661,16 @@ module "stripe-webhook-lambda-role" {
       },
       {
         # BE-017: the webhook reads the global `billing` flag from the SSM
-        # feature-flag parameter to no-op when billing is off. Same source as the API.
+        # feature-flag parameter (set out-of-band, never in TF state) to no-op when
+        # billing is off. Same source as the API.
         Sid    = "ReadFeatureFlagsSsmParameter"
         Effect = "Allow"
         Action = [
           "ssm:GetParameter"
         ]
         Resource = [
-          aws_ssm_parameter.feature_flags_east.arn,
-          aws_ssm_parameter.feature_flags_west.arn
+          "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/feature-flags",
+          "arn:aws:ssm:us-west-2:${var.account_id}:parameter/leagueql/${var.environment}/feature-flags"
         ]
       }
     ]

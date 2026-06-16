@@ -66,11 +66,13 @@ they always agree.
   `_override_for_testing({...})` swaps the active flag map.
 - Source of truth: an AWS SSM Parameter Store parameter (per environment, per region) named
   `/leagueql/<env>/feature-flags`, serving the same `{ "billing": { "enabled": false }, ... }` JSON
-  shape the module parses. The flag values are edited in the SSM console (the runtime toggle); the
-  parameter is scaffolded in Terraform with a placeholder value and
-  `lifecycle { ignore_changes = [value] }` (`infrastructure/global/{dev,prod}`), so a toggle never
-  needs a `terraform apply` / causes drift. The parameter is a plain `String` (the flags are
-  non-secret global booleans already exposed via `GET /feature-flags`), not a `SecureString`.
+  shape the module parses. Like the Stripe/Axiom/Discord SSM values, it is **created and edited
+  out-of-band** in the SSM console and is **never managed in Terraform** (no `aws_ssm_parameter`
+  resource), so a toggle never needs a `terraform apply` / causes drift; only the `ssm:GetParameter`
+  read grant lives in TF (`infrastructure/global/{dev,prod}`). The parameter is a plain `String`
+  (the flags are non-secret global booleans already exposed via `GET /feature-flags`), not a
+  `SecureString`. Until it is created the Lambdas read all flags off (fail-safe), so a fresh
+  environment is safe before the value is set.
 - Call sites:
   - `src/api/routes.py` — `get_feature_flags` (public `GET /feature-flags`),
     `create_checkout_session` and `create_billing_portal_session` raise `404` when billing is off.
@@ -121,5 +123,6 @@ they always agree.
 `src/common/feature_flags.py`, `src/api/routes.py` (`get_feature_flags`, billing endpoints),
 `src/api/helpers.py`, `src/stripe_webhook/handler.py`,
 `infrastructure/regional/main.tf`, `infrastructure/global/{dev,prod}/main.tf`
-(`aws_ssm_parameter` + `ssm:GetParameter` grants), `docs/api/openapi_spec.yaml` (`/feature-flags`),
+(`ssm:GetParameter` grants; the parameter itself is set out-of-band), `docs/api/openapi_spec.yaml`
+(`/feature-flags`),
 [FE-026](../frontend/FE-026-feature-flags.md) (frontend consumer).
