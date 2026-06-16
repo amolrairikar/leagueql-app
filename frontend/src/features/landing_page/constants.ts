@@ -15,6 +15,7 @@ import type {
   PricingPlan,
   PremiumFeature,
 } from '@/features/landing_page/types';
+import { SUBSCRIPTION_PRICES } from '@/lib/pricing';
 
 export const NAV_LINKS: NavLinkItem[] = [
   { label: 'Changelog', href: '/changelog', icon: FileText, external: false },
@@ -110,13 +111,13 @@ export const FEATURES: Feature[] = [
 export const PRICING_PLANS: PricingPlan[] = [
   {
     name: 'Monthly',
-    price: '$2.99',
+    price: SUBSCRIPTION_PRICES.MONTHLY,
     period: '/month',
     billedAs: 'Billed monthly',
   },
   {
     name: 'Yearly',
-    price: '$14.99',
+    price: SUBSCRIPTION_PRICES.YEARLY,
     period: '/year',
     billedAs: 'Billed annually — save ~58%',
     highlight: true,

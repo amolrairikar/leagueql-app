@@ -26,7 +26,10 @@ the app therefore refreshes subscription state with the cache bypassed and shows
   `plan` is `MONTHLY` or `YEARLY` (BE-015 selects the matching Stripe price). Uses `apiClient.post`
   (auth via the `__session` cookie; POSTs are not cached).
 - **Plan picker:** a monthly/yearly **toggle** (`plan-toggle.tsx`) rendered above the Subscribe
-  CTA, defaulting to `MONTHLY`. Both plans unlock the same premium features; the toggle only
+  CTA, defaulting to `MONTHLY`. Each option shows its price (`$2.99/mo`, `$14.99/yr`) alongside the
+  cadence label for full price transparency before checkout, with the yearly option also carrying
+  the `Save ~58%` hint; the prices match the landing-page pricing table
+  ([FE-001](FE-001-landing-page.md)). Both plans unlock the same premium features; the toggle only
   chooses the billing cadence sent to checkout. Existing subscribers switch plans via the Stripe
   Billing Portal ([FE-023](FE-023-subscription-management.md)).
 - **Subscribe trigger:** a "Subscribe" button in `subscription-required.tsx` (the locked overlay)
@@ -74,9 +77,10 @@ the app therefore refreshes subscription state with the cache bypassed and shows
 ## Acceptance Criteria
 - [ ] A "Subscribe" action appears for a league with no active subscription (paywall + dialog) and
       is hidden in demo mode / when no league is connected.
-- [ ] A monthly/yearly toggle (default monthly) is shown with the Subscribe action; clicking
-      Subscribe calls `POST /leagues/{id}/checkout-session` with the selected `plan` and redirects
-      to the returned Stripe URL.
+- [ ] A monthly/yearly toggle (default monthly) is shown with the Subscribe action, with each
+      option displaying its price (`$2.99/mo`, `$14.99/yr`); clicking Subscribe calls
+      `POST /leagues/{id}/checkout-session` with the selected `plan` and redirects to the returned
+      Stripe URL.
 - [ ] The button shows a loading state while the session is created and returns to idle on error.
 - [ ] A `409` response shows an "already active" message and refreshes subscription state instead
       of redirecting.
