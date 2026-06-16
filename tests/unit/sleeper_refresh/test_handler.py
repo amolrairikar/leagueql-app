@@ -136,6 +136,33 @@ class TestLambdaHandlerSleeperRefresh:
         ]
         assert invoked_correlation_id in logged_correlation_ids
 
+    def test_each_league_gets_a_root_span(self, sleeper_refresh_handler):
+        """Every refreshed league starts its own root trace (BE-021); the cron has
+        no inbound context to continue."""
+        with (
+            patch.object(
+                sleeper_refresh_handler,
+                "get_nfl_state",
+                return_value={"season_type": "regular", "week": 5},
+            ),
+            patch.object(
+                sleeper_refresh_handler,
+                "get_sleeper_leagues",
+                return_value=[
+                    {"league_id": "lg1", "canonical_league_id": "c1"},
+                    {"league_id": "lg2", "canonical_league_id": "c2"},
+                ],
+            ),
+            patch.object(sleeper_refresh_handler, "invoke_onboarder_lambda"),
+            patch.object(sleeper_refresh_handler, "traced_handler") as th,
+        ):
+            sleeper_refresh_handler.lambda_handler({}, self._make_context())
+
+        assert th.call_count == 2
+        for call in th.call_args_list:
+            assert call.args[0] == "sleeper_refresh.league"
+            assert call.kwargs["root"] is True
+
     def test_raises_when_any_dispatch_fails(self, sleeper_refresh_handler):
         """A dispatch failure never reaches the onboarder (so no onboarder/DLQ
         alarm covers it); the handler must attempt every league and then raise so

@@ -8,9 +8,14 @@ from common.job_status import (
     classify_http_error,
     write_job_status,
 )
+from common.tracing import init_tracing, traced_handler
 from onboarding_service import OnboardingService
 from sleeper_client import resolve_sleeper_canonical_league_id
 from utils import correlation_id_var, logger, publish_failure
+
+# Continue the trace started upstream (API or Sleeper refresh) → Axiom (BE-021).
+# A no-op unless Axiom is configured, so tests / unconfigured envs are unaffected.
+init_tracing("leagueql-onboarder")
 
 
 def _record_failure(
@@ -46,6 +51,24 @@ def _record_failure(
 
 
 def lambda_handler(event, context) -> dict[str, str | int]:
+    """Entry point: continue the upstream trace (BE-021), then run the onboarder.
+
+    Wraps :func:`_handle` in a span that continues the trace carried in
+    ``event["trace_context"]`` (a no-op when tracing is disabled) and force-flushes
+    spans before returning, since the Lambda freezes between invocations.
+
+    Args:
+        event: The event data that triggered the Lambda function.
+        context: The context in which the Lambda function is running.
+
+    Returns:
+        dict: A response indicating the success of the operation.
+    """
+    with traced_handler("onboarder.handle", carrier=event.get("trace_context")):
+        return _handle(event, context)
+
+
+def _handle(event, context) -> dict[str, str | int]:
     """
     Main handler function for league onboarder.
 

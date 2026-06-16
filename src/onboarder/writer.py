@@ -7,6 +7,7 @@ import boto3
 import botocore.config
 import botocore.exceptions
 
+from common.tracing import inject_context
 from utils import correlation_id_var, logger
 
 _retry_config = botocore.config.Config(retries={"mode": "standard"})
@@ -84,6 +85,11 @@ def upload_results_to_s3(
         metadata = {"correlation_id": correlation_id_var.get()}
         if reprocess_all:
             metadata["reprocess_all"] = "true"
+        # Carry W3C trace context (traceparent/tracestate) in the object metadata so
+        # the processor — triggered by this manifest's S3 event — continues the trace
+        # (BE-021). A no-op when tracing is disabled. S3 lowercases metadata keys and
+        # the W3C header names are already lowercase, so the propagator round-trips.
+        inject_context(metadata)
 
         _s3.put_object(
             Bucket=bucket_name,

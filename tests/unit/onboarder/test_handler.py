@@ -1,9 +1,39 @@
 """Tests for onboarder/handler.py."""
 
 import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 
 import requests
+
+
+class TestTraceContextPropagation:
+    """The handler continues the upstream trace carried in the event (BE-021)."""
+
+    def test_handler_continues_trace_from_event_carrier(self, onboarder_handler):
+        event = {"trace_context": {"traceparent": "00-abc-def-01"}}
+        with (
+            patch.object(
+                onboarder_handler, "_handle", return_value={"statusCode": 200}
+            ) as impl,
+            patch.object(onboarder_handler, "traced_handler") as th,
+        ):
+            result = onboarder_handler.lambda_handler(event, MagicMock())
+
+        assert result == {"statusCode": 200}
+        th.assert_called_once_with(
+            "onboarder.handle", carrier={"traceparent": "00-abc-def-01"}
+        )
+        impl.assert_called_once_with(event, ANY)
+
+    def test_handler_passes_none_carrier_when_absent(self, onboarder_handler):
+        with (
+            patch.object(
+                onboarder_handler, "_handle", return_value={"statusCode": 200}
+            ),
+            patch.object(onboarder_handler, "traced_handler") as th,
+        ):
+            onboarder_handler.lambda_handler({}, MagicMock())
+        th.assert_called_once_with("onboarder.handle", carrier=None)
 
 
 class TestLambdaHandlerMissingFields:

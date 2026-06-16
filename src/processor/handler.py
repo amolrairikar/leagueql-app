@@ -14,8 +14,14 @@ import botocore.exceptions
 import duckdb
 import pandas as pd
 from common.job_status import write_job_status
+from common.tracing import init_tracing, traced_handler
 from utils import correlation_id_var, logger, publish_failure
 from queries import QUERIES
+
+# Continue the trace the onboarder propagated via the manifest's S3 metadata → Axiom
+# (BE-021). A no-op unless Axiom is configured, so tests / unconfigured envs are
+# unaffected.
+init_tracing("leagueql-processor")
 
 _retry_config = botocore.config.Config(retries={"mode": "standard"})
 s3_client = boto3.client("s3", config=_retry_config)
@@ -1245,6 +1251,34 @@ def _lambda_handler_impl(event, context) -> None:
     # season the normal refresh diff would select.
     reprocess_all = manifest_metadata.get("reprocess_all") == "true"
 
+    # Continue the onboarder's trace across the S3 event (BE-021): the heavy
+    # processing and its DynamoDB/S3 child spans hang off this span. A no-op when
+    # tracing is disabled.
+    with traced_handler("processor.handle", carrier=manifest_metadata):
+        _process_manifest(
+            bucket=bucket,
+            key=key,
+            canonical_league_id=canonical_league_id,
+            previous_version_id=previous_version_id,
+            manifest=manifest,
+            reprocess_all=reprocess_all,
+        )
+
+
+def _process_manifest(
+    *,
+    bucket: str,
+    key: str,
+    canonical_league_id: str,
+    previous_version_id: str | None,
+    manifest: dict,
+    reprocess_all: bool,
+) -> None:
+    """Build and persist every precomputed view for the onboarded league.
+
+    Split out from :func:`_lambda_handler_impl` so the work runs inside the
+    ``processor.handle`` span that continues the onboarder's trace (BE-021).
+    """
     platform = next(iter(manifest))
     all_seasons = manifest[platform]
     prefix = "/".join(key.split("/")[:2])

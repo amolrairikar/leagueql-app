@@ -511,6 +511,30 @@ _FAKE_QUERIES = {
 }
 
 
+class TestProcessorTracePropagation:
+    """The processor continues the onboarder's trace from the manifest metadata (BE-021)."""
+
+    def test_continues_trace_from_manifest_metadata(self, processor_handler):
+        mock_s3 = MagicMock()
+        resp = _manifest_response({"SLEEPER": ["2024"]})
+        resp["Metadata"]["traceparent"] = "00-abc-def-01"
+        mock_s3.get_object.return_value = resp
+        proc = MagicMock()
+        with patch.multiple(
+            processor_handler,
+            s3_client=mock_s3,
+            get_previous_version_id=MagicMock(return_value=None),
+            _process_manifest=proc,
+        ):
+            with patch.object(processor_handler, "traced_handler") as th:
+                processor_handler._lambda_handler_impl(_s3_event(), MagicMock())
+        th.assert_called_once_with(
+            "processor.handle",
+            carrier={"correlation_id": "corr-1", "traceparent": "00-abc-def-01"},
+        )
+        proc.assert_called_once()
+
+
 class TestLambdaHandlerImpl:
     def test_replication_event_returns_early(self, processor_handler):
         mock_s3 = MagicMock()
