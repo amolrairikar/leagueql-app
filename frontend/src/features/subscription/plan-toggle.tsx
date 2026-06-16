@@ -1,16 +1,32 @@
 import type { SubscriptionPlan } from '@/components/api/types';
+import { SUBSCRIPTION_PRICES } from '@/lib/pricing';
 import { cn } from '@/lib/utils';
 
-const OPTIONS: { value: SubscriptionPlan; label: string; hint?: string }[] = [
-  { value: 'MONTHLY', label: 'Monthly' },
-  { value: 'YEARLY', label: 'Yearly', hint: 'Save ~58%' },
+const OPTIONS: {
+  value: SubscriptionPlan;
+  label: string;
+  price: string;
+  hint?: string;
+}[] = [
+  {
+    value: 'MONTHLY',
+    label: 'Monthly',
+    price: `${SUBSCRIPTION_PRICES.MONTHLY}/mo`,
+  },
+  {
+    value: 'YEARLY',
+    label: 'Yearly',
+    price: `${SUBSCRIPTION_PRICES.YEARLY}/yr`,
+    hint: 'Save ~58%',
+  },
 ];
 
 /**
  * Segmented monthly/yearly picker for the subscription plan (FE-022). Both plans
  * gate the same premium features; the choice only selects which Stripe price the
- * checkout session uses. Rendered above the Subscribe CTA in the locked overlay
- * and the Manage Subscription dialog.
+ * checkout session uses. Each option shows its price for full transparency before
+ * checkout. Rendered above the Subscribe CTA in the locked overlay and the Manage
+ * Subscription dialog.
  */
 export function PlanToggle({
   value,
@@ -38,16 +54,21 @@ export function PlanToggle({
             disabled={disabled}
             onClick={() => onChange(opt.value)}
             className={cn(
-              'cursor-pointer rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+              'flex cursor-pointer flex-col items-center rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
               selected
                 ? 'bg-background text-foreground shadow-sm'
                 : 'text-muted-foreground hover:text-foreground',
             )}
           >
-            {opt.label}
-            {opt.hint && (
-              <span className="text-primary ml-1.5 text-xs">{opt.hint}</span>
-            )}
+            <span>
+              {opt.label}
+              {opt.hint && (
+                <span className="text-primary ml-1.5 text-xs">{opt.hint}</span>
+              )}
+            </span>
+            <span className="text-muted-foreground text-xs font-normal">
+              {opt.price}
+            </span>
           </button>
         );
       })}

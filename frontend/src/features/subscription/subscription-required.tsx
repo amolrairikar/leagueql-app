@@ -85,7 +85,7 @@ export function SubscriptionRequired({
           <>
             <p className="text-muted-foreground max-w-md">
               {featureLabel
-                ? `Subscribe to unlock ${featureLabel.toLowerCase()} for your league.`
+                ? `Subscribe to unlock ${featureLabel.toLowerCase()} and all other premium features for your league.`
                 : "Subscribe to gain access to your league's analytics."}
             </p>
             <PlanToggle

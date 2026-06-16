@@ -68,6 +68,28 @@ defineFeature(feature, (test) => {
     });
   });
 
+  test("The plan toggle shows each plan's price", ({ given, when, then }) => {
+    given('a checkout session will be created', () => {
+      assignSpy = mockNavigation();
+    });
+    when('I open the paywall as the owner', async () => {
+      // Only the owner sees the plan toggle (FE-025).
+      server.use(leagueMetadata({ is_owner: true }));
+      await renderRoute(<SubscriptionRequired />, { league });
+    });
+    then(
+      'I see the monthly price "$2.99/mo" and the yearly price "$14.99/yr"',
+      async () => {
+        expect(
+          await screen.findByRole('radio', { name: /monthly/i }),
+        ).toHaveTextContent('$2.99/mo');
+        expect(
+          screen.getByRole('radio', { name: /yearly/i }),
+        ).toHaveTextContent('$14.99/yr');
+      },
+    );
+  });
+
   test('Subscribing on the yearly plan sends the yearly plan', ({
     given,
     when,

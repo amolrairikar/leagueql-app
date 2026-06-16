@@ -4,6 +4,7 @@ import { defineFeature, loadFeature } from 'jest-cucumber';
 import type { TransactionItem } from '../api-calls';
 import Transactions from '../transactions';
 
+import { avatarColor } from '@/lib/color-constants';
 import { leagueQuery, leagueQueryError, server } from '@/test/msw/server';
 import { renderRoute } from '@/test/render';
 
@@ -141,6 +142,20 @@ const TRANSACTIONS: TransactionItem[] = [
   },
 ];
 
+// Standings for the same season (team_id is the roster_id for Sleeper), ordered Alice then
+// Bob. The summary lists Bob first (higher total), so reusing the *standings* index proves
+// Bob takes the second avatar color (avatarColor(1)) — not the first, which the summary's own
+// row order would give — and that the avatar shows the standings logo.
+const BOB_LOGO = 'https://logos.test/bob.png';
+const STANDINGS = [
+  {
+    team_id: '1',
+    team_name: 'Team Alice',
+    team_logo: 'https://logos.test/alice.png',
+  },
+  { team_id: '2', team_name: 'Team Bob', team_logo: BOB_LOGO },
+];
+
 defineFeature(feature, (test) => {
   test('A trade shows only what each team received', ({
     given,
@@ -220,7 +235,11 @@ defineFeature(feature, (test) => {
       trades: string,
       total: string,
     ) => {
-      const ownerCell = await screen.findByRole('cell', { name });
+      // The owner cell now holds the avatar initials, username, and team name,
+      // so match the username as a substring of the cell's accessible name.
+      const ownerCell = await screen.findByRole('cell', {
+        name: new RegExp(name),
+      });
       const cells = within(ownerCell.closest('tr')!).getAllByRole('cell');
       expect(cells[1].textContent).toBe(waivers);
       expect(cells[2].textContent).toBe(freeAgents);
@@ -239,13 +258,36 @@ defineFeature(feature, (test) => {
       /^owner "(.*)" is listed above owner "(.*)" in the summary table$/,
       async (first, second) => {
         const firstRow = (
-          await screen.findByRole('cell', { name: first })
+          await screen.findByRole('cell', { name: new RegExp(first) })
         ).closest('tr')!;
         const secondRow = (
-          await screen.findByRole('cell', { name: second })
+          await screen.findByRole('cell', { name: new RegExp(second) })
         ).closest('tr')!;
         const rows = screen.getAllByRole('row');
         expect(rows.indexOf(firstRow)).toBeLessThan(rows.indexOf(secondRow));
+      },
+    );
+  });
+
+  test("The summary reuses each owner's Season Standings avatar and color", ({
+    given,
+    when,
+    then,
+  }) => {
+    given('transactions and standings data are available', () => {
+      server.use(leagueQuery({ TRANSACTIONS, SEASON_STANDINGS: STANDINGS }));
+    });
+    when('I open the transactions page', async () => {
+      await renderRoute(<Transactions />, { route: '/transactions', league });
+    });
+    then(
+      'owner "Bob" shows the standings team logo and standings color',
+      async () => {
+        const logo = await screen.findByRole('img', { name: 'Team Bob' });
+        expect(logo).toHaveAttribute('src', BOB_LOGO);
+        // Bob is roster_id 2 → standings index 1, so the avatar uses avatarColor(1)
+        // even though he is the first row in the (total-sorted) summary.
+        expect(logo.parentElement).toHaveStyle({ background: avatarColor(1) });
       },
     );
   });

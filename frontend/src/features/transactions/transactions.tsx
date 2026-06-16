@@ -1,17 +1,26 @@
 import { ArrowDown, ArrowUp, Repeat } from 'lucide-react';
 import { Suspense, use, useMemo, useState } from 'react';
 
+import { TeamAvatar } from '@/components/team-avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import SeasonSelect from '@/features/season_select/season-select';
 import {
+  type SeasonStandingsItem,
+  getSeasonStandings,
+} from '@/features/season_standings/api-calls';
+import {
   type TransactionItem,
   type TransactionPlayer,
+  type TransactionTeam,
   getTransactions,
 } from '@/features/transactions/api-calls';
+import { avatarColor } from '@/lib/color-constants';
 import { getLeagueCookies } from '@/lib/cookie-handler';
 import { type Result, toResult } from '@/lib/result';
 
 type TransactionsResult = Result<TransactionItem[]>;
+
+type StandingsResult = Result<SeasonStandingsItem[]>;
 
 const TYPE_LABELS: Record<string, string> = {
   trade: 'Trade',
@@ -62,7 +71,8 @@ type SummaryType = 'waiver' | 'free_agent' | 'trade';
 
 interface OwnerSummaryRow {
   rosterId: string;
-  name: string;
+  ownerUsername: string;
+  teamName: string;
   waiver: number;
   free_agent: number;
   trade: number;
@@ -76,24 +86,25 @@ interface OwnerSummaryRow {
  * then owner name ascending. Commissioner transactions are ignored.
  */
 function buildOwnerSummary(transactions: TransactionItem[]): OwnerSummaryRow[] {
-  // Resolve display names from every team mentioned across the season's transactions.
-  const names = new Map<string, string>();
+  // Resolve each roster's team from every transaction it appears in, so the row can show the
+  // owner username and team name (matching the other tables, e.g. Season Standings).
+  const teams = new Map<string, TransactionTeam>();
   for (const txn of transactions) {
-    for (const team of txn.teams) {
-      const name =
-        [team.display_name, team.team_name].find((n) => n) ??
-        `Roster ${team.roster_id}`;
-      names.set(team.roster_id, name);
-    }
+    for (const team of txn.teams) teams.set(team.roster_id, team);
   }
 
   const rows = new Map<string, OwnerSummaryRow>();
   const rowFor = (rosterId: string): OwnerSummaryRow => {
     let row = rows.get(rosterId);
     if (!row) {
+      const team = teams.get(rosterId);
+      const ownerUsername =
+        [team?.display_name, team?.team_name].find((n) => n) ??
+        `Roster ${rosterId}`;
       row = {
         rosterId,
-        name: names.get(rosterId) ?? `Roster ${rosterId}`,
+        ownerUsername,
+        teamName: [team?.team_name].find((n) => n) ?? `Team ${ownerUsername}`,
         waiver: 0,
         free_agent: 0,
         trade: 0,
@@ -121,7 +132,8 @@ function buildOwnerSummary(transactions: TransactionItem[]): OwnerSummaryRow[] {
   }
 
   return [...rows.values()].sort(
-    (a, b) => b.total - a.total || a.name.localeCompare(b.name),
+    (a, b) =>
+      b.total - a.total || a.ownerUsername.localeCompare(b.ownerUsername),
   );
 }
 
@@ -229,53 +241,121 @@ function TransactionCard({ txn }: { txn: TransactionItem }) {
   );
 }
 
-function SummaryTable({ promise }: { promise: Promise<TransactionsResult> }) {
+interface OwnerVisual {
+  /** Index into the standings order, so `avatarColor(index)` matches the standings page. */
+  colorIndex: number;
+  teamLogo: string;
+}
+
+/**
+ * Maps each roster_id to the avatar logo and color *index* used on the Season Standings page
+ * (FE-005), so the summary table shows the same avatar/color per owner. Standings keys on
+ * team_id, which is the roster_id for Sleeper (the only platform with transactions), and its
+ * color is positional — `avatarColor(index)` over the API's returned order — so the index is
+ * captured here rather than the resolved color.
+ */
+function buildStandingsVisuals(
+  standings: SeasonStandingsItem[],
+): Map<string, OwnerVisual> {
+  return new Map(
+    standings.map((s, i): [string, OwnerVisual] => [
+      s.team_id,
+      { colorIndex: i, teamLogo: s.team_logo },
+    ]),
+  );
+}
+
+function SummaryTable({
+  promise,
+  standingsPromise,
+}: {
+  promise: Promise<TransactionsResult>;
+  standingsPromise: Promise<StandingsResult>;
+}) {
   const result = use(promise);
+  const standingsResult = use(standingsPromise);
 
   // The wire below renders the error / empty state, so the table stays out of the way.
   if (!result.ok) return null;
   const rows = buildOwnerSummary(result.data);
   if (rows.length === 0) return null;
 
+  // Reuse the Season Standings avatar/color when standings is available; fall back to the
+  // row's own index + initials when it isn't (e.g. a season with no standings yet, or a
+  // roster not present in standings).
+  const visuals = standingsResult.ok
+    ? buildStandingsVisuals(standingsResult.data)
+    : new Map<string, OwnerVisual>();
+
   const headCell =
     'text-[10px] font-medium uppercase tracking-[0.07em] text-muted-foreground px-3.5 py-2.5 border-b border-border/50 bg-muted';
 
   return (
-    <table className="w-full border-collapse text-[13px]">
-      <thead className="sticky top-0 z-20">
-        <tr>
-          <th className={`${headCell} text-left`}>Owner</th>
-          <th className={`${headCell} text-right`}>Waivers</th>
-          <th className={`${headCell} text-right`}>Free Agents</th>
-          <th className={`${headCell} text-right`}>Trades</th>
-          <th className={`${headCell} text-right`}>Total</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((row) => (
-          <tr
-            key={row.rosterId}
-            className="border-b border-border/50 last:border-0 bg-card"
-          >
-            <td className="px-3.5 py-2.5 text-left text-foreground">
-              {row.name}
-            </td>
-            <td className="px-3.5 py-2.5 text-right text-muted-foreground">
-              {row.waiver}
-            </td>
-            <td className="px-3.5 py-2.5 text-right text-muted-foreground">
-              {row.free_agent}
-            </td>
-            <td className="px-3.5 py-2.5 text-right text-muted-foreground">
-              {row.trade}
-            </td>
-            <td className="px-3.5 py-2.5 text-right font-medium text-foreground">
-              {row.total}
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <div className="bg-card border border-border/50 rounded-lg overflow-hidden">
+      <div className="max-h-[70vh] overflow-auto">
+        <table
+          className="w-full border-collapse text-[13px]"
+          style={{ tableLayout: 'fixed', minWidth: '480px' }}
+        >
+          <thead className="sticky top-0 z-20">
+            <tr>
+              <th
+                className={`${headCell} text-left sticky left-0 z-10`}
+                style={{ width: '40%' }}
+              >
+                Owner
+              </th>
+              <th className={`${headCell} text-right`}>Waivers</th>
+              <th className={`${headCell} text-right`}>Free Agents</th>
+              <th className={`${headCell} text-right`}>Trades</th>
+              <th className={`${headCell} text-right`}>Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, i) => {
+              const visual = visuals.get(row.rosterId);
+              return (
+                <tr
+                  key={row.rosterId}
+                  className="border-b border-border/50 last:border-0 bg-card"
+                >
+                  <td className="px-3.5 py-2.5 sticky left-0 z-10 bg-card">
+                    <div className="flex items-center gap-2">
+                      <TeamAvatar
+                        teamLogo={visual?.teamLogo ?? null}
+                        teamName={row.teamName}
+                        ownerUsername={row.ownerUsername}
+                        color={avatarColor(visual?.colorIndex ?? i)}
+                      />
+                      <div className="flex flex-col">
+                        <span className="text-[13px] font-medium text-foreground">
+                          {row.ownerUsername}
+                        </span>
+                        <span className="text-[11px] text-muted-foreground">
+                          {row.teamName}
+                        </span>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-3.5 py-2.5 text-right text-muted-foreground">
+                    {row.waiver}
+                  </td>
+                  <td className="px-3.5 py-2.5 text-right text-muted-foreground">
+                    {row.free_agent}
+                  </td>
+                  <td className="px-3.5 py-2.5 text-right text-muted-foreground">
+                    {row.trade}
+                  </td>
+                  <td className="px-3.5 py-2.5 text-right font-medium text-foreground">
+                    {row.total}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
 
@@ -358,6 +438,21 @@ export default function Transactions() {
     [leagueId, platform, selectedSeason],
   );
 
+  // Standings supplies the avatar/color the summary table reuses (FE-005); a missing or failed
+  // load is tolerated — the summary falls back to index-based colors and initials.
+  const standingsPromise = useMemo(
+    (): Promise<StandingsResult> =>
+      leagueId && selectedSeason
+        ? toResult(
+            getSeasonStandings(leagueId, platform, selectedSeason).then(
+              (res) => res.data,
+            ),
+            'Failed to load standings.',
+          )
+        : Promise.resolve({ ok: true as const, data: [] }),
+    [leagueId, platform, selectedSeason],
+  );
+
   return (
     <div className="flex flex-1 flex-col p-6 overflow-auto">
       <div className="max-w-225 mx-auto w-full">
@@ -374,9 +469,12 @@ export default function Transactions() {
         <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-2.5">
           Summary
         </p>
-        <div className="mb-4 overflow-x-auto">
+        <div className="mb-4">
           <Suspense fallback={<TableSkeleton />}>
-            <SummaryTable promise={transactionsPromise} />
+            <SummaryTable
+              promise={transactionsPromise}
+              standingsPromise={standingsPromise}
+            />
           </Suspense>
         </div>
 

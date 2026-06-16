@@ -24,6 +24,11 @@ Feature: Transactions (FE-027)
     And the summary row for "Alice" shows waivers "1", free agents "0", trades "1", total "2"
     And owner "Bob" is listed above owner "Alice" in the summary table
 
+  Scenario: The summary reuses each owner's Season Standings avatar and color
+    Given transactions and standings data are available
+    When I open the transactions page
+    Then owner "Bob" shows the standings team logo and standings color
+
   Scenario: A season with no transactions shows an empty state
     Given the league has no transactions
     When I open the transactions page
