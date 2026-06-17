@@ -17,10 +17,10 @@ Feature: Subscription checkout and billing portal (FE-022, FE-023)
     When I pick the yearly plan and click Subscribe
     Then the checkout request used the yearly plan
 
-  Scenario: Subscribe sends the originating page as the cancel path
+  Scenario: Subscribe sends the originating page as the return path
     Given a checkout session will be created
     When I click Subscribe from the schedule-swap page
-    Then the checkout request sent the schedule-swap page as the cancel path
+    Then the checkout request sent the schedule-swap page as the return path
 
   Scenario: A 409 on checkout shows an inline error
     Given checkout is rejected because a subscription already exists

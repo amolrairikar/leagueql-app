@@ -119,15 +119,15 @@ defineFeature(feature, (test) => {
     });
   });
 
-  test('Subscribe sends the originating page as the cancel path', ({
+  test('Subscribe sends the originating page as the return path', ({
     given,
     when,
     then,
   }) => {
     let capturedUrl = '';
     given('a checkout session will be created', () => {
-      // Start checkout from the schedule-swap page so the cancel ("back") URL
-      // should return the user here rather than /home (FE-022).
+      // Start checkout from the schedule-swap page so both the success and cancel
+      // ("back") URLs should return the user here rather than /home (FE-022).
       assignSpy = mockNavigation('/schedule-swap');
     });
     when('I click Subscribe from the schedule-swap page', async () => {
@@ -142,9 +142,9 @@ defineFeature(feature, (test) => {
       await userEvent.click(screen.getByRole('button', { name: /subscribe/i }));
     });
     then(
-      'the checkout request sent the schedule-swap page as the cancel path',
+      'the checkout request sent the schedule-swap page as the return path',
       () => {
-        expect(new URL(capturedUrl).searchParams.get('cancelPath')).toBe(
+        expect(new URL(capturedUrl).searchParams.get('returnPath')).toBe(
           '/schedule-swap',
         );
         expect(assignSpy).toHaveBeenCalledWith(STRIPE_URL);

@@ -11,9 +11,12 @@ import {
   type WeeklyStandingItem,
 } from '@/features/matchups/api-calls';
 import SeasonSelect from '@/features/season_select/season-select';
+import { SubscriptionGuard } from '@/features/subscription/subscription-guard';
+import WeeklyAwards from '@/features/weekly_awards/weekly-awards';
 import { avatarColor } from '@/lib/color-constants';
 import { MATCHUP_STATUS_COLORS } from '@/lib/color-constants';
 import { getLeagueCookies } from '@/lib/cookie-handler';
+import { isBillingEnabled } from '@/lib/feature-flags';
 import { type Result, toResult } from '@/lib/result';
 
 interface TeamSide {
@@ -483,6 +486,28 @@ export default function Matchups() {
             season={selectedSeason}
           />
         </Suspense>
+
+        {/* The whole weekly-awards section (header + gated content) only exists
+            when billing is on; the guard hides the content when billing is off,
+            so gate the header here too to avoid an orphan label (FE-032). */}
+        {isBillingEnabled() && (
+          <>
+            <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mt-8 mb-2.5">
+              Weekly awards &amp; superlatives
+            </p>
+            <SubscriptionGuard
+              featureFlag="premium_feature"
+              featureLabel="Weekly awards & superlatives"
+            >
+              <WeeklyAwards
+                leagueId={leagueId}
+                platform={platform}
+                season={selectedSeason}
+                selectedWeek={selectedWeek}
+              />
+            </SubscriptionGuard>
+          </>
+        )}
       </div>
     </div>
   );

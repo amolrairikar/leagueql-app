@@ -29,17 +29,18 @@ export function useStripeBilling() {
     setError(null);
     setCheckoutLoading(true);
     try {
-      // Send the current in-app path so a cancel ("back") at Stripe returns the
-      // user to the page they started checkout from rather than /home (FE-022).
-      const cancelPath = window.location.pathname + window.location.search;
+      // Send the current in-app path so both a successful checkout and a cancel
+      // ("back") at Stripe return the user to the page they started checkout from
+      // rather than /home (FE-022).
+      const returnPath = window.location.pathname + window.location.search;
       const res = await createCheckoutSession(
         leagueId,
         platform,
         plan,
-        cancelPath,
+        returnPath,
       );
-      // On return, Stripe's success_url carries `?checkout=success`, which drives
-      // the activation poll in useSubscription.
+      // On a successful return, Stripe's success_url carries `?checkout=success`,
+      // which drives the activation poll in useSubscription.
       window.location.assign(res.data.url);
     } catch (err) {
       // A 409 means the league already has a subscription / in-flight checkout;

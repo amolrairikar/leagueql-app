@@ -123,10 +123,12 @@ class TestCheckoutSessionEndpoint:
         assert kwargs["mode"] == "subscription"
         assert kwargs["allow_promotion_codes"] is True
         assert kwargs["managed_payments"] == {"enabled": True}
-        # No cancelPath supplied → cancel_url falls back to the dashboard home.
+        # No returnPath supplied → both URLs fall back to the dashboard home
+        # (success still carries ?checkout=success).
         assert kwargs["cancel_url"] == "https://leagueql.com/home"
+        assert kwargs["success_url"] == "https://leagueql.com/home?checkout=success"
 
-    def test_cancel_path_returns_user_to_originating_page(
+    def test_return_path_returns_user_to_originating_page(
         self,
         client,
         mock_table,
@@ -134,8 +136,9 @@ class TestCheckoutSessionEndpoint:
         league_metadata_item,
         override_user,
     ):
-        # A safe same-origin cancelPath builds a cancel_url back to that page so the
-        # Checkout "back" button returns the user where they started (FE-022).
+        # A safe same-origin returnPath builds both the success and cancel URLs back
+        # to that page so completing or cancelling returns the user where they
+        # started (FE-022).
         league_metadata_item["trial_used"] = True
         mock_table.get_item.side_effect = [
             {"Item": league_lookup_item},
@@ -146,11 +149,15 @@ class TestCheckoutSessionEndpoint:
             mock_stripe.checkout.Session.create.return_value = {"url": "https://c"}
             resp = client.post(
                 "/leagues/123/checkout-session"
-                "?platform=SLEEPER&plan=MONTHLY&cancelPath=/schedule-swap"
+                "?platform=SLEEPER&plan=MONTHLY&returnPath=/schedule-swap"
             )
         assert resp.status_code == 200
         _, kwargs = mock_stripe.checkout.Session.create.call_args
         assert kwargs["cancel_url"] == "https://leagueql.com/schedule-swap"
+        assert (
+            kwargs["success_url"]
+            == "https://leagueql.com/schedule-swap?checkout=success"
+        )
 
     def test_omits_trial_when_durable_marker_present(
         self,
@@ -475,10 +482,10 @@ class TestBillingPortalEndpoint:
 
 
 class TestResolveCheckoutCancelUrl:
-    """Open-redirect guard for the caller-supplied checkout cancelPath (FE-022)."""
+    """Open-redirect guard for the caller-supplied checkout returnPath (FE-022)."""
 
     @pytest.mark.parametrize(
-        "cancel_path,expected",
+        "return_path,expected",
         [
             # Safe same-origin relative paths are appended to the cancel origin.
             ("/schedule-swap", "https://leagueql.com/schedule-swap"),
@@ -495,7 +502,41 @@ class TestResolveCheckoutCancelUrl:
             ("/foo\nbar", "https://leagueql.com/home"),  # control char
         ],
     )
-    def test_resolves_cancel_url(self, cancel_path, expected):
+    def test_resolves_cancel_url(self, return_path, expected):
         from main import resolve_checkout_cancel_url
 
-        assert resolve_checkout_cancel_url(cancel_path) == expected
+        assert resolve_checkout_cancel_url(return_path) == expected
+
+
+class TestResolveCheckoutSuccessUrl:
+    """The success URL returns to the originating page carrying ?checkout=success (FE-022)."""
+
+    @pytest.mark.parametrize(
+        "return_path,expected",
+        [
+            # Safe same-origin paths are appended to the success origin, with
+            # checkout=success merged into any existing query.
+            (
+                "/schedule-swap",
+                "https://leagueql.com/schedule-swap?checkout=success",
+            ),
+            (
+                "/matchups?week=3",
+                "https://leagueql.com/matchups?week=3&checkout=success",
+            ),
+            ("/", "https://leagueql.com/?checkout=success"),
+            # Absent / unsafe paths fall back to the default success URL (which
+            # already carries the param).
+            (None, "https://leagueql.com/home?checkout=success"),
+            ("", "https://leagueql.com/home?checkout=success"),
+            ("//evil.com/phish", "https://leagueql.com/home?checkout=success"),
+            ("https://evil.com", "https://leagueql.com/home?checkout=success"),
+            ("schedule-swap", "https://leagueql.com/home?checkout=success"),
+            ("/foo\\bar", "https://leagueql.com/home?checkout=success"),
+            ("/foo bar", "https://leagueql.com/home?checkout=success"),
+        ],
+    )
+    def test_resolves_success_url(self, return_path, expected):
+        from main import resolve_checkout_success_url
+
+        assert resolve_checkout_success_url(return_path) == expected
