@@ -37,8 +37,27 @@ function toFlagConfiguration(config: Record<string, FlagSpec>) {
   );
 }
 
+/**
+ * Canonical serialization of a flag map (name → enabled, key-sorted) used to
+ * detect whether the resolved flags actually changed. A refresh that returns the
+ * same values — e.g. the `visibilitychange` refresh on every tab focus — must NOT
+ * swap the provider, because swapping emits `PROVIDER_READY` /
+ * `PROVIDER_CONFIGURATION_CHANGED`, which remounts the whole app (FE-026).
+ */
+function serializeFlags(config: Record<string, FlagSpec>): string {
+  return JSON.stringify(
+    Object.entries(config)
+      .map(([name, spec]) => [name, spec?.enabled ?? false] as const)
+      .sort(([a], [b]) => a.localeCompare(b)),
+  );
+}
+
+/** The flag map currently installed on the active provider (see `serializeFlags`). */
+let lastAppliedFlags = '';
+
 /** Build the `InMemoryProvider` for a flag config and register it globally. */
 function setProviderFromConfig(config: Record<string, FlagSpec>): void {
+  lastAppliedFlags = serializeFlags(config);
   OpenFeature.setProvider(new InMemoryProvider(toFlagConfiguration(config)));
 }
 
@@ -88,11 +107,14 @@ export async function refreshFlags(): Promise<void> {
     if (!res.ok) return;
     const body = (await res.json()) as FeatureFlagsPayload;
     const flags = body.data ?? {};
-    setProviderFromConfig(
-      Object.fromEntries(
-        Object.entries(flags).map(([name, enabled]) => [name, { enabled }]),
-      ),
+    const config = Object.fromEntries(
+      Object.entries(flags).map(([name, enabled]) => [name, { enabled }]),
     );
+    // Only swap the provider when the values actually changed. An unchanged
+    // refresh (the common case for the visibilitychange/poll refresh) must be a
+    // no-op so it does not emit a provider event and remount the app (FE-026).
+    if (serializeFlags(config) === lastAppliedFlags) return;
+    setProviderFromConfig(config);
   } catch {
     // Keep the fail-safe provider; a transient outage must not flip flags on.
   }

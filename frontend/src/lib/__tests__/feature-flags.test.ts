@@ -1,5 +1,6 @@
+import { OpenFeature } from '@openfeature/web-sdk';
 import { http, HttpResponse } from 'msw';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { API, server } from '../../test/msw/server';
 import {
@@ -49,6 +50,44 @@ describe('feature-flags runtime resolution', () => {
     await refreshFlags();
     expect(isBillingEnabled()).toBe(false);
     expect(isEnabled('premium_feature')).toBe(true);
+  });
+
+  it('does not swap the provider when the refreshed flags are unchanged', async () => {
+    // Apply a known flag set, then have the endpoint return the SAME values.
+    setFlagsForTesting({ billing: true, premium_feature: false });
+    const setProvider = vi.spyOn(OpenFeature, 'setProvider');
+    server.use(
+      http.get(`${API}/feature-flags`, () =>
+        HttpResponse.json({
+          detail: 'Feature flags',
+          // Key order differs from the applied map to prove the comparison is
+          // order-independent (a no-op refresh must not depend on JSON order).
+          data: { premium_feature: false, billing: true },
+        }),
+      ),
+    );
+    await refreshFlags();
+    // No provider swap => no PROVIDER_READY/CONFIGURATION_CHANGED => no remount.
+    expect(setProvider).not.toHaveBeenCalled();
+    expect(isBillingEnabled()).toBe(true);
+    setProvider.mockRestore();
+  });
+
+  it('swaps the provider when a refreshed flag value changes', async () => {
+    setFlagsForTesting({ billing: true, premium_feature: false });
+    const setProvider = vi.spyOn(OpenFeature, 'setProvider');
+    server.use(
+      http.get(`${API}/feature-flags`, () =>
+        HttpResponse.json({
+          detail: 'Feature flags',
+          data: { billing: true, premium_feature: true },
+        }),
+      ),
+    );
+    await refreshFlags();
+    expect(setProvider).toHaveBeenCalledTimes(1);
+    expect(isEnabled('premium_feature')).toBe(true);
+    setProvider.mockRestore();
   });
 
   it('keeps current flags when the endpoint errors (fail-safe)', async () => {

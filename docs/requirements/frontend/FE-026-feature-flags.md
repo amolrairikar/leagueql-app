@@ -43,8 +43,11 @@ momentarily stale the API gate still governs access.
   `${API_BASE_URL}/feature-flags` (bare `fetch`, no auth) and building the `InMemoryProvider` from
   the response. It is a **no-op under Vitest** so component tests never hit the network.
 - A light refresh (a poll interval + a refresh on `visibilitychange`) re-fetches the flags so a
-  console toggle is picked up without a reload; on a change it swaps the provider, which emits
-  `PROVIDER_READY` / `PROVIDER_CONFIGURATION_CHANGED`.
+  console toggle is picked up without a reload. The refresh is **idempotent**: it swaps the
+  provider (emitting `PROVIDER_READY` / `PROVIDER_CONFIGURATION_CHANGED`) **only when the resolved
+  flag values actually changed** — compared key-sorted against the currently applied map. A refresh
+  that returns the same values (the common case, e.g. every tab-focus refresh) is a no-op, so it
+  does **not** emit an event and does **not** remount the app.
 - `FeatureFlagProvider` (`app/feature-flags-provider.tsx`, wrapping `<App />`) listens for those
   events and **remounts the subtree** (via a changing `key`) so the synchronous `isEnabled()` call
   sites — which take no flag props — re-evaluate. The initial (already-applied) flags are skipped,
@@ -79,6 +82,9 @@ momentarily stale the API gate still governs access.
 - **Unknown flag name / spec without `enabled`:** `isEnabled` returns the `false` default.
 - **Runtime toggle mid-session:** the refresh swaps the provider and the app remounts so the UI
   reflects the new flags; this is a soft re-render of the tree (current route preserved).
+- **Refresh with no change (incl. every tab-focus refresh):** the resolved flags match the applied
+  map, so the provider is not swapped and the app does not remount — switching tabs does not reset
+  component state.
 - **UI/API flag mismatch (brief):** harmless — the backend gate
   ([BE-014](../backend/BE-014-subscription-access-control.md)) is the source of truth; the UI flag
   only controls what is shown.
@@ -97,6 +103,8 @@ momentarily stale the API gate still governs access.
 - [ ] An unknown flag evaluates to `false`.
 - [ ] Editing the feature-flag parameter value in the SSM console changes the UI within the refresh
       window **without a rebuild**.
+- [ ] A refresh that resolves the same flag values (e.g. returning to the tab) does not swap the
+      provider or remount the app.
 - [ ] `initFeatureFlags()` is a no-op under Vitest (no `/feature-flags` fetch in component tests).
 
 ## Sources
