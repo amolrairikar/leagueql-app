@@ -17,11 +17,6 @@ export function readCookie(name: string): string {
 
 const COOKIE_FLAGS = `; path=/; SameSite=Strict${import.meta.env.PROD ? '; Secure' : ''}`;
 
-function writeCookie(name: string, value: string, maxAge?: number): void {
-  const age = maxAge !== undefined ? `; max-age=${maxAge}` : '';
-  document.cookie = `${name}=${encodeURIComponent(value)}${COOKIE_FLAGS}${age}`;
-}
-
 function eraseCookie(name: string): void {
   document.cookie = `${name}=${COOKIE_FLAGS}; max-age=0`;
 }
@@ -31,15 +26,15 @@ function isPlatform(value: string): value is Platform {
 }
 
 export function getLeagueCookies(): LeagueCookies {
-  const leagueId = readCookie('leagueId');
-  const raw = readCookie('leaguePlatform');
-  const platform: Platform = isPlatform(raw) ? raw : 'ESPN';
+  const leagueId = window.localStorage.getItem('leagueId') ?? '';
+  const rawPlatform = window.localStorage.getItem('leaguePlatform') ?? '';
+  const platform: Platform = isPlatform(rawPlatform) ? rawPlatform : 'ESPN';
   let seasons: string[] = [];
   try {
-    const raw = readCookie('leagueSeasons');
+    const raw = window.localStorage.getItem('leagueSeasons');
     if (raw) seasons = JSON.parse(raw) as string[];
   } catch {
-    // malformed cookie — fall back to empty
+    // malformed value — fall back to empty
   }
   return { leagueId, platform, seasons };
 }
@@ -49,21 +44,21 @@ export function setLeagueCookies(
   platform: Platform,
   seasons: string[],
 ): void {
-  writeCookie('leagueId', leagueId);
-  writeCookie('leaguePlatform', platform);
-  writeCookie('leagueSeasons', JSON.stringify(seasons));
+  window.localStorage.setItem('leagueId', leagueId);
+  window.localStorage.setItem('leaguePlatform', platform);
+  window.localStorage.setItem('leagueSeasons', JSON.stringify(seasons));
 }
 
 export function clearLeagueCookies(): void {
-  eraseCookie('leagueId');
-  eraseCookie('leaguePlatform');
-  eraseCookie('leagueSeasons');
+  window.localStorage.removeItem('leagueId');
+  window.localStorage.removeItem('leaguePlatform');
+  window.localStorage.removeItem('leagueSeasons');
 }
 
 export function setDemoMode(seasons: string[]): void {
-  writeCookie('leagueId', DEMO_LEAGUE_ID, 86400);
-  writeCookie('leaguePlatform', DEMO_PLATFORM, 86400);
-  writeCookie('leagueSeasons', JSON.stringify(seasons), 86400);
+  window.localStorage.setItem('leagueId', DEMO_LEAGUE_ID);
+  window.localStorage.setItem('leaguePlatform', DEMO_PLATFORM);
+  window.localStorage.setItem('leagueSeasons', JSON.stringify(seasons));
   document.cookie = `demo_mode=true${COOKIE_FLAGS}; max-age=86400`;
 }
 

@@ -130,4 +130,26 @@ defineFeature(feature, (test) => {
       expect(await screen.findByText(text)).toBeInTheDocument();
     });
   });
+
+  test('The dashboard renders without crashing when seasons cookie has expired', ({
+    given,
+    when,
+    then,
+  }) => {
+    given('a connected league with no seasons', () => {
+      server.use(
+        leagueMetadata({ league_name: 'My League', seasons: [] }),
+        leagueQuery({ SEASON_STANDINGS: [], MATCHUPS: [] }),
+      );
+    });
+    when('I open the home dashboard', async () => {
+      await renderRoute(<HomePage />, {
+        route: '/home',
+        league: { ...league, seasons: [] },
+      });
+    });
+    then(/^I see the headline stat "(.*)"$/, async (label) => {
+      expect(await screen.findByText(label)).toBeInTheDocument();
+    });
+  });
 });

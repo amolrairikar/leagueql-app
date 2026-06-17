@@ -24,9 +24,9 @@ export function setLeagueCookie(
   platform: Platform,
   seasons: string[],
 ) {
-  document.cookie = `leagueId=${leagueId}; path=/`;
-  document.cookie = `leaguePlatform=${platform}; path=/`;
-  document.cookie = `leagueSeasons=${encodeURIComponent(JSON.stringify(seasons))}; path=/`;
+  window.localStorage.setItem('leagueId', leagueId);
+  window.localStorage.setItem('leaguePlatform', platform);
+  window.localStorage.setItem('leagueSeasons', JSON.stringify(seasons));
 }
 
 export function setDemoMode() {

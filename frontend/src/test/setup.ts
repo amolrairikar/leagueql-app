@@ -47,6 +47,35 @@ proto.setPointerCapture ??= vi.fn();
 proto.releasePointerCapture ??= vi.fn();
 proto.scrollIntoView ??= vi.fn();
 
+// Node 22+ ships a built-in `localStorage` (plain object, no Storage methods)
+// that shadows jsdom's proper Web Storage implementation. Polyfill a spec-
+// compliant Storage so production code using window.localStorage works in tests.
+if (typeof window.localStorage.getItem !== 'function') {
+  const store = new Map<string, string>();
+  const storage: Storage = {
+    get length() {
+      return store.size;
+    },
+    clear() {
+      store.clear();
+    },
+    getItem(key: string) {
+      return store.get(key) ?? null;
+    },
+    key(index: number) {
+      return [...store.keys()][index] ?? null;
+    },
+    removeItem(key: string) {
+      store.delete(key);
+    },
+    setItem(key: string, value: string) {
+      store.set(key, String(value));
+    },
+  };
+  Object.defineProperty(window, 'localStorage', { value: storage });
+  Object.defineProperty(globalThis, 'localStorage', { value: storage });
+}
+
 // The sidebar / theme read matchMedia; jsdom doesn't implement it.
 if (!window.matchMedia) {
   window.matchMedia = (query: string) =>
@@ -74,11 +103,13 @@ beforeEach(() => setFlagsForTesting({ billing: true, premium_feature: true }));
 afterEach(async () => {
   server.resetHandlers();
   clearApiCache();
-  // Clear all cookies set during the test so league/demo state never leaks.
+  // Clear all cookies set during the test so demo state never leaks.
   for (const cookie of document.cookie.split(';')) {
     const name = cookie.split('=')[0].trim();
     if (name) document.cookie = `${name}=; path=/; max-age=0`;
   }
+  // Clear localStorage league state between tests.
+  window.localStorage.clear();
   const { resetClerkState } = await import('./clerk-mock');
   resetClerkState();
 });

@@ -20,10 +20,15 @@ function clearAllCookies(): void {
   });
 }
 
+function clearAll(): void {
+  clearAllCookies();
+  window.localStorage.clear();
+}
+
 // ── readCookie ────────────────────────────────────────────────────────────────
 
 describe('readCookie', () => {
-  beforeEach(clearAllCookies);
+  beforeEach(clearAll);
 
   it('returns the decoded value when the cookie exists', () => {
     document.cookie = 'myKey=hello';
@@ -50,9 +55,9 @@ describe('readCookie', () => {
 // ── getLeagueCookies ──────────────────────────────────────────────────────────
 
 describe('getLeagueCookies', () => {
-  beforeEach(clearAllCookies);
+  beforeEach(clearAll);
 
-  it('returns leagueId, platform, and seasons from cookies', () => {
+  it('returns leagueId, platform, and seasons from localStorage', () => {
     setLeagueCookies('123', 'ESPN', ['2022', '2023']);
     expect(getLeagueCookies()).toEqual({
       leagueId: '123',
@@ -61,23 +66,22 @@ describe('getLeagueCookies', () => {
     });
   });
 
-  it('defaults platform to ESPN when cookie holds an unknown value', () => {
-    document.cookie = 'leagueId=99';
-    document.cookie = `leaguePlatform=${encodeURIComponent('UNKNOWN')}`;
-    document.cookie = `leagueSeasons=${encodeURIComponent('[]')}`;
+  it('defaults platform to ESPN when stored value is unknown', () => {
+    window.localStorage.setItem('leagueId', '99');
+    window.localStorage.setItem('leaguePlatform', 'UNKNOWN');
     expect(getLeagueCookies().platform).toBe('ESPN');
   });
 
-  it('returns empty seasons array when leagueSeasons cookie is absent', () => {
-    document.cookie = 'leagueId=99';
-    document.cookie = 'leaguePlatform=ESPN';
+  it('returns empty seasons array when leagueSeasons is absent', () => {
+    window.localStorage.setItem('leagueId', '99');
+    window.localStorage.setItem('leaguePlatform', 'ESPN');
     expect(getLeagueCookies().seasons).toEqual([]);
   });
 
   it('returns empty seasons array and does not throw on malformed JSON', () => {
-    document.cookie = 'leagueId=99';
-    document.cookie = 'leaguePlatform=ESPN';
-    document.cookie = `leagueSeasons=${encodeURIComponent('not-json!')}`;
+    window.localStorage.setItem('leagueId', '99');
+    window.localStorage.setItem('leaguePlatform', 'ESPN');
+    window.localStorage.setItem('leagueSeasons', 'not-json!');
     expect(() => getLeagueCookies()).not.toThrow();
     expect(getLeagueCookies().seasons).toEqual([]);
   });
@@ -86,7 +90,7 @@ describe('getLeagueCookies', () => {
 // ── setLeagueCookies / clearLeagueCookies ─────────────────────────────────────
 
 describe('setLeagueCookies / clearLeagueCookies', () => {
-  beforeEach(clearAllCookies);
+  beforeEach(clearAll);
 
   it('persists values readable by getLeagueCookies', () => {
     setLeagueCookies('777', 'SLEEPER', ['2021', '2022']);
@@ -99,16 +103,16 @@ describe('setLeagueCookies / clearLeagueCookies', () => {
   it('clearLeagueCookies erases leagueId, leaguePlatform, and leagueSeasons', () => {
     setLeagueCookies('777', 'ESPN', ['2022']);
     clearLeagueCookies();
-    expect(readCookie('leagueId')).toBe('');
-    expect(readCookie('leaguePlatform')).toBe('');
-    expect(readCookie('leagueSeasons')).toBe('');
+    expect(window.localStorage.getItem('leagueId')).toBeNull();
+    expect(window.localStorage.getItem('leaguePlatform')).toBeNull();
+    expect(window.localStorage.getItem('leagueSeasons')).toBeNull();
   });
 });
 
 // ── isDemoMode ────────────────────────────────────────────────────────────────
 
 describe('isDemoMode', () => {
-  beforeEach(clearAllCookies);
+  beforeEach(clearAll);
 
   it('returns false when demo_mode cookie is not set', () => {
     expect(isDemoMode()).toBe(false);
@@ -129,7 +133,7 @@ describe('isDemoMode', () => {
 // ── setDemoMode ───────────────────────────────────────────────────────────────
 
 describe('setDemoMode', () => {
-  beforeEach(clearAllCookies);
+  beforeEach(clearAll);
 
   it('makes isDemoMode() return true', () => {
     setDemoMode(['2022', '2023']);
@@ -148,22 +152,22 @@ describe('setDemoMode', () => {
 // ── clearAllLeagueCookies ─────────────────────────────────────────────────────
 
 describe('clearAllLeagueCookies', () => {
-  beforeEach(clearAllCookies);
+  beforeEach(clearAll);
 
-  it('clears demo_mode and all league cookies after setDemoMode', () => {
+  it('clears demo_mode and all league storage after setDemoMode', () => {
     setDemoMode(['2022', '2023']);
     clearAllLeagueCookies();
     expect(isDemoMode()).toBe(false);
-    expect(readCookie('leagueId')).toBe('');
-    expect(readCookie('leaguePlatform')).toBe('');
-    expect(readCookie('leagueSeasons')).toBe('');
+    expect(window.localStorage.getItem('leagueId')).toBeNull();
+    expect(window.localStorage.getItem('leaguePlatform')).toBeNull();
+    expect(window.localStorage.getItem('leagueSeasons')).toBeNull();
   });
 });
 
 // ── clearEspnCookies ──────────────────────────────────────────────────────────
 
 describe('clearEspnCookies', () => {
-  beforeEach(clearAllCookies);
+  beforeEach(clearAll);
 
   it('erases SWID and espn_s2 cookies', () => {
     document.cookie = 'SWID=swid-value';
