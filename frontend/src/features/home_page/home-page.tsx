@@ -634,7 +634,7 @@ function StatsWithTotalGames({
   ).size;
 
   const displayStats = [
-    stats[0],
+    ...stats.slice(0, 1),
     {
       label: 'Total matchups',
       value: totalGames.toLocaleString(),

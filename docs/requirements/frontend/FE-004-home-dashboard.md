@@ -23,6 +23,9 @@ is counted consistently over time.
 - **Missing logos:** fall back to a generated team avatar / owner-stable color.
 - **No champion yet (season in progress):** unique-champion and championship counts handle
   the absence of a completed title.
+- **Empty seasons (expired cookies):** if the `leagueSeasons` cookie expires while `leagueId`
+  persists, `seasons` is `[]` and the stats array is empty. The stats grid must not crash when
+  the "Seasons played" item is absent — it renders three cards instead of four.
 - **Data load fails:** all summary sections derive from a single league-data request; on failure
   the dashboard shows one inline error (an `ErrorAlert`) in place of the stats/champions/standings/
   chart, rather than silently rendering empty tables. There is no global error banner.

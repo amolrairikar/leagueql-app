@@ -19,3 +19,8 @@ Feature: Home dashboard (FE-004)
     Given a connected league with no games yet
     When I open the home dashboard
     Then I see "No standings data available."
+
+  Scenario: The dashboard renders without crashing when seasons cookie has expired
+    Given a connected league with no seasons
+    When I open the home dashboard
+    Then I see the headline stat "Total matchups"
