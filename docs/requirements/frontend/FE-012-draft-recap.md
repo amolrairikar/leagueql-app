@@ -14,6 +14,13 @@ position and shows the player's season points.
 ## Edge Cases
 - **Snake vs. auction:** board layout differs — snake grid shows overall pick number;
   auction spend board shows `bid_amount`. Detect draft type from pick data.
+- **Traded picks:** a manager may make more than one pick in a round (and another manager
+  none) when a draft pick was traded. The snake grid places each pick in its **draft slot's
+  column** — derived from `overall_pick_number`, the team count, and the detected
+  snake/linear direction — **not** the picking manager's column, so no pick is dropped.
+  `round_pick_number` is **not** used for placement because its meaning differs by platform
+  (Sleeper: fixed draft slot; ESPN: chronological within-round order). A pick made by a
+  manager other than the column's owner is marked with a "traded to <manager>" badge.
 - **Keeper picks:** indicate keepers; ESPN may also have `reserved_for_keeper` slots.
 - **Missing player name/points:** cells tolerate null `player_name`/`total_points`.
 - **Pinned/sticky context:** the board supports pinning a row/column for reading large grids
@@ -23,6 +30,8 @@ position and shows the player's season points.
 
 ## Acceptance Criteria
 - [ ] `/draft_recap` renders a snake draft grid with overall pick numbers for snake leagues.
+- [ ] A pick that was traded to another manager renders in its draft slot's column (never
+      dropped) and is marked with a "traded to <manager>" badge.
 - [ ] Auction drafts render a spend board showing winning bids.
 - [ ] Each cell is colored by position and shows the player's season points when available.
 - [ ] Keeper picks are visually indicated.

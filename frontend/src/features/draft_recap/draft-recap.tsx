@@ -25,6 +25,18 @@ interface BoardTeam {
   firstPick: number;
 }
 
+// One column of the snake board = one draft slot. `ownerTeamId` is the manager
+// who owns the slot (the most frequent picker in this column); `pickByRound` is
+// that slot's pick for each round, regardless of who actually made it — a pick
+// made by a different manager (a traded pick) still lands in its slot's column.
+interface BoardColumn {
+  ownerTeamId: string;
+  username: string;
+  teamName: string;
+  logo: string;
+  pickByRound: Map<number, DraftPickItem>;
+}
+
 interface AuctionTeam extends BoardTeam {
   totalSpent: number;
   picks: DraftPickItem[];
@@ -52,9 +64,14 @@ const posStyle = (position: string) =>
 function PickCell({
   pick,
   topRight,
+  tradedTo,
 }: {
   pick: DraftPickItem;
   topRight: ReactNode;
+  // When set, the pick was made by a manager other than this column's owner —
+  // i.e. the draft pick was traded to `tradedTo`. Renders a badge so the pick is
+  // recognizable in its original slot's column.
+  tradedTo?: string | null;
 }) {
   const pm = posStyle(pick.position);
   return (
@@ -66,9 +83,21 @@ function PickCell({
         <span className="text-[9px] font-semibold uppercase tracking-[0.04em]">
           {pick.position}
         </span>
-        {pick.keeper && (
-          <span className="absolute left-1/2 -translate-x-1/2 rounded-full bg-black/25 px-1.5 py-px text-[8px] font-semibold uppercase tracking-[0.04em] leading-none">
-            Keeper
+        {(pick.keeper || tradedTo) && (
+          <span className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1">
+            {pick.keeper && (
+              <span className="rounded-full bg-black/25 px-1.5 py-px text-[8px] font-semibold uppercase tracking-[0.04em] leading-none">
+                Keeper
+              </span>
+            )}
+            {tradedTo && (
+              <span
+                className="max-w-[5.5rem] truncate rounded-full bg-black/40 px-1.5 py-px text-[8px] font-semibold leading-none"
+                title={`Traded to ${tradedTo}`}
+              >
+                ⇄ {tradedTo}
+              </span>
+            )}
           </span>
         )}
         {topRight}
@@ -187,38 +216,87 @@ function DraftRecapContent({
 
   const allPicks = useMemo(() => (result.ok ? result.data : []), [result]);
 
-  // Teams ordered by their draft slot. The team that made the earliest overall
-  // pick owns the left-most column; in a snake draft the same team holds that
-  // column every round even though the pick order reverses each round.
-  const teams = useMemo<BoardTeam[]>(() => {
-    const map = new Map<string, BoardTeam>();
+  // The snake board has one column per draft slot. A pick's column is its slot,
+  // derived from `overall_pick_number` (global chronological order) — NOT from
+  // the manager who made it, so a pick traded to another manager still lands in
+  // its slot's column instead of being dropped. `round_pick_number` is avoided
+  // because its meaning differs by platform (Sleeper: fixed slot; ESPN: snake
+  // chronological order).
+  const { columns, rounds } = useMemo<{
+    columns: BoardColumn[];
+    rounds: number[];
+  }>(() => {
+    if (allPicks.length === 0) return { columns: [], rounds: [] };
+
+    // Teams per round = the largest round's pick count (a full round has one
+    // pick per slot). Used as the snake width.
+    const perRound = new Map<number, number>();
+    for (const p of allPicks)
+      perRound.set(p.round, (perRound.get(p.round) ?? 0) + 1);
+    const n = Math.max(...perRound.values());
+
+    // Chronological position of a pick within its round, 0-based.
+    const posInRound = (p: DraftPickItem) => (p.overall_pick_number - 1) % n;
+
+    // Round 1 fixes each slot's home column (round 1 is forward in any draft).
+    const homeCol = new Map<string, number>();
+    for (const p of allPicks)
+      if (p.round === 1) homeCol.set(p.team_id, posInRound(p));
+
+    // Detect snake vs. linear from non-traded even-round picks: if a manager's
+    // even-round position mirrors its home column it's a snake; if it matches
+    // it's linear. (Traded picks lack a clean home, so they're skipped here.)
+    let snakeVotes = 0;
+    let linearVotes = 0;
     for (const p of allPicks) {
-      const existing = map.get(p.team_id);
-      if (!existing || p.overall_pick_number < existing.firstPick) {
-        map.set(p.team_id, {
-          id: p.team_id,
-          username: p.owner_username,
-          teamName: p.team_name,
-          logo: p.team_logo,
-          firstPick: p.overall_pick_number,
-        });
+      if (p.round % 2 === 0) {
+        const home = homeCol.get(p.team_id);
+        if (home === undefined) continue;
+        const pos = posInRound(p);
+        if (home === n - 1 - pos) snakeVotes++;
+        else if (home === pos) linearVotes++;
       }
     }
-    return [...map.values()].sort((a, b) => a.firstPick - b.firstPick);
-  }, [allPicks]);
+    const isSnake = snakeVotes >= linearVotes;
 
-  // Look up a pick by its team + round so each board cell is O(1).
-  const pickByTeamRound = useMemo(() => {
-    const map = new Map<string, DraftPickItem>();
-    for (const p of allPicks) map.set(`${p.team_id}-${p.round}`, p);
-    return map;
-  }, [allPicks]);
+    const colOf = (p: DraftPickItem) => {
+      const pos = posInRound(p);
+      return isSnake && p.round % 2 === 0 ? n - 1 - pos : pos;
+    };
 
-  const rounds = useMemo(() => {
-    const maxRound = allPicks.length
-      ? Math.max(...allPicks.map((p) => p.round))
-      : 0;
-    return Array.from({ length: maxRound }, (_, i) => i + 1);
+    const colPicks: DraftPickItem[][] = Array.from({ length: n }, () => []);
+    for (const p of allPicks) {
+      const c = colOf(p);
+      if (c >= 0 && c < n) colPicks[c].push(p);
+    }
+
+    const cols = colPicks.map<BoardColumn>((picks) => {
+      // Column owner = the manager who made the most picks in this slot, so a
+      // single traded pick doesn't relabel the column.
+      const counts = new Map<string, number>();
+      for (const p of picks)
+        counts.set(p.team_id, (counts.get(p.team_id) ?? 0) + 1);
+      let ownerTeamId = '';
+      let best = -1;
+      for (const [tid, count] of counts)
+        if (count > best) [best, ownerTeamId] = [count, tid];
+      const owner = picks.find((p) => p.team_id === ownerTeamId);
+      const pickByRound = new Map<number, DraftPickItem>();
+      for (const p of picks) pickByRound.set(p.round, p);
+      return {
+        ownerTeamId,
+        username: owner?.owner_username ?? '',
+        teamName: owner?.team_name ?? '',
+        logo: owner?.team_logo ?? '',
+        pickByRound,
+      };
+    });
+
+    const maxRound = Math.max(...allPicks.map((p) => p.round));
+    return {
+      columns: cols,
+      rounds: Array.from({ length: maxRound }, (_, i) => i + 1),
+    };
   }, [allPicks]);
 
   const isAuction = allPicks.some((p) => p.is_auction);
@@ -292,7 +370,7 @@ function DraftRecapContent({
         )}
       </div>
 
-      {teams.length === 0 ? (
+      {columns.length === 0 ? (
         <p className="text-[13px] text-muted-foreground text-center py-8">
           No draft data available for this season.
         </p>
@@ -302,7 +380,7 @@ function DraftRecapContent({
         <div className="bg-card border border-border/50 rounded-lg overflow-auto max-h-[78vh]">
           <table
             className="table-fixed border-separate border-spacing-0 text-[12px]"
-            style={{ width: `${40 + teams.length * 160}px` }}
+            style={{ width: `${40 + columns.length * 160}px` }}
           >
             <thead className="sticky top-0 z-30">
               <tr>
@@ -312,27 +390,27 @@ function DraftRecapContent({
                 >
                   Rd
                 </th>
-                {teams.map((team, i) => (
+                {columns.map((column, i) => (
                   <th
-                    key={team.id}
+                    key={column.ownerTeamId || i}
                     className="w-40 px-2.5 py-2.5 text-left align-bottom bg-muted border-b border-border/50"
                   >
                     <div className="flex items-center gap-2">
                       <TeamAvatar
-                        teamLogo={team.logo}
-                        teamName={team.teamName}
-                        ownerUsername={team.username}
+                        teamLogo={column.logo}
+                        teamName={column.teamName}
+                        ownerUsername={column.username}
                         color={avatarColor(i)}
                       />
                       <div className="flex flex-col min-w-0">
                         <span className="text-[12px] font-medium text-foreground truncate">
-                          {team.username}
+                          {column.username}
                         </span>
                         <span
                           className="text-[11px] font-normal text-muted-foreground truncate"
-                          title={team.teamName || `Team ${team.username}`}
+                          title={column.teamName || `Team ${column.username}`}
                         >
-                          {team.teamName || `Team ${team.username}`}
+                          {column.teamName || `Team ${column.username}`}
                         </span>
                       </div>
                     </div>
@@ -349,23 +427,30 @@ function DraftRecapContent({
                   >
                     {round}
                   </td>
-                  {teams.map((team) => {
-                    const pick = pickByTeamRound.get(`${team.id}-${round}`);
+                  {columns.map((column, i) => {
+                    const pick = column.pickByRound.get(round);
                     if (!pick) {
                       return (
                         <td
-                          key={team.id}
+                          key={column.ownerTeamId || i}
                           className="w-40 border-b border-border/50"
                         />
                       );
                     }
+                    // A pick made by someone other than this slot's owner is a
+                    // traded pick — badge it with the manager who made it.
+                    const tradedTo =
+                      pick.team_id !== column.ownerTeamId
+                        ? pick.owner_username
+                        : null;
                     return (
                       <td
-                        key={team.id}
+                        key={column.ownerTeamId || i}
                         className="w-40 border-b border-border/50 px-1.5 py-1.5 align-top"
                       >
                         <PickCell
                           pick={pick}
+                          tradedTo={tradedTo}
                           topRight={
                             <span className="text-[9px] font-medium opacity-70">
                               #{pick.overall_pick_number}

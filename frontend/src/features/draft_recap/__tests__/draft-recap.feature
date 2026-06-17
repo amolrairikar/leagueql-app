@@ -12,6 +12,12 @@ Feature: Draft recap (FE-012)
     When I open the draft recap page
     Then I see the player "Denver Broncos"
 
+  Scenario: A pick traded to another manager renders in its slot with a traded badge
+    Given draft data with a traded pick is available
+    When I open the draft recap page
+    Then I see the player "Traded Pick"
+    And the pick is badged as traded to "Alice"
+
   Scenario: A failed load surfaces an inline error
     Given the draft data fails to load
     When I open the draft recap page
