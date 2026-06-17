@@ -102,7 +102,7 @@ export const FEATURES: Feature[] = [
   {
     icon: '🔀',
     title: 'Platform Migration',
-    desc: 'Switched fantasy platforms? Follow our migration wizard to preserve your full all-time history across platforms.',
+    desc: 'Switched fantasy platforms? Use our league migration wizard to preserve your full all-time history across platforms.',
   },
 ];
 

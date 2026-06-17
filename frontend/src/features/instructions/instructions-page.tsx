@@ -13,9 +13,10 @@ const TOC_ITEMS = [
   { id: 'authentication', label: 'Authentication', level: 2 },
   { id: 'connecting-a-league', label: 'Connecting a League', level: 1 },
   { id: 'espn-leagues', label: 'ESPN Leagues', level: 2 },
-  { id: 'form-fields', label: 'Form Fields', level: 3 },
+  { id: 'espn-form-fields', label: 'Form Fields', level: 3 },
   { id: 'chrome-extension', label: 'Chrome Extension', level: 3 },
   { id: 'sleeper-leagues', label: 'Sleeper Leagues', level: 2 },
+  { id: 'sleeper-form-fields', label: 'Form Fields', level: 3 },
   { id: 'league-ownership', label: 'League Ownership', level: 2 },
   { id: 'joining-an-espn-league', label: 'Joining an ESPN League', level: 3 },
   { id: 'transferring-ownership', label: 'Transferring Ownership', level: 3 },
@@ -404,7 +405,7 @@ export default function InstructionsPage() {
                   alt="The ESPN Onboard/Refresh League form with fields for League ID, Latest Season, SWID, and ESPN S2"
                   className="mb-4 w-full rounded-md border border-border"
                 />
-                <SubSubHeading id="form-fields">Form Fields</SubSubHeading>
+                <SubSubHeading id="espn-form-fields">Form Fields</SubSubHeading>
                 <div className="mb-4">
                   <DocTable
                     headers={['Field', 'Description']}
@@ -433,7 +434,7 @@ export default function InstructionsPage() {
                     ]}
                   />
                 </div>
-                <Callout variant="warning">
+                <Callout>
                   Your SWID and ESPN S2 cookies are only transmitted once over
                   HTTPS to fetch your data and are never stored by LeagueQL.
                 </Callout>
@@ -465,7 +466,7 @@ export default function InstructionsPage() {
                     <strong className="text-foreground">
                       fantasy.espn.com
                     </strong>{' '}
-                    in the same browser.
+                    in another browser tab.
                   </li>
                   <li>
                     On the Onboard/Refresh League form, click{' '}
@@ -489,6 +490,9 @@ export default function InstructionsPage() {
                   Onboarding typically takes ~45 seconds, after which you are
                   redirected to your league&apos;s dashboard.
                 </p>
+                <SubSubHeading id="sleeper-form-fields">
+                  Form Fields
+                </SubSubHeading>
                 <div className="mb-4">
                   <DocTable
                     headers={['Field', 'Description']}
@@ -614,7 +618,7 @@ export default function InstructionsPage() {
                       The token expires after 24 hours and can be used only
                       once; generating a new token invalidates any previous one.
                       Anyone with the token can claim ownership, so share it
-                      privately. If a league&apos;s owner is unavailable,
+                      privately. If a league&apos;s owner cannot be contacted,
                       contact{' '}
                       <a
                         href="mailto:support@leagueql.com"
@@ -705,18 +709,6 @@ export default function InstructionsPage() {
                 system preferences
               </li>
             </ul>
-            <p className="text-muted-foreground leading-relaxed">
-              At the bottom of the sidebar you will find league management
-              options: refresh your league, migrate to another platform, switch
-              to view another league,{' '}
-              {billingEnabled && 'manage your subscription, '}transfer
-              ownership, and delete the current league. Most of these are
-              available to owners only. See{' '}
-              <SectionLink id="ownership-and-access">
-                League Ownership
-              </SectionLink>{' '}
-              above.
-            </p>
           </section>
 
           {/* Managing Your League */}
@@ -755,12 +747,7 @@ export default function InstructionsPage() {
                 <SubHeading id="migrating-your-league">
                   Migrating Your League
                 </SubHeading>
-                <Callout variant="warning">
-                  <strong>Experimental feature</strong>: League migration cannot
-                  be undone. All-time metrics will be recalculated to reflect
-                  the merged history across both platforms.
-                </Callout>
-                <p className="text-muted-foreground leading-relaxed mt-4 mb-4">
+                <p className="text-muted-foreground leading-relaxed mb-4">
                   Use this when your league moves from one platform to another
                   in the offseason (ESPN → Sleeper or Sleeper → ESPN). Click
                   <Kbd>Migrate League</Kbd> in the sidebar settings.
@@ -783,7 +770,7 @@ export default function InstructionsPage() {
                     Provide the league ID for the new platform. For ESPN, you
                     will also need to enter the latest season, SWID, and ESPN S2
                     cookies. See the{' '}
-                    <SectionLink id="form-fields">Form Fields</SectionLink>{' '}
+                    <SectionLink id="espn-form-fields">Form Fields</SectionLink>{' '}
                     section above for details on these fields and how to fill
                     them in.
                   </li>
@@ -801,6 +788,13 @@ export default function InstructionsPage() {
                     in the background (typically ~1 minute).
                   </li>
                 </ol>
+                <div className="mt-4">
+                  <Callout variant="warning">
+                    <strong>Experimental feature</strong>: League migration
+                    cannot be undone. All-time metrics will be recalculated to
+                    reflect the merged history across both platforms.
+                  </Callout>
+                </div>
               </div>
 
               <div>
