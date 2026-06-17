@@ -3,7 +3,7 @@ import { defineFeature, loadFeature } from 'jest-cucumber';
 
 import DraftRecap from '../draft-recap';
 
-import { DRAFT, LEAGUE } from '@/test/fixtures';
+import { DRAFT, DRAFT_TRADED, LEAGUE } from '@/test/fixtures';
 import { leagueQuery, leagueQueryError, server } from '@/test/msw/server';
 import { renderRoute } from '@/test/render';
 
@@ -43,6 +43,31 @@ defineFeature(feature, (test) => {
     });
     then(/^I see the player "(.*)"$/, async (name) => {
       expect((await screen.findAllByText(name)).length).toBeGreaterThan(0);
+    });
+  });
+
+  test('A pick traded to another manager renders in its slot with a traded badge', ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    given('draft data with a traded pick is available', () => {
+      server.use(leagueQuery({ DRAFT: DRAFT_TRADED }));
+    });
+    when('I open the draft recap page', async () => {
+      await renderRoute(<DraftRecap />, {
+        route: '/draft_recap',
+        league: LEAGUE,
+      });
+    });
+    then(/^I see the player "(.*)"$/, async (name) => {
+      expect((await screen.findAllByText(name)).length).toBeGreaterThan(0);
+    });
+    and(/^the pick is badged as traded to "(.*)"$/, async (manager) => {
+      expect(
+        await screen.findByTitle(`Traded to ${manager}`),
+      ).toBeInTheDocument();
     });
   });
 
