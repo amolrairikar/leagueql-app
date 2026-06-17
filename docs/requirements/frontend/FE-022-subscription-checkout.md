@@ -18,11 +18,11 @@ the app therefore refreshes subscription state with the cache bypassed and shows
 "activating" state, polling for a bounded interval before falling back to the paywall.
 
 ## Scope
-- **API accessor:** `createCheckoutSession(leagueId, platform, plan, cancelPath?)` in a new billing
+- **API accessor:** `createCheckoutSession(leagueId, platform, plan, returnPath?)` in a new billing
   client module (`src/components/api/billing.ts`), POSTing to
-  `/leagues/{leagueId}/checkout-session?platform=…&plan=…&cancelPath=…` and returning
-  `{ data: { url } }`. The `cancelPath` is the in-app path checkout was started from, used to build
-  the Checkout cancel ("back") `cancel_url`. The
+  `/leagues/{leagueId}/checkout-session?platform=…&plan=…&returnPath=…` and returning
+  `{ data: { url } }`. The `returnPath` is the in-app path checkout was started from, used to build
+  **both** the Checkout `success_url` and cancel ("back") `cancel_url`. The
   `plan` is `MONTHLY` or `YEARLY` (BE-015 selects the matching Stripe price). Uses `apiClient.post`
   (auth via the `__session` cookie; POSTs are not cached).
 - **Plan picker:** a monthly/yearly **toggle** (`plan-toggle.tsx`) rendered above the Subscribe
@@ -35,12 +35,12 @@ the app therefore refreshes subscription state with the cache bypassed and shows
 - **Subscribe trigger:** a "Subscribe" button in `subscription-required.tsx` (the locked overlay)
   and in the Manage Subscription dialog when the subscription is not active. On click → call the
   accessor with the toggled `plan` → `window.location.assign(url)`.
-- **Return destination:** Stripe `success_url` lands the user on the in-app **dashboard home**
-  (`/home`, under the `SubscriptionGuard`) carrying `?checkout=success`. The `cancel_url` (the
-  Checkout "back" button) returns the user to the **page they started checkout from** — the
-  accessor sends the current in-app path (`window.location.pathname + search`) as a `cancelPath`
-  query param, and BE-015 builds the `cancel_url` from it (falling back to `/home` when absent or
-  not a safe same-origin relative path). The cancel return has no param, so it never polls.
+- **Return destination:** both the Stripe `success_url` and `cancel_url` return the user to the
+  **page they started checkout from**. The accessor sends the current in-app path
+  (`window.location.pathname + search`) as a `returnPath` query param, and BE-015 builds both URLs
+  from it (falling back to `/home` when absent or not a safe same-origin relative path). The
+  `success_url` carries `?checkout=success` (merged with any existing query) so the return triggers
+  the activation poll; the `cancel_url` has no param, so a cancel never polls.
 - **Return handling:** the activation poll is driven by the `?checkout=success` query param
   (consumed and stripped via `history.replaceState`), **not** a sessionStorage flag — so a cancel
   return never polls or shows a failure notice. On a success return, refresh subscription state —

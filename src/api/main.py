@@ -270,6 +270,7 @@ from helpers import (  # noqa: E402, F401
     require_active_subscription,
     require_league_member,
     resolve_checkout_cancel_url,
+    resolve_checkout_success_url,
     require_league_owner,
     set_active_job,
     trial_used_for_league,

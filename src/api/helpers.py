@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from functools import partial
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 import botocore.exceptions
 import requests as http_requests
@@ -789,20 +789,42 @@ def _is_safe_relative_path(path: str) -> bool:
     )
 
 
-def resolve_checkout_cancel_url(cancel_path: str | None) -> str:
+def resolve_checkout_cancel_url(return_path: str | None) -> str:
     """Build the Checkout ``cancel_url`` from a caller-supplied relative path (FE-022).
 
     The Checkout "back" button should return the user to the page they started
-    checkout from rather than the dashboard home. ``cancel_path`` is client-supplied,
+    checkout from rather than the dashboard home. ``return_path`` is client-supplied,
     so it is honored only when it is a safe same-origin relative path
     (:func:`_is_safe_relative_path`); it is then appended to the configured cancel
     URL's origin. Anything else (absent or unsafe) falls back to the default
     ``STRIPE_CHECKOUT_CANCEL_URL``.
     """
-    if not cancel_path or not _is_safe_relative_path(cancel_path):
+    if not return_path or not _is_safe_relative_path(return_path):
         return main.STRIPE_CHECKOUT_CANCEL_URL
     parsed = urlparse(main.STRIPE_CHECKOUT_CANCEL_URL)
-    return f"{parsed.scheme}://{parsed.netloc}{cancel_path}"
+    return f"{parsed.scheme}://{parsed.netloc}{return_path}"
+
+
+def resolve_checkout_success_url(return_path: str | None) -> str:
+    """Build the Checkout ``success_url`` from a caller-supplied relative path (FE-022).
+
+    On a successful checkout the user should land back on the page they started from
+    rather than the dashboard home, so ``return_path`` is honored the same way as for
+    the cancel URL (:func:`_is_safe_relative_path`) and appended to the configured
+    success URL's origin. Either way the result carries ``checkout=success`` — merged
+    with any query already on ``return_path`` — so the frontend's activation poll
+    (:func:`useSubscription`) fires on return. An absent/unsafe path falls back to the
+    default ``STRIPE_CHECKOUT_SUCCESS_URL`` (which already carries the param).
+    """
+    if not return_path or not _is_safe_relative_path(return_path):
+        return main.STRIPE_CHECKOUT_SUCCESS_URL
+    origin = urlparse(main.STRIPE_CHECKOUT_SUCCESS_URL)
+    parsed = urlparse(return_path)
+    query = parse_qsl(parsed.query)
+    query.append(("checkout", "success"))
+    return urlunparse(
+        (origin.scheme, origin.netloc, parsed.path, "", urlencode(query), "")
+    )
 
 
 def create_subscription_checkout_session(
@@ -811,6 +833,7 @@ def create_subscription_checkout_session(
     subscription_data: dict[str, Any],
     token: str,
     price_id: str,
+    success_url: str,
     cancel_url: str,
 ) -> Any:
     """Open a subscription-mode Checkout Session, recovering from a deleted customer.
@@ -832,6 +855,9 @@ def create_subscription_checkout_session(
         token: The per-attempt nonce used as the Stripe idempotency key.
         price_id: The Stripe recurring price ID for the chosen plan (monthly or
             yearly); resolved by the caller from the request's ``plan``.
+        success_url: The URL Stripe returns the user to on a completed checkout;
+            resolved by the caller via :func:`resolve_checkout_success_url` and
+            carrying ``checkout=success``.
         cancel_url: The URL Stripe returns the user to when they cancel ("back")
             out of Checkout; resolved by the caller via
             :func:`resolve_checkout_cancel_url`.
@@ -850,7 +876,7 @@ def create_subscription_checkout_session(
             subscription_data=subscription_data,
             allow_promotion_codes=True,
             managed_payments={"enabled": True},
-            success_url=main.STRIPE_CHECKOUT_SUCCESS_URL,
+            success_url=success_url,
             cancel_url=cancel_url,
             idempotency_key=idempotency_key,
         )
