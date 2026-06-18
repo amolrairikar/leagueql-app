@@ -4,6 +4,10 @@ import { apiClient } from '@/lib/api-client';
 import { isDemoMode } from '@/lib/cookie-handler';
 import { getDemoLeague, queryDemoLeague } from '@/lib/demo-api';
 
+// Precomputed views only change when a league is onboarded/refreshed (which
+// clears the cache), so they can be cached far longer than the 30s default.
+const QUERY_CACHE_TTL_MS = 5 * 60 * 1000;
+
 /**
  * Shared accessor for the `/leagues/{id}/query` endpoint.
  *
@@ -19,7 +23,11 @@ export function queryLeague<T>(
 ): Promise<{ data: T[] }> {
   if (isDemoMode()) return queryDemoLeague<T>(queryType);
   const params = new URLSearchParams({ platform, queryType });
-  return apiClient.get<{ data: T[] }>(`/leagues/${leagueId}/query?${params}`);
+  return apiClient.get<{ data: T[] }>(
+    `/leagues/${leagueId}/query?${params}`,
+    undefined,
+    { cacheTtlMs: QUERY_CACHE_TTL_MS },
+  );
 }
 
 export interface PlatformMigrationEntry {

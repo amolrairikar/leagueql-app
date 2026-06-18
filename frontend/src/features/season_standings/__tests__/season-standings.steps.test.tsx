@@ -1,8 +1,9 @@
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import { defineFeature, loadFeature } from 'jest-cucumber';
 
 import SeasonStandings from '../season-standings';
 
+import { MATCHUPS, STANDINGS } from '@/test/fixtures';
 import { leagueQuery, leagueQueryError, server } from '@/test/msw/server';
 import { renderRoute } from '@/test/render';
 
@@ -16,37 +17,26 @@ const league = {
   seasons: ['2024'],
 };
 
-const STANDINGS = [
-  {
-    season: '2024',
-    team_id: '1',
-    owner_id: 'uA',
-    team_name: 'Team Alice',
-    team_logo: null,
-    owner_username: 'Alice',
-    final_rank: 1,
-    games_played: 2,
-    wins: 2,
-    losses: 0,
-    ties: 0,
-    record: '2-0-0',
-    win_pct: 1,
-    total_pf: 220,
-    total_pa: 180,
-    avg_pf: 110,
-    avg_pa: 90,
-    total_vs_league_wins: 10,
-    total_vs_league_losses: 2,
-    win_pct_vs_league: 0.83,
-    champion: 'Yes',
-  },
-];
+/** The last cell of the standings row for `name` is the SoS column. */
+async function sosCellFor(name: string): Promise<HTMLElement> {
+  // The name also appears in the awards cards, so pick the occurrence that sits
+  // inside a table row (the standings table).
+  const row = (await screen.findAllByText(name))
+    .map((el) => el.closest('tr'))
+    .find((r): r is HTMLTableRowElement => r !== null)!;
+  const cells = within(row).getAllByRole('cell');
+  return cells[cells.length - 1];
+}
 
 defineFeature(feature, (test) => {
   test('Standings render when data loads', ({ given, when, then }) => {
     given('season standings data is available', () => {
       server.use(
-        leagueQuery({ SEASON_STANDINGS: STANDINGS, WEEKLY_STANDINGS: [] }),
+        leagueQuery({
+          SEASON_STANDINGS: STANDINGS,
+          MATCHUPS,
+          WEEKLY_STANDINGS: [],
+        }),
       );
     });
     when('I open the standings page', async () => {
@@ -55,6 +45,58 @@ defineFeature(feature, (test) => {
     then(/^I see the manager "(.*)"$/, async (name) => {
       expect((await screen.findAllByText(name)).length).toBeGreaterThan(0);
     });
+  });
+
+  test('Strength of schedule reflects opponents faced', ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    given('season standings data is available', () => {
+      server.use(
+        leagueQuery({
+          SEASON_STANDINGS: STANDINGS,
+          MATCHUPS,
+          WEEKLY_STANDINGS: [],
+        }),
+      );
+    });
+    when('I open the standings page', async () => {
+      await renderRoute(<SeasonStandings />, { route: '/standings', league });
+    });
+    // Alice (win% 1.000) and Bob (win% 0.000) only played each other, so each
+    // team's SoS is its single opponent's win%.
+    then(
+      /^the schedule strength for "(.*)" is "(.*)"$/,
+      async (name, value) => {
+        expect(await sosCellFor(name)).toHaveTextContent(value);
+      },
+    );
+    and(/^the schedule strength for "(.*)" is "(.*)"$/, async (name, value) => {
+      expect(await sosCellFor(name)).toHaveTextContent(value);
+    });
+  });
+
+  test('Strength of schedule shows a dash when matchups are missing', ({
+    given,
+    when,
+    then,
+  }) => {
+    given('season standings data is available but matchups are missing', () => {
+      server.use(
+        leagueQuery({ SEASON_STANDINGS: STANDINGS, WEEKLY_STANDINGS: [] }),
+      );
+    });
+    when('I open the standings page', async () => {
+      await renderRoute(<SeasonStandings />, { route: '/standings', league });
+    });
+    then(
+      /^the schedule strength for "(.*)" is "(.*)"$/,
+      async (name, value) => {
+        expect(await sosCellFor(name)).toHaveTextContent(value);
+      },
+    );
   });
 
   test('A failed load surfaces an inline error', ({ given, when, then }) => {

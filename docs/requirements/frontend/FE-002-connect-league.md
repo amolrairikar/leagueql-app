@@ -53,6 +53,10 @@ the form (so the user isn't re-prompted), as a safety net for direct navigation.
   error banner.
 - **Already onboarded:** backend may return "already onboarded"; route the user in rather
   than erroring.
+- **Stale cached views after onboard/refresh:** a successful onboard/refresh rewrites the
+  league's precomputed views, so the in-memory API cache is cleared (`clearApiCache`) before
+  re-reading the league — otherwise cached reads (which are held for 5 min) could show
+  pre-refresh data.
 - **Non-owner of an existing league:** when the league already exists and the caller is not
   its owner, the flow opens the dashboard without sending an (owner-only) refresh; for ESPN it
   first verifies membership (a `403` on the lookup) before opening.
@@ -72,7 +76,8 @@ the form (so the user isn't re-prompted), as a safety net for direct navigation.
       backend-provided failure message.
 - [ ] Polling persists long enough to capture completion of slow (~120s) jobs.
 - [ ] Pre-filled platform/league ID fields are locked.
-- [ ] On success the user is routed into the app (home).
+- [ ] On success the user is routed into the app (home), with cached API reads cleared so the
+      dashboard reflects the freshly onboarded/refreshed data.
 - [ ] A non-owner opening an already-onboarded league is routed to the dashboard without an
       onboard/refresh request; an ESPN non-member verifies membership first.
 - [ ] ESPN credentials never appear in logs or persistent storage.

@@ -13,7 +13,7 @@ import { isBannerEnabled } from '@/lib/feature-flags';
 const BANNER_MESSAGE_PREFIX = 'Join the LeagueQL Discord ';
 const BANNER_LINK_LABEL = 'community';
 const BANNER_MESSAGE_SUFFIX = '!';
-const BANNER_LINK_URL = 'https://discord.gg/QZcxhYcY9';
+const BANNER_LINK_URL = 'https://discord.gg/jE2dm89GWh';
 
 // localStorage key remembering a dismissal so the banner stays hidden for this
 // browser (FE-030). Mirrors the direct localStorage pattern in theme-provider.tsx.

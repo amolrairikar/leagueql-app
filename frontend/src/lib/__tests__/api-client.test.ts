@@ -171,6 +171,21 @@ describe('GET caching', () => {
     expect(fetchMock().mock.calls).toHaveLength(2);
   });
 
+  it('honors a per-call cacheTtlMs override past the default TTL', async () => {
+    vi.useFakeTimers();
+    mockFetchOk({ val: 'long' });
+    const opts = { cacheTtlMs: 5 * 60 * 1000 };
+    await apiClient.get('/cache-ttl-custom', undefined, opts);
+    // Past the 30 s default but within the 5 min override → still cached.
+    vi.advanceTimersByTime(60_000);
+    await apiClient.get('/cache-ttl-custom', undefined, opts);
+    expect(fetchMock().mock.calls).toHaveLength(1);
+    // Past the override → re-fetches.
+    vi.advanceTimersByTime(5 * 60 * 1000);
+    await apiClient.get('/cache-ttl-custom', undefined, opts);
+    expect(fetchMock().mock.calls).toHaveLength(2);
+  });
+
   it('deduplicates concurrent GET requests to the same path', async () => {
     let resolveFetch!: () => void;
     const barrier = new Promise<void>((res) => {

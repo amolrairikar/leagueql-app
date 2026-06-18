@@ -66,6 +66,9 @@ async function getSessionToken(): Promise<string | null> {
 // (feature) surfaces them locally; there is no global error sink.
 interface FetchOpts {
   skipCache?: boolean;
+  // Override the settled-response cache lifetime for this GET. Defaults to
+  // CACHE_TTL_MS. Used to hold slow-changing precomputed-view reads longer.
+  cacheTtlMs?: number;
 }
 
 async function _doFetch<T>(path: string, init?: RequestInit): Promise<T> {
@@ -125,7 +128,8 @@ function apiFetch<T>(
 
   const promise = _doFetch<T>(path, init).then(
     (data) => {
-      _cache.set(path, { data, expires: Date.now() + CACHE_TTL_MS });
+      const ttl = opts?.cacheTtlMs ?? CACHE_TTL_MS;
+      _cache.set(path, { data, expires: Date.now() + ttl });
       _inflight.delete(path);
       return data;
     },
