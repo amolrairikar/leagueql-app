@@ -40,7 +40,7 @@ import {
 } from '@/features/connect_league/league-connect-schema';
 import { pollForCompletion, sleep } from '@/features/connect_league/poll';
 import { useEspnExtensionReady } from '@/hooks/use-espn-extension-ready';
-import { ApiError } from '@/lib/api-client';
+import { ApiError, clearApiCache } from '@/lib/api-client';
 import { clearEspnCookies, setLeagueCookies } from '@/lib/cookie-handler';
 import {
   ESPN_EXTENSION_URL,
@@ -296,6 +296,9 @@ export default function LeagueConnect() {
     }
     setPollStatus(result.status);
     if (result.status === 'success') {
+      // Onboard/refresh wrote new precomputed views (and possibly new seasons),
+      // so drop any cached reads before re-reading the league.
+      clearApiCache();
       const leagueData = await getLeague(data.leagueId, apiPlatform);
       setLeagueCookies(data.leagueId, apiPlatform, leagueData.data.seasons);
       void navigate('/home');

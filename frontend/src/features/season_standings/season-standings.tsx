@@ -17,7 +17,9 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import {
+  type MatchupItem,
   type WeeklyStandingItem,
+  getSeasonMatchups,
   getSeasonWeeklyStandings,
 } from '@/features/matchups/api-calls';
 import ScheduleSwap from '@/features/schedule_swap/schedule-swap';
@@ -26,6 +28,7 @@ import {
   type SeasonStandingsItem,
   getSeasonStandings,
 } from '@/features/season_standings/api-calls';
+import { computeStrengthOfSchedule } from '@/features/season_standings/compute-sos';
 import { SubscriptionGuard } from '@/features/subscription/subscription-guard';
 import { avatarColor } from '@/lib/color-constants';
 import { POSITION_COLORS, UI_COLORS } from '@/lib/color-constants';
@@ -36,6 +39,8 @@ import { type Result, toResult } from '@/lib/result';
 type StandingsResult = Result<SeasonStandingsItem[]>;
 
 type WeeklyResult = Result<WeeklyStandingItem[]>;
+
+type MatchupsResult = Result<MatchupItem[]>;
 
 function SkeletonChart() {
   return <Skeleton className="w-full h-80" />;
@@ -170,15 +175,22 @@ function WinsProgressionChart({ promise }: { promise: Promise<WeeklyResult> }) {
   );
 }
 
-function StandingsBody({ promise }: { promise: Promise<StandingsResult> }) {
-  const result = use(promise);
+function StandingsBody({
+  standingsPromise,
+  matchupsPromise,
+}: {
+  standingsPromise: Promise<StandingsResult>;
+  matchupsPromise: Promise<MatchupsResult>;
+}) {
+  const result = use(standingsPromise);
+  const matchupsResult = use(matchupsPromise);
 
   if (!result.ok) {
     return (
       <tbody>
         <tr>
           <td
-            colSpan={6}
+            colSpan={7}
             className="px-3.5 py-4 text-center text-[13px] text-destructive"
           >
             {result.error}
@@ -189,10 +201,16 @@ function StandingsBody({ promise }: { promise: Promise<StandingsResult> }) {
   }
 
   const { data: standings } = result;
+  // SoS is best-effort: if matchups fail to load, the column shows a dash
+  // rather than failing the whole standings table.
+  const sosById = matchupsResult.ok
+    ? computeStrengthOfSchedule(standings, matchupsResult.data)
+    : {};
 
   return (
     <tbody>
       {standings.map((row, i) => {
+        const sos = sosById[row.team_id];
         return (
           <tr
             key={row.team_id}
@@ -233,6 +251,9 @@ function StandingsBody({ promise }: { promise: Promise<StandingsResult> }) {
             </td>
             <td className="px-3.5 py-2.5 text-right text-muted-foreground">
               {row.win_pct_vs_league.toFixed(3)}
+            </td>
+            <td className="px-3.5 py-2.5 text-right text-muted-foreground">
+              {sos != null ? sos.toFixed(3) : '—'}
             </td>
           </tr>
         );
@@ -438,7 +459,7 @@ function SkeletonBody() {
               <Skeleton className="h-3 w-28" />
             </div>
           </td>
-          {Array.from({ length: 5 }).map((_, j) => (
+          {Array.from({ length: 6 }).map((_, j) => (
             <td key={j} className="px-3.5 py-2.5 text-right">
               <Skeleton className="h-3 w-12 ml-auto" />
             </td>
@@ -464,6 +485,19 @@ export default function SeasonStandings() {
               (res) => res.data,
             ),
             'Failed to load standings.',
+          )
+        : Promise.resolve({ ok: true as const, data: [] }),
+    [leagueId, platform, selectedSeason],
+  );
+
+  const matchupsPromise = useMemo(
+    (): Promise<MatchupsResult> =>
+      leagueId && selectedSeason
+        ? toResult(
+            getSeasonMatchups(leagueId, platform, selectedSeason).then(
+              (res) => res.data,
+            ),
+            'Failed to load matchups.',
           )
         : Promise.resolve({ ok: true as const, data: [] }),
     [leagueId, platform, selectedSeason],
@@ -511,43 +545,43 @@ export default function SeasonStandings() {
           <div className="max-h-[70vh] overflow-auto">
             <table
               className="w-full border-collapse text-[13px]"
-              style={{ tableLayout: 'fixed', minWidth: '540px' }}
+              style={{ tableLayout: 'fixed', minWidth: '640px' }}
             >
               <thead className="sticky top-0 z-20">
                 <tr>
                   <th
                     className="text-left text-[10px] font-medium uppercase tracking-[0.07em] text-muted-foreground px-3.5 py-2.5 border-b border-border/50 bg-muted sticky left-0 z-10"
-                    style={{ width: '48%' }}
+                    style={{ width: '38%' }}
                   >
                     Owner
                   </th>
                   <th
                     className="text-right text-[10px] font-medium uppercase tracking-[0.07em] text-muted-foreground px-3.5 py-2.5 border-b border-border/50 bg-muted"
-                    style={{ width: '15%' }}
+                    style={{ width: '12%' }}
                   >
                     Record
                   </th>
                   <th
                     className="text-right text-[10px] font-medium uppercase tracking-[0.07em] text-muted-foreground px-3.5 py-2.5 border-b border-border/50 bg-muted"
-                    style={{ width: '12%' }}
+                    style={{ width: '10%' }}
                   >
                     PF/Game
                   </th>
                   <th
                     className="text-right text-[10px] font-medium uppercase tracking-[0.07em] text-muted-foreground px-3.5 py-2.5 border-b border-border/50 bg-muted"
-                    style={{ width: '12%' }}
+                    style={{ width: '10%' }}
                   >
                     PA/Game
                   </th>
                   <th
                     className="text-right text-[10px] font-medium uppercase tracking-[0.07em] text-muted-foreground px-3.5 py-2.5 border-b border-border/50 bg-muted"
-                    style={{ width: '14%' }}
+                    style={{ width: '10%' }}
                   >
                     Win %
                   </th>
                   <th
                     className="text-right text-[10px] font-medium uppercase tracking-[0.07em] text-muted-foreground px-3.5 py-2.5 border-b border-border/50 bg-muted"
-                    style={{ width: '14%' }}
+                    style={{ width: '10%' }}
                   >
                     <TooltipProvider>
                       <Tooltip>
@@ -571,10 +605,34 @@ export default function SeasonStandings() {
                       </Tooltip>
                     </TooltipProvider>
                   </th>
+                  <th
+                    className="text-right text-[10px] font-medium uppercase tracking-[0.07em] text-muted-foreground px-3.5 py-2.5 border-b border-border/50 bg-muted"
+                    style={{ width: '10%' }}
+                  >
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="inline-flex items-center justify-end gap-1 cursor-default">
+                            SoS
+                            <Info className="w-3 h-3 shrink-0" />
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent
+                          side="top"
+                          className="max-w-64 text-center leading-relaxed bg-popover text-popover-foreground border border-border shadow-md [&>svg]:fill-popover [&>svg]:bg-popover"
+                        >
+                          Average win% of the team&apos;s opponents
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </th>
                 </tr>
               </thead>
               <Suspense fallback={<SkeletonBody />}>
-                <StandingsBody promise={standingsPromise} />
+                <StandingsBody
+                  standingsPromise={standingsPromise}
+                  matchupsPromise={matchupsPromise}
+                />
               </Suspense>
             </table>
           </div>

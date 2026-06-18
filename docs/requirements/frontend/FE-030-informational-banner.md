@@ -22,7 +22,7 @@ change, not a structural one.
   rendered inline on `BANNER_LINK_LABEL`, so the link lives within the sentence rather than as
   a trailing call-to-action. The current campaign is the Discord invite — "Join the LeagueQL
   Discord community" with the word "community" linking to the invite
-  (`https://discord.gg/QZcxhYcY9`). An empty `BANNER_LINK_URL` renders the label as plain text
+  (`https://discord.gg/jE2dm89GWh`). An empty `BANNER_LINK_URL` renders the label as plain text
   (a message-only banner).
 - Dismissal persistence: `localStorage` key `leagueql.bannerDismissed` (read/written
   defensively so storage failures never crash the app).
