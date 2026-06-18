@@ -14,6 +14,7 @@ Usage:
 """
 
 import argparse
+import datetime
 import json
 import logging
 import pathlib
@@ -1188,6 +1189,162 @@ def build_season_items(
     return items
 
 
+# ── Transactions (Sleeper only) ───────────────────────────────────────────────
+
+
+def _txn_created_ms(season: str, week: int, rng: random.Random) -> int:
+    """Unix epoch milliseconds for a transaction in a given season/week.
+
+    Anchored to early September of the season, advancing one week per game week
+    with a little intra-week jitter so cards sort believably newest-first.
+    """
+    base = datetime.datetime(int(season), 9, 4, tzinfo=datetime.timezone.utc)
+    dt = base + datetime.timedelta(days=(week - 1) * 7, hours=rng.uniform(0, 72))
+    return int(dt.timestamp() * 1000)
+
+
+def _txn_player(player: dict, pos: str, roster_id: str) -> dict:
+    """A TransactionPlayer row (player_id is a string on the wire, per FE-027)."""
+    return {
+        "player_id": str(player["player_id"]),
+        "player_name": player["full_name"],
+        "position": pos,
+        "roster_id": roster_id,
+    }
+
+
+def build_transactions(
+    season: str,
+    owners: list[dict],
+    rosters: dict[str, list[tuple[str, dict]]],
+    draft_picks: list[dict],
+    rng: random.Random,
+) -> list[dict]:
+    """Synthesize a Sleeper season's transactions (BE-019 / FE-027).
+
+    For each game week, generates a handful of waiver/free-agent adds (each
+    dropping a player already on the roster and adding an undrafted free agent)
+    plus the occasional trade — sometimes including a future-season draft pick.
+    Roster movements stay coherent (a dropped player rejoins the free-agent pool,
+    a traded player swaps rosters), and roster_id == team_id, matching the
+    Sleeper standings/teams so the page's avatars line up.
+    """
+    team_ids = [o["id"] for o in owners]
+    teams_meta_by_id = {
+        o["id"]: {
+            "roster_id": o["id"],
+            "team_name": o["team_name"],
+            "display_name": o["username"],
+        }
+        for o in owners
+    }
+
+    drafted_ids = {int(p["player_id"]) for p in draft_picks}
+    free_agents: list[tuple[str, dict]] = [
+        (pos, player)
+        for pos, players in PLAYER_POOL.items()
+        for player in players
+        if player["player_id"] not in drafted_ids
+    ]
+    rng.shuffle(free_agents)
+    fa_idx = 0
+
+    def next_free_agent() -> tuple[str, dict]:
+        nonlocal fa_idx
+        if fa_idx >= len(free_agents):
+            rng.shuffle(free_agents)
+            fa_idx = 0
+        entry = free_agents[fa_idx]
+        fa_idx += 1
+        return entry
+
+    roster_players = {tid: list(roster) for tid, roster in rosters.items()}
+
+    transactions: list[dict] = []
+    counter = 0
+
+    def make_id() -> str:
+        nonlocal counter
+        counter += 1
+        return f"demo-txn-{season}-{counter:03d}"
+
+    for week in range(1, N_REG_WEEKS + 1):
+        # Waiver / free-agent adds for the week.
+        for _ in range(rng.choice([0, 1, 1, 2, 2, 3])):
+            tid = rng.choice(team_ids)
+            roster = roster_players[tid]
+            if not roster:
+                continue
+            drop_pos, drop_player = roster.pop(rng.randrange(len(roster)))
+            add_pos, add_player = next_free_agent()
+            roster.append((add_pos, add_player))
+            free_agents.append((drop_pos, drop_player))  # dropped → back to pool
+            is_waiver = rng.random() < 0.5
+            transactions.append(
+                {
+                    "season": season,
+                    "transaction_id": make_id(),
+                    "type": "waiver" if is_waiver else "free_agent",
+                    "week": week,
+                    "created": _txn_created_ms(season, week, rng),
+                    "roster_ids": [tid],
+                    "teams": [teams_meta_by_id[tid]],
+                    "adds": [_txn_player(add_player, add_pos, tid)],
+                    "drops": [_txn_player(drop_player, drop_pos, tid)],
+                    "draft_picks": [],
+                    "waiver_bid": rng.choice([3, 5, 8, 12, 17, 23])
+                    if is_waiver
+                    else None,
+                }
+            )
+
+        # Occasional trade between two rosters.
+        if rng.random() < 0.25:
+            a, b = rng.sample(team_ids, 2)
+            ra, rb = roster_players[a], roster_players[b]
+            if ra and rb:
+                pa_pos, pa = ra.pop(rng.randrange(len(ra)))
+                pb_pos, pb = rb.pop(rng.randrange(len(rb)))
+                ra.append((pb_pos, pb))
+                rb.append((pa_pos, pa))
+                draft_picks_traded: list[dict] = []
+                if rng.random() < 0.3:
+                    draft_picks_traded.append(
+                        {
+                            "round": rng.randint(1, 5),
+                            "season": str(int(season) + 1),
+                            "from_roster_id": b,
+                            "to_roster_id": a,
+                        }
+                    )
+                transactions.append(
+                    {
+                        "season": season,
+                        "transaction_id": make_id(),
+                        "type": "trade",
+                        "week": week,
+                        "created": _txn_created_ms(season, week, rng),
+                        "roster_ids": [a, b],
+                        "teams": [teams_meta_by_id[a], teams_meta_by_id[b]],
+                        # Each team receives the other's player; drops are the
+                        # players each side sends away.
+                        "adds": [
+                            _txn_player(pb, pb_pos, a),
+                            _txn_player(pa, pa_pos, b),
+                        ],
+                        "drops": [
+                            _txn_player(pa, pa_pos, a),
+                            _txn_player(pb, pb_pos, b),
+                        ],
+                        "draft_picks": draft_picks_traded,
+                        "waiver_bid": None,
+                    }
+                )
+
+    transactions.sort(key=lambda t: -t["created"])  # newest-first, per BE-019
+    return [sanitize_value(t) for t in transactions]
+
+
 # ── Main seeding logic ────────────────────────────────────────────────────────
 
 
@@ -1277,6 +1434,20 @@ def build_all_items() -> list[dict]:
         sim_2025,
     )
     items.extend(season_items_2025)
+
+    # Transactions are Sleeper-only (ESPN exposes none), so they exist only for
+    # the 2025 Sleeper season. Seeded separately so bids/timestamps are stable.
+    txn_rng = random.Random(SEED + 100)
+    txn_data = build_transactions(
+        "2025", sleeper_owners, rosters_2025, draft_picks_2025, txn_rng
+    )
+    items.append(
+        {
+            "PK": f"LEAGUE#{DEMO_CANONICAL_ID}",
+            "SK": "TRANSACTIONS#2025",
+            "data": txn_data,
+        }
+    )
 
     return items
 

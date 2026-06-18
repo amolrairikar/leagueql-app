@@ -68,7 +68,10 @@ handling.
 - **`subscription_end_time` absent or in the past (wrapped, both flags ON):** show the locked
   overlay (treated as expired); the gated feature's data is not fetched.
 - **`subscription_end_time` in the future:** render the gated component normally.
-- **Demo mode:** the guard bypasses entirely (no subscription concept in demo).
+- **Demo mode:** there is no league or subscription to check, so the guard renders the feature
+  (it is not locked) but prefixes it with a small **"Premium" badge** whose tooltip explains the
+  feature is unlocked for the demo and needs a subscription on a real league — so demo visitors
+  aren't misled into thinking a premium feature is free (FE-015).
 - **No league connected:** behaves like the rest of the app when cookies are empty (the
   guard does not crash on a missing league).
 - **Manage Subscription dialog:** opens/closes; its billing content (Subscribe / Manage billing)
@@ -95,7 +98,8 @@ handling.
 - [ ] When a section is wrapped, the guard renders nothing if `billing` is OFF, and is a
       pass-through if `billing` is ON but `premium_feature` is OFF.
 - [ ] A spinner is shown while the subscription state is loading on a paywalled (wrapped) section.
-- [ ] Demo mode bypasses the subscription gate.
+- [ ] In demo mode a premium section renders unlocked but shows a "Premium" badge marking it as a
+      subscription feature (rather than appearing free).
 - [ ] The sidebar shows "Manage Subscription" (replacing "Request a Feature") and clicking it
       opens the subscription dialog.
 - [ ] A red alert dot appears on the "Manage Subscription" icon when the current league's

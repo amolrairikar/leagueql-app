@@ -1,6 +1,7 @@
 import { Megaphone, X } from 'lucide-react';
 import { useState } from 'react';
 
+import { isDemoMode } from '@/lib/cookie-handler';
 import { isBannerEnabled } from '@/lib/feature-flags';
 
 // Current banner content. This is the one place to edit for any banner update —
@@ -42,12 +43,15 @@ function persistDismissed(): void {
  * Thin, full-width informational banner below the in-app header (FE-030). A
  * generic, content-driven banner (see the BANNER_* constants) gated behind the
  * `banner` feature flag and dismissible — a dismissal is remembered in
- * localStorage. Renders nothing when the flag is off or the user dismissed it.
+ * localStorage. Renders nothing when the flag is off, in demo mode, or once the
+ * user has dismissed it.
  */
 export function Banner() {
   const [dismissed, setDismissed] = useState(readDismissed);
 
-  if (!isBannerEnabled() || dismissed) return null;
+  // Suppressed in demo mode so the promotional invite doesn't clutter the
+  // sample-data experience (FE-030).
+  if (!isBannerEnabled() || isDemoMode() || dismissed) return null;
 
   const dismiss = () => {
     persistDismissed();

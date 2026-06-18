@@ -6,3 +6,8 @@ Feature: Demo mode (FE-015)
     Given demo mode is active
     When I open the home dashboard in demo mode
     Then I see the headline stat "Total matchups"
+
+  Scenario: The Sleeper-only Transactions page renders demo fixtures
+    Given demo mode is active
+    When I open the transactions page in demo mode
+    Then I see a transaction card for the 2025 demo season

@@ -111,9 +111,11 @@ defineFeature(feature, (test) => {
     };
     then(/^I see the "(.*)" plan priced "(.*)"$/, assertPlan);
     and(/^I see the "(.*)" plan priced "(.*)"$/, assertPlan);
-    and(/^I see "(.*)" listed as a premium feature$/, (title) => {
+    const assertPremiumFeature = (title: string) => {
       expect(screen.getByText(title)).toBeInTheDocument();
-    });
+    };
+    and(/^I see "(.*)" listed as a premium feature$/, assertPremiumFeature);
+    and(/^I see "(.*)" listed as a premium feature$/, assertPremiumFeature);
   });
 
   test('With billing disabled the pricing table is hidden', ({
