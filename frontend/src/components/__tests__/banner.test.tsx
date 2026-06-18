@@ -46,6 +46,13 @@ describe('Banner', () => {
     expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'));
   });
 
+  it('renders nothing in demo mode even when the flag is on', () => {
+    setFlagsForTesting({ banner: true });
+    document.cookie = 'demo_mode=true; path=/';
+    const { container } = render(<Banner />);
+    expect(container).toBeEmptyDOMElement();
+  });
+
   it('hides the banner and remembers the dismissal when dismissed', async () => {
     setFlagsForTesting({ banner: true });
     const { unmount } = render(<Banner />);

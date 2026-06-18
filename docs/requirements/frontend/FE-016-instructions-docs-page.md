@@ -54,6 +54,10 @@ Rendered with the marketing header (scrollable content area).
       Cookie Helper extension ([EXT-001](../extension/EXT-001-espn-cookie-autofill.md)) that
       autofills the SWID/ESPN S2 cookies, with a link to its Chrome Web Store listing.
 - [ ] Both extension-based and manual ESPN cookie retrieval are documented.
+- [ ] Under Managing Your League, the "Refreshing League Data" subsection splits its ESPN and
+      Sleeper instructions into their own sub-subsections, each a (level-3) table-of-contents
+      entry. The Sleeper sub-subsection is further divided into "Midseason Refreshes" and "New
+      Season Refreshes" labels that are not table-of-contents entries.
 - [ ] Content scrolls within the page while the header remains.
 - [ ] The docs document how to subscribe (Stripe Checkout), the once-per-league free trial, and
       promotion codes (under Connecting a League), plus managing/canceling billing — immediate

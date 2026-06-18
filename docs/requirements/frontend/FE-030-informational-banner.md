@@ -11,7 +11,8 @@ change, not a structural one.
 
 ## Scope
 - Component: `src/components/banner.tsx` — content-driven (the `BANNER_*` constants),
-  self-gates on the flag and on the stored dismissal, returning `null` when off or dismissed.
+  self-gates on the flag, on demo mode, and on the stored dismissal, returning `null` when off,
+  in demo mode, or dismissed.
 - Flag helper: `isBannerEnabled()` in `src/lib/feature-flags.ts` (reads the `banner` flag
   resolved from `GET /feature-flags`).
 - Placement: rendered in `AppLayout` (`src/app/app.tsx`) immediately below the in-app
@@ -34,6 +35,8 @@ change, not a structural one.
 - **Dismissed:** clicking the close (X) button hides the banner and writes the
   `localStorage` flag, so it stays hidden across reloads/navigations for that browser.
 - **Main app only:** the banner never appears on landing/docs/privacy/changelog routes.
+- **Demo mode:** the banner is suppressed (renders nothing) while exploring the demo, so the
+  promotional invite doesn't clutter the sample-data experience — even with the flag on.
 - **Link-less content:** a banner with no `BANNER_LINK_URL` shows just the message (the label
   renders as plain text).
 - **localStorage unavailable:** a storage read/write failure (private browsing, disabled
@@ -44,6 +47,7 @@ change, not a structural one.
 - [ ] With `banner` ON, the banner appears below the header on every main-app page and, when
       configured, links to the campaign URL in a new tab.
 - [ ] The banner does not render on the public marketing routes (landing/docs/privacy/changelog).
+- [ ] The banner does not render in demo mode, even with `banner` ON.
 - [ ] Dismissing the banner hides it and keeps it hidden after a reload (localStorage).
 
 ## Sources

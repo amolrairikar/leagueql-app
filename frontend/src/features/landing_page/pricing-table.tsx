@@ -29,8 +29,9 @@ export function PricingTable() {
           </h2>
           <p className="text-sm text-muted-foreground leading-relaxed">
             LeagueQL is free to use. A subscription unlocks premium features for
-            your league. All subscriptions come with a 14 day trial. You can
-            select a subscription after connecting your league.
+            your league: one subscription is shared across the whole league, so
+            every member gets access. All subscriptions come with a 14 day
+            trial. You can select a subscription after connecting your league.
           </p>
         </div>
 

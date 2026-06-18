@@ -131,6 +131,10 @@ export const PREMIUM_FEATURES: PremiumFeature[] = [
     title: 'Schedule-swap simulator',
     desc: "See what every team's record would be under each other manager's schedule — find out who was schedule-lucky and who got robbed.",
   },
+  {
+    title: 'Weekly awards',
+    desc: 'Weekly superlatives that crown the highest scorer, biggest blowout, closest call, and other standout performances for each week.',
+  },
 ];
 
 export const FOOTER_LINKS: string[] = ['About', 'Privacy', 'GitHub'];

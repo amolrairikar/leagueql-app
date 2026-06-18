@@ -25,6 +25,8 @@ const TOC_ITEMS = [
   { id: 'navigation', label: 'Navigation', level: 1 },
   { id: 'managing-your-league', label: 'Managing Your League', level: 1 },
   { id: 'refreshing-league-data', label: 'Refreshing League Data', level: 2 },
+  { id: 'refresh-espn', label: 'ESPN', level: 3 },
+  { id: 'refresh-sleeper', label: 'Sleeper', level: 3 },
   { id: 'migrating-your-league', label: 'Migrating Your League', level: 2 },
   { id: 'switching-leagues', label: 'Switching Leagues', level: 2 },
   { id: 'managing-billing', label: 'Managing Billing', level: 2 },
@@ -222,6 +224,16 @@ function SubSubHeading({
     >
       {children}
     </h4>
+  );
+}
+
+// A heading one level below SubSubHeading. Intentionally has no id /
+// `data-section`, so it never appears in the table of contents nor drives the
+// scroll-spy active state — used for in-section labels like the Sleeper
+// midseason vs. new-season refresh split.
+function MinorHeading({ children }: { children: React.ReactNode }) {
+  return (
+    <h5 className="text-sm font-semibold text-foreground mb-1.5">{children}</h5>
   );
 }
 
@@ -721,7 +733,7 @@ export default function InstructionsPage() {
                 <SubHeading id="refreshing-league-data">
                   Refreshing League Data
                 </SubHeading>
-                <SubSubHeading>ESPN</SubSubHeading>
+                <SubSubHeading id="refresh-espn">ESPN</SubSubHeading>
                 <p className="text-muted-foreground leading-relaxed mb-4">
                   Click the Refresh League button in the sidebar. This navigates
                   you to the league connection page where you can submit your
@@ -729,16 +741,18 @@ export default function InstructionsPage() {
                   exists and runs a refresh instead of a full re-onboard, which
                   is faster.
                 </p>
-                <SubSubHeading>Sleeper</SubSubHeading>
-                <p className="text-muted-foreground leading-relaxed mb-2">
+                <SubSubHeading id="refresh-sleeper">Sleeper</SubSubHeading>
+                <MinorHeading>Midseason Refreshes</MinorHeading>
+                <p className="text-muted-foreground leading-relaxed mb-4">
                   You do not need to refresh your Sleeper league during the
                   active season. An automated process runs weekly every Tuesday
                   morning to update your league data.
                 </p>
+                <MinorHeading>New Season Refreshes</MinorHeading>
                 <p className="text-muted-foreground leading-relaxed">
                   If refreshing for a new season, enter your new Sleeper league
                   ID as if you are connecting a new league (Sleeper league IDs
-                  change each season). The backend automatically associates the
+                  change each season). The system automatically associates the
                   new league ID with your existing history.
                 </p>
               </div>

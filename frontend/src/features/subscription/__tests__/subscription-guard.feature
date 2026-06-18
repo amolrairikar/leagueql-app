@@ -26,3 +26,9 @@ Feature: Subscription access guard (FE-021)
     And the current league subscription has expired
     When I open a gated page behind the subscription guard
     Then I see the gated content "Protected analytics"
+
+  Scenario: Demo mode shows the feature but marks it premium (FE-015)
+    Given I am in demo mode
+    When I open a gated page behind the subscription guard
+    Then I see the gated content "Protected analytics"
+    And I see a "Premium" badge on the feature

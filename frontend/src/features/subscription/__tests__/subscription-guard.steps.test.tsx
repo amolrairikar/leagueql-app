@@ -5,7 +5,7 @@ import { SubscriptionGuard } from '../subscription-guard';
 
 import { setFlagsForTesting } from '@/lib/feature-flags';
 import { leagueMetadata, server } from '@/test/msw/server';
-import { renderRoute } from '@/test/render';
+import { renderRoute, setDemoMode } from '@/test/render';
 
 const feature = loadFeature(
   'src/features/subscription/__tests__/subscription-guard.feature',
@@ -94,6 +94,24 @@ defineFeature(feature, (test) => {
     when('I open a gated page behind the subscription guard', openGatedPage);
     then(/^I see the gated content "(.*)"$/, async (text) => {
       expect(await screen.findByText(text)).toBeInTheDocument();
+    });
+  });
+
+  test('Demo mode shows the feature but marks it premium (FE-015)', ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    given('I am in demo mode', () => {
+      setDemoMode();
+    });
+    when('I open a gated page behind the subscription guard', openGatedPage);
+    then(/^I see the gated content "(.*)"$/, async (text) => {
+      expect(await screen.findByText(text)).toBeInTheDocument();
+    });
+    and(/^I see a "(.*)" badge on the feature$/, (label) => {
+      expect(screen.getByText(label)).toBeInTheDocument();
     });
   });
 });
