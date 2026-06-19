@@ -6,6 +6,6 @@ import type { SubscriptionPlan } from '@/components/api/types';
  * truth — update the amounts here only.
  */
 export const SUBSCRIPTION_PRICES: Record<SubscriptionPlan, string> = {
-  MONTHLY: '$2.99',
-  YEARLY: '$14.99',
+  MONTHLY: '$1.99',
+  YEARLY: '$8.99',
 };

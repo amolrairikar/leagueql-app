@@ -14,8 +14,8 @@ Rendered with the marketing `Header` (not the app sidebar layout).
   History, Draft Grades, Player Records, Matchup Records, Complete History, Rivalry Tracker,
   Championship Timeline, Team Trends, League Records, Platform Migration.
 - Pricing table: `src/features/landing_page/pricing-table.tsx`, rendered below the feature grid.
-  Shows two subscription plans — **Monthly $2.99/month** and **Yearly $14.99/year** (the yearly
-  plan is highlighted as the best value, ~58% cheaper than 12 monthly payments) — notes that all
+  Shows two subscription plans — **Monthly $1.99/month** and **Yearly $8.99/year** (the yearly
+  plan is highlighted as the best value, ~62% cheaper than 12 monthly payments) — notes that all
   subscriptions come with a 14-day trial, and lists the **premium features** a subscription
   unlocks (the **Schedule-swap simulator**, [FE-031](FE-031-schedule-swap-simulator.md), and
   **Weekly awards**, [FE-032](FE-032-weekly-awards-superlatives.md)). Plans
@@ -48,8 +48,8 @@ Rendered with the marketing `Header` (not the app sidebar layout).
       page still renders if it fails.
 - [ ] CTAs route to sign in / connect league (or into the app for signed-in users) and to
       demo mode.
-- [ ] With `billing` ON, a pricing table below the feature grid shows the Monthly ($2.99/month) and
-      Yearly ($14.99/year) plans and lists the premium features (the Schedule-swap simulator and
+- [ ] With `billing` ON, a pricing table below the feature grid shows the Monthly ($1.99/month) and
+      Yearly ($8.99/year) plans and lists the premium features (the Schedule-swap simulator and
       Weekly awards), with no per-plan CTA; with `billing` OFF it is hidden.
 - [ ] The Docs nav link resolves to `/docs`; the Changelog nav link resolves to the in-app
       `/changelog` page ([FE-028](FE-028-changelog-page.md)).

@@ -78,14 +78,14 @@ defineFeature(feature, (test) => {
       await renderRoute(<SubscriptionRequired />, { league });
     });
     then(
-      'I see the monthly price "$2.99/mo" and the yearly price "$14.99/yr"',
+      'I see the monthly price "$1.99/mo" and the yearly price "$8.99/yr"',
       async () => {
         expect(
           await screen.findByRole('radio', { name: /monthly/i }),
-        ).toHaveTextContent('$2.99/mo');
+        ).toHaveTextContent('$1.99/mo');
         expect(
           screen.getByRole('radio', { name: /yearly/i }),
-        ).toHaveTextContent('$14.99/yr');
+        ).toHaveTextContent('$8.99/yr');
       },
     );
   });

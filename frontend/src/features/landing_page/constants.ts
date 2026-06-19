@@ -107,7 +107,7 @@ export const FEATURES: Feature[] = [
 ];
 
 // Subscription plans shown in the landing-page pricing table (FE-001). A yearly
-// subscription is $14.99 vs. $35.88 for 12 monthly payments — ~58% cheaper.
+// subscription is $8.99 vs. $23.88 for 12 monthly payments — ~62% cheaper.
 export const PRICING_PLANS: PricingPlan[] = [
   {
     name: 'Monthly',
@@ -119,7 +119,7 @@ export const PRICING_PLANS: PricingPlan[] = [
     name: 'Yearly',
     price: SUBSCRIPTION_PRICES.YEARLY,
     period: '/year',
-    billedAs: 'Billed annually — save ~58%',
+    billedAs: 'Billed annually — save ~62%',
     highlight: true,
     badge: 'Best value',
   },

@@ -17,7 +17,7 @@ const OPTIONS: {
     value: 'YEARLY',
     label: 'Yearly',
     price: `${SUBSCRIPTION_PRICES.YEARLY}/yr`,
-    hint: 'Save ~58%',
+    hint: 'Save ~62%',
   },
 ];
 
