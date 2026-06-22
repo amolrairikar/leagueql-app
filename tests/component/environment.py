@@ -62,6 +62,10 @@ _ENV = {
     "STRIPE_PRICE_ID_MONTHLY": "price_test_monthly",
     "STRIPE_PRICE_ID_YEARLY": "price_test_yearly",
     "STRIPE_TRIAL_PERIOD_DAYS": "14",
+    # BE-022: the webhook fans out an async invoke of the AI-recap lambda. The
+    # invoke is bridged to call the recap handler directly (no real Lambda runtime).
+    "AI_RECAP_LAMBDA_NAME": "ai-recap-test",
+    "BEDROCK_MODEL_ID": "amazon.nova-lite-v1:0",
 }
 
 
@@ -237,6 +241,53 @@ def _load_handlers(context) -> None:
         "player_metadata.handler", _SRC / "player_metadata" / "handler.py"
     )
 
+    # --- AI weekly recap (BE-022) ------------------------------------------
+    # `highlights` / `generate` share bare names; load them, then the handler.
+    sys.modules["highlights"] = _load_module(
+        "ai_recap.highlights", _SRC / "ai_recap" / "highlights.py"
+    )
+    ai_recap_generate = _load_module(
+        "ai_recap.generate", _SRC / "ai_recap" / "generate.py"
+    )
+    sys.modules["generate"] = ai_recap_generate
+    context.ai_recap_generate = ai_recap_generate
+    context.ai_recap_handler = _load_module(
+        "ai_recap.handler", _SRC / "ai_recap" / "handler.py"
+    )
+
+    # Bedrock is the only external dep in the recap pipeline; mock the
+    # bedrock-runtime Converse client so `generate_recap` returns a fixed narrative
+    # (real DynamoDB via moto runs).
+    bedrock = MagicMock()
+    bedrock.converse.return_value = {
+        "stopReason": "end_turn",
+        "output": {
+            "message": {
+                "content": [
+                    {
+                        "text": (
+                            '{"headline": "Test Headline", "body": "Test recap body."}'
+                        )
+                    }
+                ]
+            }
+        },
+    }
+    ai_recap_generate._client = bedrock
+
+    # Bridge the webhook's fire-and-forget async invoke to call the recap handler
+    # directly (moto[s3,dynamodb] has no Lambda runtime). Mirrors how the API's
+    # onboarder invoke is stubbed.
+    import json as _json
+
+    class _RecapInvokeBridge:
+        def invoke(self, FunctionName, InvocationType, Payload):
+            event = _json.loads(Payload)
+            context.ai_recap_handler.lambda_handler(event, None)
+            return {"StatusCode": 202}
+
+    context.stripe_handler._lambda_client = _RecapInvokeBridge()
+
 
 def before_all(context):
     _stub_newrelic()
@@ -284,6 +335,9 @@ def before_scenario(context, scenario):
     # Reset the API's Lambda-invoke spy each scenario so payload assertions are
     # scoped to the scenario under test.
     context.main.lambda_client.reset_mock()
+    # Reset the mocked Bedrock client so per-scenario call-count assertions (recap
+    # idempotency, BE-022) are scoped to the scenario under test.
+    context.ai_recap_generate._client.converse.reset_mock()
     # Billing ships feature-flagged OFF (BE-017); default it ON for component
     # scenarios since the billing features assume it, along with the shared
     # ``premium_feature`` flag (BE-014). The "billing is disabled" step flips

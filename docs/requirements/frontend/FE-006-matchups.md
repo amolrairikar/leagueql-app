@@ -11,9 +11,11 @@ to see all matchups for that week, and can open a matchup to view the full box s
 - Box score card: `src/components/box-score-card.tsx`.
 - Reads `MATCHUPS#{season}#WEEK#{week}` via
   [BE-005](../backend/BE-005-query-precomputed-views-api.md).
-- Hosts the gated **Weekly Awards & Superlatives** section
-  ([FE-032](FE-032-weekly-awards-superlatives.md)) below the matchup grid; it reuses the page's
-  season + week navigation and is wrapped in `SubscriptionGuard` (premium).
+- Hosts two gated premium sections below the matchup grid, in order: the **Weekly Awards &
+  Superlatives** section ([FE-032](FE-032-weekly-awards-superlatives.md)), then the **AI Weekly
+  Recap** section ([FE-033](FE-033-ai-weekly-recap.md)). Both reuse the page's season + week
+  navigation and are wrapped in `SubscriptionGuard` (premium). Page order: matchup grid →
+  FE-032 superlatives → FE-033 recap.
 
 ## Edge Cases
 - **Playoff weeks:** matchups carry `playoff_tier_type`/`playoff_round`; display the round

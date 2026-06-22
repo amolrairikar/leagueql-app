@@ -715,6 +715,19 @@ module "stripe-webhook-lambda-role" {
           "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/feature-flags",
           "arn:aws:ssm:us-west-2:${var.account_id}:parameter/leagueql/${var.environment}/feature-flags"
         ]
+      },
+      {
+        # BE-022: a genuine premium activation fans out an async invoke of the AI
+        # recap generator lambda (the same-region copy).
+        Sid    = "InvokeAiRecapLambda"
+        Effect = "Allow"
+        Action = [
+          "lambda:InvokeFunction"
+        ]
+        Resource = [
+          "arn:aws:lambda:us-east-1:${var.account_id}:function:leagueql-ai-recap-${var.environment}-east",
+          "arn:aws:lambda:us-west-2:${var.account_id}:function:leagueql-ai-recap-${var.environment}-west"
+        ]
       }
     ]
   })
@@ -1140,6 +1153,121 @@ module "sleeper-refresh-lambda-role" {
         ]
         Resource = [
           "arn:aws:lambda:us-east-1:${var.account_id}:function:leagueql-onboarder-${var.environment}-east"
+        ]
+      }
+    ]
+  })
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    component   = "data-processing"
+    managed-by  = "terraform"
+  }
+}
+
+# Execution role for the AI weekly recap generator lambda (BE-022). Reads
+# MATCHUPS / WEEKLY_STANDINGS / METADATA and reads/writes RECAP items, invokes
+# Amazon Nova Lite on Amazon Bedrock (IAM auth — there is no API-key secret), and
+# reads the Axiom tracing token + feature-flag SSM parameters. Deployed in both
+# regions (invoked by the same-region Stripe webhook), so grants span east + west.
+module "ai-recap-lambda-role" {
+  source           = "../../modules/iam-role"
+  role_name        = "leagueql-${var.environment}-ai-recap-role"
+  role_description = "Execution role for the AI weekly recap generator lambda."
+  trust_policy_json = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+      }
+    ]
+  })
+  role_policy_json = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "CreateLogGroups"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup"
+        ]
+        Resource = [
+          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/lambda/leagueql-ai-recap-${var.environment}-east",
+          "arn:aws:logs:us-west-2:${var.account_id}:log-group:/aws/lambda/leagueql-ai-recap-${var.environment}-west"
+        ]
+      },
+      {
+        Sid    = "CreateLogEvents"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = [
+          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/lambda/leagueql-ai-recap-${var.environment}-east:*",
+          "arn:aws:logs:us-west-2:${var.account_id}:log-group:/aws/lambda/leagueql-ai-recap-${var.environment}-west:*"
+        ]
+      },
+      {
+        # BE-021: continue the OTel trace and export to Axiom; the ingest token is a
+        # SecureString SSM parameter (set out-of-band, never in TF state).
+        Sid    = "ReadAxiomSsmParameter"
+        Effect = "Allow"
+        Action = [
+          "ssm:GetParameter"
+        ]
+        Resource = [
+          "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/axiom/api_token",
+          "arn:aws:ssm:us-west-2:${var.account_id}:parameter/leagueql/${var.environment}/axiom/api_token"
+        ]
+      },
+      {
+        # BE-017: the recap lambda reads the feature-flag parameter to gate on the
+        # premium_feature flag (only paywalled leagues generate recaps).
+        Sid    = "ReadFeatureFlagsSsmParameter"
+        Effect = "Allow"
+        Action = [
+          "ssm:GetParameter"
+        ]
+        Resource = [
+          "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/feature-flags",
+          "arn:aws:ssm:us-west-2:${var.account_id}:parameter/leagueql/${var.environment}/feature-flags"
+        ]
+      },
+      {
+        # Read MATCHUPS / WEEKLY_STANDINGS / METADATA and read/write RECAP items.
+        Sid    = "ReadWriteDynamoDB"
+        Effect = "Allow"
+        Action = [
+          "dynamodb:GetItem",
+          "dynamodb:Query",
+          "dynamodb:PutItem",
+          "dynamodb:UpdateItem"
+        ]
+        Resource = [
+          module.dynamodb.primary_table_arn,
+          module.dynamodb.replica_table_arn
+        ]
+      },
+      {
+        # BE-022: invoke Amazon Nova Lite on Bedrock via IAM (no API-key secret).
+        # Scoped to the Nova Lite foundation model + any region inference profile
+        # for it, in both deployed regions.
+        Sid    = "InvokeBedrockNova"
+        Effect = "Allow"
+        Action = [
+          "bedrock:InvokeModel"
+        ]
+        Resource = [
+          "arn:aws:bedrock:us-east-1::foundation-model/amazon.nova-lite-v1:0*",
+          "arn:aws:bedrock:us-west-2::foundation-model/amazon.nova-lite-v1:0*",
+          "arn:aws:bedrock:us-east-1:${var.account_id}:inference-profile/*.amazon.nova-lite-v1:0*",
+          "arn:aws:bedrock:us-west-2:${var.account_id}:inference-profile/*.amazon.nova-lite-v1:0*"
         ]
       }
     ]

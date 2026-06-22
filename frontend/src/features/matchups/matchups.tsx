@@ -3,6 +3,7 @@ import { Suspense, use, useEffect, useMemo, useRef, useState } from 'react';
 import { BoxScoreCard, type BoxScoreSide } from '@/components/box-score-card';
 import { TeamAvatar } from '@/components/team-avatar';
 import { Skeleton } from '@/components/ui/skeleton';
+import AiRecap from '@/features/ai_recap/ai-recap';
 import {
   getSeasonMatchups,
   getSeasonWeeklyStandings,
@@ -500,6 +501,23 @@ export default function Matchups() {
               featureLabel="Weekly awards & superlatives"
             >
               <WeeklyAwards
+                leagueId={leagueId}
+                platform={platform}
+                season={selectedSeason}
+                selectedWeek={selectedWeek}
+              />
+            </SubscriptionGuard>
+
+            {/* AI weekly recap (FE-033), rendered directly below the superlatives
+                section and gated identically. */}
+            <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mt-8 mb-2.5">
+              AI weekly recap
+            </p>
+            <SubscriptionGuard
+              featureFlag="premium_feature"
+              featureLabel="AI weekly recap"
+            >
+              <AiRecap
                 leagueId={leagueId}
                 platform={platform}
                 season={selectedSeason}

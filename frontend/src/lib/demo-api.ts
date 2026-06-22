@@ -28,6 +28,9 @@ const QUERY_TYPE_TO_SK_BASE: Record<string, string> = {
   // recap's demo toggle. Has no counterpart in the real backend QueryType.
   DRAFT_AUCTION: 'DRAFT_AUCTION',
   PLATFORM_MIGRATION: 'PLATFORM_MIGRATION',
+  // No demo recap dataset; resolves to an empty list → the FE-033 section shows
+  // its empty state in demo mode (BE-022 recaps only exist for real leagues).
+  RECAP: 'RECAP',
 };
 
 // ── Module-level cache (loaded once per session) ───────────────────────────────

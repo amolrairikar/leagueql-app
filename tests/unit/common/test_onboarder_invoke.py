@@ -3,7 +3,7 @@
 import json
 from unittest.mock import MagicMock
 
-from common.onboarder_invoke import invoke_onboarder
+from common.onboarder_invoke import invoke_ai_recap, invoke_onboarder
 
 
 def test_invoke_onboarder_builds_payload_and_invokes():
@@ -100,3 +100,27 @@ def test_invoke_onboarder_allows_none_canonical_id():
     )
     payload = json.loads(client.invoke.call_args.kwargs["Payload"])
     assert payload["canonicalLeagueId"] is None
+
+
+def test_invoke_ai_recap_builds_payload_and_invokes():
+    client = MagicMock()
+    client.invoke.return_value = {"StatusCode": 202}
+
+    result = invoke_ai_recap(
+        lambda_client=client,
+        function_name="recap-fn",
+        canonical_league_id="cid-1",
+        correlation_id="corr-9",
+    )
+
+    assert result == {"StatusCode": 202}
+    kwargs = client.invoke.call_args.kwargs
+    assert kwargs["FunctionName"] == "recap-fn"
+    assert kwargs["InvocationType"] == "Event"
+    payload = json.loads(kwargs["Payload"])
+    assert payload == {
+        "canonical_league_id": "cid-1",
+        "correlation_id": "corr-9",
+        # Tracing disabled in unit tests → empty W3C carrier (BE-021).
+        "trace_context": {},
+    }

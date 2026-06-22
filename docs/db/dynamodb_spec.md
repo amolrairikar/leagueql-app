@@ -315,6 +315,49 @@ Represents matchups for a given week in the fantasy league.
 </details>
 
 <details>
+<summary><b>RECAP</b></summary>
+
+Represents the AI-generated weekly recap ("commissioner's column") for a single league
+season/week (BE-022). One item per league/season/week (mirrors `MATCHUPS` keying). Written by
+the `ai_recap` Lambda and served read-only through the BE-005 query endpoint.
+
+| Attribute | Type | Required | Description |
+|---|---|---|---|
+| `PK` | String | Yes | `LEAGUE#{league_id}` |
+| `SK` | String | Yes | `RECAP#{season}#WEEK#{week}` (week zero-padded, e.g. `WEEK#01`) |
+| `data` | List\<Object\> | Yes | A single-element list holding the recap object (matches every other view's `data` shape so the BE-005 query path returns it generically) |
+
+**`data[n]` object:**
+
+| Attribute | Type | Description |
+|---|---|---|
+| `season` | String | Season year (e.g. `"2025"`) |
+| `week` | String | Week number (e.g. `"1"`) |
+| `headline` | String | LLM-generated headline for the week |
+| `body` | String | LLM-generated narrative recap body |
+| `model` | String | The model/inference-profile id used to generate the recap |
+| `generated_at` | String | ISO 8601 (UTC) generation timestamp |
+
+**Example:**
+```json
+{
+  "PK": "LEAGUE#123456789",
+  "SK": "RECAP#2025#WEEK#01",
+  "data": [
+    {
+      "season": "2025",
+      "week": "1",
+      "headline": "Week 1: Player One Sets the Tone",
+      "body": "Player One's Team opened the season with a statement 95.46–90.12 win...",
+      "model": "amazon.nova-lite-v1:0",
+      "generated_at": "2026-06-19T12:00:00+00:00"
+    }
+  ]
+}
+```
+</details>
+
+<details>
 <summary><b>STANDINGS</b></summary>
 
 Represents standings for a given season in the fantasy league.

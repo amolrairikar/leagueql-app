@@ -135,6 +135,10 @@ export const PREMIUM_FEATURES: PremiumFeature[] = [
     title: 'Weekly awards',
     desc: 'Weekly superlatives that crown the highest scorer, biggest blowout, closest call, and other standout performances for each week.',
   },
+  {
+    title: 'AI weekly recap',
+    desc: "An AI-written commissioner's column for every week — storylines, upsets, awards, and a little trash talk, generated from your league's real results.",
+  },
 ];
 
 export const FOOTER_LINKS: string[] = ['About', 'Privacy', 'GitHub'];

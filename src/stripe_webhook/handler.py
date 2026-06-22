@@ -20,6 +20,7 @@ import base64
 import datetime
 import json
 import os
+import uuid
 
 import boto3
 import botocore.config
@@ -27,6 +28,7 @@ import stripe
 
 from common.feature_flags import is_billing_enabled
 from common.logging_utils import logger
+from common.onboarder_invoke import invoke_ai_recap
 from common.secrets import get_secret_from_env_param
 from common.subscription import (
     DuplicateSubscription,
@@ -42,6 +44,11 @@ _WEBHOOK_SECRET = get_secret_from_env_param("STRIPE_WEBHOOK_SECRET_SSM_PARAM")
 
 _retry_config = botocore.config.Config(retries={"mode": "standard"})
 _dynamodb = boto3.client("dynamodb", config=_retry_config)
+_lambda_client = boto3.client("lambda", config=_retry_config)
+
+# AI-recap Lambda name (BE-022). Set per-env by Terraform; when unset (local /
+# tests) the recap backfill fan-out is skipped.
+_AI_RECAP_LAMBDA_NAME = os.environ.get("AI_RECAP_LAMBDA_NAME")
 
 # Event types that record/refresh an active or trialing subscription.
 _ACTIVATING_EVENTS = {
@@ -151,6 +158,30 @@ def _subscription_id_from_event(event_type: str, obj) -> str | None:
     return _get(obj, "subscription")
 
 
+def _trigger_recap_backfill(canonical_league_id: str) -> None:
+    """Async-invoke the AI-recap Lambda for a league (BE-022); never raises.
+
+    Best-effort fan-out: a recap-invoke failure must never fail the webhook (which
+    is the single writer of subscription state). No-op when ``AI_RECAP_LAMBDA_NAME``
+    is unset (local / tests).
+    """
+    if not _AI_RECAP_LAMBDA_NAME:
+        logger.info("AI_RECAP_LAMBDA_NAME unset; skipping recap backfill")
+        return
+    try:
+        invoke_ai_recap(
+            lambda_client=_lambda_client,
+            function_name=_AI_RECAP_LAMBDA_NAME,
+            canonical_league_id=canonical_league_id,
+            correlation_id=str(uuid.uuid4()),
+        )
+        logger.info("Triggered AI recap backfill for league %s", canonical_league_id)
+    except Exception:
+        logger.exception(
+            "Failed to trigger AI recap backfill for league %s", canonical_league_id
+        )
+
+
 def _process_event(stripe_event: dict) -> None:
     """Apply a verified Stripe event to the league's subscription state."""
     event_type = stripe_event["type"]
@@ -197,7 +228,7 @@ def _process_event(stripe_event: dict) -> None:
             logger.warning("Subscription %s has no end time; skipping", subscription_id)
             return
         try:
-            record_active_subscription(
+            applied = record_active_subscription(
                 canonical_league_id,
                 end_time,
                 subscription_id,
@@ -205,6 +236,12 @@ def _process_event(stripe_event: dict) -> None:
                 platform=native_platform,
                 native_league_id=native_league_id,
             )
+            # A genuine, monotonic apply (not a stale/duplicate no-op) fans out an
+            # async AI-recap backfill (BE-022). The webhook stays the single writer
+            # of subscription state; recap generation is a downstream, idempotent
+            # consumer, so this is fire-and-forget and safe to re-fire on renewals.
+            if applied:
+                _trigger_recap_backfill(canonical_league_id)
         except DuplicateSubscription:
             # A different subscription is already recorded for this league; this
             # one is the duplicate, so cancel it (Layer 3 reconciliation).

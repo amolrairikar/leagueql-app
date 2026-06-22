@@ -37,6 +37,7 @@ criteria. Frontend, backend, and extension features are kept separate.
 | [BE-019](backend/BE-019-sleeper-transactions.md) | Sleeper Transactions (Waivers, Trades, Free Agents) |
 | [BE-020](backend/BE-020-api-otel-tracing.md) | API OpenTelemetry Tracing → Axiom |
 | [BE-021](backend/BE-021-async-chain-otel-propagation.md) | Async Chain OpenTelemetry Trace Propagation |
+| [BE-022](backend/BE-022-ai-weekly-recap.md) | AI Weekly Recap Generator (Bedrock/Nova Lite) |
 
 ## Frontend (`frontend/`)
 | ID | Feature |
@@ -72,6 +73,7 @@ criteria. Frontend, backend, and extension features are kept separate.
 | [FE-030](frontend/FE-030-informational-banner.md) | Informational Banner |
 | [FE-031](frontend/FE-031-schedule-swap-simulator.md) | Schedule-Swap Simulator (Standings premium) |
 | [FE-032](frontend/FE-032-weekly-awards-superlatives.md) | Weekly Awards & Superlatives (Matchups premium) |
+| [FE-033](frontend/FE-033-ai-weekly-recap.md) | AI Weekly Recap (Matchups premium) |
 
 ## Extension (`extension/`)
 | ID | Feature |

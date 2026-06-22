@@ -280,3 +280,64 @@ class TestHelpers:
         resp = webhook_handler._response(200, "OK")
         assert resp["statusCode"] == 200
         assert json.loads(resp["body"]) == {"detail": "OK"}
+
+
+class TestRecapBackfillTrigger:
+    """BE-022: a genuine activation fans out an async AI-recap invoke."""
+
+    def _active_event(self, patched):
+        patched.stripe.Webhook.construct_event.return_value = _stripe_event(
+            "checkout.session.completed", {"subscription": "sub_1"}
+        )
+        patched.stripe.Subscription.retrieve.return_value = {
+            "status": "active",
+            "current_period_end": _FUTURE_TS,
+            "metadata": {"canonical_league_id": "cid"},
+        }
+
+    def test_genuine_apply_invokes_recap(self, patched):
+        patched.record.return_value = True
+        self._active_event(patched)
+        with (
+            patch.object(patched.wh, "_AI_RECAP_LAMBDA_NAME", "recap-fn"),
+            patch.object(patched.wh, "invoke_ai_recap") as mock_invoke,
+        ):
+            resp = patched.wh.lambda_handler(_event(), None)
+        assert resp["statusCode"] == 200
+        mock_invoke.assert_called_once()
+        assert mock_invoke.call_args.kwargs["canonical_league_id"] == "cid"
+        assert mock_invoke.call_args.kwargs["function_name"] == "recap-fn"
+
+    def test_non_advancing_write_does_not_invoke(self, patched):
+        patched.record.return_value = False  # stale/duplicate no-op
+        self._active_event(patched)
+        with (
+            patch.object(patched.wh, "_AI_RECAP_LAMBDA_NAME", "recap-fn"),
+            patch.object(patched.wh, "invoke_ai_recap") as mock_invoke,
+        ):
+            patched.wh.lambda_handler(_event(), None)
+        mock_invoke.assert_not_called()
+
+    def test_no_lambda_name_skips_invoke(self, patched):
+        patched.record.return_value = True
+        self._active_event(patched)
+        with (
+            patch.object(patched.wh, "_AI_RECAP_LAMBDA_NAME", None),
+            patch.object(patched.wh, "invoke_ai_recap") as mock_invoke,
+        ):
+            patched.wh.lambda_handler(_event(), None)
+        mock_invoke.assert_not_called()
+
+    def test_invoke_failure_does_not_fail_webhook(self, patched):
+        patched.record.return_value = True
+        self._active_event(patched)
+        with (
+            patch.object(patched.wh, "_AI_RECAP_LAMBDA_NAME", "recap-fn"),
+            patch.object(
+                patched.wh, "invoke_ai_recap", side_effect=RuntimeError("boom")
+            ),
+        ):
+            resp = patched.wh.lambda_handler(_event(), None)
+        # Best-effort: a recap-invoke failure must not fail the webhook (200, dedup written).
+        assert resp["statusCode"] == 200
+        patched.ddb.put_item.assert_called_once()
