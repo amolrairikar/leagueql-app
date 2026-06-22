@@ -19,7 +19,7 @@ const RECAP = {
   week: '1',
   headline: 'Week 1 Recap: Alice Cruises',
   body: 'Alice rolled to a comfortable win to open the season.',
-  model: 'amazon.nova-lite-v1:0',
+  model: 'snippet-v1',
   generated_at: '2026-06-19T12:00:00+00:00',
 };
 
@@ -56,7 +56,7 @@ defineFeature(feature, (test) => {
   // boundary and needs a concrete week to fetch. The page must feed it the resolved
   // active week (latest when none picked), so the recap loads on first render — not
   // only after the user clicks a week button.
-  test('The AI recap loads for the latest week on first render', ({
+  test('The weekly recap loads for the latest week on first render', ({
     given,
     when,
     then,

@@ -13,7 +13,7 @@ to see all matchups for that week, and can open a matchup to view the full box s
   [BE-005](../backend/BE-005-query-precomputed-views-api.md).
 - Hosts two gated premium sections below the matchup grid, in order: the **Weekly Awards &
   Superlatives** section ([FE-032](FE-032-weekly-awards-superlatives.md)), then the **AI Weekly
-  Recap** section ([FE-033](FE-033-ai-weekly-recap.md)). Both reuse the page's season + week
+  Recap** section ([FE-033](FE-033-weekly-recap.md)). Both reuse the page's season + week
   navigation and are wrapped in `SubscriptionGuard` (premium). Page order: matchup grid →
   FE-032 superlatives → FE-033 recap.
 

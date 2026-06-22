@@ -62,9 +62,9 @@ event-driven webhook.
   `subscription_end_time` to the past (gate flips to expired live). When the recorded
   subscription is *trialing*, it also writes the durable `TRIAL_USED` record keyed by the
   `(platform, native_league_id)` read from the subscription metadata (see the trial edge case).
-  - **Recap backfill side-effect ([BE-022](BE-022-ai-weekly-recap.md)):** when
+  - **Recap backfill side-effect ([BE-022](BE-022-weekly-recap.md)):** when
     `record_active_subscription` returns `True` (a genuine, monotonic apply) and the status is
-    active/trialing, the webhook async-invokes the AI-recap Lambda for the league
+    active/trialing, the webhook async-invokes the recap Lambda for the league
     (fire-and-forget, `InvocationType="Event"`, with the webhook's `trace_context`). The webhook
     stays the **single writer** of subscription state; recap generation is a downstream,
     idempotent consumer, so a recap failure never affects subscription convergence and

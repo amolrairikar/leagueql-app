@@ -676,14 +676,14 @@ module "stripe-webhook-lambda-role" {
       {
         # BE-022: a genuine premium activation fans out an async invoke of the AI
         # recap generator lambda (the same-region copy).
-        Sid    = "InvokeAiRecapLambda"
+        Sid    = "InvokeRecapLambda"
         Effect = "Allow"
         Action = [
           "lambda:InvokeFunction"
         ]
         Resource = [
-          "arn:aws:lambda:us-east-1:${var.account_id}:function:leagueql-ai-recap-${var.environment}-east",
-          "arn:aws:lambda:us-west-2:${var.account_id}:function:leagueql-ai-recap-${var.environment}-west"
+          "arn:aws:lambda:us-east-1:${var.account_id}:function:leagueql-recap-${var.environment}-east",
+          "arn:aws:lambda:us-west-2:${var.account_id}:function:leagueql-recap-${var.environment}-west"
         ]
       }
     ]
@@ -1136,15 +1136,16 @@ module "sleeper-refresh-lambda-role" {
   }
 }
 
-# Execution role for the AI weekly recap generator lambda (BE-022). Reads
-# MATCHUPS / WEEKLY_STANDINGS / METADATA and reads/writes RECAP items, invokes
-# Amazon Nova Lite on Amazon Bedrock (IAM auth — there is no API-key secret), and
-# reads the Axiom tracing token + feature-flag SSM parameters. Deployed in both
-# regions (invoked by the same-region Stripe webhook), so grants span east + west.
-module "ai-recap-lambda-role" {
+# Execution role for the weekly recap generator lambda (BE-022). Reads
+# MATCHUPS / WEEKLY_STANDINGS / METADATA and reads/writes RECAP items, and reads
+# the Axiom tracing token + feature-flag SSM parameters. Recaps are composed
+# deterministically from a snippet phrase bank (no LLM), so no Bedrock grant is
+# needed. Deployed in both regions (invoked by the same-region Stripe webhook), so
+# grants span east + west.
+module "recap-lambda-role" {
   source           = "../../modules/iam-role"
-  role_name        = "leagueql-${var.environment}-ai-recap-role"
-  role_description = "Execution role for the AI weekly recap generator lambda."
+  role_name        = "leagueql-${var.environment}-recap-role"
+  role_description = "Execution role for the weekly recap generator lambda."
   trust_policy_json = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -1167,8 +1168,8 @@ module "ai-recap-lambda-role" {
           "logs:CreateLogGroup"
         ]
         Resource = [
-          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/lambda/leagueql-ai-recap-${var.environment}-east",
-          "arn:aws:logs:us-west-2:${var.account_id}:log-group:/aws/lambda/leagueql-ai-recap-${var.environment}-west"
+          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/lambda/leagueql-recap-${var.environment}-east",
+          "arn:aws:logs:us-west-2:${var.account_id}:log-group:/aws/lambda/leagueql-recap-${var.environment}-west"
         ]
       },
       {
@@ -1179,8 +1180,8 @@ module "ai-recap-lambda-role" {
           "logs:PutLogEvents"
         ]
         Resource = [
-          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/lambda/leagueql-ai-recap-${var.environment}-east:*",
-          "arn:aws:logs:us-west-2:${var.account_id}:log-group:/aws/lambda/leagueql-ai-recap-${var.environment}-west:*"
+          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/lambda/leagueql-recap-${var.environment}-east:*",
+          "arn:aws:logs:us-west-2:${var.account_id}:log-group:/aws/lambda/leagueql-recap-${var.environment}-west:*"
         ]
       },
       {
@@ -1222,22 +1223,6 @@ module "ai-recap-lambda-role" {
         Resource = [
           module.dynamodb.primary_table_arn,
           module.dynamodb.replica_table_arn
-        ]
-      },
-      {
-        # BE-022: invoke Amazon Nova Lite on Bedrock via IAM (no API-key secret).
-        # Scoped to the Nova Lite foundation model + any region inference profile
-        # for it, in both deployed regions.
-        Sid    = "InvokeBedrockNova"
-        Effect = "Allow"
-        Action = [
-          "bedrock:InvokeModel"
-        ]
-        Resource = [
-          "arn:aws:bedrock:us-east-1::foundation-model/amazon.nova-lite-v1:0*",
-          "arn:aws:bedrock:us-west-2::foundation-model/amazon.nova-lite-v1:0*",
-          "arn:aws:bedrock:us-east-1:${var.account_id}:inference-profile/*.amazon.nova-lite-v1:0*",
-          "arn:aws:bedrock:us-west-2:${var.account_id}:inference-profile/*.amazon.nova-lite-v1:0*"
         ]
       }
     ]

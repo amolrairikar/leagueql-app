@@ -1,4 +1,4 @@
-"""Tests for ai_recap/highlights.py (deterministic, no LLM)."""
+"""Tests for recap/highlights.py (deterministic, no LLM)."""
 
 from decimal import Decimal
 
@@ -33,8 +33,8 @@ def _matchup(
 
 
 class TestComputeHighlights:
-    def test_basic_scores_and_winner(self, ai_recap_highlights):
-        h = ai_recap_highlights.compute_highlights(
+    def test_basic_scores_and_winner(self, recap_highlights):
+        h = recap_highlights.compute_highlights(
             [_matchup(Decimal("100.5"), Decimal("90.25"))], [], "2025", "1"
         )
         assert h["season"] == "2025"
@@ -52,18 +52,18 @@ class TestComputeHighlights:
         assert m["playoff_round"] is None
         assert h["is_playoff_week"] is False
 
-    def test_regular_season_with_missing_playoff_fields(self, ai_recap_highlights):
+    def test_regular_season_with_missing_playoff_fields(self, recap_highlights):
         # An older matchup row without the playoff keys defaults to regular-season.
         bare = _matchup(50, 40)
         del bare["playoff_tier_type"]
         del bare["playoff_round"]
-        h = ai_recap_highlights.compute_highlights([bare], [], "2025", "1")
+        h = recap_highlights.compute_highlights([bare], [], "2025", "1")
         assert h["is_playoff_week"] is False
         assert h["matchups"][0]["is_playoff"] is False
         assert h["matchups"][0]["playoff_tier_type"] == "NONE"
 
-    def test_playoff_matchup_carries_round_and_flags_week(self, ai_recap_highlights):
-        h = ai_recap_highlights.compute_highlights(
+    def test_playoff_matchup_carries_round_and_flags_week(self, recap_highlights):
+        h = recap_highlights.compute_highlights(
             [
                 _matchup(
                     110,
@@ -85,7 +85,7 @@ class TestComputeHighlights:
         assert m["loser"] == "bob"
 
     def test_mixed_week_flags_playoff_when_any_game_is_postseason(
-        self, ai_recap_highlights
+        self, recap_highlights
     ):
         regular = _matchup(50, 40)
         playoff = {
@@ -97,19 +97,19 @@ class TestComputeHighlights:
             "team_b_id": "4",
             "team_b_display_name": "dave",
         }
-        h = ai_recap_highlights.compute_highlights([regular, playoff], [], "2025", "15")
+        h = recap_highlights.compute_highlights([regular, playoff], [], "2025", "15")
         assert h["is_playoff_week"] is True
         by_winner = {m["winner"]: m for m in h["matchups"]}
         assert by_winner["alice"]["is_playoff"] is False
         assert by_winner["carol"]["is_playoff"] is True
         assert by_winner["carol"]["playoff_round"] == "Semifinals"
 
-    def test_top_scorer_and_bust(self, ai_recap_highlights):
+    def test_top_scorer_and_bust(self, recap_highlights):
         starters = [
             {"full_name": "QB One", "position": "QB", "points_scored": Decimal("30.5")},
             {"full_name": "RB Two", "position": "RB", "points_scored": Decimal("2.1")},
         ]
-        h = ai_recap_highlights.compute_highlights(
+        h = recap_highlights.compute_highlights(
             [_matchup(50, 40, a_starters=starters)], [], "2025", "1"
         )
         side = h["matchups"][0]["team_a"]
@@ -118,7 +118,7 @@ class TestComputeHighlights:
         assert side["biggest_bust"]["name"] == "RB Two"
         assert side["biggest_bust"]["points"] == 2.1
 
-    def test_fantasy_position_preferred_over_position(self, ai_recap_highlights):
+    def test_fantasy_position_preferred_over_position(self, recap_highlights):
         starters = [
             {
                 "full_name": "Flex Guy",
@@ -127,29 +127,29 @@ class TestComputeHighlights:
                 "points_scored": 12,
             }
         ]
-        h = ai_recap_highlights.compute_highlights(
+        h = recap_highlights.compute_highlights(
             [_matchup(50, 40, a_starters=starters)], [], "2025", "1"
         )
         assert h["matchups"][0]["team_a"]["top_scorer"]["position"] == "FLEX"
 
-    def test_bench_points_summed(self, ai_recap_highlights):
+    def test_bench_points_summed(self, recap_highlights):
         bench = [
             {"full_name": "Bench A", "points_scored": Decimal("5.5")},
             {"full_name": "Bench B", "points_scored": Decimal("4.5")},
         ]
-        h = ai_recap_highlights.compute_highlights(
+        h = recap_highlights.compute_highlights(
             [_matchup(50, 40, a_bench=bench)], [], "2025", "1"
         )
         assert h["matchups"][0]["team_a"]["points_on_bench"] == 10.0
 
-    def test_no_starters_yields_none(self, ai_recap_highlights):
-        h = ai_recap_highlights.compute_highlights([_matchup(50, 40)], [], "2025", "1")
+    def test_no_starters_yields_none(self, recap_highlights):
+        h = recap_highlights.compute_highlights([_matchup(50, 40)], [], "2025", "1")
         assert h["matchups"][0]["team_a"]["top_scorer"] is None
         assert h["matchups"][0]["team_a"]["biggest_bust"] is None
         assert h["matchups"][0]["team_a"]["points_on_bench"] == 0.0
 
-    def test_tie_has_no_winner_and_no_margin_entry(self, ai_recap_highlights):
-        h = ai_recap_highlights.compute_highlights([_matchup(75, 75)], [], "2025", "1")
+    def test_tie_has_no_winner_and_no_margin_entry(self, recap_highlights):
+        h = recap_highlights.compute_highlights([_matchup(75, 75)], [], "2025", "1")
         m = h["matchups"][0]
         assert m["tied"] is True
         assert m["winner"] is None
@@ -157,14 +157,14 @@ class TestComputeHighlights:
         # A tie contributes no decided margin, so week_extremes is empty.
         assert h["week_extremes"] == {}
 
-    def test_bye_self_matchup_skipped(self, ai_recap_highlights):
+    def test_bye_self_matchup_skipped(self, recap_highlights):
         bye = _matchup(100, 0)
         bye["team_b_id"] = "1"  # same as team_a_id → placeholder
-        h = ai_recap_highlights.compute_highlights([bye], [], "2025", "1")
+        h = recap_highlights.compute_highlights([bye], [], "2025", "1")
         assert h["matchups"] == []
         assert h["week_extremes"] == {}
 
-    def test_week_extremes_biggest_and_closest(self, ai_recap_highlights):
+    def test_week_extremes_biggest_and_closest(self, recap_highlights):
         blowout = _matchup(120, 80)  # margin 40
         close = {
             **_matchup(101, 100),  # margin 1
@@ -173,13 +173,13 @@ class TestComputeHighlights:
             "team_b_id": "4",
             "team_b_display_name": "dave",
         }
-        h = ai_recap_highlights.compute_highlights([blowout, close], [], "2025", "1")
+        h = recap_highlights.compute_highlights([blowout, close], [], "2025", "1")
         assert h["week_extremes"]["biggest_margin"]["margin"] == 40.0
         assert h["week_extremes"]["biggest_margin"]["winner"] == "alice"
         assert h["week_extremes"]["closest_margin"]["margin"] == 1.0
         assert h["week_extremes"]["closest_margin"]["winner"] == "carol"
 
-    def test_standings_filtered_to_week_and_ranked(self, ai_recap_highlights):
+    def test_standings_filtered_to_week_and_ranked(self, recap_highlights):
         rows = [
             {
                 "snapshot_week": "1",
@@ -204,7 +204,7 @@ class TestComputeHighlights:
                 "total_pf": Decimal("200"),
             },
         ]
-        h = ai_recap_highlights.compute_highlights(
+        h = recap_highlights.compute_highlights(
             [_matchup(100.5, 90.25)], rows, "2025", "1"
         )
         standings = h["standings"]
@@ -212,14 +212,14 @@ class TestComputeHighlights:
         assert standings[0]["manager"] == "alice"  # more wins → rank 1
         assert standings[1]["manager"] == "bob"
 
-    def test_empty_week(self, ai_recap_highlights):
-        h = ai_recap_highlights.compute_highlights([], [], "2025", "3")
+    def test_empty_week(self, recap_highlights):
+        h = recap_highlights.compute_highlights([], [], "2025", "3")
         assert h["matchups"] == []
         assert h["week_extremes"] == {}
         assert h["standings"] == []
 
-    def test_non_numeric_score_coerced_to_zero(self, ai_recap_highlights):
-        h = ai_recap_highlights.compute_highlights(
+    def test_non_numeric_score_coerced_to_zero(self, recap_highlights):
+        h = recap_highlights.compute_highlights(
             [_matchup("not-a-number", 50)], [], "2025", "1"
         )
         m = h["matchups"][0]

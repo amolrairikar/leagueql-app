@@ -24,7 +24,7 @@ locals {
   player_metadata_role_arn  = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-sleeper-player-metadata-fetcher-role"
   sleeper_refresh_role_arn  = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-sleeper-league-refresh-role"
   stripe_webhook_role_arn   = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-stripe-webhook-role"
-  ai_recap_role_arn         = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-ai-recap-role"
+  recap_role_arn         = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-recap-role"
   discord_notifier_role_arn = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-discord-notifier-role"
 
   # Sleeper player stats refresher runs as a Fargate task (see BE-011). Roles are
@@ -212,9 +212,9 @@ module "stripe_webhook_lambda" {
     # `billing` flag to no-op when billing is off; same SSM source as the API.
     FEATURE_FLAGS_SSM_PARAM = "/leagueql/${var.environment}/feature-flags"
 
-    # BE-022: a genuine premium activation async-invokes this same-region AI-recap
+    # BE-022: a genuine premium activation async-invokes this same-region recap
     # lambda to backfill recaps. Fire-and-forget; the recap side is idempotent.
-    AI_RECAP_LAMBDA_NAME = "leagueql-ai-recap-${var.environment}-${local.region}"
+    RECAP_LAMBDA_NAME = "leagueql-recap-${var.environment}-${local.region}"
   }
 
   tags = {
@@ -225,30 +225,27 @@ module "stripe_webhook_lambda" {
   }
 }
 
-# AI weekly recap generator (BE-022). Deployed in both regions so each region's
-# Stripe webhook invokes its same-region copy. Authenticates to Bedrock via its IAM
-# execution role — no API-key secret. Continues the webhook's OTel trace (BE-021).
-module "ai_recap_lambda" {
+# Weekly recap generator (BE-022). Deployed in both regions so each region's
+# Stripe webhook invokes its same-region copy. Recaps are composed deterministically
+# from a snippet phrase bank (no LLM / external dep). Continues the webhook's OTel
+# trace (BE-021).
+module "recap_lambda" {
   source = "../modules/lambda"
 
-  function_name        = "leagueql-ai-recap-${var.environment}-${local.region}"
-  function_description = "Generates AI weekly recap narratives for premium leagues"
-  role_arn             = local.ai_recap_role_arn
+  function_name        = "leagueql-recap-${var.environment}-${local.region}"
+  function_description = "Generates weekly recap narratives for premium leagues"
+  role_arn             = local.recap_role_arn
   handler              = "handler.lambda_handler"
   memory_size          = 512
-  # Sequential per-week Bedrock calls during a historical backfill can run long.
-  timeout       = 300
+  # Deterministic composition is instant; the cap is the historical backfill's
+  # DynamoDB enumeration + per-week writes.
+  timeout       = 60
   log_retention = 7
   s3_bucket     = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
-  s3_key        = "lambda-code-artifacts/ai_recap-lambda.zip"
+  s3_key        = "lambda-code-artifacts/recap-lambda.zip"
 
   environment_variables = {
     DYNAMODB_TABLE_NAME = "leagueql-table-${var.environment}"
-
-    # Amazon Nova Lite on Bedrock (IAM auth). Overridable to a region-specific
-    # inference-profile id (e.g. us.amazon.nova-lite-v1:0) without a code change.
-    # (AWS_REGION is set by Lambda automatically and read by the Bedrock client.)
-    BEDROCK_MODEL_ID = "amazon.nova-lite-v1:0"
 
     # BE-017: gate recap generation on the premium_feature flag (same SSM source).
     FEATURE_FLAGS_SSM_PARAM = "/leagueql/${var.environment}/feature-flags"

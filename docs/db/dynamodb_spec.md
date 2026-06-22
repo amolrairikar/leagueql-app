@@ -317,9 +317,10 @@ Represents matchups for a given week in the fantasy league.
 <details>
 <summary><b>RECAP</b></summary>
 
-Represents the AI-generated weekly recap ("commissioner's column") for a single league
-season/week (BE-022). One item per league/season/week (mirrors `MATCHUPS` keying). Written by
-the `ai_recap` Lambda and served read-only through the BE-005 query endpoint.
+Represents the weekly recap ("commissioner's column") for a single league season/week (BE-022),
+composed deterministically from a snippet phrase bank (no LLM). One item per league/season/week
+(mirrors `MATCHUPS` keying). Written by the `recap` Lambda and served read-only through the
+BE-005 query endpoint.
 
 | Attribute | Type | Required | Description |
 |---|---|---|---|
@@ -333,9 +334,9 @@ the `ai_recap` Lambda and served read-only through the BE-005 query endpoint.
 |---|---|---|
 | `season` | String | Season year (e.g. `"2025"`) |
 | `week` | String | Week number (e.g. `"1"`) |
-| `headline` | String | LLM-generated headline for the week |
-| `body` | String | LLM-generated narrative recap body |
-| `model` | String | The model/inference-profile id used to generate the recap |
+| `headline` | String | Headline for the week |
+| `body` | String | Narrative recap body (one paragraph per matchup) |
+| `model` | String | Recap composer version (e.g. `snippet-v1`) |
 | `generated_at` | String | ISO 8601 (UTC) generation timestamp |
 
 **Example:**
@@ -347,9 +348,9 @@ the `ai_recap` Lambda and served read-only through the BE-005 query endpoint.
     {
       "season": "2025",
       "week": "1",
-      "headline": "Week 1: Player One Sets the Tone",
-      "body": "Player One's Team opened the season with a statement 95.46–90.12 win...",
-      "model": "amazon.nova-lite-v1:0",
+      "headline": "Box Scores Don't Lie",
+      "body": "Player One's Team opened the season with a statement 95.46-90.12 win...",
+      "model": "snippet-v1",
       "generated_at": "2026-06-19T12:00:00+00:00"
     }
   ]

@@ -3,7 +3,7 @@
 import json
 from unittest.mock import MagicMock
 
-from common.onboarder_invoke import invoke_ai_recap, invoke_onboarder
+from common.onboarder_invoke import invoke_recap, invoke_onboarder
 
 
 def test_invoke_onboarder_builds_payload_and_invokes():
@@ -102,11 +102,11 @@ def test_invoke_onboarder_allows_none_canonical_id():
     assert payload["canonicalLeagueId"] is None
 
 
-def test_invoke_ai_recap_builds_payload_and_invokes():
+def test_invoke_recap_builds_payload_and_invokes():
     client = MagicMock()
     client.invoke.return_value = {"StatusCode": 202}
 
-    result = invoke_ai_recap(
+    result = invoke_recap(
         lambda_client=client,
         function_name="recap-fn",
         canonical_league_id="cid-1",

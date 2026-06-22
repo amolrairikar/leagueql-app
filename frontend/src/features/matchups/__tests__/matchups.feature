@@ -12,7 +12,7 @@ Feature: Matchups and box scores (FE-006)
     When I open the matchups page
     Then I see "Failed to load matchups."
 
-  Scenario: The AI recap loads for the latest week on first render
+  Scenario: The weekly recap loads for the latest week on first render
     Given matchup and recap data are available
     When I open the matchups page
     Then I see the recap headline "Week 1 Recap: Alice Cruises"

@@ -25,7 +25,7 @@ function EmptyState() {
   );
 }
 
-function AiRecapInner({ promise }: { promise: Promise<RecapResult> }) {
+function RecapInner({ promise }: { promise: Promise<RecapResult> }) {
   const result = use(promise);
 
   if (!result.ok) {
@@ -71,11 +71,11 @@ function SkeletonRecap() {
 }
 
 /**
- * AI weekly recap section for the matchups page (FE-033). Fetches and renders the
+ * Weekly recap section for the matchups page (FE-033). Fetches and renders the
  * stored recap for the selected season/week; empty state when none exists yet,
  * inline error on failure. Mirrors the `<WeeklyAwards>` premium-gated display.
  */
-export default function AiRecap({
+export default function Recap({
   leagueId,
   platform,
   season,
@@ -99,7 +99,7 @@ export default function AiRecap({
 
   return (
     <Suspense fallback={<SkeletonRecap />}>
-      <AiRecapInner promise={promise} />
+      <RecapInner promise={promise} />
     </Suspense>
   );
 }

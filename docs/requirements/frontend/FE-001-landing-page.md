@@ -19,7 +19,7 @@ Rendered with the marketing `Header` (not the app sidebar layout).
   subscriptions come with a 14-day trial, and lists the **premium features** a subscription
   unlocks (the **Schedule-swap simulator**, [FE-031](FE-031-schedule-swap-simulator.md),
   **Weekly awards**, [FE-032](FE-032-weekly-awards-superlatives.md), and the **AI weekly
-  recap**, [FE-033](FE-033-ai-weekly-recap.md)). Plans
+  recap**, [FE-033](FE-033-weekly-recap.md)). Plans
   and premium features come from `PRICING_PLANS` / `PREMIUM_FEATURES` in `constants.ts`. The table
   is **informational** — there is no per-plan CTA (checkout needs a connected league), and the
   blurb notes a subscription is shared across the whole league (every member gets access) and that

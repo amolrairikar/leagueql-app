@@ -2,7 +2,7 @@
 
 Invoked asynchronously by the Stripe billing webhook on a genuine premium
 activation (``InvocationType="Event"``) with
-``{canonical_league_id, correlation_id, trace_context}``. Backfills an AI recap
+``{canonical_league_id, correlation_id, trace_context}``. Backfills an recap
 for every historical season/week of the league that has matchups, idempotently
 (an existing ``RECAP`` item for a week is skipped — safe under Stripe's
 at-least-once delivery, renewals, partial-completion retries, and re-upgrades).
@@ -11,12 +11,12 @@ Mirrors the existing async workers (``sleeper_refresh``, ``processor``): module-
 ``init_tracing`` + a ``traced_handler`` span continuing the webhook's trace
 (BE-021), a best-effort ``JOB_STATUS`` item (BE-008), and a feature-flag gate.
 
-Generation cost is controlled three ways: premium-only (feature-flag +
-subscription re-check), deterministic highlights in / prose out (no number
-hallucination, bounded tokens), and per-week idempotency (no double-spend).
+Generation is controlled two ways: premium-only (feature-flag + subscription
+re-check) and per-week idempotency (an existing RECAP item is skipped). Recaps are
+composed deterministically from a snippet phrase bank (``generate.py``) — no LLM,
+so generation is instant and runs single-threaded.
 """
 
-import concurrent.futures
 import datetime
 import os
 
@@ -33,16 +33,10 @@ from highlights import compute_highlights
 
 # Continue the end-to-end trace the webhook started (BE-021). No-op unless Axiom
 # is configured, so tests / unconfigured envs are unaffected.
-init_tracing("leagueql-ai-recap")
+init_tracing("leagueql-recap")
 
 _retry_config = botocore.config.Config(retries={"mode": "standard"})
 _dynamodb = boto3.resource("dynamodb", config=_retry_config)
-
-# How many weeks to generate concurrently. Bedrock enforces per-account
-# requests/tokens-per-minute quotas on Nova Lite, so this is deliberately small —
-# a bounded pool collapses the backfill's wall-clock time while the Bedrock
-# client's own retry/backoff absorbs the occasional throttle. Tune via env.
-MAX_CONCURRENCY = max(1, int(os.environ.get("RECAP_MAX_CONCURRENCY", "4")))
 
 
 def _table():
@@ -140,10 +134,9 @@ def _write_recap(
 
 
 def _generate_and_write(table, canonical_league_id: str, work: dict) -> bool:
-    """Generate + persist one week's recap. Returns True on success, False on a
-    handled generation failure. Runs in a worker thread (the boto3 Bedrock client
-    and the DynamoDB client are thread-safe); reads were done up front, so the only
-    DynamoDB call here is the per-week ``put_item``.
+    """Compose + persist one week's recap. Returns True on success, False on a
+    handled generation failure. Reads were done up front, so the only DynamoDB
+    call here is the per-week ``put_item``.
     """
     season, ww, week = work["season"], work["ww"], work["week"]
     try:
@@ -164,22 +157,21 @@ def _generate_and_write(table, canonical_league_id: str, work: dict) -> bool:
 
 
 def lambda_handler(event, context) -> dict:
-    """Backfill AI recaps for every un-recapped week of a premium league.
+    """Backfill recaps for every un-recapped week of a premium league.
 
     Always returns a summary dict; per-week generation failures are recorded on
     JOB_STATUS (failure_code ``RECAP``) but do not raise, so one bad week never
-    loses the others. Weeks are generated concurrently (bounded by
-    ``MAX_CONCURRENCY``) to keep the backfill within the Lambda timeout.
+    loses the others.
     """
     canonical_league_id = event.get("canonical_league_id")
     correlation_id = event.get("correlation_id")
     logger.info(
-        "AI recap backfill: canonical_league_id=%s correlation_id=%s",
+        "recap backfill: canonical_league_id=%s correlation_id=%s",
         canonical_league_id,
         correlation_id,
     )
 
-    with traced_handler("ai_recap", carrier=event.get("trace_context")):
+    with traced_handler("recap", carrier=event.get("trace_context")):
         if not canonical_league_id:
             logger.warning("No canonical_league_id in event; nothing to do")
             return {"status": "skipped", "reason": "no_league"}
@@ -236,18 +228,11 @@ def lambda_handler(event, context) -> dict:
 
         generated = 0
         failed = 0
-        if work_items:
-            workers = min(MAX_CONCURRENCY, len(work_items))
-            with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
-                results = pool.map(
-                    lambda w: _generate_and_write(table, canonical_league_id, w),
-                    work_items,
-                )
-                for ok in results:
-                    if ok:
-                        generated += 1
-                    else:
-                        failed += 1
+        for work in work_items:
+            if _generate_and_write(table, canonical_league_id, work):
+                generated += 1
+            else:
+                failed += 1
 
         status = "FAILED" if failed else "COMPLETED"
         write_job_status(
@@ -257,7 +242,7 @@ def lambda_handler(event, context) -> dict:
             canonical_league_id=canonical_league_id,
         )
         logger.info(
-            "AI recap backfill done: generated=%d skipped=%d failed=%d",
+            "recap backfill done: generated=%d skipped=%d failed=%d",
             generated,
             skipped,
             failed,

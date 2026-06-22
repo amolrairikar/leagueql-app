@@ -62,13 +62,13 @@ def invoke_onboarder(
     )
 
 
-def invoke_ai_recap(
+def invoke_recap(
     lambda_client: Any,
     function_name: str,
     canonical_league_id: str,
     correlation_id: str,
 ) -> dict:
-    """Fire-and-forget invoke of the AI-recap Lambda for a league (BE-022).
+    """Fire-and-forget invoke of the recap Lambda for a league (BE-022).
 
     Used by the Stripe webhook on a genuine premium activation to backfill recaps
     out of band. Async (``InvocationType="Event"``) and idempotent on the recap
@@ -79,7 +79,7 @@ def invoke_ai_recap(
 
     Args:
         lambda_client: A boto3 Lambda client.
-        function_name: The AI-recap Lambda's function name.
+        function_name: The recap Lambda's function name.
         canonical_league_id: The league to backfill recaps for.
         correlation_id: Correlation ID propagated for request tracing / JOB_STATUS.
 

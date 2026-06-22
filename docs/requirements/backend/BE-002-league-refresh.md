@@ -23,8 +23,8 @@ when the league is already up to date based on current NFL state.
   NFL state, return `409` "League is already up to date."
 - **ESPN refresh season:** must use the user-entered `latestSeason` from the request, not
   the previously-onboarded season returned by `getLeague`. (See memory: ESPN refresh season bug.)
-- **AI recaps are not idempotent:** any AI-generated season recaps must be overwritten on
-  refresh, not skipped. (See memory: AI recap idempotency.)
+- **Recaps are not idempotent across refresh:** any generated season recaps must be overwritten
+  on refresh, not skipped. (See memory: recap idempotency.)
 - **Sleeper league not yet in `LEAGUE_LOOKUP`:** allowed — the onboarder resolves the
   canonical league via the `previous_league_id` chain (does not 404 like ESPN would).
 - **New Sleeper season not yet started:** when a refresh resolves only a not-yet-started

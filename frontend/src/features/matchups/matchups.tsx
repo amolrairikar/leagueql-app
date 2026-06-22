@@ -11,7 +11,6 @@ import {
 import { BoxScoreCard, type BoxScoreSide } from '@/components/box-score-card';
 import { TeamAvatar } from '@/components/team-avatar';
 import { Skeleton } from '@/components/ui/skeleton';
-import AiRecap from '@/features/ai_recap/ai-recap';
 import {
   getSeasonMatchups,
   getSeasonWeeklyStandings,
@@ -19,6 +18,7 @@ import {
   type PlayerStat,
   type WeeklyStandingItem,
 } from '@/features/matchups/api-calls';
+import Recap from '@/features/recap/recap';
 import SeasonSelect from '@/features/season_select/season-select';
 import { SubscriptionGuard } from '@/features/subscription/subscription-guard';
 import WeeklyAwards from '@/features/weekly_awards/weekly-awards';
@@ -368,7 +368,7 @@ function MatchupsContent({
 
   // Resolve the displayed week (the latest week when nothing is explicitly
   // selected) and report it up, so sibling sections gated outside this Suspense
-  // boundary — the AI recap (FE-033), which needs a concrete week to fetch — can
+  // boundary — the weekly recap (FE-033), which needs a concrete week to fetch — can
   // track the same week even before the user clicks a week button.
   const data = result.ok ? result.data : null;
   const weeks = data?.weeks ?? [];
@@ -453,7 +453,7 @@ export default function Matchups() {
   const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
   // The actually-displayed week reported by MatchupsContent: equals selectedWeek
   // when set, else the latest week. Premium sections gated outside the matchups
-  // Suspense boundary (the AI recap, FE-033) key their fetch off this so they load
+  // Suspense boundary (the weekly recap, FE-033) key their fetch off this so they load
   // on first render rather than waiting for an explicit week click.
   const [resolvedWeek, setResolvedWeek] = useState<number | null>(null);
   const [selectedMatchup, setSelectedMatchup] = useState<number | null>(null);
@@ -539,16 +539,16 @@ export default function Matchups() {
               />
             </SubscriptionGuard>
 
-            {/* AI weekly recap (FE-033), rendered directly below the superlatives
+            {/* Weekly recap (FE-033), rendered directly below the superlatives
                 section and gated identically. */}
             <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mt-8 mb-2.5">
-              AI weekly recap
+              Weekly recap
             </p>
             <SubscriptionGuard
               featureFlag="premium_feature"
-              featureLabel="AI weekly recap"
+              featureLabel="Weekly recap"
             >
-              <AiRecap
+              <Recap
                 leagueId={leagueId}
                 platform={platform}
                 season={selectedSeason}

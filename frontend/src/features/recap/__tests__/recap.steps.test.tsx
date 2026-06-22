@@ -1,7 +1,7 @@
 import { screen } from '@testing-library/react';
 import { defineFeature, loadFeature } from 'jest-cucumber';
 
-import AiRecap from '../ai-recap';
+import Recap from '../recap';
 
 import { SubscriptionGuard } from '@/features/subscription/subscription-guard';
 import { setFlagsForTesting } from '@/lib/feature-flags';
@@ -13,7 +13,7 @@ import {
 } from '@/test/msw/server';
 import { renderRoute } from '@/test/render';
 
-const feature = loadFeature('src/features/ai_recap/__tests__/ai-recap.feature');
+const feature = loadFeature('src/features/recap/__tests__/recap.feature');
 
 const league = {
   leagueId: '100',
@@ -26,7 +26,7 @@ const RECAP = {
   week: '1',
   headline: 'Week 1: Alice Runs the Table',
   body: 'Alice steamrolled the league this week.',
-  model: 'amazon.nova-lite-v1:0',
+  model: 'snippet-v1',
   generated_at: '2026-06-19T12:00:00+00:00',
 };
 
@@ -36,12 +36,7 @@ function isoIn(days: number): string {
 
 async function openRecap() {
   await renderRoute(
-    <AiRecap
-      leagueId="100"
-      platform="SLEEPER"
-      season="2024"
-      selectedWeek={1}
-    />,
+    <Recap leagueId="100" platform="SLEEPER" season="2024" selectedWeek={1} />,
     { league },
   );
 }
@@ -56,7 +51,7 @@ defineFeature(feature, (test) => {
     given('a recap exists for the selected week', () => {
       server.use(leagueQuery({ RECAP: [RECAP] }));
     });
-    when('I open the AI recap', openRecap);
+    when('I open the recap', openRecap);
     then(/^I see the recap headline "(.*)"$/, async (text) => {
       expect(await screen.findByText(text)).toBeInTheDocument();
     });
@@ -74,7 +69,7 @@ defineFeature(feature, (test) => {
       // No RECAP key mapped → the query 404s, which the feature treats as empty.
       server.use(leagueQuery({ MATCHUPS: [] }));
     });
-    when('I open the AI recap', openRecap);
+    when('I open the recap', openRecap);
     then(/^I see "(.*)"$/, async (text) => {
       expect(await screen.findByText(text)).toBeInTheDocument();
     });
@@ -84,7 +79,7 @@ defineFeature(feature, (test) => {
     given('the recap data fails to load', () => {
       server.use(leagueQueryError(500));
     });
-    when('I open the AI recap', openRecap);
+    when('I open the recap', openRecap);
     then(/^I see "(.*)"$/, async (text) => {
       expect(await screen.findByText(text)).toBeInTheDocument();
     });
@@ -106,13 +101,13 @@ defineFeature(feature, (test) => {
         server.use(leagueMetadata({ subscription_end_time: isoIn(-1) }));
       },
     );
-    when('I open the gated AI recap', async () => {
+    when('I open the gated recap', async () => {
       await renderRoute(
         <SubscriptionGuard
           featureFlag="premium_feature"
-          featureLabel="AI weekly recap"
+          featureLabel="Weekly recap"
         >
-          <AiRecap
+          <Recap
             leagueId="100"
             platform="SLEEPER"
             season="2024"
@@ -125,7 +120,7 @@ defineFeature(feature, (test) => {
     then(/^I see the paywall heading "(.*)"$/, async (text) => {
       expect(await screen.findByText(text)).toBeInTheDocument();
     });
-    and('the AI recap is not rendered', () => {
+    and('the recap is not rendered', () => {
       expect(
         screen.queryByText('Week 1: Alice Runs the Table'),
       ).not.toBeInTheDocument();

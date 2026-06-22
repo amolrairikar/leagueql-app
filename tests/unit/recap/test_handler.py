@@ -1,4 +1,4 @@
-"""Tests for ai_recap/handler.py (DynamoDB faked in-memory; LLM mocked)."""
+"""Tests for recap/handler.py (DynamoDB faked in-memory; generate_recap mocked)."""
 
 import datetime
 from unittest.mock import MagicMock
@@ -79,18 +79,18 @@ def _recap_item(cid="cid-1", season="2025", ww="01"):
 
 
 @pytest.fixture
-def patched(ai_recap_handler, monkeypatch):
+def patched(recap_handler, monkeypatch):
     """Patch the handler's collaborators and return a small control surface."""
-    monkeypatch.setattr(ai_recap_handler, "is_feature_paywalled", lambda flag: True)
+    monkeypatch.setattr(recap_handler, "is_feature_paywalled", lambda flag: True)
     job_status = MagicMock()
-    monkeypatch.setattr(ai_recap_handler, "write_job_status", job_status)
+    monkeypatch.setattr(recap_handler, "write_job_status", job_status)
     gen = MagicMock(return_value={"headline": "H", "body": "B"})
-    monkeypatch.setattr(ai_recap_handler, "generate_recap", gen)
+    monkeypatch.setattr(recap_handler, "generate_recap", gen)
 
     def set_table(table):
-        monkeypatch.setattr(ai_recap_handler, "_table", lambda: table)
+        monkeypatch.setattr(recap_handler, "_table", lambda: table)
 
-    return SimpleControl(ai_recap_handler, job_status, gen, set_table)
+    return SimpleControl(recap_handler, job_status, gen, set_table)
 
 
 class SimpleControl:
@@ -217,9 +217,9 @@ class TestLambdaHandler:
         assert result["generated"] == 0
         assert patched.job_status.call_args.args[1] == "COMPLETED"
 
-    def test_mixed_success_and_failure_tallied_across_pool(self, patched, monkeypatch):
-        # One week succeeds, one raises — the bounded thread pool must tally both
-        # outcomes correctly and write only the successful week's RECAP item.
+    def test_mixed_success_and_failure_tallied(self, patched, monkeypatch):
+        # One week succeeds, one raises — the loop tallies both outcomes correctly
+        # and writes only the successful week's RECAP item.
         def _gen(highlights, season, week):
             if week == "2":
                 raise patched.handler.RecapGenerationError("refused week 2")
@@ -239,11 +239,3 @@ class TestLambdaHandler:
         assert result["generated"] == 1
         assert result["failed"] == 1
         assert [p["SK"] for p in table.puts] == ["RECAP#2025#WEEK#01"]
-
-    def test_concurrency_bound_is_at_least_one(self, patched, monkeypatch):
-        # A degenerate RECAP_MAX_CONCURRENCY still yields a usable pool size.
-        monkeypatch.setattr(patched.handler, "MAX_CONCURRENCY", 1)
-        table = FakeTable([_metadata(end_time=_future_iso()), _matchups_item(ww="01")])
-        patched.set_table(table)
-        result = patched.handler.lambda_handler(_event(), MagicMock())
-        assert result["generated"] == 1

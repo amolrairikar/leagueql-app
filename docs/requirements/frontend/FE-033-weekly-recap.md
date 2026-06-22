@@ -1,10 +1,12 @@
-# FE-033: AI Weekly Recap
+# FE-033: Weekly Recap
 
 ## Description
-A premium section on the `/matchups` page that renders the LLM-generated "commissioner's
-column" ([BE-022](../backend/BE-022-ai-weekly-recap.md)) for the currently-selected
-season/week — a headline plus a narrative body recapping that week's storylines, upsets, and
-awards. It is **not** a standalone page or nav entry; it reuses the matchups page's existing
+A premium section on the `/matchups` page that renders the "commissioner's column"
+([BE-022](../backend/BE-022-weekly-recap.md)) for the currently-selected season/week — a
+headline plus a narrative body recapping that week's storylines, upsets, and awards. The recap
+is composed server-side from a deterministic snippet phrase bank (no LLM); the frontend is
+agnostic to how it's produced. It is **not** a standalone page or nav entry; it reuses the
+matchups page's existing
 `selectedSeason` / `selectedWeek` state and renders directly **below** the FE-032 weekly awards
 & superlatives section (page order: matchups grid → FE-032 superlatives → FE-033 recap).
 
@@ -18,8 +20,8 @@ separated) and renders with `whitespace-pre-line` so those paragraph breaks disp
 ## Scope
 - Lives on `/matchups` ([FE-006](FE-006-matchups.md)), below the weekly-awards block, scoped to
   the page's season + week navigation. No new route, no sidebar entry.
-- Feature folder `src/features/ai_recap/`: `api-calls.ts` (fetch the single
-  `RECAP#{season}#WEEK#{WW}` item) and `ai-recap.tsx` (component taking
+- Feature folder `src/features/recap/`: `api-calls.ts` (fetch the single
+  `RECAP#{season}#WEEK#{WW}` item) and `recap.tsx` (component taking
   `leagueId` / `platform` / `season` / `selectedWeek`, mirroring `<WeeklyAwards>`).
 - The component needs a concrete week to build the `RECAP` key, so the matchups page
   feeds it the **resolved active week** (the latest week when the user hasn't picked one)
@@ -29,7 +31,7 @@ separated) and renders with `whitespace-pre-line` so those paragraph breaks disp
 - **Premium-gated:** wrapped in `SubscriptionGuard` on the shared `premium_feature` flag, with
   the section header gated on `isBillingEnabled` so it disappears with the section when `billing`
   is off — identical to how the FE-032 superlatives section is gated.
-- **Advertised on the landing/pricing page** ([FE-001](FE-001-landing-page.md)): an "AI weekly
+- **Advertised on the landing/pricing page** ([FE-001](FE-001-landing-page.md)): a "Weekly
   recap" entry is added to `PREMIUM_FEATURES` so the marketing surface matches what a
   subscription unlocks.
 
@@ -47,7 +49,7 @@ separated) and renders with `whitespace-pre-line` so those paragraph breaks disp
 - **Changing season/week:** refetches the recap for the newly-selected week.
 
 ## Acceptance Criteria
-- [ ] On `/matchups`, an AI weekly recap section renders below the weekly-awards section,
+- [ ] On `/matchups`, a weekly recap section renders below the weekly-awards section,
       showing the headline + narrative body for the selected season/week.
 - [ ] Navigating to a different week (or season) refetches and renders that week's recap.
 - [ ] A week with no stored recap (404) shows an empty-state message, not an error.
@@ -58,7 +60,7 @@ separated) and renders with `whitespace-pre-line` so those paragraph breaks disp
       everyone.
 
 ## Sources
-`src/features/ai_recap/`, `src/features/matchups/matchups.tsx`,
+`src/features/recap/`, `src/features/matchups/matchups.tsx`,
 `src/features/weekly_awards/weekly-awards.tsx` (display pattern),
 `src/features/subscription/subscription-guard.tsx`,
 `src/features/landing_page/constants.ts` (`PREMIUM_FEATURES`).

@@ -2,7 +2,7 @@ import { queryLeague } from '@/components/api/leagues';
 import type { Platform } from '@/components/api/types';
 import { ApiError } from '@/lib/api-client';
 
-/** A single week's AI-generated recap (FE-033 / BE-022). */
+/** A single week's recap (FE-033 / BE-022). */
 export interface RecapItem {
   season: string;
   week: string;

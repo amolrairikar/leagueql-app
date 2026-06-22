@@ -283,7 +283,7 @@ class TestHelpers:
 
 
 class TestRecapBackfillTrigger:
-    """BE-022: a genuine activation fans out an async AI-recap invoke."""
+    """BE-022: a genuine activation fans out an async recap invoke."""
 
     def _active_event(self, patched):
         patched.stripe.Webhook.construct_event.return_value = _stripe_event(
@@ -299,8 +299,8 @@ class TestRecapBackfillTrigger:
         patched.record.return_value = True
         self._active_event(patched)
         with (
-            patch.object(patched.wh, "_AI_RECAP_LAMBDA_NAME", "recap-fn"),
-            patch.object(patched.wh, "invoke_ai_recap") as mock_invoke,
+            patch.object(patched.wh, "_RECAP_LAMBDA_NAME", "recap-fn"),
+            patch.object(patched.wh, "invoke_recap") as mock_invoke,
         ):
             resp = patched.wh.lambda_handler(_event(), None)
         assert resp["statusCode"] == 200
@@ -312,8 +312,8 @@ class TestRecapBackfillTrigger:
         patched.record.return_value = False  # stale/duplicate no-op
         self._active_event(patched)
         with (
-            patch.object(patched.wh, "_AI_RECAP_LAMBDA_NAME", "recap-fn"),
-            patch.object(patched.wh, "invoke_ai_recap") as mock_invoke,
+            patch.object(patched.wh, "_RECAP_LAMBDA_NAME", "recap-fn"),
+            patch.object(patched.wh, "invoke_recap") as mock_invoke,
         ):
             patched.wh.lambda_handler(_event(), None)
         mock_invoke.assert_not_called()
@@ -322,8 +322,8 @@ class TestRecapBackfillTrigger:
         patched.record.return_value = True
         self._active_event(patched)
         with (
-            patch.object(patched.wh, "_AI_RECAP_LAMBDA_NAME", None),
-            patch.object(patched.wh, "invoke_ai_recap") as mock_invoke,
+            patch.object(patched.wh, "_RECAP_LAMBDA_NAME", None),
+            patch.object(patched.wh, "invoke_recap") as mock_invoke,
         ):
             patched.wh.lambda_handler(_event(), None)
         mock_invoke.assert_not_called()
@@ -332,10 +332,8 @@ class TestRecapBackfillTrigger:
         patched.record.return_value = True
         self._active_event(patched)
         with (
-            patch.object(patched.wh, "_AI_RECAP_LAMBDA_NAME", "recap-fn"),
-            patch.object(
-                patched.wh, "invoke_ai_recap", side_effect=RuntimeError("boom")
-            ),
+            patch.object(patched.wh, "_RECAP_LAMBDA_NAME", "recap-fn"),
+            patch.object(patched.wh, "invoke_recap", side_effect=RuntimeError("boom")),
         ):
             resp = patched.wh.lambda_handler(_event(), None)
         # Best-effort: a recap-invoke failure must not fail the webhook (200, dedup written).
