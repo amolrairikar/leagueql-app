@@ -63,13 +63,13 @@ RESULT = {
     ],
     "nailbiter": [
         "{winner} survived a heart-stopper over {loser}, {winner_score}-"
-        "{loser_score}, by a razor-thin {margin}.",
+        "{loser_score}, by a razor-thin {margin} points.",
         "{winner} edged {loser} {winner_score}-{loser_score} in a game that came "
         "down to the final whistle.",
         "By the slimmest of margins, just {margin} points, {winner} squeaked past "
         "{loser} {winner_score}-{loser_score}.",
         "{winner} clipped {loser} {winner_score}-{loser_score}, holding on by all "
-        "of {margin}.",
+        "of {margin} points.",
         "It doesn't get tighter than this: {winner} nipped {loser} {winner_score}-"
         "{loser_score}.",
         "{winner} won the coin-flip of a matchup, slipping by {loser} "
@@ -168,42 +168,66 @@ PLAYOFF_RESULT = {
     ],
 }
 
+# Consolation / losers-bracket result sentence — these games are NOT for the title,
+# so the framing leans on pride / bragging rights and never implies a championship
+# run. Placeholders: {winner} {loser} {winner_score} {loser_score} {margin}
+CONSOLATION_RESULT = [
+    "With nothing but pride on the line, {winner} beat {loser} {winner_score}-"
+    "{loser_score} in the consolation bracket.",
+    "It won't make the trophy case, but {winner} topped {loser} {winner_score}-"
+    "{loser_score}.",
+    "Down in the consolation games, {winner} handled {loser} {winner_score}-"
+    "{loser_score}.",
+    "Playing for bragging rights and little else, {winner} got past {loser} "
+    "{winner_score}-{loser_score}.",
+    "{winner} salvaged some dignity with a {winner_score}-{loser_score} win over "
+    "{loser}.",
+    "No title on the line, just pride: {winner} beat {loser} {winner_score}-"
+    "{loser_score}.",
+    "{winner} closed out the season with a {margin}-point consolation win over "
+    "{loser}, {winner_score}-{loser_score}.",
+    "Out of the title hunt, {winner} still took care of {loser} {winner_score}-"
+    "{loser_score}.",
+]
+
 # Standout-performance sentence. Placeholders: {player} {points} {team}
+# ({points} is a bare number; templates supply the "points" unit.)
 STANDOUT = [
-    "{player} carried {team}, posting a team-high {points}.",
-    "{team} rode {player}'s {points} to the finish.",
-    "{player} went off for {points} to pace {team}.",
-    "{player} was the engine for {team}, racking up {points}.",
-    "{points} from {player} did the heavy lifting for {team}.",
-    "{team} can thank {player}, whose {points} led the way.",
+    "{player} carried {team}, posting a team-high {points} points.",
+    "{team} rode {player}'s {points} points to the finish.",
+    "{player} went off for {points} points to pace {team}.",
+    "{player} was the engine for {team}, racking up {points} points.",
+    "{points} points from {player} did the heavy lifting for {team}.",
+    "{team} can thank {player}, whose {points} points led the way.",
 ]
 
 # Standout with position. Placeholders: {player} {points} {team} {position}
 STANDOUT_WITH_POS = [
-    "{player} ({position}) led {team} with {points}.",
-    "{team} leaned on {player} at {position}, who delivered {points}.",
-    "{player} smashed for {points} at {position} to top {team}'s scoring.",
-    "Best on {team} was {player}, dropping {points} from the {position} slot.",
-    "{player} was elite at {position} for {team}, going for {points}.",
+    "{player} ({position}) led {team} with {points} points.",
+    "{team} leaned on {player} at {position}, who delivered {points} points.",
+    "{player} smashed for {points} points at {position} to lead the way for {team}.",
+    "Best on {team} was {player}, dropping {points} points from the {position} slot.",
+    "{player} was elite at {position} for {team}, going for {points} points.",
 ]
 
 # Optional flavor (third) sentence. Each group documents its placeholders.
 FLAVOR = {
     # {team} {player} {points}
     "bust": [
-        "{team} won't want to rewatch {player}, who mustered a meager {points}.",
-        "Somebody bench {player}, because {points} just isn't cutting it for {team}.",
-        "{player} was a no-show for {team}, limping to {points}.",
-        "{team}'s {player} laid an egg with just {points}.",
-        "The {player} experience cost {team} dearly: a measly {points}.",
+        "{team} won't want to rewatch {player}, who mustered a meager {points} points.",
+        "Somebody bench {player}, because {points} points won't cut it for {team}.",
+        "{player} was a no-show for {team}, limping to {points} points.",
+        "{team}'s {player} laid an egg with just {points} points.",
+        "The {player} experience cost {team} dearly: a measly {points} points.",
     ],
     # {team} {bench}
     "bench": [
-        "{team} left a painful {bench} on the bench; lineups matter, folks.",
-        "Coaching cost {team} this week, with {bench} rotting on the pine.",
-        "{team} could've used the {bench} they stapled to the bench.",
+        "{team} left a painful {bench} points on the bench; lineups matter, folks.",
+        "Coaching cost {team} this week, with {bench} points rotting on the pine.",
+        "{team} could've used the {bench} points they stapled to the bench.",
         "File {team}'s {bench} bench points under what could have been.",
-        "{team} forgot to start their best guys, stranding {bench} on the bench.",
+        "{team} forgot to start their best guys, stranding {bench} points on the "
+        "bench.",
     ],
     # {loser} {loser_mgr} {winner}
     "trash": [

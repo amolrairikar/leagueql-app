@@ -27,6 +27,13 @@ MODEL_ID = "snippet-v1"
 # below this it's noise, not a storyline.
 _BENCH_THRESHOLD = 20.0
 
+# The only tier actually playing for the championship; it earns the
+# advance/title/championship framing. Every other non-NONE tier
+# (``WINNERS_CONSOLATION_LADDER``, ``LOSERS_BRACKET``) is a consolation game —
+# framed for pride, never as a title run. See ``highlights.py`` /
+# ``processor`` for how tiers are assigned.
+_TITLE_TIER = "WINNERS_BRACKET"
+
 
 class RecapGenerationError(Exception):
     """Raised when a week cannot be composed (e.g. no matchups).
@@ -86,8 +93,14 @@ def _best_scorer(*sides) -> tuple[dict, str] | None:
     return max(cands, key=lambda c: c[0]["points"])
 
 
-def _result_sentence(rng, winner, loser, margin, tied, is_playoff, round_name):
-    """Compose the opening result sentence for a matchup."""
+def _result_sentence(rng, winner, loser, margin, tied, tier, round_name):
+    """Compose the opening result sentence for a matchup.
+
+    ``tier`` is the matchup's ``playoff_tier_type``: only ``WINNERS_BRACKET`` gets
+    advance/championship framing; other non-``NONE`` tiers (losers bracket /
+    winners-consolation ladder) get pride-only consolation framing so we never
+    claim a consolation game "kept their title hopes alive".
+    """
     if tied:
         tpl = rng.choice(snippets.RESULT["tie"])
         return tpl.format(
@@ -103,13 +116,19 @@ def _result_sentence(rng, winner, loser, margin, tied, is_playoff, round_name):
         "round": round_name or "",
     }
 
-    if is_playoff:
+    if tier == _TITLE_TIER:
         if _is_championship(round_name):
             tpl = rng.choice(snippets.PLAYOFF_RESULT["championship"])
         elif round_name:
             tpl = rng.choice(snippets.PLAYOFF_RESULT["advance"])
         else:
             tpl = rng.choice(snippets.PLAYOFF_RESULT["advance_generic"])
+        return tpl.format(**ctx)
+
+    if tier != "NONE":
+        # Losers bracket / winners-consolation ladder: a real postseason game, but
+        # not for the title — pride only.
+        tpl = rng.choice(snippets.CONSOLATION_RESULT)
         return tpl.format(**ctx)
 
     tpl = rng.choice(snippets.RESULT[_bucket(margin)])
@@ -146,11 +165,13 @@ def _standout_sentence(rng, winner, loser):
     return tpl.format(player=player["name"], points=_fmt(player["points"]), team=team)
 
 
-def _flavor_sentence(rng, winner, loser, tied, is_playoff):
+def _flavor_sentence(rng, winner, loser, tied, is_title):
     """Pick at most one optional flavor sentence (bust / bench / trash / eliminated).
 
-    Returns ``None`` when nothing is eligible or the RNG draws the no-flavor slot
-    (so paragraphs stay a natural 2-3 sentences).
+    ``is_title`` gates the elimination callout to actual championship-bracket games
+    so a consolation loser is never told "the dream is dead". Returns ``None`` when
+    nothing is eligible or the RNG draws the no-flavor slot (so paragraphs stay a
+    natural 2-3 sentences).
     """
     keys: list[str | None] = []
     if not tied:
@@ -158,7 +179,7 @@ def _flavor_sentence(rng, winner, loser, tied, is_playoff):
         bust = loser.get("biggest_bust")
         if bust and bust.get("name"):
             keys.append("bust")
-        if is_playoff:
+        if is_title:
             keys.append("eliminated")
 
     bench_side = max(winner, loser, key=lambda s: s.get("points_on_bench", 0.0))
@@ -226,6 +247,8 @@ def _matchup_paragraph(rng, m: dict, extreme_tag: str | None) -> str:
     """Compose one matchup's 2-3 sentence paragraph."""
     a, b = m["team_a"], m["team_b"]
     winner, loser = (a, b) if a["score"] >= b["score"] else (b, a)
+    tier = m.get("playoff_tier_type") or "NONE"
+    is_title = tier == _TITLE_TIER
 
     sentences = [
         _result_sentence(
@@ -234,14 +257,14 @@ def _matchup_paragraph(rng, m: dict, extreme_tag: str | None) -> str:
             loser,
             m["margin"],
             m["tied"],
-            m["is_playoff"],
+            tier,
             m.get("playoff_round"),
         )
     ]
     standout = _standout_sentence(rng, winner, loser)
     if standout:
         sentences.append(standout)
-    flavor = _flavor_sentence(rng, winner, loser, m["tied"], m["is_playoff"])
+    flavor = _flavor_sentence(rng, winner, loser, m["tied"], is_title)
     if flavor:
         sentences.append(flavor)
     if extreme_tag:
@@ -251,11 +274,14 @@ def _matchup_paragraph(rng, m: dict, extreme_tag: str | None) -> str:
 
 def _headline(rng, highlights: dict) -> str:
     matchups = highlights.get("matchups") or []
-    if any(
-        m["is_playoff"] and _is_championship(m.get("playoff_round")) for m in matchups
-    ):
+    # Only true championship-bracket games drive playoff/championship headlines; a
+    # week of pure consolation/losers games reads as a regular week.
+    title_games = [
+        m for m in matchups if (m.get("playoff_tier_type") or "NONE") == _TITLE_TIER
+    ]
+    if any(_is_championship(m.get("playoff_round")) for m in title_games):
         group = "championship"
-    elif highlights.get("is_playoff_week"):
+    elif title_games:
         group = "playoff"
     elif any(not m["tied"] and m["margin"] >= 40 for m in matchups):
         group = "blowout"

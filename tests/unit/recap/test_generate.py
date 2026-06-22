@@ -28,13 +28,15 @@ def _team(name, mgr, score, top=None, bust=None, bench=0.0):
     }
 
 
-def _matchup(a, b, is_playoff=False, round_name=None):
+def _matchup(a, b, is_playoff=False, round_name=None, tier=None):
     if a["score"] > b["score"]:
         winner, loser = a["manager"], b["manager"]
     elif b["score"] > a["score"]:
         winner, loser = b["manager"], a["manager"]
     else:
         winner = loser = None
+    if tier is None:
+        tier = "WINNERS_BRACKET" if is_playoff else "NONE"
     return {
         "team_a": a,
         "team_b": b,
@@ -42,8 +44,8 @@ def _matchup(a, b, is_playoff=False, round_name=None):
         "loser": loser,
         "margin": round(abs(a["score"] - b["score"]), 2),
         "tied": a["score"] == b["score"],
-        "is_playoff": is_playoff,
-        "playoff_tier_type": "WINNERS_BRACKET" if is_playoff else "NONE",
+        "is_playoff": tier != "NONE",
+        "playoff_tier_type": tier,
         "playoff_round": round_name,
     }
 
@@ -131,6 +133,22 @@ class TestGenerateRecap:
         body = recap_generate.generate_recap(h, "2025", "1")["body"]
         assert "\n\n" in body
 
+    def test_losers_bracket_week_has_no_title_framing(self, recap_generate):
+        # End-to-end regression for the "kept their title hopes alive" bug: a final
+        # week of only losers-bracket games must never imply a championship run.
+        a = _team("Aces", "alice", 120, top=_player(), bench=30.0)
+        b = _team("Bears", "bob", 100, bust=_player("Dud", "TE", 2.0))
+        h = _highlights(
+            [_matchup(a, b, tier="LOSERS_BRACKET", round_name="Losers Bracket")],
+            is_playoff_week=True,
+        )
+        for w in range(1, 12):
+            body = recap_generate.generate_recap(h, "2025", str(w))["body"].lower()
+            assert "title hopes" not in body
+            assert "advance" not in body
+            assert "champion" not in body
+            assert "dream is dead" not in body
+
     def test_empty_matchups_raises(self, recap_generate):
         with pytest.raises(recap_generate.RecapGenerationError):
             recap_generate.generate_recap(_highlights([]), "2025", "1")
@@ -151,7 +169,7 @@ class TestResultSentence:
         w = _team("Aces", "alice", 88)
         lo = _team("Bears", "bob", 88)
         out = recap_generate._result_sentence(
-            random.Random(0), w, lo, 0, True, False, None
+            random.Random(0), w, lo, 0, True, "NONE", None
         )
         expected = _formatted(
             recap_snippets.RESULT["tie"], team_a="Aces", team_b="Bears", score="88"
@@ -172,7 +190,7 @@ class TestResultSentence:
         w = _team("Aces", "alice", 120)
         lo = _team("Bears", "bob", 100)
         out = recap_generate._result_sentence(
-            random.Random(0), w, lo, 20, False, True, round_name
+            random.Random(0), w, lo, 20, False, "WINNERS_BRACKET", round_name
         )
         ctx = dict(
             winner="Aces",
@@ -188,7 +206,7 @@ class TestResultSentence:
         w = _team("Aces", "alice", 120)
         lo = _team("Bears", "bob", 100)
         out = recap_generate._result_sentence(
-            random.Random(0), w, lo, 20, False, True, None
+            random.Random(0), w, lo, 20, False, "WINNERS_BRACKET", None
         )
         ctx = dict(
             winner="Aces",
@@ -201,6 +219,48 @@ class TestResultSentence:
         assert out in _formatted(
             recap_snippets.PLAYOFF_RESULT["advance_generic"], **ctx
         )
+
+    @pytest.mark.parametrize("tier", ["LOSERS_BRACKET", "WINNERS_CONSOLATION_LADDER"])
+    def test_consolation_tiers_use_consolation_framing(
+        self, recap_generate, recap_snippets, tier
+    ):
+        # A non-NONE, non-WINNERS_BRACKET tier must never get advance/title framing,
+        # even when its round name ("Losers Bracket", "Winners Consolation") is set.
+        w = _team("Aces", "alice", 120)
+        lo = _team("Bears", "bob", 100)
+        out = recap_generate._result_sentence(
+            random.Random(0), w, lo, 20, False, tier, "Losers Bracket"
+        )
+        ctx = dict(
+            winner="Aces",
+            loser="Bears",
+            winner_score="120",
+            loser_score="100",
+            margin="20",
+        )
+        assert out in _formatted(recap_snippets.CONSOLATION_RESULT, **ctx)
+
+    def test_consolation_never_uses_advance_language(
+        self, recap_generate, recap_snippets
+    ):
+        # Regression: sweep seeds; a losers-bracket game must always land in the
+        # consolation set and never an advance/championship line (the "kept their
+        # title hopes alive" bug).
+        w = _team("Aces", "alice", 120)
+        lo = _team("Bears", "bob", 100)
+        ctx = dict(
+            winner="Aces",
+            loser="Bears",
+            winner_score="120",
+            loser_score="100",
+            margin="20",
+        )
+        consolation = _formatted(recap_snippets.CONSOLATION_RESULT, **ctx)
+        for s in range(60):
+            out = recap_generate._result_sentence(
+                random.Random(s), w, lo, 20, False, "LOSERS_BRACKET", "Losers Bracket"
+            )
+            assert out in consolation
 
 
 # --- helpers ----------------------------------------------------------------
@@ -308,8 +368,22 @@ class TestFlavor:
             is None
         )
 
+    def test_no_elimination_when_not_title_game(self, recap_generate, recap_snippets):
+        # A decided consolation game (is_title=False) must never produce an
+        # "eliminated / season's over" line.
+        w = _team("Aces", "alice", 120, bench=35.0)
+        lo = _team("Bears", "bob", 100, bust=_player("Dud", "TE", 2.0))
+        elim = _formatted(
+            recap_snippets.FLAVOR["eliminated"], loser="Bears", loser_mgr="bob"
+        )
+        results = {
+            recap_generate._flavor_sentence(random.Random(s), w, lo, False, False)
+            for s in range(80)
+        }
+        assert not (results & elim)
+
     def test_all_branches_reachable(self, recap_generate, recap_snippets):
-        # Winner has a bench worth calling out; loser has a bust; playoff game →
+        # Winner has a bench worth calling out; loser has a bust; title game →
         # trash, bust, eliminated and bench are all eligible. Sweep seeds so each
         # format branch (and the no-flavor slot) is exercised.
         w = _team("Aces", "alice", 120, bench=35.0)
@@ -429,3 +503,20 @@ class TestHeadline:
         b = _team("Bears", "bob", 100)
         h = _highlights([_matchup(a, b)])
         assert self._h(recap_generate, h) in recap_snippets.HEADLINES["general"]
+
+    @pytest.mark.parametrize("tier", ["LOSERS_BRACKET", "WINNERS_CONSOLATION_LADDER"])
+    def test_consolation_only_week_is_not_playoff(
+        self, recap_generate, recap_snippets, tier
+    ):
+        # A week of only consolation/losers games (no WINNERS_BRACKET) must not get a
+        # playoff/championship headline.
+        a = _team("Aces", "alice", 105, top=_player())
+        b = _team("Bears", "bob", 100)
+        h = _highlights(
+            [_matchup(a, b, tier=tier, round_name="Losers Bracket")],
+            is_playoff_week=True,
+        )
+        headline = self._h(recap_generate, h)
+        assert headline not in recap_snippets.HEADLINES["playoff"]
+        assert headline not in recap_snippets.HEADLINES["championship"]
+        assert headline in recap_snippets.HEADLINES["general"]

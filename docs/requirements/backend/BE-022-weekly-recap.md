@@ -56,11 +56,17 @@ was handed. Playoff stakes are framed only for matchups actually flagged as play
 - **Structure.** The body is **one short paragraph (2-3 sentences) per matchup**, covering every
   matchup in the data in order, separated by blank lines. Per paragraph: a result sentence
   chosen by margin bucket (tie / nailbiter / close / solid / comfortable / blowout) or a playoff
-  override (advance / championship), a standout-performance sentence for the week's higher top
-  scorer, an optional flavor sentence (biggest-bust, bench-points regret, trash talk, or
-  postseason elimination), and a week-extreme tag on the biggest / closest decided game. A
-  headline is chosen from a set keyed to the week's shape (championship > playoff > blowout >
-  general). It returns `{headline, body}`.
+  override, a standout-performance sentence for the week's higher top scorer, an optional flavor
+  sentence (biggest-bust, bench-points regret, trash talk, or postseason elimination), and a
+  week-extreme tag on the biggest / closest decided game. A headline is chosen from a set keyed
+  to the week's shape (championship > playoff > blowout > general). It returns `{headline, body}`.
+- **Title framing is gated on the bracket tier**, not just on "is this a playoff game". Only the
+  `WINNERS_BRACKET` tier earns advance / championship language ("kept their title hopes alive",
+  "are your league champions") and the elimination flavor; the `Finals` round within it is the
+  championship. Every other non-`NONE` tier — `WINNERS_CONSOLATION_LADDER` (3rd/5th-place games)
+  and `LOSERS_BRACKET` — is a **consolation** game and is framed for pride only ("playing for
+  bragging rights", "out of the title hunt"), never as a title run or an elimination. A week with
+  **no** `WINNERS_BRACKET` game gets a regular (general / blowout) headline, not a playoff one.
 - The snippet bank's generator version is recorded in each recap's `model` field
   (e.g. `snippet-v1`) so a recap can be traced to the composer that wrote it. `generate_recap`
   raises `RecapGenerationError` only as a defensive guard (a week with no matchups); composition
