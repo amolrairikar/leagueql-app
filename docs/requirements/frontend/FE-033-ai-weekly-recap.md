@@ -12,7 +12,8 @@ The recap content is generated server-side and stored as a `RECAP#{season}#WEEK#
 frontend just fetches and displays the single item for the selected week via the existing BE-005
 query client. It mirrors the [FE-032](FE-032-weekly-awards-superlatives.md) pattern: a
 premium-gated display of a fetched view, using the shared `toResult` + `<ErrorAlert>` inline
-error pattern (no global error store).
+error pattern (no global error store). The body is one short paragraph per matchup (blank-line
+separated) and renders with `whitespace-pre-line` so those paragraph breaks display.
 
 ## Scope
 - Lives on `/matchups` ([FE-006](FE-006-matchups.md)), below the weekly-awards block, scoped to
@@ -20,6 +21,11 @@ error pattern (no global error store).
 - Feature folder `src/features/ai_recap/`: `api-calls.ts` (fetch the single
   `RECAP#{season}#WEEK#{WW}` item) and `ai-recap.tsx` (component taking
   `leagueId` / `platform` / `season` / `selectedWeek`, mirroring `<WeeklyAwards>`).
+- The component needs a concrete week to build the `RECAP` key, so the matchups page
+  feeds it the **resolved active week** (the latest week when the user hasn't picked one)
+  rather than the raw selection — `MatchupsContent` reports the displayed week up to the page,
+  which passes it down. This makes the recap fetch on first render / refresh, not only after a
+  week button is clicked.
 - **Premium-gated:** wrapped in `SubscriptionGuard` on the shared `premium_feature` flag, with
   the section header gated on `isBillingEnabled` so it disappears with the section when `billing`
   is off — identical to how the FE-032 superlatives section is gated.

@@ -1,4 +1,12 @@
-import { Suspense, use, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Suspense,
+  use,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import { BoxScoreCard, type BoxScoreSide } from '@/components/box-score-card';
 import { TeamAvatar } from '@/components/team-avatar';
@@ -341,6 +349,7 @@ function MatchupsContent({
   promise,
   selectedWeek,
   onWeekChange,
+  onActiveWeekChange,
   selectedMatchup,
   onMatchupSelect,
   platform,
@@ -349,12 +358,26 @@ function MatchupsContent({
   promise: Promise<MatchupsResult>;
   selectedWeek: number | null;
   onWeekChange: (week: number) => void;
+  onActiveWeekChange: (week: number) => void;
   selectedMatchup: number | null;
   onMatchupSelect: (idx: number | null) => void;
   platform: 'ESPN' | 'SLEEPER';
   season: string;
 }) {
   const result = use(promise);
+
+  // Resolve the displayed week (the latest week when nothing is explicitly
+  // selected) and report it up, so sibling sections gated outside this Suspense
+  // boundary — the AI recap (FE-033), which needs a concrete week to fetch — can
+  // track the same week even before the user clicks a week button.
+  const data = result.ok ? result.data : null;
+  const weeks = data?.weeks ?? [];
+  const matchupsByWeek = data?.matchupsByWeek ?? {};
+  const latestWeek = weeks[weeks.length - 1] ?? 1;
+  const activeWeek = selectedWeek ?? latestWeek;
+  useEffect(() => {
+    if (data) onActiveWeekChange(activeWeek);
+  }, [data, activeWeek, onActiveWeekChange]);
 
   if (!result.ok) {
     return (
@@ -364,9 +387,6 @@ function MatchupsContent({
     );
   }
 
-  const { weeks, matchupsByWeek } = result.data;
-  const latestWeek = weeks[weeks.length - 1] ?? 1;
-  const activeWeek = selectedWeek ?? latestWeek;
   const currentMatchups = matchupsByWeek[activeWeek] ?? [];
   const activeMatchup =
     selectedMatchup !== null
@@ -431,7 +451,16 @@ export default function Matchups() {
     [...seasons].sort((a, b) => Number(b) - Number(a))[0] ?? '';
   const [selectedSeason, setSelectedSeason] = useState(defaultSeason);
   const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
+  // The actually-displayed week reported by MatchupsContent: equals selectedWeek
+  // when set, else the latest week. Premium sections gated outside the matchups
+  // Suspense boundary (the AI recap, FE-033) key their fetch off this so they load
+  // on first render rather than waiting for an explicit week click.
+  const [resolvedWeek, setResolvedWeek] = useState<number | null>(null);
   const [selectedMatchup, setSelectedMatchup] = useState<number | null>(null);
+  const handleActiveWeekChange = useCallback(
+    (week: number) => setResolvedWeek(week),
+    [],
+  );
 
   const matchupsPromise = useMemo(
     (): Promise<MatchupsResult> =>
@@ -455,6 +484,7 @@ export default function Matchups() {
   function handleSeasonChange(season: string) {
     setSelectedSeason(season);
     setSelectedWeek(null);
+    setResolvedWeek(null);
     setSelectedMatchup(null);
   }
 
@@ -481,6 +511,7 @@ export default function Matchups() {
             promise={matchupsPromise}
             selectedWeek={selectedWeek}
             onWeekChange={handleWeekChange}
+            onActiveWeekChange={handleActiveWeekChange}
             selectedMatchup={selectedMatchup}
             onMatchupSelect={setSelectedMatchup}
             platform={platform}
@@ -521,7 +552,7 @@ export default function Matchups() {
                 leagueId={leagueId}
                 platform={platform}
                 season={selectedSeason}
-                selectedWeek={selectedWeek}
+                selectedWeek={resolvedWeek}
               />
             </SubscriptionGuard>
           </>

@@ -33,11 +33,15 @@ scores. This prevents number hallucination and controls token cost. `highlights.
 - points left on the bench (sum of bench `points_scored` — best-legal-swap analysis is out of
   scope),
 - the week's closest and biggest margins,
+- playoff context per matchup (`is_playoff`, `playoff_tier_type`, `playoff_round`) plus a
+  week-level `is_playoff_week` flag, so the recap can frame postseason stakes — celebrating a
+  winner advancing / being crowned champion and calling out the losing team's elimination,
 - standings movement for the week (from `WEEKLY_STANDINGS#{season}` filtered to the matching
   `snapshot_week`).
 
 All numbers in the recap originate here; the model is instructed to use only the numbers it is
-given.
+given. The system prompt tells it to lean into playoff stakes only for matchups actually
+flagged as playoff games.
 
 ### Model + provider
 - **Model:** Amazon Nova Lite — cheap enough for bulk historical backfill.
@@ -49,10 +53,11 @@ given.
   inference profile (e.g. `us.amazon.nova-lite-v1:0`) can be set without a code change.
 - `generate.py` (`generate_recap`) is the only LLM-touching code. The **system prompt** carries
   persona + voice + output contract + the guardrail ("use only the numbers provided; never
-  invent stats"); the **user message** carries the deterministic highlights JSON. It returns
-  `{headline, body}`. A blocking `stopReason` (`content_filtered` / `guardrail_intervened`),
-  unparseable output, or any API error raises, so that week is left un-recapped and a later
-  retry fills it.
+  invent stats"); the **user message** carries the deterministic highlights JSON. The body is
+  structured as **one short paragraph (2-3 sentences) per matchup**, covering every matchup in
+  the data, separated by blank lines. It returns `{headline, body}`. A blocking `stopReason`
+  (`content_filtered` / `guardrail_intervened`), unparseable output, or any API error raises, so
+  that week is left un-recapped and a later retry fills it.
 
 ### Storage / serving
 - One `RECAP#{season}#WEEK#{WW}` item per league/season/week (mirrors `MATCHUPS` keying), PK

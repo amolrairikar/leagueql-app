@@ -113,12 +113,15 @@ def compute_highlights(
 
     Returns:
         A compact, fully-numeric dict the recap prompt consumes. ``matchups`` is a
-        list of per-game highlight objects; ``week_extremes`` carries the closest /
-        biggest decided margins; ``standings`` is the ranked snapshot through the
-        week.
+        list of per-game highlight objects (each carrying any playoff context so
+        the recap can call out advancement / championship wins and eliminations);
+        ``week_extremes`` carries the closest / biggest decided margins;
+        ``is_playoff_week`` flags a postseason week; ``standings`` is the ranked
+        snapshot through the week.
     """
     matchups: list[dict] = []
     margins: list[dict] = []
+    is_playoff_week = False
     for m in matchup_list or []:
         # Skip bye / self-matchup placeholders (no real opponent).
         if m.get("team_a_id") and m.get("team_a_id") == m.get("team_b_id"):
@@ -131,6 +134,13 @@ def compute_highlights(
         else:
             winner, loser = side_b, side_a
         margin = round(abs(side_a["score"] - side_b["score"]), 2)
+        # Playoff context: ``playoff_tier_type`` is "NONE" for regular-season games;
+        # a real bracket (e.g. "WINNERS_BRACKET") plus the human-readable
+        # ``playoff_round`` lets the recap frame advancement / titles / eliminations.
+        tier = m.get("playoff_tier_type") or "NONE"
+        is_playoff = tier != "NONE"
+        if is_playoff:
+            is_playoff_week = True
         matchups.append(
             {
                 "team_a": side_a,
@@ -139,6 +149,9 @@ def compute_highlights(
                 "loser": None if tied else loser["manager"],
                 "margin": margin,
                 "tied": tied,
+                "is_playoff": is_playoff,
+                "playoff_tier_type": tier,
+                "playoff_round": m.get("playoff_round"),
             }
         )
         if not tied:
@@ -164,6 +177,7 @@ def compute_highlights(
     return {
         "season": season,
         "week": week,
+        "is_playoff_week": is_playoff_week,
         "matchups": matchups,
         "week_extremes": week_extremes,
         "standings": _standings_for_week(weekly_standings_rows, week),

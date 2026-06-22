@@ -4,7 +4,15 @@ from decimal import Decimal
 
 
 def _matchup(
-    a_score, b_score, *, a_starters=None, a_bench=None, b_starters=None, b_bench=None
+    a_score,
+    b_score,
+    *,
+    a_starters=None,
+    a_bench=None,
+    b_starters=None,
+    b_bench=None,
+    playoff_tier_type=None,
+    playoff_round=None,
 ):
     return {
         "team_a_id": "1",
@@ -19,6 +27,8 @@ def _matchup(
         "team_b_score": b_score,
         "team_b_starters": b_starters or [],
         "team_b_bench": b_bench or [],
+        "playoff_tier_type": playoff_tier_type,
+        "playoff_round": playoff_round,
     }
 
 
@@ -36,6 +46,63 @@ class TestComputeHighlights:
         assert m["margin"] == 10.25
         assert m["tied"] is False
         assert m["team_a"]["score"] == 100.5
+        # Regular-season game: no playoff context, week not flagged.
+        assert m["is_playoff"] is False
+        assert m["playoff_tier_type"] == "NONE"
+        assert m["playoff_round"] is None
+        assert h["is_playoff_week"] is False
+
+    def test_regular_season_with_missing_playoff_fields(self, ai_recap_highlights):
+        # An older matchup row without the playoff keys defaults to regular-season.
+        bare = _matchup(50, 40)
+        del bare["playoff_tier_type"]
+        del bare["playoff_round"]
+        h = ai_recap_highlights.compute_highlights([bare], [], "2025", "1")
+        assert h["is_playoff_week"] is False
+        assert h["matchups"][0]["is_playoff"] is False
+        assert h["matchups"][0]["playoff_tier_type"] == "NONE"
+
+    def test_playoff_matchup_carries_round_and_flags_week(self, ai_recap_highlights):
+        h = ai_recap_highlights.compute_highlights(
+            [
+                _matchup(
+                    110,
+                    100,
+                    playoff_tier_type="WINNERS_BRACKET",
+                    playoff_round="Championship",
+                )
+            ],
+            [],
+            "2025",
+            "16",
+        )
+        assert h["is_playoff_week"] is True
+        m = h["matchups"][0]
+        assert m["is_playoff"] is True
+        assert m["playoff_tier_type"] == "WINNERS_BRACKET"
+        assert m["playoff_round"] == "Championship"
+        assert m["winner"] == "alice"
+        assert m["loser"] == "bob"
+
+    def test_mixed_week_flags_playoff_when_any_game_is_postseason(
+        self, ai_recap_highlights
+    ):
+        regular = _matchup(50, 40)
+        playoff = {
+            **_matchup(
+                90, 80, playoff_tier_type="WINNERS_BRACKET", playoff_round="Semifinals"
+            ),
+            "team_a_id": "3",
+            "team_a_display_name": "carol",
+            "team_b_id": "4",
+            "team_b_display_name": "dave",
+        }
+        h = ai_recap_highlights.compute_highlights([regular, playoff], [], "2025", "15")
+        assert h["is_playoff_week"] is True
+        by_winner = {m["winner"]: m for m in h["matchups"]}
+        assert by_winner["alice"]["is_playoff"] is False
+        assert by_winner["carol"]["is_playoff"] is True
+        assert by_winner["carol"]["playoff_round"] == "Semifinals"
 
     def test_top_scorer_and_bust(self, ai_recap_highlights):
         starters = [

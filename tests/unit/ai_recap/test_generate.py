@@ -33,7 +33,12 @@ class TestGenerateRecap:
         # Model id + system prompt + highlights in the user turn (Converse shape).
         kwargs = mock_client.converse.call_args.kwargs
         assert kwargs["modelId"] == ai_recap_generate.MODEL_ID
-        assert "commissioner" in kwargs["system"][0]["text"].lower()
+        system_text = kwargs["system"][0]["text"].lower()
+        assert "commissioner" in system_text
+        # The prompt instructs the model to use playoff context when present.
+        assert "playoff" in system_text
+        # ...and to write one short paragraph per matchup.
+        assert "per matchup" in system_text
         assert kwargs["messages"][0]["role"] == "user"
 
     def test_strips_code_fences(self, ai_recap_generate, mock_client):
