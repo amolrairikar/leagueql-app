@@ -5,7 +5,7 @@ The webhook's async recap invoke is bridged to call the recap handler directly
 that returns a fixed narrative. These steps assert the RECAP items the backfill
 wrote (incl. the ``model`` that produced them), that re-firing doesn't regenerate
 them (idempotency, via an unchanged ``generated_at``), and that a Bedrock outage
-falls back to the deterministic snippet composer.
+leaves the week un-recapped (no fallback).
 """
 
 from behave import given, then

@@ -247,9 +247,6 @@ def _load_handlers(context) -> None:
     # Real DynamoDB via moto runs.
     for _bare, _file in (
         ("highlights", "highlights.py"),
-        ("snippets", "snippets.py"),
-        ("generate", "generate.py"),
-        ("outline", "outline.py"),
         ("ai_generate", "ai_generate.py"),
         ("validate", "validate.py"),
         ("compose", "compose.py"),

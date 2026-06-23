@@ -1,8 +1,8 @@
 """Tests for recap/ai_generate.py — the Bedrock (Nova Premier) Converse call.
 
 The bedrock-runtime client is mocked, so these assert the request shape (model id,
-temperature 0, facts + outline in the user turn), JSON parsing (incl. fenced
-output), and that filtered / empty / unparseable responses raise.
+temperature 0, facts in the user turn), JSON parsing (incl. fenced output), and that
+filtered / empty / unparseable responses raise.
 """
 
 from unittest.mock import MagicMock
@@ -27,40 +27,44 @@ def mock_client(recap_ai_generate, monkeypatch):
     return client
 
 
-_HIGHLIGHTS = {"season": "2025", "week": "1", "matchups": [{"margin": 10}]}
-_OUTLINE = {"headline_angle": "general", "matchups": [{"winner": "Aces"}]}
+_HIGHLIGHTS = {
+    "season": "2025",
+    "week": "1",
+    "matchups": [{"winner": "Aces", "margin": 10}],
+}
 
 
 class TestGenerate:
     def test_returns_parsed_recap(self, recap_ai_generate, mock_client):
-        result = recap_ai_generate.generate(_HIGHLIGHTS, _OUTLINE, "2025", "1")
+        result = recap_ai_generate.generate(_HIGHLIGHTS, "2025", "1")
         assert result == {"headline": "Big Win", "body": "Aces rolled."}
 
     def test_request_shape(self, recap_ai_generate, mock_client):
-        recap_ai_generate.generate(_HIGHLIGHTS, _OUTLINE, "2025", "1")
+        recap_ai_generate.generate(_HIGHLIGHTS, "2025", "1")
         kwargs = mock_client.converse.call_args.kwargs
         assert kwargs["modelId"] == recap_ai_generate.MODEL_ID
         assert kwargs["inferenceConfig"]["temperature"] == 0
         assert kwargs["inferenceConfig"]["maxTokens"] == recap_ai_generate.MAX_TOKENS
-        # Persona/guardrail in the system turn; facts + outline in the user turn.
-        assert "commissioner" in kwargs["system"][0]["text"].lower()
+        # Persona/guardrail in the system turn; facts serialized into the user turn.
+        system = kwargs["system"][0]["text"].lower()
+        assert "commissioner" in system
+        assert "newspaper" in system
         user_text = kwargs["messages"][0]["content"][0]["text"]
-        assert "FACTS" in user_text and "OUTLINE" in user_text
-        assert '"general"' in user_text  # outline serialized in
         assert '"matchups"' in user_text
+        assert '"Aces"' in user_text  # highlights serialized in
 
     def test_strips_code_fences(self, recap_ai_generate, mock_client):
         mock_client.converse.return_value = _converse_response(
             '```json\n{"headline": "H", "body": "B"}\n```'
         )
-        result = recap_ai_generate.generate(_HIGHLIGHTS, _OUTLINE, "2025", "1")
+        result = recap_ai_generate.generate(_HIGHLIGHTS, "2025", "1")
         assert result == {"headline": "H", "body": "B"}
 
     def test_strips_bare_fence_without_language(self, recap_ai_generate, mock_client):
         mock_client.converse.return_value = _converse_response(
             '```{"headline": "H", "body": "B"}```'
         )
-        result = recap_ai_generate.generate(_HIGHLIGHTS, _OUTLINE, "2025", "1")
+        result = recap_ai_generate.generate(_HIGHLIGHTS, "2025", "1")
         assert result == {"headline": "H", "body": "B"}
 
     @pytest.mark.parametrize(
@@ -71,29 +75,29 @@ class TestGenerate:
         resp["stopReason"] = stop_reason
         mock_client.converse.return_value = resp
         with pytest.raises(recap_ai_generate.RecapGenerationError):
-            recap_ai_generate.generate(_HIGHLIGHTS, _OUTLINE, "2025", "1")
+            recap_ai_generate.generate(_HIGHLIGHTS, "2025", "1")
 
     def test_empty_text_raises(self, recap_ai_generate, mock_client):
         mock_client.converse.return_value = _converse_response("")
         with pytest.raises(recap_ai_generate.RecapGenerationError):
-            recap_ai_generate.generate(_HIGHLIGHTS, _OUTLINE, "2025", "1")
+            recap_ai_generate.generate(_HIGHLIGHTS, "2025", "1")
 
     def test_unparseable_json_raises(self, recap_ai_generate, mock_client):
         mock_client.converse.return_value = _converse_response("not json at all")
         with pytest.raises(recap_ai_generate.RecapGenerationError):
-            recap_ai_generate.generate(_HIGHLIGHTS, _OUTLINE, "2025", "1")
+            recap_ai_generate.generate(_HIGHLIGHTS, "2025", "1")
 
     def test_missing_key_raises(self, recap_ai_generate, mock_client):
         mock_client.converse.return_value = _converse_response('{"headline": "H"}')
         with pytest.raises(recap_ai_generate.RecapGenerationError):
-            recap_ai_generate.generate(_HIGHLIGHTS, _OUTLINE, "2025", "1")
+            recap_ai_generate.generate(_HIGHLIGHTS, "2025", "1")
 
     def test_blank_fields_raise(self, recap_ai_generate, mock_client):
         mock_client.converse.return_value = _converse_response(
             '{"headline": "  ", "body": "  "}'
         )
         with pytest.raises(recap_ai_generate.RecapGenerationError):
-            recap_ai_generate.generate(_HIGHLIGHTS, _OUTLINE, "2025", "1")
+            recap_ai_generate.generate(_HIGHLIGHTS, "2025", "1")
 
 
 class TestGetClient:

@@ -1,8 +1,9 @@
 """Tests for recap/compose.py — the orchestrator.
 
-Verifies the four-step flow: deterministic outline → Bedrock AI → numeric
-validation → snippet fallback. ``ai_generate.generate`` is monkeypatched; the
-validation gate and the snippet composer run for real.
+Verifies the flow: Bedrock AI generation → numeric validation. There is no
+deterministic fallback, so an AI failure, a validation rejection, or an empty week
+raises ``RecapGenerationError`` (which the handler records as a failed week).
+``ai_generate.generate`` is monkeypatched; the validation gate runs for real.
 """
 
 import pytest
@@ -54,60 +55,50 @@ def _highlights(matchups=None):
 
 
 class TestGenerateRecap:
-    def test_ai_success_returns_ai_model(self, recap_compose, monkeypatch):
+    def test_valid_recap_returns_model(self, recap_compose, monkeypatch):
         monkeypatch.setattr(
             recap_compose.ai_generate,
             "generate",
-            lambda h, o, s, w: {"headline": "AI Headline", "body": "Aces rolled."},
+            lambda h, s, w: {"headline": "AI Headline", "body": "Aces rolled."},
         )
         result = recap_compose.generate_recap(_highlights(), "2025", "1")
         assert result["headline"] == "AI Headline"
         assert result["body"] == "Aces rolled."
         assert result["model"] == recap_compose.ai_generate.MODEL_ID
 
-    def test_ai_error_falls_back_to_snippet(self, recap_compose, monkeypatch):
-        def _raise(h, o, s, w):
-            raise recap_compose.ai_generate.RecapGenerationError("blocked")
-
-        monkeypatch.setattr(recap_compose.ai_generate, "generate", _raise)
-        result = recap_compose.generate_recap(_highlights(), "2025", "1")
-        assert result["model"] == "snippet-v1"
-        assert result["headline"] and result["body"]
-
-    def test_unexpected_ai_error_falls_back(self, recap_compose, monkeypatch):
-        def _boom(h, o, s, w):
-            raise RuntimeError("throttled")
-
-        monkeypatch.setattr(recap_compose.ai_generate, "generate", _boom)
-        result = recap_compose.generate_recap(_highlights(), "2025", "1")
-        assert result["model"] == "snippet-v1"
-        assert result["body"]
-
-    def test_failed_validation_falls_back(self, recap_compose, monkeypatch):
-        # An invented number fails the gate -> deterministic fallback.
-        monkeypatch.setattr(
-            recap_compose.ai_generate,
-            "generate",
-            lambda h, o, s, w: {
-                "headline": "Phantom",
-                "body": "Aces piled up 99999 points from nowhere.",
-            },
-        )
-        result = recap_compose.generate_recap(_highlights(), "2025", "1")
-        assert result["model"] == "snippet-v1"
-
     def test_valid_ai_numbers_kept(self, recap_compose, monkeypatch):
         # Real scores from the highlights pass validation -> AI recap is kept.
         monkeypatch.setattr(
             recap_compose.ai_generate,
             "generate",
-            lambda h, o, s, w: {
+            lambda h, s, w: {
                 "headline": "Aces 100-90",
                 "body": "Aces beat Bears 100 to 90.",
             },
         )
         result = recap_compose.generate_recap(_highlights(), "2025", "1")
         assert result["model"] == recap_compose.ai_generate.MODEL_ID
+
+    def test_failed_validation_raises(self, recap_compose, monkeypatch):
+        # An invented number fails the gate -> no fallback, the week is left failed.
+        monkeypatch.setattr(
+            recap_compose.ai_generate,
+            "generate",
+            lambda h, s, w: {
+                "headline": "Phantom",
+                "body": "Aces piled up 99999 points from nowhere.",
+            },
+        )
+        with pytest.raises(recap_compose.RecapGenerationError):
+            recap_compose.generate_recap(_highlights(), "2025", "1")
+
+    def test_ai_error_propagates(self, recap_compose, monkeypatch):
+        def _raise(h, s, w):
+            raise recap_compose.ai_generate.RecapGenerationError("blocked")
+
+        monkeypatch.setattr(recap_compose.ai_generate, "generate", _raise)
+        with pytest.raises(recap_compose.RecapGenerationError):
+            recap_compose.generate_recap(_highlights(), "2025", "1")
 
     def test_no_matchups_skips_ai_and_raises(self, recap_compose, monkeypatch):
         called = []
@@ -119,3 +110,6 @@ class TestGenerateRecap:
         with pytest.raises(recap_compose.RecapGenerationError):
             recap_compose.generate_recap(_highlights(matchups=[]), "2025", "1")
         assert called == []  # AI never invoked for an empty week
+
+    def test_model_id_re_exported(self, recap_compose):
+        assert recap_compose.MODEL_ID == recap_compose.ai_generate.MODEL_ID

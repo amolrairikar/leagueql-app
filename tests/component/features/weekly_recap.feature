@@ -1,10 +1,11 @@
 Feature: Weekly recap backfill (BE-022)
   A genuine premium activation in the Stripe webhook fans out an async recap
   backfill that generates one RECAP item per season/week of MATCHUPS, idempotently.
-  Recaps are written by an LLM (Bedrock Nova Premier, mocked here) constrained by a
-  deterministic outline + numeric-validation gate, with a deterministic snippet
-  composer as fallback when Bedrock fails. Real DynamoDB runs via moto. Generated
-  recaps are served back through the BE-005 query endpoint.
+  Recaps are written by an LLM (Bedrock Nova Premier, mocked here) as a
+  newspaper-style column, guarded by a numeric-validation gate. There is no
+  fallback: if Bedrock fails the week is left un-recapped for a later retry. Real
+  DynamoDB runs via moto. Generated recaps are served back through the BE-005 query
+  endpoint.
 
   Background:
     Given a LEAGUE_LOOKUP exists for league "100" platform "SLEEPER" canonical "canon-1"
@@ -19,14 +20,13 @@ Feature: Weekly recap backfill (BE-022)
     And a RECAP item exists for league "canon-1" season "2024" week "02"
     And the recap "model" for league "canon-1" season "2024" week "01" is "us.amazon.nova-premier-v1:0"
 
-  Scenario: A Bedrock outage falls back to the deterministic snippet composer
+  Scenario: A Bedrock outage leaves the week un-recapped for a later retry
     Given a subscribable league "canon-1" native "100" on "SLEEPER"
     And the Bedrock recap model is unavailable
     And league "canon-1" has a "MATCHUPS#2024#WEEK#01" view with 2 row(s)
     When Stripe sends a "checkout.session.completed" webhook (event "evt_1") for subscription "sub_1" with status "active"
     Then the webhook responds with status 200
-    And a RECAP item exists for league "canon-1" season "2024" week "01"
-    And the recap "model" for league "canon-1" season "2024" week "01" is "snippet-v1"
+    And no RECAP item exists for league "canon-1" season "2024" week "01"
 
   Scenario: A subscription for one league does not generate recaps for another league
     Given a subscribable league "canon-1" native "100" on "SLEEPER"

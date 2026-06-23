@@ -1,18 +1,18 @@
 """LLM recap generation via Amazon Bedrock — Amazon Nova Premier (BE-022).
 
-The only LLM-touching code in the recap pipeline. Calls Bedrock's **Converse**
-API with the boto3 ``bedrock-runtime`` client, authenticating with the Lambda's
-IAM execution role (SigV4) — there is **no API-key secret**. Inputs are the
-deterministic ``highlights`` dict (``highlights.py`` — the numeric guardrail) and
-the deterministic ``outline`` (``outline.py`` — the story plan / order). Output is
+The author of the weekly recap. Calls Bedrock's **Converse** API with the boto3
+``bedrock-runtime`` client, authenticating with the Lambda's IAM execution role
+(SigV4) — there is **no API-key secret**. Input is the deterministic ``highlights``
+dict (``highlights.py`` — the numeric guardrail); the model writes the whole
+"commissioner's column" as a sports-newspaper-style article. Output is
 ``{headline, body}``.
 
 The system prompt carries the persona / voice / output contract / numeric
-guardrail; the highlights + outline ride in the user turn (data belongs in the
-user message, never the system prompt). Generation runs at **temperature 0** so a
-given week's prose stays stable within a run. ``compose.py`` wraps this with a
-numeric-validation gate and a deterministic snippet fallback, so a blocked or
-unusable response never loses the week.
+guardrail; the highlights ride in the user turn (data belongs in the user message,
+never the system prompt). Generation runs at **temperature 0** so a given week's
+prose stays stable within a run. ``compose.py`` wraps this with a numeric-validation
+gate; there is no deterministic fallback, so a blocked / unusable / unfaithful
+response leaves the week un-recapped for a later retry.
 
 Model + provider: Amazon Nova Premier on Amazon Bedrock. The model /
 inference-profile id is supplied via ``BEDROCK_MODEL_ID`` (default the cross-region
@@ -33,38 +33,41 @@ from common.logging_utils import logger
 # so a region-specific profile id can be supplied without a code change.
 MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", "us.amazon.nova-premier-v1:0")
 
-# Headroom for a headline + a multi-paragraph column.
+# Headroom for a headline + a multi-paragraph article.
 MAX_TOKENS = 2000
 
 # Converse ``stopReason`` values that mean the model declined / was filtered
-# rather than completing — treat like a refusal so the week falls back.
+# rather than completing — treat like a refusal so the week is left un-recapped.
 _BLOCKED_STOP_REASONS = {"content_filtered", "guardrail_intervened"}
 
 _SYSTEM_PROMPT = (
-    "You are the commissioner of a fantasy football league writing the weekly "
-    "recap column — a lively, cohesive 'commissioner's column' that flows as one "
-    "narrative about the week: its storylines, upsets, standout performances, and "
-    "a little good-natured trash talk. Write 3-5 short connected paragraphs (not a "
-    "list of separate game summaries), refer to managers and teams by name, and "
-    "land a fun, opinionated voice.\n\n"
-    "You will be given the week's FACTS (every legal number and name) and an "
-    "OUTLINE (the order to cover matchups in, the headline angle, and the beats "
-    "worth hitting). Follow the outline's ordering and emphasis; lead with the "
-    "biggest story.\n\n"
-    "CRITICAL GUARDRAIL: Use ONLY the numbers, names, and facts provided. Never "
-    "invent, estimate, or alter any score, player, statistic, margin, or record. "
-    "If a detail is not in the provided data, do not mention it.\n\n"
+    "You are the league commissioner moonlighting as a sports columnist, writing "
+    "the week's recap as a newspaper-style sports article — a beat writer's column "
+    "on the week in fantasy football. Open with a lede that captures the week's "
+    "defining storyline, then develop the narrative across several short, connected "
+    "paragraphs: the marquee matchup, the upsets and blowouts, standout individual "
+    "performances, and the playoff or standings picture where it matters. Decide for "
+    "yourself which stories lead and how the article flows — the most dramatic "
+    "results and performances deserve the top of the column.\n\n"
+    "Voice: lively, witty, and opinionated, with a little good-natured trash talk — "
+    "a commissioner's column, not a dry box-score readout. Refer to managers and "
+    "teams by name. Write it as flowing prose, never a bulleted list or a "
+    "game-by-game recap template.\n\n"
+    "CRITICAL GUARDRAIL: Use ONLY the numbers, names, and facts in the provided "
+    "data. Never invent, estimate, or alter any score, player, statistic, margin, "
+    "or record. If a detail is not in the data, do not mention it. Frame playoff "
+    "stakes only for matchups the data marks as playoff games.\n\n"
     "Respond with ONLY a JSON object (no markdown, no code fences) of the exact "
-    'shape: {"headline": "<short punchy headline>", "body": "<the recap '
-    'narrative, paragraphs separated by blank lines>"}.'
+    'shape: {"headline": "<punchy newspaper-style headline>", "body": "<the article, '
+    'paragraphs separated by blank lines>"}.'
 )
 
 
 class RecapGenerationError(Exception):
     """Raised when the model is filtered or returns unusable output for a week.
 
-    ``compose.py`` catches this and falls back to the deterministic snippet
-    composer so the week is still recapped.
+    There is no fallback: ``handler.py`` records the week as failed (failure_code
+    ``RECAP``) and a later retry regenerates it.
     """
 
 
@@ -96,12 +99,11 @@ def _strip_code_fences(text: str) -> str:
     return text.strip()
 
 
-def generate(highlights: dict, outline: dict, season: str, week: str) -> dict:
+def generate(highlights: dict, season: str, week: str) -> dict:
     """Generate a ``{headline, body}`` recap for one week via Bedrock.
 
     Args:
         highlights: The deterministic highlights dict (the numeric guardrail).
-        outline: The deterministic story plan (see ``build_outline``).
         season: Season year (for logging / error context).
         week: Week number (for logging / error context).
 
@@ -114,11 +116,9 @@ def generate(highlights: dict, outline: dict, season: str, week: str) -> dict:
     """
     client = _get_client()
     user_text = (
-        f"Write the recap for season {season}, week {week}.\n\n"
-        "FACTS (use only these numbers and names):\n"
+        f"Write the recap column for season {season}, week {week}. Use only the "
+        "facts below — every number and name must come from this data:\n\n"
         + json.dumps(highlights, separators=(",", ":"))
-        + "\n\nOUTLINE (cover matchups in this order, hit these beats):\n"
-        + json.dumps(outline, separators=(",", ":"))
     )
     response = client.converse(
         modelId=MODEL_ID,
@@ -128,7 +128,7 @@ def generate(highlights: dict, outline: dict, season: str, week: str) -> dict:
     )
 
     # Content filtering / guardrail intervention surface as a stopReason (HTTP 200),
-    # not an exception — check before reading content so the week falls back.
+    # not an exception — check before reading content so the week is left un-recapped.
     stop_reason = response.get("stopReason")
     if stop_reason in _BLOCKED_STOP_REASONS:
         logger.warning(

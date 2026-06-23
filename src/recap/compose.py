@@ -1,85 +1,62 @@
-"""Recap orchestrator (BE-022): outline → AI → validate → snippet fallback.
+"""Recap orchestrator (BE-022): AI generation + numeric validation.
 
 ``handler.py`` imports ``generate_recap`` and ``RecapGenerationError`` from here and
 is agnostic to how the prose is produced. For one week's deterministic highlights:
 
-1. ``outline.build_outline`` — a deterministic story plan (order + emphasis).
-2. ``ai_generate.generate`` — Amazon Bedrock (Nova Premier) writes the column at
-   temperature 0, constrained by the outline + a hard numeric guardrail.
-3. ``validate.validate_recap`` — rejects any recap that prints a number the facts
-   don't contain.
-4. On **any** AI failure (blocked / empty / unparseable / throttled) or a failed
-   validation, fall back to ``generate.generate_recap`` — the deterministic snippet
-   composer (kept unchanged) — so a recap always exists.
+1. ``ai_generate.generate`` — Amazon Bedrock (Nova Premier) writes the recap as a
+   sports-newspaper-style column, constrained by a hard numeric guardrail.
+2. ``validate.validate_recap`` — rejects any recap that prints a number the facts
+   don't contain (a hallucinated score / stat).
 
-The returned dict carries the ``model`` that actually produced it (the Bedrock
-model id for an AI recap, ``snippet-v1`` for a fallback) so each recap is traceable.
-
-``RecapGenerationError`` re-exported here is the snippet composer's — it is raised
-only when even the fallback can't compose a week (no matchups), which ``handler.py``
-counts as a failed week.
+There is **no deterministic fallback**: on any AI failure (blocked / empty /
+unparseable / throttled) or a failed validation, ``RecapGenerationError`` propagates
+and ``handler.py`` records the week as failed (failure_code ``RECAP``) so a later
+retry regenerates it. The returned dict carries the Bedrock ``model`` id that
+produced it.
 """
 
 import ai_generate
-import generate as snippet
-import outline as outline_mod
 import validate as validate_mod
 from common.logging_utils import logger
 
-# Re-export the snippet composer's error so `handler.py`'s `except RecapGenerationError`
-# catches the only failure that can escape `generate_recap` (a week with no matchups).
-RecapGenerationError = snippet.RecapGenerationError
+# Re-exported so `handler.py`'s `except RecapGenerationError` catches both an AI
+# failure and a validation rejection (raised below).
+RecapGenerationError = ai_generate.RecapGenerationError
+MODEL_ID = ai_generate.MODEL_ID
 
 
 def generate_recap(highlights: dict, season: str, week: str) -> dict:
-    """Compose one week's recap, preferring AI prose with a deterministic fallback.
+    """Generate one week's validated recap.
 
     Args:
         highlights: The deterministic highlights dict (see ``compute_highlights``).
-        season: Season year (seeds the fallback / error context).
+        season: Season year (error context).
         week: Week number.
 
     Returns:
         ``{"headline": str, "body": str, "model": str}`` — ``model`` is the Bedrock
-        model id when the AI recap was used, else ``snippet-v1``.
+        model id that produced the recap.
 
     Raises:
-        RecapGenerationError: Even the snippet fallback could not compose the week
-            (no matchups). Propagated for ``handler.py`` to mark the week failed.
+        RecapGenerationError: The week has no matchups, the model failed or was
+            blocked, or the output printed a number not present in the highlights.
     """
-    if highlights.get("matchups"):
-        try:
-            plan = outline_mod.build_outline(highlights)
-            recap = ai_generate.generate(highlights, plan, season, week)
-            if validate_mod.validate_recap(recap, highlights):
-                return {
-                    "headline": recap["headline"],
-                    "body": recap["body"],
-                    "model": ai_generate.MODEL_ID,
-                }
-            logger.warning(
-                "AI recap failed numeric validation for %s week %s; "
-                "falling back to snippet composer",
-                season,
-                week,
-            )
-        except Exception:
-            # Any AI-side failure (blocked/empty/unparseable, throttling, transient
-            # Bedrock errors) falls back to the deterministic composer rather than
-            # losing the week.
-            logger.warning(
-                "AI recap generation failed for %s week %s; "
-                "falling back to snippet composer",
-                season,
-                week,
-                exc_info=True,
-            )
+    if not highlights.get("matchups"):
+        raise RecapGenerationError(f"No matchups to recap for {season} week {week}")
 
-    # Deterministic fallback. Raises RecapGenerationError only if the week has no
-    # matchups to write about.
-    fallback = snippet.generate_recap(highlights, season, week)
+    recap = ai_generate.generate(highlights, season, week)
+    if not validate_mod.validate_recap(recap, highlights):
+        logger.warning(
+            "AI recap failed numeric validation for %s week %s; leaving un-recapped",
+            season,
+            week,
+        )
+        raise RecapGenerationError(
+            f"Recap failed numeric validation for {season} week {week}"
+        )
+
     return {
-        "headline": fallback["headline"],
-        "body": fallback["body"],
-        "model": snippet.MODEL_ID,
+        "headline": recap["headline"],
+        "body": recap["body"],
+        "model": ai_generate.MODEL_ID,
     }

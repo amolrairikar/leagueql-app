@@ -37,7 +37,7 @@ criteria. Frontend, backend, and extension features are kept separate.
 | [BE-019](backend/BE-019-sleeper-transactions.md) | Sleeper Transactions (Waivers, Trades, Free Agents) |
 | [BE-020](backend/BE-020-api-otel-tracing.md) | API OpenTelemetry Tracing → Axiom |
 | [BE-021](backend/BE-021-async-chain-otel-propagation.md) | Async Chain OpenTelemetry Trace Propagation |
-| [BE-022](backend/BE-022-weekly-recap.md) | Weekly Recap Generator (deterministic snippet templates) |
+| [BE-022](backend/BE-022-weekly-recap.md) | Weekly Recap Generator (AI column via Bedrock Nova Premier) |
 
 ## Frontend (`frontend/`)
 | ID | Feature |

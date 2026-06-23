@@ -1,12 +1,12 @@
 """Fixtures for the recap Lambda unit tests.
 
-Loads the recap modules (``highlights`` / ``snippets`` / ``generate`` / ``outline`` /
-``ai_generate`` / ``validate`` / ``compose`` / ``handler``) from ``src/recap`` under
-unique module names (their basenames collide with other Lambdas), registering the
-flat names in ``sys.modules`` so each module's bare ``import`` (e.g. the handler's
-``from compose import ...``, compose's ``import ai_generate``) resolve. boto3 is
-mocked at import so module-level ``boto3.resource`` / lazy ``boto3.client`` need no
-AWS call or credential; the Bedrock ``converse`` client is patched per test.
+Loads the recap modules (``highlights`` / ``ai_generate`` / ``validate`` /
+``compose`` / ``handler``) from ``src/recap`` under unique module names (their
+basenames collide with other Lambdas), registering the flat names in ``sys.modules``
+so each module's bare ``import`` (e.g. the handler's ``from compose import ...``,
+compose's ``import ai_generate``) resolve. boto3 is mocked at import so module-level
+``boto3.resource`` / lazy ``boto3.client`` need no AWS call or credential; the
+Bedrock ``converse`` client is patched per test.
 """
 
 import importlib.util
@@ -22,9 +22,6 @@ _SRC = Path(__file__).parents[3] / "src" / "recap"
 # Bare names registered for the duration of the session, in dependency order.
 _MODULES = [
     ("highlights", "highlights.py"),
-    ("snippets", "snippets.py"),
-    ("generate", "generate.py"),
-    ("outline", "outline.py"),
     ("ai_generate", "ai_generate.py"),
     ("validate", "validate.py"),
     ("compose", "compose.py"),
@@ -69,21 +66,6 @@ def _bootstrap_recap():
 @pytest.fixture(scope="session")
 def recap_highlights():
     return sys.modules["recap.highlights"]
-
-
-@pytest.fixture(scope="session")
-def recap_snippets():
-    return sys.modules["recap.snippets"]
-
-
-@pytest.fixture(scope="session")
-def recap_generate():
-    return sys.modules["recap.generate"]
-
-
-@pytest.fixture(scope="session")
-def recap_outline():
-    return sys.modules["recap.outline"]
 
 
 @pytest.fixture(scope="session")

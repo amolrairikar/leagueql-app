@@ -227,8 +227,8 @@ module "stripe_webhook_lambda" {
 
 # Weekly recap generator (BE-022). Deployed in both regions so each region's
 # Stripe webhook invokes its same-region copy. Recaps are written by Amazon Bedrock
-# (Nova Premier) via the Converse API, constrained by a deterministic outline +
-# numeric-validation gate, with a deterministic snippet composer as fallback.
+# (Nova Premier) via the Converse API as a sports-newspaper-style column, guarded by
+# a numeric-validation gate (no fallback — a failed week is retried later).
 # Continues the webhook's OTel trace (BE-021).
 module "recap_lambda" {
   source = "../modules/lambda"

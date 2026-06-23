@@ -4,8 +4,8 @@
 A premium section on the `/matchups` page that renders the "commissioner's column"
 ([BE-022](../backend/BE-022-weekly-recap.md)) for the currently-selected season/week — a
 headline plus a narrative body recapping that week's storylines, upsets, and awards. The recap
-is composed server-side from a deterministic snippet phrase bank (no LLM); the frontend is
-agnostic to how it's produced. It is **not** a standalone page or nav entry; it reuses the
+is written server-side by an LLM (Amazon Nova Premier on Bedrock) as a sports-newspaper-style
+column; the frontend is agnostic to how it's produced. It is **not** a standalone page or nav entry; it reuses the
 matchups page's existing
 `selectedSeason` / `selectedWeek` state and renders directly **below** the FE-032 weekly awards
 & superlatives section (page order: matchups grid → FE-032 superlatives → FE-033 recap).

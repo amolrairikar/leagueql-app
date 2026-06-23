@@ -13,10 +13,11 @@ Mirrors the existing async workers (``sleeper_refresh``, ``processor``): module-
 
 Generation is controlled two ways: premium-only (feature-flag + subscription
 re-check) and per-week idempotency (an existing RECAP item is skipped). Recaps are
-composed by ``compose.py`` (deterministic outline → Bedrock Nova Premier → numeric
-validation → deterministic snippet fallback); since each week is an independent
-Bedrock call, the per-week generations run on a small bounded thread pool while the
-DynamoDB writes stay serial.
+composed by ``compose.py`` (Bedrock Nova Premier writes a newspaper-style column →
+numeric validation; no fallback, so a failed/blocked/unfaithful week is left
+un-recapped for a later retry). Since each week is an independent Bedrock call, the
+per-week generations run on a small bounded thread pool while the DynamoDB writes
+stay serial.
 """
 
 import datetime
