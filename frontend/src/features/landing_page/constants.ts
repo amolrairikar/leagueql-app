@@ -139,6 +139,10 @@ export const PREMIUM_FEATURES: PremiumFeature[] = [
     title: 'Analytics page',
     desc: 'Per-manager box-and-whisker plots of weekly scores show who is steady and who is feast-or-famine, while a power-rankings chart ranks every team week by week.',
   },
+  {
+    title: 'Lineup efficiency',
+    desc: 'See how many points each manager left on the bench each week — the optimal legal lineup vs. what they actually started, with a slot-by-slot start/sit report (FLEX/superflex aware).',
+  },
 ];
 
 export const FOOTER_LINKS: string[] = ['About', 'Privacy', 'GitHub'];

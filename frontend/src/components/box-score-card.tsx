@@ -1,6 +1,7 @@
 import { X } from 'lucide-react';
 
 import { TeamAvatar } from '@/components/team-avatar';
+import { LineupEfficiencyChip } from '@/features/lineup_efficiency/lineup-efficiency-chip';
 import type { PlayerStat } from '@/features/matchups/api-calls';
 import { UI_COLORS } from '@/lib/color-constants';
 import { FANTASY_POSITION_ORDER } from '@/lib/position-constants';
@@ -59,6 +60,7 @@ export function BoxScoreCard({
               <div className="text-[11px] text-muted-foreground">
                 {left.teamName}
               </div>
+              <LineupEfficiencyChip side={left} />
             </div>
           </div>
           <div className="text-center">
@@ -91,6 +93,7 @@ export function BoxScoreCard({
               <div className="text-[11px] text-muted-foreground">
                 {right.teamName}
               </div>
+              <LineupEfficiencyChip side={right} />
             </div>
           </div>
         </div>
@@ -114,6 +117,7 @@ export function BoxScoreCard({
                   <div className="text-[11px] text-muted-foreground">
                     {side.teamName}
                   </div>
+                  <LineupEfficiencyChip side={side} />
                 </div>
                 {side.isWinner && (
                   <span
