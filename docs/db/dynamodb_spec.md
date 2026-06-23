@@ -318,9 +318,10 @@ Represents matchups for a given week in the fantasy league.
 <summary><b>RECAP</b></summary>
 
 Represents the weekly recap ("commissioner's column") for a single league season/week (BE-022),
-composed deterministically from a snippet phrase bank (no LLM). One item per league/season/week
-(mirrors `MATCHUPS` keying). Written by the `recap` Lambda and served read-only through the
-BE-005 query endpoint.
+written by an LLM (Amazon Nova Premier on Bedrock) constrained by a deterministic outline and a
+numeric-validation gate, with a deterministic snippet-phrase-bank composer as fallback. One item
+per league/season/week (mirrors `MATCHUPS` keying). Written by the `recap` Lambda and served
+read-only through the BE-005 query endpoint.
 
 | Attribute | Type | Required | Description |
 |---|---|---|---|
@@ -336,7 +337,7 @@ BE-005 query endpoint.
 | `week` | String | Week number (e.g. `"1"`) |
 | `headline` | String | Headline for the week |
 | `body` | String | Narrative recap body (one paragraph per matchup) |
-| `model` | String | Recap composer version (e.g. `snippet-v1`) |
+| `model` | String | Generator that produced this recap: the Bedrock model id (e.g. `us.amazon.nova-premier-v1:0`) for an AI recap, or `snippet-v1` for the deterministic fallback |
 | `generated_at` | String | ISO 8601 (UTC) generation timestamp |
 
 **Example:**

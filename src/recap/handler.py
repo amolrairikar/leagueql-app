@@ -13,12 +13,15 @@ Mirrors the existing async workers (``sleeper_refresh``, ``processor``): module-
 
 Generation is controlled two ways: premium-only (feature-flag + subscription
 re-check) and per-week idempotency (an existing RECAP item is skipped). Recaps are
-composed deterministically from a snippet phrase bank (``generate.py``) — no LLM,
-so generation is instant and runs single-threaded.
+composed by ``compose.py`` (deterministic outline → Bedrock Nova Premier → numeric
+validation → deterministic snippet fallback); since each week is an independent
+Bedrock call, the per-week generations run on a small bounded thread pool while the
+DynamoDB writes stay serial.
 """
 
 import datetime
 import os
+from concurrent.futures import ThreadPoolExecutor
 
 import boto3
 import botocore.config
@@ -28,8 +31,13 @@ from common.feature_flags import PREMIUM_FEATURE, is_feature_paywalled
 from common.job_status import write_job_status
 from common.logging_utils import logger
 from common.tracing import init_tracing, traced_handler
-from generate import RecapGenerationError, MODEL_ID, generate_recap
+from compose import RecapGenerationError, generate_recap
 from highlights import compute_highlights
+
+# Bound on concurrent per-week Bedrock generations during a backfill. Generation
+# is network-bound (an LLM call per week), so a small pool keeps backfill latency
+# down without overwhelming Bedrock throttling limits.
+_MAX_GENERATE_WORKERS = 8
 
 # Continue the end-to-end trace the webhook started (BE-021). No-op unless Axiom
 # is configured, so tests / unconfigured envs are unaffected.
@@ -123,7 +131,9 @@ def _write_recap(
                     "week": week,
                     "headline": recap["headline"],
                     "body": recap["body"],
-                    "model": MODEL_ID,
+                    # The generator that produced this recap (Bedrock model id for an
+                    # AI recap, "snippet-v1" for the deterministic fallback).
+                    "model": recap["model"],
                     "generated_at": datetime.datetime.now(
                         datetime.timezone.utc
                     ).isoformat(),
@@ -133,16 +143,16 @@ def _write_recap(
     )
 
 
-def _generate_and_write(table, canonical_league_id: str, work: dict) -> bool:
-    """Compose + persist one week's recap. Returns True on success, False on a
-    handled generation failure. Reads were done up front, so the only DynamoDB
-    call here is the per-week ``put_item``.
+def _generate_one(canonical_league_id: str, work: dict) -> dict | None:
+    """Compose one week's recap. Returns the recap dict, or ``None`` on a handled
+    generation failure (so a bad week never loses the others). Pure compute + the
+    Bedrock call — no DynamoDB — so it is safe to run concurrently across weeks.
     """
-    season, ww, week = work["season"], work["ww"], work["week"]
+    season, ww = work["season"], work["ww"]
     try:
-        recap = generate_recap(work["highlights"], season, week)
+        return generate_recap(work["highlights"], season, work["week"])
     except RecapGenerationError:
-        return False
+        return None
     except Exception:
         logger.exception(
             "Unexpected error generating recap for %s %s week %s",
@@ -150,10 +160,7 @@ def _generate_and_write(table, canonical_league_id: str, work: dict) -> bool:
             season,
             ww,
         )
-        return False
-
-    _write_recap(table, canonical_league_id, season, ww, week, recap)
-    return True
+        return None
 
 
 def lambda_handler(event, context) -> dict:
@@ -226,13 +233,31 @@ def lambda_handler(event, context) -> dict:
                 }
             )
 
+        # Generate weeks concurrently (each is an independent Bedrock call), then
+        # write serially — the DynamoDB Table resource isn't guaranteed thread-safe,
+        # and the Bedrock call is what dominates latency. ``map`` preserves order, so
+        # writes stay in week order.
         generated = 0
         failed = 0
-        for work in work_items:
-            if _generate_and_write(table, canonical_league_id, work):
+        if work_items:
+            workers = min(_MAX_GENERATE_WORKERS, len(work_items))
+            with ThreadPoolExecutor(max_workers=workers) as pool:
+                recaps = pool.map(
+                    lambda w: (w, _generate_one(canonical_league_id, w)), work_items
+                )
+            for work, recap in recaps:
+                if recap is None:
+                    failed += 1
+                    continue
+                _write_recap(
+                    table,
+                    canonical_league_id,
+                    work["season"],
+                    work["ww"],
+                    work["week"],
+                    recap,
+                )
                 generated += 1
-            else:
-                failed += 1
 
         status = "FAILED" if failed else "COMPLETED"
         write_job_status(

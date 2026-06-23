@@ -1,11 +1,12 @@
 """Fixtures for the recap Lambda unit tests.
 
-Loads ``highlights`` / ``generate`` / ``handler`` from ``src/recap`` under unique
-module names (their basenames collide with other Lambdas), registering the flat
-names in ``sys.modules`` so the handler's ``from generate import ...`` /
-``from highlights import ...`` resolve. boto3 is mocked at import so the handler's
-module-level ``boto3.resource`` needs no AWS call or credential (recap composition
-itself is pure — no AWS, no LLM).
+Loads the recap modules (``highlights`` / ``snippets`` / ``generate`` / ``outline`` /
+``ai_generate`` / ``validate`` / ``compose`` / ``handler``) from ``src/recap`` under
+unique module names (their basenames collide with other Lambdas), registering the
+flat names in ``sys.modules`` so each module's bare ``import`` (e.g. the handler's
+``from compose import ...``, compose's ``import ai_generate``) resolve. boto3 is
+mocked at import so module-level ``boto3.resource`` / lazy ``boto3.client`` need no
+AWS call or credential; the Bedrock ``converse`` client is patched per test.
 """
 
 import importlib.util
@@ -18,6 +19,18 @@ import pytest
 
 _SRC = Path(__file__).parents[3] / "src" / "recap"
 
+# Bare names registered for the duration of the session, in dependency order.
+_MODULES = [
+    ("highlights", "highlights.py"),
+    ("snippets", "snippets.py"),
+    ("generate", "generate.py"),
+    ("outline", "outline.py"),
+    ("ai_generate", "ai_generate.py"),
+    ("validate", "validate.py"),
+    ("compose", "compose.py"),
+    ("handler", "handler.py"),
+]
+
 
 def _load_module(unique_name: str, path: Path) -> object:
     spec = importlib.util.spec_from_file_location(unique_name, path)
@@ -29,9 +42,7 @@ def _load_module(unique_name: str, path: Path) -> object:
 
 @pytest.fixture(scope="session", autouse=True)
 def _bootstrap_recap():
-    saved = {
-        n: sys.modules.get(n) for n in ["highlights", "generate", "snippets", "handler"]
-    }
+    saved = {name: sys.modules.get(name) for name, _ in _MODULES}
     env = {"DYNAMODB_TABLE_NAME": "test-table"}
 
     with patch.dict(os.environ, env):
@@ -42,17 +53,9 @@ def _bootstrap_recap():
             mock_resource.return_value = MagicMock()
             mock_client.return_value = MagicMock()
 
-            highlights_mod = _load_module("recap.highlights", _SRC / "highlights.py")
-            sys.modules["highlights"] = highlights_mod
-
-            snippets_mod = _load_module("recap.snippets", _SRC / "snippets.py")
-            sys.modules["snippets"] = snippets_mod
-
-            generate_mod = _load_module("recap.generate", _SRC / "generate.py")
-            sys.modules["generate"] = generate_mod
-
-            handler_mod = _load_module("recap.handler", _SRC / "handler.py")
-            sys.modules["handler"] = handler_mod
+            for bare, filename in _MODULES:
+                mod = _load_module(f"recap.{bare}", _SRC / filename)
+                sys.modules[bare] = mod
 
     for name, prev in saved.items():
         if prev is None:
@@ -76,6 +79,26 @@ def recap_snippets():
 @pytest.fixture(scope="session")
 def recap_generate():
     return sys.modules["recap.generate"]
+
+
+@pytest.fixture(scope="session")
+def recap_outline():
+    return sys.modules["recap.outline"]
+
+
+@pytest.fixture(scope="session")
+def recap_ai_generate():
+    return sys.modules["recap.ai_generate"]
+
+
+@pytest.fixture(scope="session")
+def recap_validate():
+    return sys.modules["recap.validate"]
+
+
+@pytest.fixture(scope="session")
+def recap_compose():
+    return sys.modules["recap.compose"]
 
 
 @pytest.fixture(scope="session")

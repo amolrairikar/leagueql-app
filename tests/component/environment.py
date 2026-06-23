@@ -241,19 +241,42 @@ def _load_handlers(context) -> None:
     )
 
     # --- weekly recap (BE-022) ---------------------------------------------
-    # `highlights` / `snippets` / `generate` share bare names; load them, then the
-    # handler. Recap composition is deterministic (a snippet phrase bank — no LLM,
-    # no external dep), so nothing here is mocked; real DynamoDB via moto runs.
-    sys.modules["highlights"] = _load_module(
-        "recap.highlights", _SRC / "recap" / "highlights.py"
-    )
-    sys.modules["snippets"] = _load_module(
-        "recap.snippets", _SRC / "recap" / "snippets.py"
-    )
-    sys.modules["generate"] = _load_module(
-        "recap.generate", _SRC / "recap" / "generate.py"
-    )
+    # The recap modules share bare names across lambdas; load them in dependency
+    # order so each module's bare imports resolve, then the handler. Bedrock is the
+    # only external dep in the recap pipeline; its Converse client is mocked below.
+    # Real DynamoDB via moto runs.
+    for _bare, _file in (
+        ("highlights", "highlights.py"),
+        ("snippets", "snippets.py"),
+        ("generate", "generate.py"),
+        ("outline", "outline.py"),
+        ("ai_generate", "ai_generate.py"),
+        ("validate", "validate.py"),
+        ("compose", "compose.py"),
+    ):
+        sys.modules[_bare] = _load_module(f"recap.{_bare}", _SRC / "recap" / _file)
+    context.recap_ai_generate = sys.modules["ai_generate"]
     context.recap_handler = _load_module("recap.handler", _SRC / "recap" / "handler.py")
+
+    # Mock the bedrock-runtime Converse client so the AI path returns a fixed,
+    # number-free narrative (passes the numeric-validation gate). Steps can set a
+    # side_effect to force the deterministic snippet fallback; reset per scenario.
+    bedrock = MagicMock()
+    bedrock.converse.return_value = {
+        "stopReason": "end_turn",
+        "output": {
+            "message": {
+                "content": [
+                    {
+                        "text": (
+                            '{"headline": "Test Headline", "body": "Test recap body."}'
+                        )
+                    }
+                ]
+            }
+        },
+    }
+    context.recap_ai_generate._client = bedrock
 
     # Bridge the webhook's fire-and-forget async invoke to call the recap handler
     # directly (moto[s3,dynamodb] has no Lambda runtime). Mirrors how the API's
@@ -315,6 +338,9 @@ def before_scenario(context, scenario):
     # Reset the API's Lambda-invoke spy each scenario so payload assertions are
     # scoped to the scenario under test.
     context.main.lambda_client.reset_mock()
+    # Reset the mocked Bedrock client so a forced side_effect (fallback scenario)
+    # or call count doesn't leak across scenarios.
+    context.recap_ai_generate._client.converse.reset_mock(side_effect=True)
     # Billing ships feature-flagged OFF (BE-017); default it ON for component
     # scenarios since the billing features assume it, along with the shared
     # ``premium_feature`` flag (BE-014). The "billing is disabled" step flips

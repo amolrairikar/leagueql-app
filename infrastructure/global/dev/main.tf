@@ -1137,11 +1137,10 @@ module "sleeper-refresh-lambda-role" {
 }
 
 # Execution role for the weekly recap generator lambda (BE-022). Reads
-# MATCHUPS / WEEKLY_STANDINGS / METADATA and reads/writes RECAP items, and reads
-# the Axiom tracing token + feature-flag SSM parameters. Recaps are composed
-# deterministically from a snippet phrase bank (no LLM), so no Bedrock grant is
-# needed. Deployed in both regions (invoked by the same-region Stripe webhook), so
-# grants span east + west.
+# MATCHUPS / WEEKLY_STANDINGS / METADATA and reads/writes RECAP items, reads the
+# Axiom tracing token + feature-flag SSM parameters, and invokes Amazon Bedrock
+# (Nova Premier) for recap generation. Deployed in both regions (invoked by the
+# same-region Stripe webhook), so grants span east + west.
 module "recap-lambda-role" {
   source           = "../../modules/iam-role"
   role_name        = "leagueql-${var.environment}-recap-role"
@@ -1223,6 +1222,24 @@ module "recap-lambda-role" {
         Resource = [
           module.dynamodb.primary_table_arn,
           module.dynamodb.replica_table_arn
+        ]
+      },
+      {
+        # BE-022: invoke Amazon Bedrock (Nova Premier) for recap generation. The
+        # cross-region inference profile (us.amazon.nova-premier-v1:0) needs invoke
+        # permission on both the profile (in each caller region) and the underlying
+        # foundation models in the regions the profile routes to.
+        Sid    = "InvokeBedrockRecapModel"
+        Effect = "Allow"
+        Action = [
+          "bedrock:InvokeModel"
+        ]
+        Resource = [
+          "arn:aws:bedrock:us-east-1:${var.account_id}:inference-profile/us.amazon.nova-premier-v1:0",
+          "arn:aws:bedrock:us-west-2:${var.account_id}:inference-profile/us.amazon.nova-premier-v1:0",
+          "arn:aws:bedrock:us-east-1::foundation-model/amazon.nova-premier-v1:0",
+          "arn:aws:bedrock:us-east-2::foundation-model/amazon.nova-premier-v1:0",
+          "arn:aws:bedrock:us-west-2::foundation-model/amazon.nova-premier-v1:0"
         ]
       }
     ]

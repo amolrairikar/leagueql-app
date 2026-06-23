@@ -24,7 +24,7 @@ locals {
   player_metadata_role_arn  = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-sleeper-player-metadata-fetcher-role"
   sleeper_refresh_role_arn  = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-sleeper-league-refresh-role"
   stripe_webhook_role_arn   = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-stripe-webhook-role"
-  recap_role_arn         = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-recap-role"
+  recap_role_arn            = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-recap-role"
   discord_notifier_role_arn = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-discord-notifier-role"
 
   # Sleeper player stats refresher runs as a Fargate task (see BE-011). Roles are
@@ -226,9 +226,10 @@ module "stripe_webhook_lambda" {
 }
 
 # Weekly recap generator (BE-022). Deployed in both regions so each region's
-# Stripe webhook invokes its same-region copy. Recaps are composed deterministically
-# from a snippet phrase bank (no LLM / external dep). Continues the webhook's OTel
-# trace (BE-021).
+# Stripe webhook invokes its same-region copy. Recaps are written by Amazon Bedrock
+# (Nova Premier) via the Converse API, constrained by a deterministic outline +
+# numeric-validation gate, with a deterministic snippet composer as fallback.
+# Continues the webhook's OTel trace (BE-021).
 module "recap_lambda" {
   source = "../modules/lambda"
 
@@ -237,15 +238,19 @@ module "recap_lambda" {
   role_arn             = local.recap_role_arn
   handler              = "handler.lambda_handler"
   memory_size          = 512
-  # Deterministic composition is instant; the cap is the historical backfill's
-  # DynamoDB enumeration + per-week writes.
-  timeout       = 60
+  # The historical backfill makes one Bedrock call per week (network-bound, run on a
+  # small thread pool); give it headroom over the prior deterministic-only timeout.
+  timeout       = 300
   log_retention = 7
   s3_bucket     = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
   s3_key        = "lambda-code-artifacts/recap-lambda.zip"
 
   environment_variables = {
     DYNAMODB_TABLE_NAME = "leagueql-table-${var.environment}"
+
+    # BE-022: Bedrock model id for the recap generator — the cross-region Nova
+    # Premier inference profile. Overridable here without a code change.
+    BEDROCK_MODEL_ID = "us.amazon.nova-premier-v1:0"
 
     # BE-017: gate recap generation on the premium_feature flag (same SSM source).
     FEATURE_FLAGS_SSM_PARAM = "/leagueql/${var.environment}/feature-flags"

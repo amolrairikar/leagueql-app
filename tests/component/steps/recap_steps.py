@@ -1,19 +1,25 @@
 """Steps for the weekly recap backfill component (BE-022).
 
 The webhook's async recap invoke is bridged to call the recap handler directly
-(see environment.py); recaps are composed deterministically from a snippet phrase
-bank (no LLM, nothing mocked). These steps assert the RECAP items the backfill
-wrote and that re-firing doesn't regenerate them (idempotency, via an unchanged
-``generated_at``).
+(see environment.py); the AI path goes through a mocked Bedrock Converse client
+that returns a fixed narrative. These steps assert the RECAP items the backfill
+wrote (incl. the ``model`` that produced them), that re-firing doesn't regenerate
+them (idempotency, via an unchanged ``generated_at``), and that a Bedrock outage
+falls back to the deterministic snippet composer.
 """
 
 from behave import given, then
 
 from common_steps import get_item
 
-# `given` is re-exported so the decorator import isn't flagged unused when only a
-# subset of step kinds is defined here.
-_ = given
+
+@given("the Bedrock recap model is unavailable")
+def step_bedrock_unavailable(context):
+    # Force every Converse call to fail so the orchestrator falls back to the
+    # deterministic snippet composer. Reset per scenario in environment.py.
+    context.recap_ai_generate._client.converse.side_effect = RuntimeError(
+        "bedrock unavailable"
+    )
 
 
 def _recap_data(context, canonical, season, ww):
@@ -65,3 +71,12 @@ def step_recap_headline_not_empty(context):
     data = context.response.json()["data"]
     assert data, "empty recap query response"
     assert data[0]["headline"], f"empty headline: {data[0]!r}"
+
+
+@then(
+    'the recap "model" for league "{canonical}" season "{season}" '
+    'week "{ww}" is "{model}"'
+)
+def step_recap_model_is(context, canonical, season, ww, model):
+    actual = _recap_data(context, canonical, season, ww)["model"]
+    assert actual == model, f"expected model {model!r}, got {actual!r}"

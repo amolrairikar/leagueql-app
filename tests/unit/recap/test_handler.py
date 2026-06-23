@@ -84,7 +84,7 @@ def patched(recap_handler, monkeypatch):
     monkeypatch.setattr(recap_handler, "is_feature_paywalled", lambda flag: True)
     job_status = MagicMock()
     monkeypatch.setattr(recap_handler, "write_job_status", job_status)
-    gen = MagicMock(return_value={"headline": "H", "body": "B"})
+    gen = MagicMock(return_value={"headline": "H", "body": "B", "model": "test-model"})
     monkeypatch.setattr(recap_handler, "generate_recap", gen)
 
     def set_table(table):
@@ -154,7 +154,8 @@ class TestLambdaHandler:
         recap = next(p for p in table.puts if p["SK"] == "RECAP#2025#WEEK#01")
         assert recap["data"][0]["week"] == "1"
         assert recap["data"][0]["headline"] == "H"
-        assert recap["data"][0]["model"] == patched.handler.MODEL_ID
+        # The model recorded is whatever the orchestrator returned for the recap.
+        assert recap["data"][0]["model"] == "test-model"
         patched.job_status.assert_called_once()
         assert patched.job_status.call_args.args[1] == "COMPLETED"
 
@@ -223,7 +224,7 @@ class TestLambdaHandler:
         def _gen(highlights, season, week):
             if week == "2":
                 raise patched.handler.RecapGenerationError("refused week 2")
-            return {"headline": "H", "body": "B"}
+            return {"headline": "H", "body": "B", "model": "test-model"}
 
         monkeypatch.setattr(patched.handler, "generate_recap", _gen)
         table = FakeTable(
