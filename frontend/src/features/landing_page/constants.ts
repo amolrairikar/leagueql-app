@@ -137,7 +137,7 @@ export const PREMIUM_FEATURES: PremiumFeature[] = [
   },
   {
     title: 'Analytics page',
-    desc: "Per-manager box-and-whisker plots of weekly scores are the first of several visuals here — see who is steady and who is feast-or-famine, and which 'good' team is really just high-variance.",
+    desc: 'Per-manager box-and-whisker plots of weekly scores show who is steady and who is feast-or-famine, while a power-rankings chart ranks every team week by week.',
   },
 ];
 
