@@ -135,6 +135,10 @@ export const PREMIUM_FEATURES: PremiumFeature[] = [
     title: 'Weekly awards',
     desc: 'Weekly superlatives that crown the highest scorer, biggest blowout, closest call, and other standout performances for each week.',
   },
+  {
+    title: 'Analytics page',
+    desc: "Per-manager box-and-whisker plots of weekly scores are the first of several visuals here — see who is steady and who is feast-or-famine, and which 'good' team is really just high-variance.",
+  },
 ];
 
 export const FOOTER_LINKS: string[] = ['About', 'Privacy', 'GitHub'];

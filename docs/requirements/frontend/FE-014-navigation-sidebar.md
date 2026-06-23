@@ -10,7 +10,9 @@ wordmark and theme toggle.
 - Layout: `AppLayout` in `src/app/app.tsx`; sidebar `src/features/sidebar/app-sidebar.tsx`;
   API in `src/features/sidebar/api-calls.ts`.
 - Nav items: Home, Standings, Matchups, Playoff Bracket, Manager Comparison, Manager
-  History, Draft Recap, Draft Grades, Player Records, Matchup Records.
+  History, Draft Recap, Draft Grades, Player Records, Matchup Records, and Analytics. The
+  **Analytics** tab is a premium page ([FE-033](FE-033-score-distribution-analytics.md)) and is
+  hidden when the `billing` master flag is off ([FE-026](FE-026-feature-flags.md)).
 - Settings items include "Manage Subscription", which opens the subscription dialog
   ([FE-021](FE-021-subscription-access-control.md)).
 
@@ -35,7 +37,8 @@ wordmark and theme toggle.
   account menu still lives in the sidebar footer (desktop) / header (mobile).
 
 ## Acceptance Criteria
-- [ ] The sidebar links to all ten analytics pages and they route correctly.
+- [ ] The sidebar links to all eleven analytics pages and they route correctly. The Analytics
+      page is premium and its nav item is hidden when `billing` is off.
 - [ ] The sidebar exposes a refresh action pre-filled and locked to the current league, and
       surfaces cooldown/up-to-date/in-progress responses.
 - [ ] The sidebar exposes a "Manage Subscription" item that opens the subscription dialog.
