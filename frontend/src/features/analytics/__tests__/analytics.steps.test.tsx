@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import { defineFeature, loadFeature } from 'jest-cucumber';
 
 import { ScoreDistribution } from '../analytics';
@@ -94,6 +94,30 @@ defineFeature(feature, (test) => {
     });
     and(/^I see the manager "(.*)"$/, async (name) => {
       expect((await screen.findAllByText(name)).length).toBeGreaterThan(0);
+    });
+  });
+
+  test("Hovering a manager's row reveals their numbers", ({
+    given,
+    when,
+    and,
+    then,
+  }) => {
+    given('a season of regular-season matchups is available', () => {
+      server.use(leagueQuery({ MATCHUPS }));
+    });
+    when('I open the score distribution', openChart);
+    and(/^I hover over the manager "(.*)"$/, async (name) => {
+      const row = await screen.findByRole('img', {
+        name: new RegExp(`^${name}:`),
+      });
+      fireEvent.mouseMove(row);
+    });
+    then(/^I see the tooltip stat "(.*)"$/, async (label) => {
+      expect(await screen.findByText(label)).toBeInTheDocument();
+    });
+    and(/^I see the tooltip stat "(.*)"$/, async (label) => {
+      expect(await screen.findByText(label)).toBeInTheDocument();
     });
   });
 

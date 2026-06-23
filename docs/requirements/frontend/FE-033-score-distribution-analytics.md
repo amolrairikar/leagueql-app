@@ -30,6 +30,15 @@ Managers are sorted by **median descending**, tie-broken on `ownerUsername.local
 (matching the deterministic tiebreak convention in `compute-schedule-swap.ts` /
 `compute-awards.ts`).
 
+## Hover detail
+Because the chart is custom SVG (recharts has no native box plot), it carries its own
+interactive tooltip rather than relying on the browser's native `<title>` hint. Hovering a
+manager's row (or focusing it via keyboard) shows a cursor-anchored tooltip listing that
+manager's numbers — median, Q1/Q3 (with the IQR), the whisker low/high, the raw min/max, the
+sample size, and any outliers — so the values behind each box are readable, not just visually
+comparable. The hovered row is subtly emphasized. The tooltip is presentational; each row also
+exposes the same summary as an accessible label.
+
 ## Score scope
 Only **regular-season** weeks are included (`playoff_tier_type` is `NONE`/absent). Playoff
 weeks are intentionally excluded so every manager's distribution uses a comparable sample — not
@@ -75,6 +84,8 @@ placeholders (`team_a_id === team_b_id`) are skipped, so byes never enter a dist
       per manager, sorted by median descending, showing each manager's name/label.
 - [ ] Each box reflects the five-number summary with Tukey-fence whiskers and outlier dots as
       described; the underlying quartile math is unit-tested.
+- [ ] Hovering (or keyboard-focusing) a manager's row reveals a tooltip with that manager's
+      numeric summary; the row carries an equivalent accessible label.
 - [ ] Switching the season selector recomputes the chart.
 - [ ] Byes and self-matchup placeholders are excluded; playoff weeks are excluded.
 - [ ] When `premium_feature` (and `billing`) is enabled and the league subscription is
