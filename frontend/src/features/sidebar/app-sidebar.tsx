@@ -1,6 +1,7 @@
 import { UserButton } from '@clerk/react';
 import {
   ArrowLeftRight,
+  ChartColumnBig,
   CreditCard,
   GraduationCap,
   History,
@@ -81,6 +82,13 @@ const sleeperOnlyNavItems = [
   { title: 'Transactions', url: '/transactions', icon: Repeat },
 ];
 
+// The Analytics page is entirely premium (FE-033): its body is wrapped in
+// SubscriptionGuard, which renders nothing when the `billing` master flag is off
+// (FE-026), so the tab would lead to a blank page. Gate the nav entry on billing.
+const billingOnlyNavItems = [
+  { title: 'Analytics', url: '/analytics', icon: ChartColumnBig },
+];
+
 export function AppSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -107,13 +115,18 @@ export function AppSidebar() {
     getLeagueCookies();
   // Insert the Sleeper-only items right after "Draft Grades" so Transactions sits
   // among the draft entries rather than at the very bottom of the nav.
-  let visibleNavItems = navItems;
+  let visibleNavItems = [...navItems];
   if (currentPlatform === 'SLEEPER') {
-    const items = [...navItems];
-    const draftGradesIdx = items.findIndex((i) => i.url === '/draft_grades');
-    const at = draftGradesIdx === -1 ? items.length : draftGradesIdx + 1;
-    items.splice(at, 0, ...sleeperOnlyNavItems);
-    visibleNavItems = items;
+    const draftGradesIdx = visibleNavItems.findIndex(
+      (i) => i.url === '/draft_grades',
+    );
+    const at =
+      draftGradesIdx === -1 ? visibleNavItems.length : draftGradesIdx + 1;
+    visibleNavItems.splice(at, 0, ...sleeperOnlyNavItems);
+  }
+  // Analytics is premium; only show it when billing is enabled (FE-026 / FE-033).
+  if (billingEnabled) {
+    visibleNavItems = [...visibleNavItems, ...billingOnlyNavItems];
   }
   const refreshLeagueUrl = currentLeagueId
     ? `/connect_league?leagueId=${encodeURIComponent(currentLeagueId)}&platform=${currentPlatform.toLowerCase()}`

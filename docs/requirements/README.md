@@ -72,6 +72,7 @@ criteria. Frontend, backend, and extension features are kept separate.
 | [FE-030](frontend/FE-030-informational-banner.md) | Informational Banner |
 | [FE-031](frontend/FE-031-schedule-swap-simulator.md) | Schedule-Swap Simulator (Standings premium) |
 | [FE-032](frontend/FE-032-weekly-awards-superlatives.md) | Weekly Awards & Superlatives (Matchups premium) |
+| [FE-033](frontend/FE-033-score-distribution-analytics.md) | Weekly Score Distribution (Analytics premium page) |
 
 ## Extension (`extension/`)
 | ID | Feature |
