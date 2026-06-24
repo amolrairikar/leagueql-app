@@ -257,8 +257,8 @@ Represents matchups for a given week in the fantasy league.
 | `team_a_team_name` | String | Team name for team A |
 | `team_a_team_logo` | String \| null | URL to team A's logo |
 | `team_a_score` | Float | Team A's score for the week |
-| `team_a_starters` | List\<Object\> | Team A's starting lineup with player stats |
-| `team_a_bench` | List\<Object\> | Team A's bench with player stats |
+| `team_a_starters` | List\<Object\> | Team A's starting lineup with player stats (see **PlayerStat** below) |
+| `team_a_bench` | List\<Object\> | Team A's bench with player stats (see **PlayerStat** below) |
 | `team_a_primary_owner_id` | String | Platform user ID of team A's primary owner |
 | `team_a_secondary_owner_id` | String \| null | Platform user ID of team A's co-owner |
 | `team_b_id` | String | Team ID for the second team |
@@ -266,8 +266,8 @@ Represents matchups for a given week in the fantasy league.
 | `team_b_team_name` | String | Team name for team B |
 | `team_b_team_logo` | String \| null | URL to team B's logo |
 | `team_b_score` | Float | Team B's score for the week |
-| `team_b_starters` | List\<Object\> | Team B's starting lineup with player stats |
-| `team_b_bench` | List\<Object\> | Team B's bench with player stats |
+| `team_b_starters` | List\<Object\> | Team B's starting lineup with player stats (see **PlayerStat** below) |
+| `team_b_bench` | List\<Object\> | Team B's bench with player stats (see **PlayerStat** below) |
 | `team_b_primary_owner_id` | String | Platform user ID of team B's primary owner |
 | `team_b_secondary_owner_id` | String \| null | Platform user ID of team B's co-owner |
 | `playoff_tier_type` | String | Playoff bracket type. Enum: `NONE`, `WINNERS_BRACKET` |
@@ -276,6 +276,16 @@ Represents matchups for a given week in the fantasy league.
 | `loser` | String | Team ID of the loser |
 | `week` | String | Week number (e.g. `"1"`) |
 | `season` | String | Season year (e.g. `"2025"`) |
+
+**`PlayerStat` object** (each element of `team_*_starters` / `team_*_bench`):
+
+| Attribute | Type | Description |
+|---|---|---|
+| `player_id` | Number | Platform player ID |
+| `full_name` | String | Player's display name |
+| `points_scored` | Float | Fantasy points the player scored that week |
+| `position` | String | Player's real position (e.g. `QB`, `RB`, `WR`, `TE`, `D/ST`, `K`) |
+| `fantasy_position` | String \| absent | The starter's lineup **slot** (e.g. `QB`, `RB`, `FLEX`, `D/ST`); present only on starters |
 
 **Example:**
 ```json

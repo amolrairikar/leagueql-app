@@ -9,7 +9,7 @@ import {
 } from '@/features/draft_grades/api-calls';
 import SeasonSelect from '@/features/season_select/season-select';
 import { avatarColor } from '@/lib/color-constants';
-import { POSITION_COLORS } from '@/lib/color-constants';
+import { positionColorMeta } from '@/lib/color-constants';
 import { getLeagueCookies, isDemoMode } from '@/lib/cookie-handler';
 import { type Result, toResult } from '@/lib/result';
 
@@ -44,17 +44,7 @@ interface AuctionTeam extends BoardTeam {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const posMeta: Record<string, { bg: string; tc: string }> = {
-  QB: { bg: POSITION_COLORS.QB.bg, tc: POSITION_COLORS.QB.tc },
-  RB: { bg: POSITION_COLORS.RB.bg, tc: POSITION_COLORS.RB.tc },
-  WR: { bg: POSITION_COLORS.WR.bg, tc: POSITION_COLORS.WR.tc },
-  TE: { bg: POSITION_COLORS.TE.bg, tc: POSITION_COLORS.TE.tc },
-  K: { bg: POSITION_COLORS.K.bg, tc: POSITION_COLORS.K.tc },
-  'D/ST': { bg: POSITION_COLORS.DEF.bg, tc: POSITION_COLORS.DEF.tc },
-};
-
-const posStyle = (position: string) =>
-  posMeta[position] ?? { bg: POSITION_COLORS.K.bg, tc: POSITION_COLORS.K.tc };
+const posStyle = (position: string) => positionColorMeta(position);
 
 // ── Pick cell ─────────────────────────────────────────────────────────────────
 

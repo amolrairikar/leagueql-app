@@ -11,7 +11,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { POSITION_COLORS } from '@/lib/color-constants';
+import { POSITION_COLORS, positionColorMeta } from '@/lib/color-constants';
 import { getLeagueCookies, isDemoMode } from '@/lib/cookie-handler';
 import { type Result, toResult } from '@/lib/result';
 
@@ -23,15 +23,6 @@ const GREEN_BG = '#dcfce7';
 const RED_BG = '#fee2e2';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-
-const posMeta: Record<string, { bg: string; tc: string }> = {
-  QB: { bg: POSITION_COLORS.QB.bg, tc: POSITION_COLORS.QB.tc },
-  RB: { bg: POSITION_COLORS.RB.bg, tc: POSITION_COLORS.RB.tc },
-  WR: { bg: POSITION_COLORS.WR.bg, tc: POSITION_COLORS.WR.tc },
-  TE: { bg: POSITION_COLORS.TE.bg, tc: POSITION_COLORS.TE.tc },
-  K: { bg: POSITION_COLORS.K.bg, tc: POSITION_COLORS.K.tc },
-  'D/ST': { bg: POSITION_COLORS.DEF.bg, tc: POSITION_COLORS.DEF.tc },
-};
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -448,10 +439,7 @@ function DraftGradesContent({
           </thead>
           <tbody>
             {picks.map((pick, i) => {
-              const pm = posMeta[pick.position] ?? {
-                bg: POSITION_COLORS.K.bg,
-                tc: POSITION_COLORS.K.tc,
-              };
+              const pm = positionColorMeta(pick.position);
               const delta = pick.draft_rank_delta;
               const deltaStr =
                 delta == null ? '—' : (delta >= 0 ? '+' : '') + delta;
@@ -592,10 +580,7 @@ function DraftGradesContent({
                         {isOpen && (
                           <div className="flex flex-col divide-y divide-border/50">
                             {bustData.alts.map((alt, altIdx) => {
-                              const altPm = posMeta[alt.position] ?? {
-                                bg: POSITION_COLORS.K.bg,
-                                tc: POSITION_COLORS.K.tc,
-                              };
+                              const altPm = positionColorMeta(alt.position);
                               const diff = (
                                 (alt.total_points ?? 0) -
                                 (pick.total_points ?? 0)
@@ -690,10 +675,7 @@ function DraftGradesContent({
                 {isOpen && (
                   <div className="p-2.5 flex flex-col gap-1.5">
                     {alts.map((alt, altIdx) => {
-                      const altPm = posMeta[alt.position] ?? {
-                        bg: POSITION_COLORS.K.bg,
-                        tc: POSITION_COLORS.K.tc,
-                      };
+                      const altPm = positionColorMeta(alt.position);
                       const diff = (
                         (alt.total_points ?? 0) - (pick.total_points ?? 0)
                       ).toFixed(2);

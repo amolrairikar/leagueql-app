@@ -75,6 +75,7 @@ criteria. Frontend, backend, and extension features are kept separate.
 | [FE-033](frontend/FE-033-score-distribution-analytics.md) | Weekly Score Distribution (Analytics premium page) |
 | [FE-034](frontend/FE-034-power-rankings-trend.md) | Power Rankings Trend (Analytics premium) |
 | [FE-035](frontend/FE-035-lineup-efficiency.md) | Lineup Efficiency / Points Left on Bench (Box-score premium) |
+| [FE-036](frontend/FE-036-positional-scoring-breakdown.md) | Positional Scoring Breakdown (Analytics premium) |
 
 ## Extension (`extension/`)
 | ID | Feature |

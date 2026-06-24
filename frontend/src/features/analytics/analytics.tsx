@@ -3,8 +3,10 @@ import { Suspense, use, useMemo, useState } from 'react';
 
 import { getSeasonMatchups, type MatchupItem } from './api-calls';
 import { BoxPlot } from './box-plot';
+import { computePositionalScoring } from './compute-positional-scoring';
 import { computePowerRankings } from './compute-power-rankings';
 import { computeScoreDistribution } from './compute-score-distribution';
+import { PositionalScoringChart } from './positional-scoring-chart';
 import { PowerRankingsChart } from './power-rankings-chart';
 
 import type { Platform } from '@/components/api/types';
@@ -120,6 +122,71 @@ export function PowerRankings({
   );
 }
 
+function PositionalScoringInner({
+  promise,
+}: {
+  promise: Promise<MatchupsResult>;
+}) {
+  const result = use(promise);
+
+  if (!result.ok) {
+    return (
+      <p className="text-[13px] text-muted-foreground text-center py-8">
+        {result.error}
+      </p>
+    );
+  }
+
+  const data = computePositionalScoring(result.data);
+
+  if (data.teams.length === 0) {
+    return (
+      <p className="text-[13px] text-muted-foreground text-center py-8">
+        No starter scoring to chart for this season yet.
+      </p>
+    );
+  }
+
+  return <PositionalScoringChart data={data} />;
+}
+
+/**
+ * Premium stacked-bar chart of each manager's season starter points split by
+ * position (FE-036). Like {@link PowerRankings} it is its own component so the
+ * {@link SubscriptionGuard} can leave it unmounted while locked — its `MATCHUPS`
+ * data is never fetched then.
+ */
+export function PositionalScoring({
+  leagueId,
+  platform,
+  season,
+}: {
+  leagueId: string;
+  platform: Platform;
+  season: string;
+}) {
+  const promise = useMemo(
+    (): Promise<MatchupsResult> =>
+      leagueId && season
+        ? toResult(
+            getSeasonMatchups(leagueId, platform, season).then(
+              (res) => res.data,
+            ),
+            'Failed to load positional-scoring data.',
+          )
+        : Promise.resolve({ ok: true as const, data: [] }),
+    [leagueId, platform, season],
+  );
+
+  return (
+    <div className="bg-card border border-border/50 rounded-lg p-5 overflow-x-auto">
+      <Suspense fallback={<SkeletonChart />}>
+        <PositionalScoringInner promise={promise} />
+      </Suspense>
+    </div>
+  );
+}
+
 /**
  * Premium box-and-whisker chart of each manager's weekly scores for a season
  * (FE-033). Kept as its own component so the {@link SubscriptionGuard} can leave
@@ -204,13 +271,9 @@ export default function Analytics() {
                 side="top"
                 className="max-w-80 text-left leading-relaxed bg-popover text-popover-foreground border border-border shadow-md [&>svg]:fill-popover [&>svg]:bg-popover"
               >
-                Each week teams are ranked by a transparent power score,
-                measured cumulatively through that week: a blend of 50% all-play
-                win% (how often you&apos;d beat the rest of the league), 30%
-                points-for (your scoring average as a share of the league&apos;s
-                best scorer), and 20% recent form (a recency-weighted all-play
-                win% so hot and cold streaks show). Only regular-season games
-                count.
+                Each week, teams are ranked by a power score that blends how
+                often you&apos;d beat the rest of the league (50%), how much you
+                score (30%), and how hot you&apos;ve been lately (20%).
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -221,6 +284,21 @@ export default function Analytics() {
           featureLabel="Analytics"
         >
           <PowerRankings
+            leagueId={leagueId}
+            platform={platform}
+            season={selectedSeason}
+          />
+        </SubscriptionGuard>
+
+        <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-2.5 mt-8">
+          Positional Scoring
+        </p>
+
+        <SubscriptionGuard
+          featureFlag="premium_feature"
+          featureLabel="Analytics"
+        >
+          <PositionalScoring
             leagueId={leagueId}
             platform={platform}
             season={selectedSeason}
