@@ -833,8 +833,8 @@ module "recap-generator-lambda-role" {
           "bedrock:InvokeModel"
         ]
         Resource = [
-          "arn:aws:bedrock:us-east-1:${var.account_id}:inference-profile/us.anthropic.claude-haiku-4-5",
-          "arn:aws:bedrock:us-east-1:${var.account_id}:inference-profile/us.anthropic.claude-sonnet-4-6",
+          "arn:aws:bedrock:us-east-1:${var.account_id}:inference-profile/us.anthropic.claude-haiku-4-5*",
+          "arn:aws:bedrock:us-east-1:${var.account_id}:inference-profile/us.anthropic.claude-sonnet-4-6*",
           "arn:aws:bedrock:*::foundation-model/anthropic.claude-haiku-4-5*",
           "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-4-6*"
         ]

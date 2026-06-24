@@ -142,9 +142,11 @@ module "recap_generator_lambda" {
 
   environment_variables = {
     DYNAMODB_TABLE_NAME = "leagueql-table-${var.environment}"
-    # Claude Haiku 4.5 on Bedrock via a cross-region inference profile. Swapping
-    # models (e.g. to us.anthropic.claude-sonnet-4-6) is a one-line change here.
-    BEDROCK_MODEL_ID = "us.anthropic.claude-haiku-4-5"
+    # Claude Haiku 4.5 on Bedrock. This is the full versioned model ID exactly as
+    # shown in the Bedrock console; the bare ``anthropic.claude-haiku-4-5`` (no date
+    # / ``-v1:0`` suffix) is rejected as an invalid model identifier by Converse.
+    # Swapping models is a one-line change here.
+    BEDROCK_MODEL_ID = "anthropic.claude-haiku-4-5-20251001-v1:0"
 
     # Feature flags via SSM (BE-017): the recap Lambda reads the global `billing`
     # and `premium_feature` flags to server-side gate generation. Same SSM source.

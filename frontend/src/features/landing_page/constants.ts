@@ -143,6 +143,10 @@ export const PREMIUM_FEATURES: PremiumFeature[] = [
     title: 'Lineup efficiency',
     desc: 'See how many points each manager left on the bench each week: the optimal legal lineup vs. what they actually started, with a slot-by-slot start/sit report (FLEX/superflex aware).',
   },
+  {
+    title: 'Recaps',
+    desc: 'AI-written recap columns that turn your league’s data into narrative — a lighthearted-but-journalistic write-up of each week’s matchups, with season-long recaps on the way.',
+  },
 ];
 
 export const FOOTER_LINKS: string[] = ['About', 'Privacy', 'GitHub'];

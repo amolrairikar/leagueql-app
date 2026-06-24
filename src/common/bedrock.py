@@ -5,9 +5,10 @@ Vendored into the recap-generator Lambda's deployment zip. Wraps a single
 style) and the Converse call that turns a week's matchup highlights into the
 AI-written recap column.
 
-The model is parameterized by the ``BEDROCK_MODEL_ID`` env var (on Bedrock this is
-a provider-prefixed cross-region inference profile, e.g.
-``us.anthropic.claude-haiku-4-5``), so swapping models is a one-line config change.
+The model is parameterized by the ``BEDROCK_MODEL_ID`` env var — the full versioned
+Bedrock model ID as shown in the console, ``anthropic.claude-haiku-4-5-20251001-v1:0``
+(the unversioned ``anthropic.claude-haiku-4-5`` is rejected as an invalid model
+identifier), so swapping models is a one-line config change.
 The client uses **adaptive** retry mode so Bedrock ``ThrottlingException`` backoff
 is handled by botocore before a parallel batch ever sees an error.
 """
