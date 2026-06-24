@@ -75,8 +75,8 @@ skipped, so byes never enter a week's all-play pool or scoring average.
   other charts; an interactive legend lists each manager so labels are real DOM (accessible, not
   dependent on chart measurement) and clicking a legend entry isolates that line.
 - The **section header carries an info tooltip** (the shared `Info` + `Tooltip` pattern) that
-  spells out the transparent blend (50% all-play win%, 30% points-for, 20% recent form, regular
-  season only), so the score is explainable in-product rather than a black box.
+  spells out the transparent blend (50% all-play win%, 30% points-for, 20% recent form) in plain
+  language, so the score is explainable in-product rather than a black box.
 - **Premium-gated:** the section is wrapped in `SubscriptionGuard` with the shared
   `premium_feature` flag ([FE-021](FE-021-subscription-access-control.md) /
   [FE-026](FE-026-feature-flags.md)). With `billing` on but `premium_feature` off the guard is a

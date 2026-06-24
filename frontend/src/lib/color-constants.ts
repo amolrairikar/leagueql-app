@@ -12,24 +12,40 @@ export interface PositionColorMeta {
   label: string;
 }
 
+// `color` is the vivid accent (chart fills, strokes, icons); `bg`/`tc` are the
+// light badge background + text. The accents are tuned to be mutually distinct
+// (e.g. QB indigo vs DEF sky-blue) so they read well even as adjacent segments
+// in the positional-scoring stacked bars; the light `bg`/`tc` tints are left as
+// the established badge colors used by the draft boards and other features.
 export const POSITION_COLORS: Record<string, PositionColorMeta> = {
-  QB: { color: '#4338ca', bg: '#EEEDFE', tc: '#3C3489', label: 'Quarterbacks' },
+  QB: { color: '#4f46e5', bg: '#EEEDFE', tc: '#3C3489', label: 'Quarterbacks' },
   WR: {
-    color: '#993c1d',
+    color: '#ea580c',
     bg: '#FAECE7',
     tc: '#712B13',
     label: 'Wide receivers',
   },
   RB: {
-    color: '#0f6e56',
+    color: '#059669',
     bg: '#E1F5EE',
     tc: '#085041',
     label: 'Running backs',
   },
-  TE: { color: '#be185d', bg: '#FCE7F0', tc: '#9D174D', label: 'Tight ends' },
-  DEF: { color: '#185FA5', bg: '#E6F1FB', tc: '#0C447C', label: 'Defenses' },
-  K: { color: '#5F5E5A', bg: '#F1EFE8', tc: '#444441', label: 'Kickers' },
+  TE: { color: '#db2777', bg: '#FCE7F0', tc: '#9D174D', label: 'Tight ends' },
+  DEF: { color: '#0284c7', bg: '#E6F1FB', tc: '#0C447C', label: 'Defenses' },
+  K: { color: '#64748b', bg: '#F1EFE8', tc: '#444441', label: 'Kickers' },
 };
+
+/**
+ * Shared position → color lookup so every feature (draft boards, analytics
+ * charts) renders a position in the same hue. Accepts either the platform
+ * `D/ST` label or the normalized `DEF`; unknown positions fall back to the
+ * kicker palette, matching the draft boards.
+ */
+export function positionColorMeta(position: string): PositionColorMeta {
+  const key = position === 'D/ST' ? 'DEF' : position;
+  return POSITION_COLORS[key] ?? POSITION_COLORS.K;
+}
 
 // ── Avatar Colors ───────────────────────────────────────────────────────────────
 

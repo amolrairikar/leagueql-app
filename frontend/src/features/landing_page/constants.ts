@@ -137,7 +137,7 @@ export const PREMIUM_FEATURES: PremiumFeature[] = [
   },
   {
     title: 'Analytics page',
-    desc: 'Per-manager box-and-whisker plots of weekly scores show who is steady and who is feast-or-famine, while a power-rankings chart ranks every team week by week.',
+    desc: "A dedicated analytics suite that turns a season's matchup data into charts — scoring consistency, week-by-week power rankings, and where each team's points come from.",
   },
   {
     title: 'Lineup efficiency',
