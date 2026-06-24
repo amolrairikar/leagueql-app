@@ -4,4 +4,3 @@ opentelemetry-sdk
 opentelemetry-exporter-otlp-proto-http
 opentelemetry-instrumentation-botocore
 opentelemetry-instrumentation-requests
-stripe

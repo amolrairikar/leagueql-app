@@ -33,6 +33,7 @@ from common.subscription import (
     expire_subscription,
     record_active_subscription,
 )
+from common.tracing import init_tracing, inject_context, traced_handler
 
 # Stripe credentials are SecureString SSM parameters fetched at cold start by
 # parameter *name* (the value never lands in a Lambda env var / TF state / CI).
@@ -42,6 +43,13 @@ _WEBHOOK_SECRET = get_secret_from_env_param("STRIPE_WEBHOOK_SECRET_SSM_PARAM")
 
 _retry_config = botocore.config.Config(retries={"mode": "standard"})
 _dynamodb = boto3.client("dynamodb", config=_retry_config)
+_lambda_client = boto3.client("lambda", config=_retry_config)
+
+# Start an OTel trace for the activation path → Axiom (BE-021). Stripe delivers over
+# HTTP with no inbound W3C context, so the handler starts a fresh *root* span (see
+# lambda_handler) which then parents the recap invoke. A no-op unless Axiom is
+# configured, so tests / unconfigured envs are unaffected.
+init_tracing("leagueql-stripe-webhook")
 
 # Event types that record/refresh an active or trialing subscription.
 _ACTIVATING_EVENTS = {
@@ -151,6 +159,39 @@ def _subscription_id_from_event(event_type: str, obj) -> str | None:
     return _get(obj, "subscription")
 
 
+def _invoke_recap_generator(
+    canonical_league_id: str, platform: str | None, native_league_id: str | None
+) -> None:
+    """Fire-and-forget the recap-generator Lambda on a real activation (BE-022).
+
+    Called only when ``record_active_subscription`` actually advanced (a real
+    activation, not a stale/duplicate no-op) → immediate full backfill of the
+    newly-premium league's weekly recaps. Runs inside the ``stripe_webhook.handle``
+    span, so ``inject_context`` carries a real W3C context and the recap span
+    attaches as a child (BE-021). A failed invoke never fails the webhook.
+    """
+    function_name = os.environ.get("RECAP_LAMBDA_NAME")
+    if not function_name:
+        logger.info("RECAP_LAMBDA_NAME unset; skipping recap generation trigger")
+        return
+    try:
+        _lambda_client.invoke(
+            FunctionName=function_name,
+            InvocationType="Event",
+            Payload=json.dumps(
+                {
+                    "canonical_league_id": canonical_league_id,
+                    "platform": platform,
+                    "native_league_id": native_league_id,
+                    "trace_context": inject_context({}),
+                }
+            ),
+        )
+        logger.info("Invoked recap generator for league=%s", canonical_league_id)
+    except Exception as exc:
+        logger.error("Failed to invoke recap generator: %s", exc)
+
+
 def _process_event(stripe_event: dict) -> None:
     """Apply a verified Stripe event to the league's subscription state."""
     event_type = stripe_event["type"]
@@ -197,7 +238,7 @@ def _process_event(stripe_event: dict) -> None:
             logger.warning("Subscription %s has no end time; skipping", subscription_id)
             return
         try:
-            record_active_subscription(
+            applied = record_active_subscription(
                 canonical_league_id,
                 end_time,
                 subscription_id,
@@ -205,6 +246,12 @@ def _process_event(stripe_event: dict) -> None:
                 platform=native_platform,
                 native_league_id=native_league_id,
             )
+            # Only a real advance (not a stale/duplicate no-op) triggers the recap
+            # backfill, so redelivered events don't re-invoke the generator (BE-022).
+            if applied:
+                _invoke_recap_generator(
+                    canonical_league_id, native_platform, native_league_id
+                )
         except DuplicateSubscription:
             # A different subscription is already recorded for this league; this
             # one is the duplicate, so cancel it (Layer 3 reconciliation).
@@ -227,9 +274,19 @@ def _process_event(stripe_event: dict) -> None:
 def lambda_handler(event, context) -> dict[str, str | int]:
     """API Gateway entry point for Stripe webhook delivery.
 
-    Verifies the signature, dedups on the Stripe event id, processes the event,
-    and only then records the dedup marker. A processing failure returns ``500``
-    without recording, so Stripe redelivers and the (idempotent) handler retries.
+    Wraps :func:`_handle` in a fresh **root** span (Stripe delivers over HTTP with
+    no inbound W3C context) that parents the activation-time recap invoke, then
+    force-flushes spans before the Lambda freezes (BE-021). A no-op when tracing is
+    disabled, so behavior is unchanged in tests / unconfigured envs.
+    """
+    with traced_handler("stripe_webhook.handle", root=True):
+        return _handle(event, context)
+
+
+def _handle(event, context) -> dict[str, str | int]:
+    """Verify the signature, dedup on the Stripe event id, process the event, and
+    only then record the dedup marker. A processing failure returns ``500`` without
+    recording, so Stripe redelivers and the (idempotent) handler retries.
 
     No-ops with a ``200`` when billing is disabled (BE-017) so any in-flight
     Stripe delivery is acknowledged without mutating subscription state.

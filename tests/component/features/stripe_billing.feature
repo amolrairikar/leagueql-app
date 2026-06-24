@@ -18,6 +18,7 @@ Feature: Stripe billing checkout and webhook lifecycle (BE-015)
     And league "canon-1" has a subscription_end_time
     And a durable TRIAL_USED marker exists for native league "100" on "SLEEPER"
     And a WEBHOOK_EVENT dedup marker exists for event "evt_1"
+    And the recap generator was invoked for league "canon-1"
 
   Scenario: An auto-renewal advances the end time for the same subscription
     Given a subscribable league "canon-1" native "100" on "SLEEPER"
@@ -33,6 +34,7 @@ Feature: Stripe billing checkout and webhook lifecycle (BE-015)
     When Stripe sends a "checkout.session.completed" webhook (event "evt_1") for subscription "sub_1" with status "trialing"
     And Stripe sends a "checkout.session.completed" webhook (event "evt_1") for subscription "sub_1" with status "trialing"
     Then the webhook responds with status 200
+    And the recap generator was invoked 1 time
 
   Scenario: An invalid signature is rejected without state change
     Given a subscribable league "canon-1" native "100" on "SLEEPER"

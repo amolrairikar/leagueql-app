@@ -37,6 +37,7 @@ criteria. Frontend, backend, and extension features are kept separate.
 | [BE-019](backend/BE-019-sleeper-transactions.md) | Sleeper Transactions (Waivers, Trades, Free Agents) |
 | [BE-020](backend/BE-020-api-otel-tracing.md) | API OpenTelemetry Tracing → Axiom |
 | [BE-021](backend/BE-021-async-chain-otel-propagation.md) | Async Chain OpenTelemetry Trace Propagation |
+| [BE-022](backend/BE-022-ai-weekly-matchup-recap.md) | AI Weekly Matchup Recap |
 
 ## Frontend (`frontend/`)
 | ID | Feature |
@@ -76,6 +77,7 @@ criteria. Frontend, backend, and extension features are kept separate.
 | [FE-034](frontend/FE-034-power-rankings-trend.md) | Power Rankings Trend (Analytics premium) |
 | [FE-035](frontend/FE-035-lineup-efficiency.md) | Lineup Efficiency / Points Left on Bench (Box-score premium) |
 | [FE-036](frontend/FE-036-positional-scoring-breakdown.md) | Positional Scoring Breakdown (Analytics premium) |
+| [FE-037](frontend/FE-037-weekly-matchup-recap.md) | Weekly Matchup Recap (Matchups premium) |
 
 ## Extension (`extension/`)
 | ID | Feature |

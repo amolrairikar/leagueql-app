@@ -363,6 +363,17 @@ module "processing-lambda-role" {
         Resource = [
           "${local.primary_bucket_arn}/player-stats/*"
         ]
+      },
+      {
+        # BE-022: the processor fires the recap-generator Lambda at end of run.
+        Sid    = "InvokeRecapLambda"
+        Effect = "Allow"
+        Action = [
+          "lambda:InvokeFunction"
+        ]
+        Resource = [
+          "arn:aws:lambda:us-east-1:${var.account_id}:function:leagueql-recap-generator-${var.environment}"
+        ]
       }
     ]
   })
@@ -671,6 +682,144 @@ module "stripe-webhook-lambda-role" {
         Resource = [
           "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/feature-flags",
           "arn:aws:ssm:us-west-2:${var.account_id}:parameter/leagueql/${var.environment}/feature-flags"
+        ]
+      },
+      {
+        # BE-022: on a real activation the webhook fires the recap-generator Lambda.
+        Sid    = "InvokeRecapLambda"
+        Effect = "Allow"
+        Action = [
+          "lambda:InvokeFunction"
+        ]
+        Resource = [
+          "arn:aws:lambda:us-east-1:${var.account_id}:function:leagueql-recap-generator-${var.environment}"
+        ]
+      },
+      {
+        # BE-021: the webhook is now a traced Lambda and exports OTel spans to Axiom;
+        # the ingest token is a SecureString SSM parameter (set out-of-band, never in
+        # TF state). Grant read on both regions' copies.
+        Sid    = "ReadAxiomSsmParameter"
+        Effect = "Allow"
+        Action = [
+          "ssm:GetParameter"
+        ]
+        Resource = [
+          "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/axiom/api_token",
+          "arn:aws:ssm:us-west-2:${var.account_id}:parameter/leagueql/${var.environment}/axiom/api_token"
+        ]
+      }
+    ]
+  })
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    component   = "api"
+    managed-by  = "terraform"
+  }
+}
+
+# Execution role for the AI weekly matchup recap generator (BE-022). Reads the
+# matchup/standings views, writes recap items, reads feature flags + the Axiom token
+# from SSM, and invokes the Bedrock Haiku 4.5 inference profile (us-east-1).
+module "recap-generator-lambda-role" {
+  source           = "../../modules/iam-role"
+  role_name        = "leagueql-${var.environment}-recap-generator-role"
+  role_description = "Execution role for the AI weekly matchup recap generator lambda."
+  trust_policy_json = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+      }
+    ]
+  })
+  role_policy_json = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "CreateLogGroups"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup"
+        ]
+        Resource = [
+          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/lambda/leagueql-recap-generator-${var.environment}"
+        ]
+      },
+      {
+        Sid    = "CreateLogEvents"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = [
+          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/lambda/leagueql-recap-generator-${var.environment}:*"
+        ]
+      },
+      {
+        Sid    = "ReadWriteDynamoDB"
+        Effect = "Allow"
+        Action = [
+          "dynamodb:GetItem",
+          "dynamodb:Query",
+          "dynamodb:PutItem",
+          "dynamodb:BatchGetItem",
+          "dynamodb:BatchWriteItem"
+        ]
+        Resource = [
+          module.dynamodb.primary_table_arn,
+          module.dynamodb.replica_table_arn,
+          "${module.dynamodb.primary_table_arn}/index/GSI1",
+          "${module.dynamodb.replica_table_arn}/index/GSI1"
+        ]
+      },
+      {
+        # BE-022: generate recaps via the Claude Haiku 4.5 cross-region inference
+        # profile in us-east-1, which fans out to the underlying foundation models
+        # (region/version wildcarded). Widened to Sonnet 4.6 for A/B comparison.
+        Sid    = "InvokeBedrockRecapModels"
+        Effect = "Allow"
+        Action = [
+          "bedrock:InvokeModel"
+        ]
+        Resource = [
+          "arn:aws:bedrock:us-east-1:${var.account_id}:inference-profile/us.anthropic.claude-haiku-4-5",
+          "arn:aws:bedrock:us-east-1:${var.account_id}:inference-profile/us.anthropic.claude-sonnet-4-6",
+          "arn:aws:bedrock:*::foundation-model/anthropic.claude-haiku-4-5*",
+          "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-4-6*"
+        ]
+      },
+      {
+        # BE-017: server-side premium gate reads the global `billing` /
+        # `premium_feature` flags from the SSM feature-flag parameter.
+        Sid    = "ReadFeatureFlagsSsmParameter"
+        Effect = "Allow"
+        Action = [
+          "ssm:GetParameter"
+        ]
+        Resource = [
+          "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/feature-flags",
+          "arn:aws:ssm:us-west-2:${var.account_id}:parameter/leagueql/${var.environment}/feature-flags"
+        ]
+      },
+      {
+        # BE-021: the recap Lambda continues the upstream OTel trace and exports to
+        # Axiom; the ingest token is a SecureString SSM parameter (never in TF state).
+        Sid    = "ReadAxiomSsmParameter"
+        Effect = "Allow"
+        Action = [
+          "ssm:GetParameter"
+        ]
+        Resource = [
+          "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/axiom/api_token",
+          "arn:aws:ssm:us-west-2:${var.account_id}:parameter/leagueql/${var.environment}/axiom/api_token"
         ]
       }
     ]

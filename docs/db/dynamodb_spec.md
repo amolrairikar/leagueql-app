@@ -325,6 +325,46 @@ Represents matchups for a given week in the fantasy league.
 </details>
 
 <details>
+<summary><b>MATCHUP_RECAP</b></summary>
+
+Caches the AI-written weekly recap column for a single completed week (BE-022). Precomputed by the
+recap-generator Lambda from the `MATCHUPS`/`STANDINGS` views and read back through the query API
+(`MATCHUP_RECAP#{season}#WEEK#{week}`). One item per `(season, week)`; written idempotently and never
+regenerated once present.
+
+| Attribute | Type | Required | Description |
+|---|---|---|---|
+| `PK` | String | Yes | `LEAGUE#{league_id}` |
+| `SK` | String | Yes | `MATCHUP_RECAP#{season}#WEEK#{week}` (week zero-padded to two digits, e.g. `MATCHUP_RECAP#2025#WEEK#01`) |
+| `data` | List\<Object\> | Yes | A single-element list holding the cached recap (a list so the query API and `queryLeague<RecapItem>` contract — which always return a list — hold, consistent with every other view) |
+
+**`data[0]` object:**
+
+| Attribute | Type | Description |
+|---|---|---|
+| `headline` | String | A single headline line for the week |
+| `body` | String | The recap prose; paragraphs joined by `\n\n` (no markdown) |
+| `generated_at` | String | ISO 8601 (UTC) timestamp the recap was generated |
+| `model` | String | The Bedrock model ID used (e.g. `us.anthropic.claude-haiku-4-5`) |
+
+**Example:**
+```json
+{
+  "PK": "LEAGUE#123456789",
+  "SK": "MATCHUP_RECAP#2025#WEEK#01",
+  "data": [
+    {
+      "headline": "Week 1: Fireworks, Faceplants, and a Last-Second Heartbreak",
+      "body": "The season opened with a bang...\n\nMeanwhile, in the week's ugliest win...",
+      "generated_at": "2025-09-10T13:45:00+00:00",
+      "model": "us.anthropic.claude-haiku-4-5"
+    }
+  ]
+}
+```
+</details>
+
+<details>
 <summary><b>STANDINGS</b></summary>
 
 Represents standings for a given season in the fantasy league.

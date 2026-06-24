@@ -268,6 +268,93 @@ class TestProcessingFailure:
         patched.ddb.put_item.assert_not_called()
 
 
+class TestRecapTrigger:
+    """The webhook fires the recap generator only on a real activation (BE-022)."""
+
+    def _active_event(self, patched):
+        patched.stripe.Webhook.construct_event.return_value = _stripe_event(
+            "checkout.session.completed", {"subscription": "sub_1"}
+        )
+        patched.stripe.Subscription.retrieve.return_value = {
+            "status": "active",
+            "current_period_end": _FUTURE_TS,
+            "metadata": {
+                "canonical_league_id": "cid",
+                "platform": "ESPN",
+                "native_league_id": "999",
+            },
+        }
+
+    def test_fires_recap_invoke_when_subscription_advances(self, patched, monkeypatch):
+        monkeypatch.setenv("RECAP_LAMBDA_NAME", "leagueql-recap-generator-dev")
+        self._active_event(patched)
+        patched.record.return_value = True  # a real advance
+        with patch.object(patched.wh, "_lambda_client") as lam:
+            resp = patched.wh.lambda_handler(_event(), None)
+        assert resp["statusCode"] == 200
+        lam.invoke.assert_called_once()
+        kwargs = lam.invoke.call_args.kwargs
+        assert kwargs["FunctionName"] == "leagueql-recap-generator-dev"
+        assert kwargs["InvocationType"] == "Event"
+        payload = json.loads(kwargs["Payload"])
+        assert payload["canonical_league_id"] == "cid"
+        assert payload["platform"] == "ESPN"
+        assert payload["native_league_id"] == "999"
+        assert "trace_context" in payload
+
+    def test_does_not_fire_when_subscription_is_noop(self, patched, monkeypatch):
+        monkeypatch.setenv("RECAP_LAMBDA_NAME", "leagueql-recap-generator-dev")
+        self._active_event(patched)
+        patched.record.return_value = False  # stale/duplicate, non-advancing
+        with patch.object(patched.wh, "_lambda_client") as lam:
+            resp = patched.wh.lambda_handler(_event(), None)
+        assert resp["statusCode"] == 200
+        lam.invoke.assert_not_called()
+
+    def test_invoke_skipped_when_lambda_name_unset(self, patched, monkeypatch):
+        monkeypatch.delenv("RECAP_LAMBDA_NAME", raising=False)
+        self._active_event(patched)
+        patched.record.return_value = True
+        with patch.object(patched.wh, "_lambda_client") as lam:
+            patched.wh.lambda_handler(_event(), None)
+        lam.invoke.assert_not_called()
+
+    def test_failed_invoke_does_not_fail_webhook(self, patched, monkeypatch):
+        monkeypatch.setenv("RECAP_LAMBDA_NAME", "leagueql-recap-generator-dev")
+        self._active_event(patched)
+        patched.record.return_value = True
+        with patch.object(patched.wh, "_lambda_client") as lam:
+            lam.invoke.side_effect = RuntimeError("invoke failed")
+            resp = patched.wh.lambda_handler(_event(), None)
+        # The webhook still records the dedup marker and returns 200.
+        assert resp["statusCode"] == 200
+        patched.ddb.put_item.assert_called_once()
+
+
+class TestTracing:
+    """The webhook is a traced Lambda starting a root span (BE-021)."""
+
+    def test_lambda_handler_wraps_in_root_span(self, webhook_handler):
+        with (
+            patch.object(
+                webhook_handler, "_handle", return_value={"statusCode": 200}
+            ) as impl,
+            patch.object(webhook_handler, "traced_handler") as th,
+        ):
+            result = webhook_handler.lambda_handler(_event(), None)
+        assert result == {"statusCode": 200}
+        th.assert_called_once_with("stripe_webhook.handle", root=True)
+        impl.assert_called_once()
+
+    def test_returns_200_with_tracing_unconfigured(self, patched):
+        # The real (no-op) traced_handler is used here; behavior is unchanged.
+        patched.stripe.Webhook.construct_event.return_value = _stripe_event(
+            "unhandled.event", {}
+        )
+        resp = patched.wh.lambda_handler(_event(), None)
+        assert resp["statusCode"] == 200
+
+
 class TestHelpers:
     def test_current_period_end_falls_back_to_items(self, webhook_handler):
         sub = {"items": {"data": [{"current_period_end": _FUTURE_TS}]}}

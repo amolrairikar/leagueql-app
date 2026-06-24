@@ -13,6 +13,7 @@ import {
 import SeasonSelect from '@/features/season_select/season-select';
 import { SubscriptionGuard } from '@/features/subscription/subscription-guard';
 import WeeklyAwards from '@/features/weekly_awards/weekly-awards';
+import WeeklyRecap from '@/features/weekly_recap/weekly-recap';
 import { avatarColor } from '@/lib/color-constants';
 import { MATCHUP_STATUS_COLORS } from '@/lib/color-constants';
 import { getLeagueCookies } from '@/lib/cookie-handler';
@@ -500,6 +501,24 @@ export default function Matchups() {
               featureLabel="Weekly awards & superlatives"
             >
               <WeeklyAwards
+                leagueId={leagueId}
+                platform={platform}
+                season={selectedSeason}
+                selectedWeek={selectedWeek}
+              />
+            </SubscriptionGuard>
+
+            {/* AI weekly matchup recap (FE-037). Same billing-gated pattern as
+                Weekly Awards: the header is gated on isBillingEnabled so it never
+                orphans, and the column itself is behind SubscriptionGuard. */}
+            <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mt-8 mb-2.5">
+              Weekly matchup recap
+            </p>
+            <SubscriptionGuard
+              featureFlag="premium_feature"
+              featureLabel="Weekly matchup recap"
+            >
+              <WeeklyRecap
                 leagueId={leagueId}
                 platform={platform}
                 season={selectedSeason}

@@ -535,6 +535,39 @@ class TestProcessorTracePropagation:
         proc.assert_called_once()
 
 
+class TestInvokeRecapGenerator:
+    """The processor fires the recap generator at end of run (BE-022)."""
+
+    def test_invokes_with_payload_when_configured(self, processor_handler, monkeypatch):
+        monkeypatch.setenv("RECAP_LAMBDA_NAME", "leagueql-recap-generator-dev")
+        lam = MagicMock()
+        with patch.object(processor_handler, "_lambda_client", lam):
+            processor_handler._invoke_recap_generator("cid", "SLEEPER")
+        lam.invoke.assert_called_once()
+        kwargs = lam.invoke.call_args.kwargs
+        assert kwargs["FunctionName"] == "leagueql-recap-generator-dev"
+        assert kwargs["InvocationType"] == "Event"
+        payload = json.loads(kwargs["Payload"])
+        assert payload["canonical_league_id"] == "cid"
+        assert payload["platform"] == "SLEEPER"
+        assert "trace_context" in payload
+
+    def test_noop_when_lambda_name_unset(self, processor_handler, monkeypatch):
+        monkeypatch.delenv("RECAP_LAMBDA_NAME", raising=False)
+        lam = MagicMock()
+        with patch.object(processor_handler, "_lambda_client", lam):
+            processor_handler._invoke_recap_generator("cid", "ESPN")
+        lam.invoke.assert_not_called()
+
+    def test_failed_invoke_is_swallowed(self, processor_handler, monkeypatch):
+        monkeypatch.setenv("RECAP_LAMBDA_NAME", "leagueql-recap-generator-dev")
+        lam = MagicMock()
+        lam.invoke.side_effect = RuntimeError("invoke failed")
+        with patch.object(processor_handler, "_lambda_client", lam):
+            # Must not raise — a failed invoke never fails the processor run.
+            processor_handler._invoke_recap_generator("cid", "ESPN")
+
+
 class TestLambdaHandlerImpl:
     def test_replication_event_returns_early(self, processor_handler):
         mock_s3 = MagicMock()
@@ -554,6 +587,7 @@ class TestLambdaHandlerImpl:
         grouped = {"league_name_by_season": {"2024": "My League"}}
         write_meta = MagicMock()
         update_count = MagicMock()
+        recap = MagicMock()
         with patch.multiple(
             processor_handler,
             s3_client=mock_s3,
@@ -564,6 +598,7 @@ class TestLambdaHandlerImpl:
             write_items=MagicMock(),
             write_metadata_items=write_meta,
             update_league_count=update_count,
+            _invoke_recap_generator=recap,
             QUERIES=_FAKE_QUERIES,
         ):
             with patch.object(
@@ -574,6 +609,8 @@ class TestLambdaHandlerImpl:
         # league_name extracted from the most recent season and passed through.
         assert write_meta.call_args[1]["league_name"] == "My League"
         assert write_meta.call_args[1]["refresh"] is False
+        # The recap generator is fired at the end of every run (BE-022).
+        recap.assert_called_once_with("canonical-abc", "ESPN")
 
     def test_sleeper_refresh_reads_previous_manifest_and_player_data(
         self, processor_handler

@@ -62,6 +62,10 @@ _ENV = {
     "STRIPE_PRICE_ID_MONTHLY": "price_test_monthly",
     "STRIPE_PRICE_ID_YEARLY": "price_test_yearly",
     "STRIPE_TRIAL_PERIOD_DAYS": "14",
+    # BE-022: the processor + webhook fire the recap generator; the recap Lambda
+    # itself calls Bedrock by this model id (mocked per scenario).
+    "RECAP_LAMBDA_NAME": "recap-test",
+    "BEDROCK_MODEL_ID": "us.anthropic.claude-haiku-4-5",
 }
 
 
@@ -226,6 +230,22 @@ def _load_handlers(context) -> None:
         "stripe_webhook.handler", _SRC / "stripe_webhook" / "handler.py"
     )
 
+    # --- recap generator (BE-022) ------------------------------------------
+    # Imports only common.* (incl. common.bedrock, which creates a bedrock-runtime
+    # client at import — fine under moto since no call is made until generate_recap,
+    # which scenarios patch). Its module-level table is moto-backed.
+    context.recap_handler = _load_module(
+        "recap_generator.handler", _SRC / "recap_generator" / "handler.py"
+    )
+
+    # moto[s3,dynamodb] has no Lambda service, so point the processor's and webhook's
+    # recap-invoke clients at one shared spy. Scenarios assert the recap Lambda
+    # *would* be invoked, and (separately) invoke the recap handler directly.
+    recap_lambda_spy = MagicMock()
+    context.processor_handler._lambda_client = recap_lambda_spy
+    context.stripe_handler._lambda_client = recap_lambda_spy
+    context.recap_lambda_client = recap_lambda_spy
+
     # --- player metadata refresher (BE-010) --------------------------------
     pm_pkg = types.ModuleType("player_metadata")
     pm_pkg.__path__ = [str(_SRC / "player_metadata")]
@@ -284,6 +304,8 @@ def before_scenario(context, scenario):
     # Reset the API's Lambda-invoke spy each scenario so payload assertions are
     # scoped to the scenario under test.
     context.main.lambda_client.reset_mock()
+    # Reset the shared recap-generator invoke spy (processor + webhook) too (BE-022).
+    context.recap_lambda_client.reset_mock()
     # Billing ships feature-flagged OFF (BE-017); default it ON for component
     # scenarios since the billing features assume it, along with the shared
     # ``premium_feature`` flag (BE-014). The "billing is disabled" step flips
