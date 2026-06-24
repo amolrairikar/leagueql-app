@@ -27,7 +27,7 @@ def _bootstrap_recap_generator():
     """
     env = {
         "DYNAMODB_TABLE_NAME": "test-table",
-        "BEDROCK_MODEL_ID": "anthropic.claude-haiku-4-5-20251001-v1:0",
+        "BEDROCK_MODEL_ID": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
     }
     with patch.dict(os.environ, env):
         with (
@@ -48,7 +48,9 @@ def recap_handler():
 @pytest.fixture(autouse=True)
 def aws_env(monkeypatch):
     monkeypatch.setenv("DYNAMODB_TABLE_NAME", "test-table")
-    monkeypatch.setenv("BEDROCK_MODEL_ID", "anthropic.claude-haiku-4-5-20251001-v1:0")
+    monkeypatch.setenv(
+        "BEDROCK_MODEL_ID", "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+    )
 
 
 @pytest.fixture(autouse=True)

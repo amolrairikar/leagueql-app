@@ -14,7 +14,9 @@ def _converse_response(text: str) -> dict:
 
 @pytest.fixture(autouse=True)
 def _model_env(monkeypatch):
-    monkeypatch.setenv("BEDROCK_MODEL_ID", "anthropic.claude-haiku-4-5-20251001-v1:0")
+    monkeypatch.setenv(
+        "BEDROCK_MODEL_ID", "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+    )
 
 
 class TestGenerateRecap:
@@ -26,7 +28,7 @@ class TestGenerateRecap:
             result = bedrock.generate_recap(highlights)
 
         kwargs = client.converse.call_args.kwargs
-        assert kwargs["modelId"] == "anthropic.claude-haiku-4-5-20251001-v1:0"
+        assert kwargs["modelId"] == "us.anthropic.claude-haiku-4-5-20251001-v1:0"
         assert kwargs["system"][0]["text"]  # voice + guardrail present
         assert json.loads(kwargs["messages"][0]["content"][0]["text"]) == highlights
         assert kwargs["inferenceConfig"]["maxTokens"] == 2000

@@ -129,7 +129,7 @@ def step_recap_item_exists(context, canonical, season, week2):
     recap = item["data"][0]
     assert recap["headline"], "recap headline missing"
     assert recap["body"], "recap body missing"
-    assert recap["model"] == "anthropic.claude-haiku-4-5-20251001-v1:0"
+    assert recap["model"] == "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
 
 @then('no MATCHUP_RECAP items exist for league "{canonical}"')
