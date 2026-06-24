@@ -129,7 +129,7 @@ export const PRICING_PLANS: PricingPlan[] = [
 export const PREMIUM_FEATURES: PremiumFeature[] = [
   {
     title: 'Schedule-swap simulator',
-    desc: "See what every team's record would be under each other manager's schedule — find out who was schedule-lucky and who got robbed.",
+    desc: "See what every team's record would be under each other manager's schedule. Find out who was schedule-lucky and who got robbed.",
   },
   {
     title: 'Weekly awards',
@@ -137,11 +137,11 @@ export const PREMIUM_FEATURES: PremiumFeature[] = [
   },
   {
     title: 'Analytics page',
-    desc: "A dedicated analytics suite that turns a season's matchup data into charts — scoring consistency, week-by-week power rankings, and where each team's points come from.",
+    desc: "A dedicated analytics suite that turns a season's matchup data into charts: scoring consistency, week-by-week power rankings, and where each team's points come from.",
   },
   {
     title: 'Lineup efficiency',
-    desc: 'See how many points each manager left on the bench each week — the optimal legal lineup vs. what they actually started, with a slot-by-slot start/sit report (FLEX/superflex aware).',
+    desc: 'See how many points each manager left on the bench each week: the optimal legal lineup vs. what they actually started, with a slot-by-slot start/sit report (FLEX/superflex aware).',
   },
 ];
 
