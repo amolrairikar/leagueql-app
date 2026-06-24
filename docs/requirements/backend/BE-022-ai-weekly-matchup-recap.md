@@ -82,11 +82,20 @@ safe.
 - **Infra:** new `recap_generator_lambda` module (east-only, memory ~1024, timeout 900s) with the
   BE-021 Axiom env block, DLQ + async-retry config, and an error alarm; the `RECAP_LAMBDA_NAME` env
   var on the `stripe_webhook` and `processor` Lambdas; a `recap-generator-lambda-role` with DynamoDB
-  read/write, feature-flag SSM read, the Axiom SSM read, and a `bedrock:InvokeModel` grant scoped to
-  the Haiku 4.5 inference-profile + foundation-model ARNs in `us-east-1`; a `lambda:InvokeFunction`
+  read/write, feature-flag SSM read, the Axiom SSM read, a `bedrock:InvokeModel` grant scoped to
+  the Haiku 4.5 inference-profile + foundation-model ARNs in `us-east-1`, and
+  `aws-marketplace:Subscribe`/`ViewSubscriptions` so the role self-subscribes the account to the
+  Bedrock Marketplace model on first invoke; a `lambda:InvokeFunction`
   grant on the recap Lambda added to the stripe-webhook and processor roles; the BE-021 Axiom env
-  block + SSM grant added to the now-traced stripe-webhook Lambda/role. **Manual prerequisite:**
-  enable Haiku 4.5 (and Sonnet 4.6 if A/B testing) model access in the `us-east-1` Bedrock console.
+  block + SSM grant added to the now-traced stripe-webhook Lambda/role. **Bedrock model access:** the
+  Bedrock *Model access* console page is retired — access to Anthropic models is now an **AWS
+  Marketplace subscription** on the account. Rather than a manual console grant, the
+  recap-generator role carries `aws-marketplace:Subscribe`/`ViewSubscriptions` so its **first
+  invoke self-subscribes** the account to the Haiku 4.5 Bedrock Marketplace product (account-wide,
+  one-time; subsequent invokes just use `bedrock:InvokeModel`). Until that first subscribe settles
+  (~2 min), Converse returns an `AccessDeniedException` citing the Marketplace actions. (Alternative,
+  if you'd rather not grant the role subscribe rights: have an admin subscribe the account to the
+  model once via AWS Marketplace, then drop those two actions from the role.)
 
 ## Edge Cases
 - **Non-premium league:** the server-side gate returns before any Bedrock call, so trigger B is a

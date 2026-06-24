@@ -840,6 +840,23 @@ module "recap-generator-lambda-role" {
         ]
       },
       {
+        # BE-022: Bedrock's "Model access" console page is retired — access to
+        # Anthropic models is now an AWS Marketplace subscription on the account.
+        # These let the recap Lambda self-subscribe on first invoke; otherwise
+        # Converse fails with AccessDeniedException citing aws-marketplace:Subscribe
+        # / ViewSubscriptions. The subscription is account-wide and one-time.
+        # ViewSubscriptions takes no resource/product condition; Subscribe can be
+        # tightened with an `aws-marketplace:ProductId` condition once the Haiku 4.5
+        # Marketplace product ID is known.
+        Sid    = "BedrockMarketplaceSubscribe"
+        Effect = "Allow"
+        Action = [
+          "aws-marketplace:Subscribe",
+          "aws-marketplace:ViewSubscriptions"
+        ]
+        Resource = "*"
+      },
+      {
         # BE-017: server-side premium gate reads the global `billing` /
         # `premium_feature` flags from the SSM feature-flag parameter.
         Sid    = "ReadFeatureFlagsSsmParameter"
