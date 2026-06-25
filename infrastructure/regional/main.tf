@@ -33,8 +33,8 @@ locals {
   # pending-recap queue. East-only (Bedrock lives in us-east-1).
   recap_drainer_role_arn    = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-recap-drainer-role"
   recap_completion_role_arn = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-recap-completion-role"
-  recap_batch_role_arn      = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-recap-batch-role"
-  recap_batch_bucket        = "leagueql-recap-batch-${var.environment}-${local.account_id}"
+  recap_batch_role_arn      = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-recap-batch-${local.account_id}-role"
+  recap_batch_bucket        = "leagueql-${var.environment}-recap-batch-${local.account_id}"
 
   # Sleeper player stats refresher runs as a Fargate task (see BE-011). Roles are
   # created in infrastructure/global; ARNs are reconstructed here from their names.

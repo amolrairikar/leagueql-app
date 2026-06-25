@@ -765,7 +765,7 @@ module "recap-drainer-role" {
         Effect = "Allow"
         Action = ["s3:PutObject", "s3:GetObject"]
         Resource = [
-          "arn:aws:s3:::leagueql-recap-batch-${var.environment}-${var.account_id}/*"
+          "arn:aws:s3:::leagueql-${var.environment}-recap-batch-${var.account_id}/*"
         ]
       },
       {
@@ -873,8 +873,8 @@ module "recap-completion-role" {
         Effect = "Allow"
         Action = ["s3:GetObject", "s3:ListBucket"]
         Resource = [
-          "arn:aws:s3:::leagueql-recap-batch-${var.environment}-${var.account_id}",
-          "arn:aws:s3:::leagueql-recap-batch-${var.environment}-${var.account_id}/*"
+          "arn:aws:s3:::leagueql-${var.environment}-recap-batch-${var.account_id}",
+          "arn:aws:s3:::leagueql-${var.environment}-recap-batch-${var.account_id}/*"
         ]
       },
       {
@@ -907,7 +907,7 @@ module "recap-completion-role" {
 # the output JSONL in the batch bucket (passed as the job's roleArn).
 module "recap-batch-service-role" {
   source           = "../../modules/iam-role"
-  role_name        = "leagueql-${var.environment}-recap-batch-role"
+  role_name        = "leagueql-${var.environment}-recap-batch-${var.account_id}-role"
   role_description = "Service role Bedrock assumes for recap batch inference S3 I/O."
   trust_policy_json = jsonencode({
     Version = "2012-10-17"
@@ -930,8 +930,8 @@ module "recap-batch-service-role" {
         Effect = "Allow"
         Action = ["s3:GetObject", "s3:PutObject", "s3:ListBucket"]
         Resource = [
-          "arn:aws:s3:::leagueql-recap-batch-${var.environment}-${var.account_id}",
-          "arn:aws:s3:::leagueql-recap-batch-${var.environment}-${var.account_id}/*"
+          "arn:aws:s3:::leagueql-${var.environment}-recap-batch-${var.account_id}",
+          "arn:aws:s3:::leagueql-${var.environment}-recap-batch-${var.account_id}/*"
         ]
       }
     ]
