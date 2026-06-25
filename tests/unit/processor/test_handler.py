@@ -536,20 +536,16 @@ class TestProcessorTracePropagation:
 
 
 class TestInvokeRecapGenerator:
-    """The processor launches the recap-generator Fargate task at end of run (BE-022)."""
+    """The processor enqueues a pending-recap marker at end of run (BE-022)."""
 
-    def test_launches_recap_task_via_shared_helper(self, processor_handler):
+    def test_enqueues_via_shared_helper(self, processor_handler):
         token = processor_handler.correlation_id_var.set("corr-1")
         try:
-            with (
-                patch.object(processor_handler, "run_recap_task") as run,
-                patch.object(processor_handler, "_ecs_client") as ecs,
-            ):
+            with patch.object(processor_handler, "record_pending_recap") as enqueue:
                 processor_handler._invoke_recap_generator("cid", "SLEEPER")
         finally:
             processor_handler.correlation_id_var.reset(token)
-        run.assert_called_once_with(
-            ecs,
+        enqueue.assert_called_once_with(
             canonical_league_id="cid",
             platform="SLEEPER",
             correlation_id="corr-1",

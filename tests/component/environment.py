@@ -62,17 +62,17 @@ _ENV = {
     "STRIPE_PRICE_ID_MONTHLY": "price_test_monthly",
     "STRIPE_PRICE_ID_YEARLY": "price_test_yearly",
     "STRIPE_TRIAL_PERIOD_DAYS": "14",
-    # BE-022: the processor + webhook launch the recap-generator Fargate task; the
-    # task calls Bedrock by BEDROCK_MODEL_ID (mocked per scenario). These RECAP_TASK_*
-    # vars let the shared run_recap_task helper reach its ecs.run_task (asserted on a spy).
-    "RECAP_TASK_CLUSTER": "leagueql-test",
-    "RECAP_TASK_DEFINITION": "arn:aws:ecs:us-east-1:1:task-definition/recap-test:1",
-    "RECAP_TASK_CONTAINER": "recap-generator",
-    "RECAP_TASK_SUBNETS": "subnet-test",
-    "RECAP_TASK_SECURITY_GROUPS": "sg-test",
+    # BE-022: the processor + webhook enqueue a pending-recap marker into this table;
+    # the recap-drainer batches the work into a Bedrock job (BEDROCK_MODEL_ID), writes
+    # input/output JSONL to the batch bucket, and the completion Lambda writes recaps.
+    "RECAP_QUEUE_TABLE": TABLE_NAME,
+    "RECAP_BATCH_BUCKET": BUCKET_NAME,
+    "RECAP_BATCH_ROLE_ARN": "arn:aws:iam::1:role/recap-batch",
     "BEDROCK_MODEL_ID": "us.meta.llama3-3-70b-instruct-v1:0",
-    # Disable request pacing in tests so the recap component scenario never sleeps.
-    "RECAP_MIN_REQUEST_INTERVAL_SECONDS": "0",
+    # Submit eagerly in tests (no minimum-batch hold) and never treat a fresh job as
+    # stale.
+    "RECAP_MIN_BATCH_RECORDS": "1",
+    "RECAP_STALE_INFLIGHT_HOURS": "6",
 }
 
 
@@ -237,21 +237,27 @@ def _load_handlers(context) -> None:
         "stripe_webhook.handler", _SRC / "stripe_webhook" / "handler.py"
     )
 
-    # --- recap generator (BE-022) ------------------------------------------
-    # Imports only common.* (incl. common.bedrock, which creates a bedrock-runtime
-    # client at import — fine under moto since no call is made until generate_recap,
-    # which scenarios patch). Its module-level table is moto-backed.
-    context.recap_handler = _load_module(
-        "recap_generator.handler", _SRC / "recap_generator" / "handler.py"
+    # --- recap batch pipeline (BE-022) -------------------------------------
+    # The drainer + completion Lambdas import only common.* (incl. common.bedrock,
+    # which creates a ``bedrock`` control-plane client at import — fine under moto
+    # since the only Bedrock call, submit_batch_job, is patched per scenario). Their
+    # module-level table + S3 client are moto-backed, so the drain → S3 input/manifest
+    # → completion → MATCHUP_RECAP write runs end to end.
+    context.recap_drainer = _load_module(
+        "recap_drainer.handler", _SRC / "recap_drainer" / "handler.py"
+    )
+    context.recap_completion = _load_module(
+        "recap_completion.handler", _SRC / "recap_completion" / "handler.py"
     )
 
-    # moto[s3,dynamodb] has no ECS service, so point the processor's and webhook's ECS
-    # clients at one shared spy. Scenarios assert the recap task *would* be launched
-    # (run_recap_task → ecs.run_task), and (separately) run the recap handler directly.
-    recap_ecs_spy = MagicMock()
-    context.processor_handler._ecs_client = recap_ecs_spy
-    context.stripe_handler._ecs_client = recap_ecs_spy
-    context.recap_ecs_client = recap_ecs_spy
+    # The processor + webhook now *enqueue* (a real DynamoDB marker) rather than launch
+    # compute. Point both handlers' ``record_pending_recap`` at one shared spy so the
+    # trigger scenarios assert the enqueue without the batch scenarios depending on it
+    # (those seed their own markers).
+    recap_enqueue_spy = MagicMock()
+    context.processor_handler.record_pending_recap = recap_enqueue_spy
+    context.stripe_handler.record_pending_recap = recap_enqueue_spy
+    context.recap_enqueue_spy = recap_enqueue_spy
 
     # --- player metadata refresher (BE-010) --------------------------------
     pm_pkg = types.ModuleType("player_metadata")
@@ -311,8 +317,8 @@ def before_scenario(context, scenario):
     # Reset the API's Lambda-invoke spy each scenario so payload assertions are
     # scoped to the scenario under test.
     context.main.lambda_client.reset_mock()
-    # Reset the shared recap-generator invoke spy (processor + webhook) too (BE-022).
-    context.recap_ecs_client.reset_mock()
+    # Reset the shared recap enqueue spy (processor + webhook) too (BE-022).
+    context.recap_enqueue_spy.reset_mock()
     # Billing ships feature-flagged OFF (BE-017); default it ON for component
     # scenarios since the billing features assume it, along with the shared
     # ``premium_feature`` flag (BE-014). The "billing is disabled" step flips

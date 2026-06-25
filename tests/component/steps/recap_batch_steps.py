@@ -1,10 +1,15 @@
-"""Steps for the AI weekly matchup recap generator component test (BE-022)."""
+"""Steps for the AI weekly matchup recap batch pipeline component test (BE-022)."""
 
+import json
 from unittest.mock import patch
 
 from behave import given, then, when
 from boto3.dynamodb.conditions import Key
 from common_steps import get_item, put_item
+
+# Fixed job ARN the patched ``submit_batch_job`` returns, so the manifest key and the
+# simulated completion event line up across steps.
+JOB_ARN = "arn:aws:bedrock:us-east-1:000000000000:model-invocation-job/comptest"
 
 
 def _matchup(week2: str) -> dict:
@@ -88,33 +93,63 @@ def step_seed_premium_league(context, canonical, seasons):
         _seed_season(context, canonical, season, weeks)
 
 
-def _ensure_recap_spy(context):
-    """Patch the recap Lambda's Bedrock call with a counting spy (once per scenario)."""
-    if getattr(context, "recap_gen_spy", None) is None:
-        patcher = patch.object(
-            context.recap_handler,
-            "generate_recap",
-            return_value={"headline": "Big Week", "body": "Para one.\n\nPara two."},
+@given('a pending recap marker for league "{canonical}"')
+def step_seed_marker(context, canonical):
+    put_item(
+        context,
+        {
+            "PK": "RECAP_QUEUE",
+            "SK": f"PENDING#{canonical}",
+            "canonical_league_id": canonical,
+            "platform": "SLEEPER",
+            "status": "pending",
+        },
+    )
+
+
+@when("the recap drainer runs")
+def step_run_drainer(context):
+    with patch.object(
+        context.recap_drainer, "submit_batch_job", return_value=JOB_ARN
+    ) as spy:
+        context.drainer_result = context.recap_drainer._handle()
+    context.drainer_submit = spy
+
+
+@when("Bedrock finishes the batch job")
+def step_bedrock_finishes(context):
+    """Simulate Bedrock writing one output record per input record to the job's S3
+    output prefix (the manifest records exactly which records were submitted)."""
+    manifest = get_item(context, f"RECAP_JOB#{JOB_ARN}", "MANIFEST")
+    assert manifest, "drainer wrote no job manifest"
+    bucket, _, prefix = manifest["output_uri"][len("s3://") :].partition("/")
+    lines = [
+        json.dumps(
+            {
+                "recordId": record_id,
+                "modelOutput": {"generation": "Big Week\n\nPara one.\n\nPara two."},
+            }
         )
-        context.recap_gen_spy = patcher.start()
-        context._patches.append(patcher)
-
-
-@when('the recap generator runs for league "{canonical}" on "{platform}"')
-def step_run_recap(context, canonical, platform):
-    _ensure_recap_spy(context)
-    context.recap_gen_spy.reset_mock()  # scope assertions to this run
-    context.recap_response = context.recap_handler._handle(
-        {"canonical_league_id": canonical, "platform": platform}
+        for record_id in manifest["records"]
+    ]
+    context.s3.put_object(
+        Bucket=bucket,
+        Key=prefix + "records.jsonl.out",
+        Body="\n".join(lines).encode("utf-8"),
     )
 
 
-@given('the recap generator has already run for league "{canonical}" on "{platform}"')
-def step_recap_already_ran(context, canonical, platform):
-    _ensure_recap_spy(context)
-    context.recap_handler._handle(
-        {"canonical_league_id": canonical, "platform": platform}
-    )
+@when("the recap completion runs for the job")
+def step_run_completion(context):
+    event = {"detail": {"batchJobArn": JOB_ARN, "status": "Completed"}}
+    context.completion_result = context.recap_completion._handle(event)
+
+
+@given('the recap batch pipeline has fully run for league "{canonical}"')
+def step_full_pipeline(context, canonical):
+    step_run_drainer(context)
+    step_bedrock_finishes(context)
+    step_run_completion(context)
 
 
 @then(
@@ -142,17 +177,28 @@ def step_no_recap_items(context, canonical):
     assert not resp.get("Items"), "expected no recap items"
 
 
-@then("the recap model generated {count:d} recaps")
-def step_recap_model_count(context, count):
-    assert context.recap_gen_spy.call_count == count, (
-        f"expected {count} generation(s), got {context.recap_gen_spy.call_count}"
+@then("the recap drainer submitted a job for {count:d} records")
+def step_drainer_submitted(context, count):
+    assert context.drainer_result["status"] == "submitted", context.drainer_result
+    assert context.drainer_result["records"] == count, context.drainer_result
+
+
+@then("the recap drainer submitted no job")
+def step_drainer_no_job(context):
+    assert context.drainer_result["status"] != "submitted", context.drainer_result
+
+
+@then('the recap queue marker for league "{canonical}" is cleared')
+def step_marker_cleared(context, canonical):
+    assert not get_item(context, "RECAP_QUEUE", f"PENDING#{canonical}"), (
+        "expected the pending recap marker to be cleared"
     )
 
 
 @then("the recap generator was invoked after processing")
 def step_recap_invoked_after_processing(context):
-    # BE-022: the processor launches the recap-generator Fargate task at end of run
-    # (the shared ECS spy stands in for the absent moto ECS service).
-    assert context.recap_ecs_client.run_task.called, (
-        "recap generator task was not launched at end of processing"
+    # BE-022: the processor enqueues a pending-recap marker at end of run (the shared
+    # enqueue spy stands in for the real record_pending_recap DynamoDB write).
+    assert context.recap_enqueue_spy.called, (
+        "recap enqueue was not called at end of processing"
     )

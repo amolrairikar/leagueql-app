@@ -285,14 +285,13 @@ class TestRecapTrigger:
             },
         }
 
-    def test_launches_recap_task_when_subscription_advances(self, patched):
+    def test_enqueues_recap_when_subscription_advances(self, patched):
         self._active_event(patched)
         patched.record.return_value = True  # a real advance
-        with patch.object(patched.wh, "run_recap_task") as run:
+        with patch.object(patched.wh, "record_pending_recap") as enqueue:
             resp = patched.wh.lambda_handler(_event(), None)
         assert resp["statusCode"] == 200
-        run.assert_called_once_with(
-            patched.wh._ecs_client,
+        enqueue.assert_called_once_with(
             canonical_league_id="cid",
             platform="ESPN",
             native_league_id="999",
@@ -302,24 +301,24 @@ class TestRecapTrigger:
     def test_does_not_fire_when_subscription_is_noop(self, patched):
         self._active_event(patched)
         patched.record.return_value = False  # stale/duplicate, non-advancing
-        with patch.object(patched.wh, "run_recap_task") as run:
+        with patch.object(patched.wh, "record_pending_recap") as enqueue:
             resp = patched.wh.lambda_handler(_event(), None)
         assert resp["statusCode"] == 200
-        run.assert_not_called()
+        enqueue.assert_not_called()
 
     def test_does_not_fire_for_integration_test_subscription(self, patched):
         # CI lifecycle subscriptions advance state (so subscription_end_time still
-        # converges) but carry an integration_test marker, so the recap launch is
+        # converges) but carry an integration_test marker, so the recap enqueue is
         # skipped — no Bedrock spend on the shared dev league (BE-022).
         self._active_event(patched)
         patched.stripe.Subscription.retrieve.return_value["metadata"][
             "integration_test"
         ] = "leagueql-stripe-lifecycle"
         patched.record.return_value = True  # a real advance
-        with patch.object(patched.wh, "run_recap_task") as run:
+        with patch.object(patched.wh, "record_pending_recap") as enqueue:
             resp = patched.wh.lambda_handler(_event(), None)
         assert resp["statusCode"] == 200
-        run.assert_not_called()
+        enqueue.assert_not_called()
 
 
 class TestTracing:

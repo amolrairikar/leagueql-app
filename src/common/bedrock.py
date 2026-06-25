@@ -1,41 +1,37 @@
 """Shared AWS Bedrock recap generation for LeagueQL (BE-022).
 
-Vendored into the recap-generator Lambda's deployment zip. Wraps a single
-``bedrock-runtime`` client (mirroring ``common.sns`` / ``common.subscription``
-style) and the Converse call that turns a week's matchup highlights into the
-AI-written recap column.
+Vendored into the recap-drainer + recap-completion Lambda zips. Recaps are produced
+via Bedrock **batch inference** (asynchronous ``CreateModelInvocationJob``), which
+runs on a separate service-quota lane from on-demand throughput and so sidesteps the
+very low real-time requests-per-minute quota for Meta Llama 3.3 70B Instruct. This
+module owns three things: building a single batch **input record** from a week's
+highlights, submitting a batch job, and parsing a batch **output record** back into
+a recap.
 
-The model is parameterized by the ``BEDROCK_MODEL_ID`` env var (currently Meta
-Llama 3.3 70B Instruct via its US cross-region inference profile,
-``us.meta.llama3-3-70b-instruct-v1:0`` — the bare foundation-model ID is
-inference-profile-only and rejects on-demand throughput). Because the call goes
-through the model-agnostic Bedrock **Converse** API, swapping to any other
-Converse-capable Bedrock model (Anthropic, Meta, etc.) is a one-line config change
-with no code change here.
-The client uses **adaptive** retry mode so Bedrock ``ThrottlingException`` backoff
-is handled by botocore before a parallel batch ever sees an error.
+Batch input/output uses **InvokeModel-style** ``modelInput``/``modelOutput``, not the
+Converse API, so this module formats the model-native request body (the Llama-3
+instruct prompt template) and reads the model-native response. The model is
+parameterized by ``BEDROCK_MODEL_ID`` (currently Meta Llama 3.3 70B Instruct via its
+US cross-region inference profile, ``us.meta.llama3-3-70b-instruct-v1:0`` — the bare
+foundation-model ID is inference-profile-only and rejects on-demand throughput).
+Because batch is not model-agnostic, swapping models means updating the prompt/body
+format here, not just the env var.
 """
 
 import json
 import os
 
 import boto3
-import botocore.config
 
 from common.logging_utils import logger
 
-# Adaptive retry mode handles Bedrock throttling (RPM/TPM) backoff for us, which
-# matters under the parallel multi-week backfill the recap Lambda runs. Adaptive
-# mode adds a client-side token-bucket rate limiter that *slows the request rate*
-# whenever it sees a ``ThrottlingException`` — but it only helps if each call has
-# enough attempts to ride out the backoff, so we raise ``max_attempts`` well above
-# the default of 3. Combined with the bounded worker pool in the handler, this keeps
-# the backfill under the model's RPM/TPM quota instead of hammering it.
-_retry_config = botocore.config.Config(retries={"mode": "adaptive", "max_attempts": 10})
-_bedrock_client = boto3.client("bedrock-runtime", config=_retry_config)
+# Control-plane client for batch job submission (``create_model_invocation_job`` lives
+# on ``bedrock``, not ``bedrock-runtime``). Batch carries its own quota, so there is no
+# client-side rate limiter here.
+_bedrock_client = boto3.client("bedrock")
 
-# Voice + hard fact-fidelity guardrail. The guardrail is the one real gap observed
-# in the model demo (it fabricated manager surnames from usernames); keeping it is
+# Voice + hard fact-fidelity guardrail. The guardrail is the one real gap observed in
+# the model demo (it fabricated manager surnames from usernames); keeping it is
 # worthwhile regardless of which model BEDROCK_MODEL_ID points at.
 _SYSTEM_PROMPT = (
     "You are a fantasy football columnist writing a weekly matchup recap. Write a "
@@ -67,47 +63,91 @@ _SYSTEM_PROMPT = (
 )
 
 # Cap output so a single recap stays bounded (and cheap) regardless of how many
-# matchups a week has.
-_MAX_TOKENS = 2000
+# matchups a week has, and a mild temperature for headline creativity.
+_MAX_GEN_LEN = 2000
+_TEMPERATURE = 0.7
 
 
-def generate_recap(highlights: dict) -> dict:
-    """Generate one week's recap column from its matchup highlights.
+def _format_llama_prompt(system: str, user: str) -> str:
+    """Wrap system + user text in the Llama-3 instruct chat template.
+
+    Converse handled this for us; batch InvokeModel does not, so we build the native
+    prompt string the model was trained on. If ``BEDROCK_MODEL_ID`` ever points at a
+    non-Llama model, this template must change with it.
+    """
+    return (
+        "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n"
+        f"{system}<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n"
+        f"{user}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+    )
+
+
+def _model_input(highlights: dict) -> dict:
+    """The model-native InvokeModel request body for one week's highlights."""
+    return {
+        "prompt": _format_llama_prompt(_SYSTEM_PROMPT, json.dumps(highlights)),
+        "max_gen_len": _MAX_GEN_LEN,
+        "temperature": _TEMPERATURE,
+    }
+
+
+def build_recap_record(record_id: str, highlights: dict) -> dict:
+    """Build one batch-inference JSONL record for a week's recap.
 
     Args:
+        record_id: An opaque per-record id (alphanumeric, >= 11 chars — Bedrock's
+            constraint) that the drainer maps back to ``(league, season, week)`` in
+            the job manifest. The output JSONL echoes it.
         highlights: A JSON-serializable dict describing the week (season, week,
             playoff round if any, and each matchup's teams/records/scores/top
-            performers). Built by the recap Lambda from the precomputed views.
+            performers).
 
     Returns:
-        ``{"headline": str, "body": str}`` — ``body`` is the prose with paragraphs
-        joined by ``\\n\\n`` and no markdown. The headline is the model's first
-        non-empty line; everything after it is the body.
+        ``{"recordId": str, "modelInput": dict}`` — one line of the batch input JSONL.
+    """
+    return {"recordId": record_id, "modelInput": _model_input(highlights)}
+
+
+def submit_batch_job(
+    *, job_name: str, input_uri: str, output_uri: str, role_arn: str
+) -> str:
+    """Submit a Bedrock batch inference job over an input JSONL already in S3.
+
+    Args:
+        job_name: A unique job name.
+        input_uri: ``s3://…/input/<job>.jsonl`` holding the ``build_recap_record``
+            lines.
+        output_uri: ``s3://…/output/<job>/`` prefix Bedrock writes results under.
+        role_arn: The Bedrock batch **service role** (trust ``bedrock.amazonaws.com``)
+            Bedrock assumes to read the input and write the output.
+
+    Returns:
+        The created job's ARN (used as the manifest key / completion-event match).
     """
     model_id = os.environ["BEDROCK_MODEL_ID"]
-    response = _bedrock_client.converse(
+    resp = _bedrock_client.create_model_invocation_job(
+        jobName=job_name,
+        roleArn=role_arn,
         modelId=model_id,
-        system=[{"text": _SYSTEM_PROMPT}],
-        messages=[
-            {
-                "role": "user",
-                "content": [{"text": json.dumps(highlights)}],
-            }
-        ],
-        inferenceConfig={"maxTokens": _MAX_TOKENS},
+        inputDataConfig={"s3InputDataConfig": {"s3Uri": input_uri}},
+        outputDataConfig={"s3OutputDataConfig": {"s3Uri": output_uri}},
     )
-    text = _extract_text(response)
-    return _parse_recap(text)
+    job_arn = resp["jobArn"]
+    logger.info("Submitted Bedrock batch job %s (%s)", job_name, job_arn)
+    return job_arn
 
 
-def _extract_text(response: dict) -> str:
-    """Pull the concatenated text out of a Converse response, tolerating shape."""
-    blocks = response.get("output", {}).get("message", {}).get("content", [])
-    parts = [b.get("text", "") for b in blocks if isinstance(b, dict)]
-    text = "".join(parts).strip()
+def parse_recap_output(model_output: dict) -> dict:
+    """Parse a batch ``modelOutput`` record into ``{"headline", "body"}``.
+
+    ``model_output`` is the model-native InvokeModel response (for Llama: a dict with
+    a ``generation`` string). ``body`` joins paragraphs with ``\\n\\n`` and has no
+    markdown; the headline is the model's first non-empty line.
+    """
+    text = (model_output.get("generation") or "").strip()
     if not text:
-        logger.warning("Bedrock Converse returned no text content")
-    return text
+        logger.warning("Bedrock batch record returned no generation text")
+    return _parse_recap(text)
 
 
 def _parse_recap(text: str) -> dict:

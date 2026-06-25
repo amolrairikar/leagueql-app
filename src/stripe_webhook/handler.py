@@ -33,7 +33,7 @@ from common.subscription import (
     expire_subscription,
     record_active_subscription,
 )
-from common.recap_task import run_recap_task
+from common.recap_queue import record_pending_recap
 from common.tracing import init_tracing, traced_handler
 
 # Stripe credentials are SecureString SSM parameters fetched at cold start by
@@ -44,12 +44,11 @@ _WEBHOOK_SECRET = get_secret_from_env_param("STRIPE_WEBHOOK_SECRET_SSM_PARAM")
 
 _retry_config = botocore.config.Config(retries={"mode": "standard"})
 _dynamodb = boto3.client("dynamodb", config=_retry_config)
-_ecs_client = boto3.client("ecs", config=_retry_config)
 
 # Start an OTel trace for the activation path → Axiom (BE-021). Stripe delivers over
 # HTTP with no inbound W3C context, so the handler starts a fresh *root* span (see
-# lambda_handler) which then parents the recap task launch. A no-op unless Axiom is
-# configured, so tests / unconfigured envs are unaffected.
+# lambda_handler). A no-op unless Axiom is configured, so tests / unconfigured envs
+# are unaffected.
 init_tracing("leagueql-stripe-webhook")
 
 # Event types that record/refresh an active or trialing subscription.
@@ -68,8 +67,8 @@ WEBHOOK_EVENT_TTL_SECONDS = 7 * 24 * 60 * 60
 
 # Subscription-metadata key the CI Stripe lifecycle suite stamps on the test-mode
 # subscriptions it creates against the dev webhook (BE-022). Subscription state still
-# converges as the suite asserts, but the recap-generator launch is suppressed so CI
-# runs incur no Bedrock spend and don't pollute the shared dev league with recaps.
+# converges as the suite asserts, but the recap enqueue is suppressed so CI runs
+# never queue Bedrock spend or pollute the shared dev league with recaps.
 # Real checkout subscriptions never carry this key (see src/api/routes.py).
 _INTEGRATION_TEST_METADATA_KEY = "integration_test"
 
@@ -170,16 +169,14 @@ def _subscription_id_from_event(event_type: str, obj) -> str | None:
 def _invoke_recap_generator(
     canonical_league_id: str, platform: str | None, native_league_id: str | None
 ) -> None:
-    """Fire-and-forget the recap-generator Fargate task on a real activation (BE-022).
+    """Enqueue a pending-recap marker on a real activation (BE-022).
 
     Called only when ``record_active_subscription`` actually advanced (a real
-    activation, not a stale/duplicate no-op) → immediate full backfill of the
-    newly-premium league's weekly recaps. Runs inside the ``stripe_webhook.handle``
-    span, so the injected W3C context attaches the task's span as a child (BE-021).
-    A failed launch never fails the webhook.
+    activation, not a stale/duplicate no-op), so redelivered events don't re-enqueue.
+    The recap-drainer later batches the newly-premium league's full backfill. A failed
+    enqueue never fails the webhook.
     """
-    run_recap_task(
-        _ecs_client,
+    record_pending_recap(
         canonical_league_id=canonical_league_id,
         platform=platform,
         native_league_id=native_league_id,
@@ -277,9 +274,9 @@ def lambda_handler(event, context) -> dict[str, str | int]:
     """API Gateway entry point for Stripe webhook delivery.
 
     Wraps :func:`_handle` in a fresh **root** span (Stripe delivers over HTTP with
-    no inbound W3C context) that parents the activation-time recap invoke, then
-    force-flushes spans before the Lambda freezes (BE-021). A no-op when tracing is
-    disabled, so behavior is unchanged in tests / unconfigured envs.
+    no inbound W3C context), then force-flushes spans before the Lambda freezes
+    (BE-021). A no-op when tracing is disabled, so behavior is unchanged in tests /
+    unconfigured envs.
     """
     with traced_handler("stripe_webhook.handle", root=True):
         return _handle(event, context)

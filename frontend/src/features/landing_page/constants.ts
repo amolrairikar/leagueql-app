@@ -145,7 +145,7 @@ export const PREMIUM_FEATURES: PremiumFeature[] = [
   },
   {
     title: 'Recaps',
-    desc: 'AI-written recap columns that turn your league’s data into narrative — a lighthearted-but-journalistic write-up of each week’s matchups, with season-long recaps on the way.',
+    desc: 'AI-written recap columns that turn your league’s data into narrative: a lighthearted-but-journalistic write-up of each week’s matchups.',
   },
 ];
 

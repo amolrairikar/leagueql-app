@@ -14,7 +14,7 @@ import botocore.exceptions
 import duckdb
 import pandas as pd
 from common.job_status import write_job_status
-from common.recap_task import run_recap_task
+from common.recap_queue import record_pending_recap
 from common.tracing import init_tracing, traced_handler
 from utils import correlation_id_var, logger, publish_failure
 from queries import QUERIES
@@ -29,19 +29,16 @@ s3_client = boto3.client("s3", config=_retry_config)
 table_name = os.environ["DYNAMODB_TABLE_NAME"]
 table = boto3.resource("dynamodb", config=_retry_config).Table(table_name)
 ddb_client = boto3.client("dynamodb", config=_retry_config)
-_ecs_client = boto3.client("ecs", config=_retry_config)
 
 
 def _invoke_recap_generator(canonical_league_id: str, platform: str) -> None:
-    """Fire-and-forget the recap-generator Fargate task at end of run (BE-022).
+    """Enqueue a pending-recap marker at end of run (BE-022).
 
-    Fires for both onboard and refresh; the task's premium gate + idempotent skip
-    make it a cheap no-op for non-premium leagues and already-recapped weeks. Runs
-    inside the active ``processor.handle`` span, so the injected W3C context attaches
-    the task's span as a child (BE-021). A failed launch never fails the processor.
+    Fires for both onboard and refresh; the recap-drainer's premium gate + idempotent
+    skip make it a cheap no-op for non-premium leagues and already-recapped weeks. A
+    failed enqueue never fails the processor.
     """
-    run_recap_task(
-        _ecs_client,
+    record_pending_recap(
         canonical_league_id=canonical_league_id,
         platform=platform,
         correlation_id=correlation_id_var.get(),
@@ -1470,7 +1467,7 @@ def _process_manifest(
     if previous_version_id is None:
         update_league_count(delta=1)
 
-    # Auto-generate the newly-completed week's AI recap (BE-022). Idempotent +
-    # premium-gated in the recap Lambda, so this is a cheap no-op for non-premium
-    # leagues and already-recapped weeks.
+    # Enqueue a pending-recap marker for the newly-completed week (BE-022). The
+    # recap-drainer batches it; idempotent + premium-gated downstream, so this is a
+    # cheap no-op for non-premium leagues and already-recapped weeks.
     _invoke_recap_generator(canonical_league_id, platform)
