@@ -6,7 +6,9 @@ style) and the Converse call that turns a week's matchup highlights into the
 AI-written recap column.
 
 The model is parameterized by the ``BEDROCK_MODEL_ID`` env var (currently Meta
-Llama 3.3 70B Instruct, ``meta.llama3-3-70b-instruct-v1:0``). Because the call goes
+Llama 3.3 70B Instruct via its US cross-region inference profile,
+``us.meta.llama3-3-70b-instruct-v1:0`` — the bare foundation-model ID is
+inference-profile-only and rejects on-demand throughput). Because the call goes
 through the model-agnostic Bedrock **Converse** API, swapping to any other
 Converse-capable Bedrock model (Anthropic, Meta, etc.) is a one-line config change
 with no code change here.

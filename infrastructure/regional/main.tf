@@ -143,11 +143,12 @@ module "recap_generator_lambda" {
   environment_variables = {
     DYNAMODB_TABLE_NAME = "leagueql-table-${var.environment}"
     # Meta Llama 3.3 70B Instruct on Bedrock, invoked via the model-agnostic
-    # Converse API. This is the on-demand foundation-model ID; if a region ever
-    # requires the cross-region inference profile instead, switch to
-    # ``us.meta.llama3-3-70b-instruct-v1:0`` (the role's IAM permits both).
-    # Swapping models is a one-line change here.
-    BEDROCK_MODEL_ID = "meta.llama3-3-70b-instruct-v1:0"
+    # Converse API. Llama 3.3 70B is inference-profile-only — invoking the bare
+    # foundation-model ID ``meta.llama3-3-70b-instruct-v1:0`` with on-demand
+    # throughput fails ("Retry with the ID or ARN of an inference profile"), so the
+    # ``us.``-prefixed cross-region profile ID is required. Swapping models is a
+    # one-line change here.
+    BEDROCK_MODEL_ID = "us.meta.llama3-3-70b-instruct-v1:0"
 
     # Feature flags via SSM (BE-017): the recap Lambda reads the global `billing`
     # and `premium_feature` flags to server-side gate generation. Same SSM source.

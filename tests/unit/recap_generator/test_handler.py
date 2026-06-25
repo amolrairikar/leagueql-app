@@ -205,7 +205,7 @@ class TestGeneration:
         recap = item["data"][0]
         assert recap["headline"] == "Big Week"
         assert recap["body"] == "Para one.\n\nPara two."
-        assert recap["model"] == "meta.llama3-3-70b-instruct-v1:0"
+        assert recap["model"] == "us.meta.llama3-3-70b-instruct-v1:0"
         assert "generated_at" in recap
 
     def test_idempotent_skip_existing_weeks(self, patched):

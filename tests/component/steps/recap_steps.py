@@ -129,7 +129,7 @@ def step_recap_item_exists(context, canonical, season, week2):
     recap = item["data"][0]
     assert recap["headline"], "recap headline missing"
     assert recap["body"], "recap body missing"
-    assert recap["model"] == "meta.llama3-3-70b-instruct-v1:0"
+    assert recap["model"] == "us.meta.llama3-3-70b-instruct-v1:0"
 
 
 @then('no MATCHUP_RECAP items exist for league "{canonical}"')

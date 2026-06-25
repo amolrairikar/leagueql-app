@@ -65,7 +65,7 @@ _ENV = {
     # BE-022: the processor + webhook fire the recap generator; the recap Lambda
     # itself calls Bedrock by this model id (mocked per scenario).
     "RECAP_LAMBDA_NAME": "recap-test",
-    "BEDROCK_MODEL_ID": "meta.llama3-3-70b-instruct-v1:0",
+    "BEDROCK_MODEL_ID": "us.meta.llama3-3-70b-instruct-v1:0",
 }
 
 

@@ -345,7 +345,7 @@ regenerated once present.
 | `headline` | String | A single headline line for the week |
 | `body` | String | The recap prose; paragraphs joined by `\n\n` (no markdown) |
 | `generated_at` | String | ISO 8601 (UTC) timestamp the recap was generated |
-| `model` | String | The Bedrock model ID used (e.g. `meta.llama3-3-70b-instruct-v1:0`) |
+| `model` | String | The Bedrock model ID used (e.g. `us.meta.llama3-3-70b-instruct-v1:0`) |
 
 **Example:**
 ```json
@@ -357,7 +357,7 @@ regenerated once present.
       "headline": "Week 1: Fireworks, Faceplants, and a Last-Second Heartbreak",
       "body": "The season opened with a bang...\n\nMeanwhile, in the week's ugliest win...",
       "generated_at": "2025-09-10T13:45:00+00:00",
-      "model": "meta.llama3-3-70b-instruct-v1:0"
+      "model": "us.meta.llama3-3-70b-instruct-v1:0"
     }
   ]
 }
