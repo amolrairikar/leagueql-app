@@ -1,5 +1,7 @@
 import { screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { defineFeature, loadFeature } from 'jest-cucumber';
+import { afterEach, expect, vi } from 'vitest';
 
 import WeeklyRecap from '../weekly-recap';
 
@@ -50,6 +52,14 @@ async function openRecap() {
 }
 
 defineFeature(feature, (test) => {
+  const realClipboard = navigator.clipboard;
+  afterEach(() => {
+    Object.defineProperty(navigator, 'clipboard', {
+      value: realClipboard,
+      configurable: true,
+    });
+  });
+
   test('The recap renders for a week with a cached recap', ({
     given,
     when,
@@ -68,7 +78,39 @@ defineFeature(feature, (test) => {
     });
   });
 
-  test('A week with no cached recap shows an empty state', ({
+  test('Copying a recap writes it to the clipboard and shows a check mark', ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+
+    given('a cached recap is available for the season', () => {
+      Object.defineProperty(navigator, 'clipboard', {
+        value: { writeText },
+        configurable: true,
+      });
+      server.use(leagueQuery({ MATCHUPS, MATCHUP_RECAP: [RECAP] }));
+    });
+    when('I open the weekly recap', openRecap);
+    and('I click the copy recap button', async () => {
+      const button = await screen.findByRole('button', { name: 'Copy recap' });
+      await userEvent.click(button);
+    });
+    then('the recap headline and body are written to the clipboard', () => {
+      expect(writeText).toHaveBeenCalledWith(
+        `${RECAP.headline}\n\n${RECAP.body}`,
+      );
+    });
+    and('the copy button shows it has copied', async () => {
+      expect(
+        await screen.findByRole('button', { name: 'Recap copied' }),
+      ).toBeInTheDocument();
+    });
+  });
+
+  test('A week with no cached recap shows the generating message', ({
     given,
     when,
     then,

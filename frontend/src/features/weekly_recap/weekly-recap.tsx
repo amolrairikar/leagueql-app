@@ -1,8 +1,10 @@
-import { Suspense, use, useMemo } from 'react';
+import { Check, Copy } from 'lucide-react';
+import { Suspense, use, useMemo, useState } from 'react';
 
 import { getSeasonMatchups, getWeekRecap, type RecapItem } from './api-calls';
 
 import type { Platform } from '@/components/api/types';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { type Result, toResult } from '@/lib/result';
 
@@ -31,7 +33,7 @@ function RecapInner({ promise }: { promise: Promise<RecapResult> }) {
   if (!recap) {
     return (
       <p className="text-[13px] text-muted-foreground text-center py-8">
-        No recap for this week yet.
+        Weekly recap generating! Check back soon.
       </p>
     );
   }
@@ -40,9 +42,12 @@ function RecapInner({ promise }: { promise: Promise<RecapResult> }) {
 
   return (
     <div className="bg-card border border-border/50 rounded-lg p-6 flex flex-col gap-4">
-      <h3 className="text-xl font-semibold text-foreground leading-snug">
-        {recap.headline}
-      </h3>
+      <div className="flex items-start justify-between gap-4">
+        <h3 className="text-xl font-semibold text-foreground leading-snug">
+          {recap.headline}
+        </h3>
+        <CopyRecapButton recap={recap} />
+      </div>
       <div className="flex flex-col gap-3">
         {paragraphs.map((paragraph, i) => (
           <p
@@ -54,6 +59,40 @@ function RecapInner({ promise }: { promise: Promise<RecapResult> }) {
         ))}
       </div>
     </div>
+  );
+}
+
+/** Copies the recap (headline + body) to the clipboard, swapping to a check
+ * mark for ~2s so the user knows the text is ready to paste into a group chat. */
+function CopyRecapButton({ recap }: { recap: RecapItem }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    void navigator.clipboard
+      ?.writeText(`${recap.headline}\n\n${recap.body}`)
+      .then(() => {
+        setCopied(true);
+        setTimeout(() => {
+          setCopied(false);
+        }, 2000);
+      });
+  };
+
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon"
+      className="h-8 w-8 shrink-0 cursor-pointer text-muted-foreground"
+      onClick={handleCopy}
+      aria-label={copied ? 'Recap copied' : 'Copy recap'}
+    >
+      {copied ? (
+        <Check className="size-4 text-green-600" />
+      ) : (
+        <Copy className="size-4" />
+      )}
+    </Button>
   );
 }
 

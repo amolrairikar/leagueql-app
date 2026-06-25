@@ -307,6 +307,20 @@ class TestRecapTrigger:
         assert resp["statusCode"] == 200
         run.assert_not_called()
 
+    def test_does_not_fire_for_integration_test_subscription(self, patched):
+        # CI lifecycle subscriptions advance state (so subscription_end_time still
+        # converges) but carry an integration_test marker, so the recap launch is
+        # skipped — no Bedrock spend on the shared dev league (BE-022).
+        self._active_event(patched)
+        patched.stripe.Subscription.retrieve.return_value["metadata"][
+            "integration_test"
+        ] = "leagueql-stripe-lifecycle"
+        patched.record.return_value = True  # a real advance
+        with patch.object(patched.wh, "run_recap_task") as run:
+            resp = patched.wh.lambda_handler(_event(), None)
+        assert resp["statusCode"] == 200
+        run.assert_not_called()
+
 
 class TestTracing:
     """The webhook is a traced Lambda starting a root span (BE-021)."""

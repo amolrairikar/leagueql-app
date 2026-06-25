@@ -91,7 +91,11 @@ safe.
   helper → `ecs:RunTask`, both premium-gated + idempotent):**
   - **Trigger A — subscription activation** ([BE-015](BE-015-stripe-billing.md)): the Stripe webhook
     fire-and-forget launches the task when `record_active_subscription(...) == True` → immediate full
-    backfill for the newly-premium league.
+    backfill for the newly-premium league. **CI gate:** the launch is suppressed when the subscription
+    metadata carries an `integration_test` marker. The CI Stripe lifecycle suite creates real test-mode
+    subscriptions against the dev webhook; that converges subscription state (what the suite asserts) but
+    must not incur Bedrock spend or write recaps to the shared dev league. Real checkout subscriptions
+    never set this key (`src/api/routes.py`), so only CI-created subscriptions are gated.
   - **Trigger B — processor completion** ([BE-004](BE-004-data-processing-pipeline.md)): the
     processor fire-and-forget launches the task at the end of every onboard/refresh → fills any
     missing weeks (the just-completed week). No-ops for non-premium leagues and skips already-recapped

@@ -66,6 +66,13 @@ _TERMINAL_STATUSES = {"canceled", "unpaid", "incomplete_expired"}
 # How long a processed-event dedup marker lives before DynamoDB TTL reaps it.
 WEBHOOK_EVENT_TTL_SECONDS = 7 * 24 * 60 * 60
 
+# Subscription-metadata key the CI Stripe lifecycle suite stamps on the test-mode
+# subscriptions it creates against the dev webhook (BE-022). Subscription state still
+# converges as the suite asserts, but the recap-generator launch is suppressed so CI
+# runs incur no Bedrock spend and don't pollute the shared dev league with recaps.
+# Real checkout subscriptions never carry this key (see src/api/routes.py).
+_INTEGRATION_TEST_METADATA_KEY = "integration_test"
+
 
 def _response(status_code: int, message: str) -> dict[str, str | int]:
     return {"statusCode": status_code, "body": json.dumps({"detail": message})}
@@ -236,9 +243,16 @@ def _process_event(stripe_event: dict) -> None:
             )
             # Only a real advance (not a stale/duplicate no-op) triggers the recap
             # backfill, so redelivered events don't re-invoke the generator (BE-022).
-            if applied:
+            # CI lifecycle test subscriptions advance state too, so skip the launch
+            # for them to avoid Bedrock spend on the shared dev league (BE-022).
+            if applied and not _get(sub_metadata, _INTEGRATION_TEST_METADATA_KEY):
                 _invoke_recap_generator(
                     canonical_league_id, native_platform, native_league_id
+                )
+            elif applied:
+                logger.info(
+                    "Skipping recap launch for integration-test subscription %s",
+                    subscription_id,
                 )
         except DuplicateSubscription:
             # A different subscription is already recorded for this league; this

@@ -24,7 +24,9 @@ navigation — there is no separate selector. It renders the recap for the **sel
   - `weekly-recap.tsx` — default-export component taking `{leagueId, platform, season, selectedWeek}`,
     using the canonical `useMemo → toResult → <Suspense>/use(promise)` pattern. Renders a styled
     headline plus body paragraphs (split `body` on `\n\n`), with skeleton, empty, and inline-error
-    states.
+    states. A fully-generated recap shows a **copy button** in the card's top-right corner that copies
+    the recap (headline + body) to the clipboard so it can be pasted into a group chat; the button
+    shows a copy icon by default and swaps to a check mark for ~2s after a successful copy.
 - **Premium-gated:** wrapped in `SubscriptionGuard` with the shared `premium_feature` flag
   ([FE-021](FE-021-subscription-access-control.md) / [FE-026](FE-026-feature-flags.md)) — identical
   to Weekly Awards. While `billing` is off the whole section (header + gated content) is **hidden**;
@@ -35,7 +37,10 @@ navigation — there is no separate selector. It renders the recap for the **sel
 
 ## Edge Cases
 - **No recap for the selected week** (no item yet — generation pending, or a non-premium league that
-  never generated): show an empty-state message ("No recap for this week yet.") rather than an error.
+  never generated): show an empty-state message ("Weekly recap generating! Check back soon.") rather
+  than an error.
+- **Copy a recap:** clicking the copy button writes the recap's headline + body to the clipboard and
+  the icon swaps to a check mark for ~2s, then reverts to the copy icon.
 - **Load failure (5xx) / network error:** surface an inline message; never throw.
 - **Week with no selection:** falls back to the page's active week, consistent with Weekly Awards.
 - **Locked (expired subscription):** the gated component is not mounted and never fetches.
@@ -45,8 +50,10 @@ navigation — there is no separate selector. It renders the recap for the **sel
 - [ ] On `/matchups`, a Weekly Matchup Recap section renders below Weekly Awards for the selected
       season, showing the cached recap (headline + body paragraphs) for the **selected week**.
 - [ ] Navigating to a different week fetches and renders that week's recap.
-- [ ] A week with no cached recap shows the empty-state message; a load failure shows an inline
-      message — neither crashes.
+- [ ] A week with no cached recap shows the empty-state message ("Weekly recap generating! Check back
+      soon."); a load failure shows an inline message — neither crashes.
+- [ ] A fully-generated recap shows a copy button in the top-right; clicking it copies the recap
+      (headline + body) to the clipboard and the icon changes to a check mark, then reverts.
 - [ ] When `premium_feature` (and `billing`) is enabled and the league subscription is
       expired/absent, the section shows a blurred lock overlay instead of the recap and **does not
       fetch** the recap data. With `billing` off the section and its header are hidden; with `billing`

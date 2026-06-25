@@ -9,10 +9,17 @@ Feature: Weekly matchup recap (FE-037)
     Then I see "Week 1: Fireworks and Faceplants"
     And I see "Alice torched the scoreboard."
 
-  Scenario: A week with no cached recap shows an empty state
+  Scenario: Copying a recap writes it to the clipboard and shows a check mark
+    Given a cached recap is available for the season
+    When I open the weekly recap
+    And I click the copy recap button
+    Then the recap headline and body are written to the clipboard
+    And the copy button shows it has copied
+
+  Scenario: A week with no cached recap shows the generating message
     Given the week has no cached recap
     When I open the weekly recap
-    Then I see "No recap for this week yet."
+    Then I see "Weekly recap generating! Check back soon."
 
   Scenario: A failed load surfaces an inline message
     Given the recap data fails to load
