@@ -14,7 +14,8 @@ import botocore.exceptions
 import duckdb
 import pandas as pd
 from common.job_status import write_job_status
-from common.tracing import init_tracing, inject_context, traced_handler
+from common.recap_task import run_recap_task
+from common.tracing import init_tracing, traced_handler
 from utils import correlation_id_var, logger, publish_failure
 from queries import QUERIES
 
@@ -28,38 +29,23 @@ s3_client = boto3.client("s3", config=_retry_config)
 table_name = os.environ["DYNAMODB_TABLE_NAME"]
 table = boto3.resource("dynamodb", config=_retry_config).Table(table_name)
 ddb_client = boto3.client("dynamodb", config=_retry_config)
-_lambda_client = boto3.client("lambda", config=_retry_config)
+_ecs_client = boto3.client("ecs", config=_retry_config)
 
 
 def _invoke_recap_generator(canonical_league_id: str, platform: str) -> None:
-    """Fire-and-forget the recap-generator Lambda at end of run (BE-022).
+    """Fire-and-forget the recap-generator Fargate task at end of run (BE-022).
 
-    Fires for both onboard and refresh; the recap Lambda's premium gate + idempotent
-    skip make it a cheap no-op for non-premium leagues and already-recapped weeks.
-    The invoke runs inside the active ``processor.handle`` span, so ``inject_context``
-    carries a real W3C context and the recap span attaches as a child (BE-021).
-    A failed invoke never fails the processor run.
+    Fires for both onboard and refresh; the task's premium gate + idempotent skip
+    make it a cheap no-op for non-premium leagues and already-recapped weeks. Runs
+    inside the active ``processor.handle`` span, so the injected W3C context attaches
+    the task's span as a child (BE-021). A failed launch never fails the processor.
     """
-    function_name = os.environ.get("RECAP_LAMBDA_NAME")
-    if not function_name:
-        logger.info("RECAP_LAMBDA_NAME unset; skipping recap generation trigger")
-        return
-    try:
-        _lambda_client.invoke(
-            FunctionName=function_name,
-            InvocationType="Event",
-            Payload=json.dumps(
-                {
-                    "canonical_league_id": canonical_league_id,
-                    "platform": platform,
-                    "correlation_id": correlation_id_var.get(),
-                    "trace_context": inject_context({}),
-                }
-            ),
-        )
-        logger.info("Invoked recap generator for league=%s", canonical_league_id)
-    except Exception as exc:
-        logger.error("Failed to invoke recap generator: %s", exc)
+    run_recap_task(
+        _ecs_client,
+        canonical_league_id=canonical_league_id,
+        platform=platform,
+        correlation_id=correlation_id_var.get(),
+    )
 
 
 ESPN_POSITION_ID_MAPPING = {

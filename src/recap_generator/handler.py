@@ -1,11 +1,16 @@
-"""AI weekly matchup recap generator Lambda for LeagueQL (BE-022).
+"""AI weekly matchup recap generator — ECS Fargate task for LeagueQL (BE-022).
 
-Triggered fire-and-forget by (A) the Stripe webhook on a real subscription
-activation and (B) the processor at the end of every onboard/refresh. Both paths
-run the same idempotent, premium-gated backfill: enumerate every season and every
-completed week the league has, skip any ``(season, week)`` that already has a
-recap, and generate the rest in a bounded thread pool via AWS Bedrock
-(``common.bedrock``).
+Launched fire-and-forget (via ``ecs:RunTask``) by (A) the Stripe webhook on a real
+subscription activation and (B) the processor at the end of every onboard/refresh.
+Both paths run the same idempotent, premium-gated backfill: enumerate every season
+and every completed week the league has, skip any ``(season, week)`` that already
+has a recap, and generate the rest via AWS Bedrock (``common.bedrock``).
+
+This runs as a **Fargate task** rather than a Lambda because a full multi-season
+backfill at the model's low requests-per-minute quota can exceed the 15-minute
+Lambda cap; a task has no such limit. Per-league input arrives as **container
+environment overrides** (set by the trigger's ``run_task`` call), and ``main()`` is
+the container entrypoint.
 
 Recaps are cached as ``MATCHUP_RECAP#{season}#WEEK#{week:02d}`` items and read back
 by the frontend through the query API (BE-005); generation never happens on the
@@ -13,8 +18,10 @@ request path.
 """
 
 import datetime
+import json
 import os
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading
+import time
 from decimal import Decimal
 
 import boto3
@@ -39,13 +46,51 @@ _retry_config = botocore.config.Config(retries={"mode": "standard"})
 _table_name = os.environ["DYNAMODB_TABLE_NAME"]
 _table = boto3.resource("dynamodb", config=_retry_config).Table(_table_name)
 
-# Bounded concurrency for the Converse calls: respects Bedrock RPM/TPM quotas while
-# keeping a full multi-season backfill (~160 weeks) inside the 900s Lambda timeout.
-# Kept conservative by default because a freshly-subscribed Bedrock model can have a
-# low on-demand request quota; tunable via ``RECAP_MAX_WORKERS`` so the burst rate
-# can be matched to the model's quota (or a granted quota increase) without a code
-# change. Paired with the adaptive client-side rate limiter in ``common.bedrock``.
-_MAX_WORKERS = max(1, int(os.environ.get("RECAP_MAX_WORKERS", "3")))
+# The throughput ceiling is the model's Bedrock **requests-per-minute** quota, not
+# parallelism: a single Converse call (a few seconds) is faster than the required
+# spacing, so the rate cap — not call latency — is the bottleneck, and running calls
+# concurrently only bursts past the RPM limit and throttles. Recaps are therefore
+# generated **sequentially**, paced so request starts stay under the quota.
+#
+# Minimum spacing between Converse request starts, in seconds. The floor is
+# ``60 / RPM`` (e.g. an 8-RPM model needs >= 7.5s); the default leaves headroom for
+# the sliding-window boundary and the occasional adaptive retry. Tune to the model's
+# RPM quota (raise if still throttling; lower after a quota increase). 0 disables
+# pacing (tests). Steady-state — one new week per refresh — is a single call, so
+# pacing is effectively free there; it only matters for multi-week backfills. The
+# Fargate task has no 15-min cap, so even a full multi-season backfill runs to
+# completion at this pace.
+_MIN_REQUEST_INTERVAL = max(
+    0.0, float(os.environ.get("RECAP_MIN_REQUEST_INTERVAL_SECONDS", "10"))
+)
+
+
+class _RateLimiter:
+    """Thread-safe minimum-interval gate between Converse request starts.
+
+    Reserves the next slot under a lock (cheap) and sleeps outside it. Thread-safe in
+    case workers are ever reintroduced; today the generation loop is sequential.
+    """
+
+    def __init__(self, min_interval: float) -> None:
+        self._min_interval = min_interval
+        self._lock = threading.Lock()
+        self._next_allowed = 0.0
+
+    def acquire(self) -> None:
+        if self._min_interval <= 0:
+            return
+        with self._lock:
+            now = time.monotonic()
+            start = max(now, self._next_allowed)
+            self._next_allowed = start + self._min_interval
+            wait = start - now
+        if wait > 0:
+            time.sleep(wait)
+
+
+_rate_limiter = _RateLimiter(_MIN_REQUEST_INTERVAL)
+
 
 # How many top performers from each side to include in the highlights, trimmed to
 # keep the prompt's input tokens low.
@@ -64,19 +109,31 @@ def _convert_decimals(obj):
     return obj
 
 
-def lambda_handler(event, context) -> dict:
-    """Entry point: continue the upstream trace (BE-021), then run the generator.
+def main() -> None:
+    """Container entrypoint: read the per-league input from environment overrides
+    (set by the trigger's ``run_task`` call), continue the upstream trace (BE-021),
+    and run the generator.
 
-    Args:
-        event: ``{canonical_league_id, platform, native_league_id?,
-            correlation_id?, trace_context?}``.
-        context: Lambda context (unused).
-
-    Returns:
-        A small status dict describing how many recaps were generated.
+    Inputs (env): ``CANONICAL_LEAGUE_ID`` (required), ``PLATFORM``,
+    ``NATIVE_LEAGUE_ID``, ``CORRELATION_ID``, and ``TRACE_CONTEXT`` (a JSON-encoded
+    W3C carrier so the task's span continues the processor/webhook trace).
     """
-    with traced_handler("recap_generator.handle", carrier=event.get("trace_context")):
-        return _handle(event)
+    event = {
+        "canonical_league_id": os.environ.get("CANONICAL_LEAGUE_ID"),
+        "platform": os.environ.get("PLATFORM"),
+        "native_league_id": os.environ.get("NATIVE_LEAGUE_ID"),
+        "correlation_id": os.environ.get("CORRELATION_ID"),
+    }
+    carrier = None
+    raw_carrier = os.environ.get("TRACE_CONTEXT")
+    if raw_carrier:
+        try:
+            carrier = json.loads(raw_carrier)
+        except (ValueError, TypeError):
+            logger.warning("Invalid TRACE_CONTEXT; starting a fresh trace")
+    with traced_handler("recap_generator.handle", carrier=carrier):
+        result = _handle(event)
+    logger.info("Recap generator task finished: %s", result)
 
 
 def _handle(event) -> dict:
@@ -148,32 +205,28 @@ def _handle(event) -> dict:
 def _generate_and_store(
     canonical_league_id: str, work: list[tuple[str, str, dict]], model_id: str
 ) -> int:
-    """Generate each week's recap in parallel and store the successes.
+    """Generate each week's recap sequentially (rate-paced) and store the successes.
 
-    Per-week failures are caught and logged so one Bedrock failure never aborts the
-    batch; the idempotent skip means a later invoke retries only the still-missing
-    weeks.
+    Each iteration waits on the rate limiter so request starts stay under the model's
+    RPM quota. Per-week failures are caught and logged so one Bedrock failure never
+    aborts the batch; the idempotent skip means a later run regenerates only the
+    still-missing weeks. Runs in a Fargate task, so there is no invocation time cap.
     """
     generated = 0
-    with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as executor:
-        future_to_key = {
-            executor.submit(generate_recap, highlights): (season, week)
-            for season, week, highlights in work
-        }
-        for future in as_completed(future_to_key):
-            season, week = future_to_key[future]
-            try:
-                recap = future.result()
-                _store_recap(canonical_league_id, season, week, recap, model_id)
-                generated += 1
-            except Exception as exc:
-                logger.error(
-                    "Failed to generate recap for league=%s season=%s week=%s: %s",
-                    canonical_league_id,
-                    season,
-                    week,
-                    exc,
-                )
+    for season, week, highlights in work:
+        _rate_limiter.acquire()
+        try:
+            recap = generate_recap(highlights)
+            _store_recap(canonical_league_id, season, week, recap, model_id)
+            generated += 1
+        except Exception as exc:
+            logger.error(
+                "Failed to generate recap for league=%s season=%s week=%s: %s",
+                canonical_league_id,
+                season,
+                week,
+                exc,
+            )
     return generated
 
 
@@ -349,3 +402,7 @@ def _store_recap(
             ],
         }
     )
+
+
+if __name__ == "__main__":  # pragma: no cover
+    main()

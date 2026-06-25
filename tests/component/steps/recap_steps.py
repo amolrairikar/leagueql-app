@@ -104,16 +104,16 @@ def _ensure_recap_spy(context):
 def step_run_recap(context, canonical, platform):
     _ensure_recap_spy(context)
     context.recap_gen_spy.reset_mock()  # scope assertions to this run
-    context.recap_response = context.recap_handler.lambda_handler(
-        {"canonical_league_id": canonical, "platform": platform}, None
+    context.recap_response = context.recap_handler._handle(
+        {"canonical_league_id": canonical, "platform": platform}
     )
 
 
 @given('the recap generator has already run for league "{canonical}" on "{platform}"')
 def step_recap_already_ran(context, canonical, platform):
     _ensure_recap_spy(context)
-    context.recap_handler.lambda_handler(
-        {"canonical_league_id": canonical, "platform": platform}, None
+    context.recap_handler._handle(
+        {"canonical_league_id": canonical, "platform": platform}
     )
 
 
@@ -151,8 +151,8 @@ def step_recap_model_count(context, count):
 
 @then("the recap generator was invoked after processing")
 def step_recap_invoked_after_processing(context):
-    # BE-022: the processor fires the recap-generator Lambda at end of run (the
-    # shared invoke spy stands in for the absent moto Lambda service).
-    assert context.recap_lambda_client.invoke.called, (
-        "recap generator was not invoked at end of processing"
+    # BE-022: the processor launches the recap-generator Fargate task at end of run
+    # (the shared ECS spy stands in for the absent moto ECS service).
+    assert context.recap_ecs_client.run_task.called, (
+        "recap generator task was not launched at end of processing"
     )

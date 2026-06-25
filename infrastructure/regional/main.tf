@@ -24,8 +24,13 @@ locals {
   player_metadata_role_arn  = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-sleeper-player-metadata-fetcher-role"
   sleeper_refresh_role_arn  = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-sleeper-league-refresh-role"
   stripe_webhook_role_arn   = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-stripe-webhook-role"
-  recap_generator_role_arn  = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-recap-generator-role"
   discord_notifier_role_arn = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-discord-notifier-role"
+
+  # AI weekly matchup recap generator runs as a Fargate task (BE-022). Roles created
+  # in infrastructure/global; ARNs reconstructed here from their names.
+  recap_task_role_arn      = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-recap-generator-task-role"
+  recap_task_exec_role_arn = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-recap-generator-task-exec-role"
+  recap_image              = "${local.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com/leagueql-recap-generator-${var.environment}:${var.recap_image_tag}"
 
   # Sleeper player stats refresher runs as a Fargate task (see BE-011). Roles are
   # created in infrastructure/global; ARNs are reconstructed here from their names.
@@ -101,9 +106,15 @@ module "processor_lambda" {
     S3_BUCKET_NAME      = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
     SNS_TOPIC_ARN       = var.environment == "prod" ? aws_sns_topic.lambda_alerts[0].arn : ""
 
-    # Fire the recap-generator Lambda at end of run to auto-generate the
+    # Launch the recap-generator Fargate task at end of run to auto-generate the
     # newly-completed week's AI recap (BE-022). Idempotent + premium-gated downstream.
-    RECAP_LAMBDA_NAME = "leagueql-recap-generator-${var.environment}"
+    # The processor is east-only, so it references the east Fargate task + network
+    # config directly.
+    RECAP_TASK_CLUSTER         = aws_ecs_cluster.leagueql[0].name
+    RECAP_TASK_DEFINITION      = aws_ecs_task_definition.recap_generator[0].arn
+    RECAP_TASK_CONTAINER       = "recap-generator"
+    RECAP_TASK_SUBNETS         = join(",", data.aws_subnets.fargate_public[0].ids)
+    RECAP_TASK_SECURITY_GROUPS = data.aws_security_group.fargate_task[0].id
 
     # OpenTelemetry trace-context propagation → Axiom (BE-021). A no-op unless set.
     # The ingest token is fetched at runtime from SSM by *name* (value never lands
@@ -123,49 +134,68 @@ module "processor_lambda" {
   }
 }
 
-# AI weekly matchup recap generator (BE-022). East-only like the onboarder/processor
-# since it reads the same DynamoDB data and Bedrock lives in us-east-1. Longer
-# timeout + more memory cover a full multi-season backfill of parallel Converse calls.
-module "recap_generator_lambda" {
-  source = "../modules/lambda"
-  count  = local.region == "east" ? 1 : 0
+# AI weekly matchup recap generator (BE-022) — Fargate task, not a Lambda: a full
+# multi-season backfill at the model's low RPM quota can exceed the 15-min Lambda cap.
+# East-only (reads the same DynamoDB data; Bedrock lives in us-east-1). Launched
+# on-demand via ecs:RunTask by the processor + Stripe webhook, which pass per-league
+# input as container environment overrides. Runs on the shared `leagueql` cluster.
+resource "aws_cloudwatch_log_group" "recap_generator" {
+  count             = local.region == "east" ? 1 : 0
+  name              = "/ecs/leagueql-recap-generator-${var.environment}"
+  retention_in_days = 7
 
-  function_name        = "leagueql-recap-generator-${var.environment}"
-  function_description = "Lambda generating AI weekly matchup recaps via AWS Bedrock"
-  role_arn             = local.recap_generator_role_arn
-  handler              = "handler.lambda_handler"
-  memory_size          = 1024
-  timeout              = 900
-  log_retention        = 7
-  s3_bucket            = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
-  s3_key               = "lambda-code-artifacts/recap_generator-lambda.zip"
-
-  environment_variables = {
-    DYNAMODB_TABLE_NAME = "leagueql-table-${var.environment}"
-    # Meta Llama 3.3 70B Instruct on Bedrock, invoked via the model-agnostic
-    # Converse API. Llama 3.3 70B is inference-profile-only — invoking the bare
-    # foundation-model ID ``meta.llama3-3-70b-instruct-v1:0`` with on-demand
-    # throughput fails ("Retry with the ID or ARN of an inference profile"), so the
-    # ``us.``-prefixed cross-region profile ID is required. Swapping models is a
-    # one-line change here.
-    BEDROCK_MODEL_ID = "us.meta.llama3-3-70b-instruct-v1:0"
-
-    # Parallel Converse calls during a backfill. Kept low to stay under the model's
-    # Bedrock on-demand RPM/TPM quota (a freshly-subscribed model starts low); raise
-    # it here — no code change — after a Bedrock service-quota increase. Pairs with
-    # the adaptive client-side rate limiter + retries in common/bedrock.py.
-    RECAP_MAX_WORKERS = "3"
-
-    # Feature flags via SSM (BE-017): the recap Lambda reads the global `billing`
-    # and `premium_feature` flags to server-side gate generation. Same SSM source.
-    FEATURE_FLAGS_SSM_PARAM = "/leagueql/${var.environment}/feature-flags"
-
-    # OpenTelemetry trace-context propagation → Axiom (BE-021). A no-op unless set.
-    ENVIRONMENT               = var.environment
-    AXIOM_API_TOKEN_SSM_PARAM = "/leagueql/${var.environment}/axiom/api_token"
-    AXIOM_DATASET             = "leagueql-${var.environment}"
-    AXIOM_TRACES_URL          = "https://api.axiom.co/v1/traces"
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    component   = "api"
+    managed-by  = "terraform"
   }
+}
+
+resource "aws_ecs_task_definition" "recap_generator" {
+  count                    = local.region == "east" ? 1 : 0
+  family                   = "leagueql-recap-generator-${var.environment}"
+  requires_compatibilities = ["FARGATE"]
+  network_mode             = "awsvpc"
+  cpu                      = 512
+  memory                   = 1024
+  execution_role_arn       = local.recap_task_exec_role_arn
+  task_role_arn            = local.recap_task_role_arn
+
+  container_definitions = jsonencode([
+    {
+      name      = "recap-generator"
+      image     = local.recap_image
+      essential = true
+      environment = [
+        { name = "DYNAMODB_TABLE_NAME", value = "leagueql-table-${var.environment}" },
+        # Meta Llama 3.3 70B Instruct via its US cross-region inference profile —
+        # Llama 3.3 70B is inference-profile-only (the bare foundation-model ID
+        # rejects on-demand throughput). Swapping models is a one-line change here.
+        { name = "BEDROCK_MODEL_ID", value = "us.meta.llama3-3-70b-instruct-v1:0" },
+        # Bedrock throttling control: recaps are generated sequentially, with request
+        # starts spaced by this interval to stay under the model's RPM quota (floor is
+        # 60/RPM — an 8-RPM model needs >= 7.5s; 10s leaves headroom). Raise if still
+        # throttling; lower after a service-quota increase.
+        { name = "RECAP_MIN_REQUEST_INTERVAL_SECONDS", value = "10" },
+        # Feature flags via SSM (BE-017): server-side gate on billing/premium_feature.
+        { name = "FEATURE_FLAGS_SSM_PARAM", value = "/leagueql/${var.environment}/feature-flags" },
+        # OpenTelemetry → Axiom (BE-021). A no-op unless these resolve.
+        { name = "ENVIRONMENT", value = var.environment },
+        { name = "AXIOM_API_TOKEN_SSM_PARAM", value = "/leagueql/${var.environment}/axiom/api_token" },
+        { name = "AXIOM_DATASET", value = "leagueql-${var.environment}" },
+        { name = "AXIOM_TRACES_URL", value = "https://api.axiom.co/v1/traces" },
+      ]
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = aws_cloudwatch_log_group.recap_generator[0].name
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = "ecs"
+        }
+      }
+    }
+  ])
 
   tags = {
     environment = var.environment
@@ -268,12 +298,18 @@ module "stripe_webhook_lambda" {
     # `billing` flag to no-op when billing is off; same SSM source as the API.
     FEATURE_FLAGS_SSM_PARAM = "/leagueql/${var.environment}/feature-flags"
 
-    # On a real subscription activation, fire the recap-generator Lambda to backfill
-    # the newly-premium league's weekly recaps (BE-022).
-    RECAP_LAMBDA_NAME = "leagueql-recap-generator-${var.environment}"
+    # On a real subscription activation, launch the recap-generator Fargate task to
+    # backfill the newly-premium league's weekly recaps (BE-022). The task is
+    # east-only; in the non-east region these resolve to "" and the webhook's launch
+    # no-ops (Stripe only calls the east endpoint anyway).
+    RECAP_TASK_CLUSTER         = local.region == "east" ? aws_ecs_cluster.leagueql[0].name : ""
+    RECAP_TASK_DEFINITION      = local.region == "east" ? aws_ecs_task_definition.recap_generator[0].arn : ""
+    RECAP_TASK_CONTAINER       = "recap-generator"
+    RECAP_TASK_SUBNETS         = local.region == "east" ? join(",", data.aws_subnets.fargate_public[0].ids) : ""
+    RECAP_TASK_SECURITY_GROUPS = local.region == "east" ? data.aws_security_group.fargate_task[0].id : ""
 
     # The webhook is now an OTel-traced Lambda (BE-021): it starts the root span for
-    # the activation path so the recap invoke attaches as a child. A no-op unless set.
+    # the activation path so the recap task's span attaches as a child. A no-op unless set.
     ENVIRONMENT               = var.environment
     AXIOM_API_TOKEN_SSM_PARAM = "/leagueql/${var.environment}/axiom/api_token"
     AXIOM_DATASET             = "leagueql-${var.environment}"
@@ -768,55 +804,27 @@ resource "aws_cloudwatch_metric_alarm" "processor_errors" {
   }
 }
 
-# DLQ + async retry config for the recap generator (BE-022), mirroring the
-# onboarder. A hard failure (after retries) lands in the DLQ; the recap Lambda is
-# idempotent, so a replayed event only regenerates the still-missing weeks.
-resource "aws_sqs_queue" "recap_generator_dlq" {
-  count                     = local.region == "east" && var.environment == "prod" ? 1 : 0
-  name                      = "leagueql-recap-generator-dlq-${var.environment}"
-  message_retention_seconds = 1209600
-  sqs_managed_sse_enabled   = true
+# Alert on a failed recap-generator Fargate task (BE-022), mirroring the sleeper
+# stats task-failed rule. The generator is idempotent, so a later trigger refills any
+# weeks a failed task didn't write; this just surfaces the failure.
+resource "aws_cloudwatch_event_rule" "recap_generator_task_failed" {
+  count       = local.region == "east" && var.environment == "prod" ? 1 : 0
+  name        = "leagueql-recap-generator-${var.environment}-task-failed"
+  description = "AI weekly matchup recap generator Fargate task failed"
 
-  tags = {
-    environment = var.environment
-    project     = "leagueql"
-    component   = "monitoring"
-    managed-by  = "terraform"
-  }
-}
-
-resource "aws_lambda_function_event_invoke_config" "recap_generator" {
-  count                  = local.region == "east" && var.environment == "prod" ? 1 : 0
-  function_name          = "leagueql-recap-generator-${var.environment}"
-  maximum_retry_attempts = 2
-
-  destination_config {
-    on_failure {
-      destination = aws_sqs_queue.recap_generator_dlq[0].arn
+  event_pattern = jsonencode({
+    source      = ["aws.ecs"]
+    detail-type = ["ECS Task State Change"]
+    detail = {
+      clusterArn        = [aws_ecs_cluster.leagueql[0].arn]
+      taskDefinitionArn = [{ prefix = "${aws_ecs_task_definition.recap_generator[0].arn_without_revision}:" }]
+      lastStatus        = ["STOPPED"]
+      "$or" = [
+        { containers = { exitCode = [{ "anything-but" = 0 }] } },
+        { stopCode = ["TaskFailedToStart"] }
+      ]
     }
-  }
-
-  depends_on = [module.recap_generator_lambda]
-}
-
-resource "aws_cloudwatch_metric_alarm" "recap_generator_dlq_messages" {
-  count               = local.region == "east" && var.environment == "prod" ? 1 : 0
-  alarm_name          = "leagueql-recap-generator-dlq-${var.environment}-messages"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = 1
-  metric_name         = "ApproximateNumberOfMessagesVisible"
-  namespace           = "AWS/SQS"
-  period              = 300
-  statistic           = "Maximum"
-  threshold           = 0
-  alarm_description   = "A recap-generator async invocation was dropped to the DLQ after exhausting retries"
-  alarm_actions       = [aws_sns_topic.lambda_alerts[0].arn]
-  ok_actions          = [aws_sns_topic.lambda_alerts[0].arn]
-  treat_missing_data  = "notBreaching"
-
-  dimensions = {
-    QueueName = aws_sqs_queue.recap_generator_dlq[0].name
-  }
+  })
 
   tags = {
     environment = var.environment
@@ -826,31 +834,10 @@ resource "aws_cloudwatch_metric_alarm" "recap_generator_dlq_messages" {
   }
 }
 
-resource "aws_cloudwatch_metric_alarm" "recap_generator_errors" {
-  count               = local.region == "east" && var.environment == "prod" ? 1 : 0
-  alarm_name          = "leagueql-recap-generator-${var.environment}-errors"
-  comparison_operator = "GreaterThanOrEqualToThreshold"
-  evaluation_periods  = 1
-  metric_name         = "Errors"
-  namespace           = "AWS/Lambda"
-  period              = 300
-  statistic           = "Sum"
-  threshold           = 1
-  alarm_description   = "Recap generator Lambda error detected"
-  alarm_actions       = [aws_sns_topic.lambda_alerts[0].arn]
-  ok_actions          = [aws_sns_topic.lambda_alerts[0].arn]
-  treat_missing_data  = "notBreaching"
-
-  dimensions = {
-    FunctionName = "leagueql-recap-generator-${var.environment}"
-  }
-
-  tags = {
-    environment = var.environment
-    project     = "leagueql"
-    component   = "monitoring"
-    managed-by  = "terraform"
-  }
+resource "aws_cloudwatch_event_target" "recap_generator_task_failed_sns" {
+  count = local.region == "east" && var.environment == "prod" ? 1 : 0
+  rule  = aws_cloudwatch_event_rule.recap_generator_task_failed[0].name
+  arn   = aws_sns_topic.lambda_alerts[0].arn
 }
 
 resource "aws_cloudwatch_metric_alarm" "sleeper_refresh_errors" {
@@ -961,7 +948,10 @@ resource "aws_sns_topic_policy" "lambda_alerts_eventbridge" {
         Resource  = aws_sns_topic.lambda_alerts[0].arn
         Condition = {
           ArnEquals = {
-            "aws:SourceArn" = aws_cloudwatch_event_rule.sleeper_stats_task_failed[0].arn
+            "aws:SourceArn" = [
+              aws_cloudwatch_event_rule.sleeper_stats_task_failed[0].arn,
+              aws_cloudwatch_event_rule.recap_generator_task_failed[0].arn,
+            ]
           }
         }
       }

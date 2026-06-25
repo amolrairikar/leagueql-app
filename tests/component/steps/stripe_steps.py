@@ -293,16 +293,17 @@ def step_dup_canceled(context):
 
 @then('the recap generator was invoked for league "{canonical}"')
 def step_recap_invoked_for_league(context, canonical):
-    # BE-022: a real activation fires the recap-generator Lambda (mocked spy).
-    spy = context.recap_lambda_client
-    assert spy.invoke.called, "recap generator was not invoked"
-    payload = json.loads(spy.invoke.call_args.kwargs["Payload"])
-    assert payload["canonical_league_id"] == canonical
+    # BE-022: a real activation launches the recap-generator Fargate task (mocked spy).
+    spy = context.recap_ecs_client
+    assert spy.run_task.called, "recap generator task was not launched"
+    overrides = spy.run_task.call_args.kwargs["overrides"]["containerOverrides"][0]
+    env = {e["name"]: e["value"] for e in overrides["environment"]}
+    assert env["CANONICAL_LEAGUE_ID"] == canonical
 
 
 @then("the recap generator was invoked {count:d} time")
 def step_recap_invoked_n_times(context, count):
-    assert context.recap_lambda_client.invoke.call_count == count, (
-        f"expected {count} recap invoke(s), got "
-        f"{context.recap_lambda_client.invoke.call_count}"
+    assert context.recap_ecs_client.run_task.call_count == count, (
+        f"expected {count} recap task launch(es), got "
+        f"{context.recap_ecs_client.run_task.call_count}"
     )

@@ -1,4 +1,4 @@
-"""Unit tests for the recap-generator Lambda (BE-022)."""
+"""Unit tests for the recap-generator Fargate task (BE-022)."""
 
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
@@ -123,7 +123,7 @@ def patched(recap_handler):
 class TestGate:
     def test_missing_canonical_id_skips(self, patched):
         rh, gen, _ = patched
-        resp = rh.lambda_handler({}, None)
+        resp = rh._handle({})
         assert resp["status"] == "skipped"
         gen.assert_not_called()
 
@@ -132,7 +132,7 @@ class TestGate:
 
         feature_flags._override_for_testing({"billing": False})
         rh, gen, table = patched
-        resp = rh.lambda_handler({"canonical_league_id": "cid"}, None)
+        resp = rh._handle({"canonical_league_id": "cid"})
         assert resp["reason"] == "billing_disabled"
         gen.assert_not_called()
         table.put_item.assert_not_called()
@@ -146,7 +146,7 @@ class TestGate:
             standings_by_season={"2024": _standings_rows()},
         )
         with patch.object(rh, "_table", rh._table):
-            resp = rh.lambda_handler({"canonical_league_id": "cid"}, None)
+            resp = rh._handle({"canonical_league_id": "cid"})
         assert resp["reason"] == "not_premium"
         gen.assert_not_called()
 
@@ -162,7 +162,7 @@ class TestGate:
                 standings_by_season={"2024": _standings_rows()},
             ),
         ):
-            resp = rh.lambda_handler({"canonical_league_id": "cid"}, None)
+            resp = rh._handle({"canonical_league_id": "cid"})
         assert resp["reason"] == "not_premium"
         gen.assert_not_called()
 
@@ -183,7 +183,7 @@ class TestGeneration:
             },
         )
         with patch.object(rh, "_table", table):
-            resp = rh.lambda_handler({"canonical_league_id": "cid"}, None)
+            resp = rh._handle({"canonical_league_id": "cid"})
         assert resp == {"status": "completed", "generated": 3}
         assert gen.call_count == 3
         assert table.put_item.call_count == 3
@@ -197,7 +197,7 @@ class TestGeneration:
             standings_by_season={"2024": _standings_rows()},
         )
         with patch.object(rh, "_table", table):
-            rh.lambda_handler({"canonical_league_id": "cid"}, None)
+            rh._handle({"canonical_league_id": "cid"})
         item = table.put_item.call_args.kwargs["Item"]
         assert item["PK"] == "LEAGUE#cid"
         assert item["SK"] == "MATCHUP_RECAP#2024#WEEK#01"
@@ -218,7 +218,7 @@ class TestGeneration:
             existing_by_season={"2024": ["01"]},  # week 1 already recapped
         )
         with patch.object(rh, "_table", table):
-            resp = rh.lambda_handler({"canonical_league_id": "cid"}, None)
+            resp = rh._handle({"canonical_league_id": "cid"})
         assert resp["generated"] == 1
         gen.assert_called_once()
         assert table.put_item.call_args.kwargs["Item"]["SK"].endswith("WEEK#02")
@@ -233,7 +233,7 @@ class TestGeneration:
             existing_by_season={"2024": ["01"]},
         )
         with patch.object(rh, "_table", table):
-            resp = rh.lambda_handler({"canonical_league_id": "cid"}, None)
+            resp = rh._handle({"canonical_league_id": "cid"})
         assert resp == {"status": "completed", "generated": 0}
         gen.assert_not_called()
 
@@ -246,7 +246,7 @@ class TestGeneration:
             standings_by_season={},
         )
         with patch.object(rh, "_table", table):
-            resp = rh.lambda_handler({"canonical_league_id": "cid"}, None)
+            resp = rh._handle({"canonical_league_id": "cid"})
         assert resp == {"status": "completed", "generated": 0}
         gen.assert_not_called()
 
@@ -259,7 +259,7 @@ class TestGeneration:
             standings_by_season={"2024": _standings_rows()},
         )
         with patch.object(rh, "_table", table):
-            resp = rh.lambda_handler({"canonical_league_id": "cid"}, None)
+            resp = rh._handle({"canonical_league_id": "cid"})
         assert resp["generated"] == 0
         gen.assert_not_called()
 
@@ -278,7 +278,7 @@ class TestGeneration:
             standings_by_season={"2024": _standings_rows()},
         )
         with patch.object(rh, "_table", table):
-            resp = rh.lambda_handler({"canonical_league_id": "cid"}, None)
+            resp = rh._handle({"canonical_league_id": "cid"})
         assert resp["generated"] == 1
         assert table.put_item.call_count == 1
 
@@ -308,6 +308,40 @@ class TestHighlights:
         assert game["team_a"]["top_starters"][0]["name"] == "QB One"
         assert len(game["team_a"]["top_bench"]) == 1
         assert game["team_a"]["record"] == "1-0-0"
+
+
+class TestRateLimiter:
+    """Request pacing keeps the backfill under the Bedrock quota (BE-022)."""
+
+    def test_zero_interval_is_noop(self, recap_handler):
+        limiter = recap_handler._RateLimiter(0)
+        with patch.object(recap_handler.time, "sleep") as sleep:
+            limiter.acquire()
+            limiter.acquire()
+        sleep.assert_not_called()
+
+    def test_spaces_out_request_starts(self, recap_handler):
+        limiter = recap_handler._RateLimiter(5.0)
+        with (
+            patch.object(recap_handler.time, "monotonic", return_value=100.0),
+            patch.object(recap_handler.time, "sleep") as sleep,
+        ):
+            limiter.acquire()  # first slot is immediate (no wait)
+            limiter.acquire()  # next slot is 5s out → must wait
+        sleep.assert_called_once_with(5.0)
+
+    def test_generation_loop_acquires_before_each_call(self, recap_handler):
+        rh = recap_handler
+        work = [("2024", "01", {}), ("2024", "02", {})]
+        with (
+            patch.object(rh._rate_limiter, "acquire") as acquire,
+            patch.object(rh, "generate_recap", return_value={"headline": "H"}) as gen,
+            patch.object(rh, "_store_recap"),
+        ):
+            generated = rh._generate_and_store("cid", work, "model")
+        assert generated == 2
+        assert acquire.call_count == 2
+        assert gen.call_count == 2
 
 
 class TestHelperBranches:
@@ -356,29 +390,50 @@ class TestHelperBranches:
         assert table.query.call_count == 2
 
 
-class TestTracing:
-    def test_handler_continues_trace_from_carrier(self, recap_handler):
-        event = {
-            "canonical_league_id": "cid",
-            "trace_context": {"traceparent": "00-abc-def-01"},
-        }
-        with (
-            patch.object(recap_handler, "_handle", return_value={"status": "ok"}),
-            patch.object(recap_handler, "traced_handler") as th,
-        ):
-            recap_handler.lambda_handler(event, None)
-        th.assert_called_once_with(
-            "recap_generator.handle", carrier={"traceparent": "00-abc-def-01"}
-        )
+class TestMainEntrypoint:
+    """The container entrypoint reads env input, continues the trace, runs (BE-022)."""
 
-    def test_handler_passes_none_carrier_when_absent(self, recap_handler):
+    def test_main_builds_event_and_continues_trace(self, recap_handler, monkeypatch):
+        monkeypatch.setenv("CANONICAL_LEAGUE_ID", "cid")
+        monkeypatch.setenv("PLATFORM", "SLEEPER")
+        monkeypatch.setenv("NATIVE_LEAGUE_ID", "100")
+        monkeypatch.setenv("CORRELATION_ID", "corr-1")
+        monkeypatch.setenv("TRACE_CONTEXT", '{"traceparent": "00-abc-def-01"}')
         with (
             patch.object(
                 recap_handler, "_handle", return_value={"status": "ok"}
             ) as impl,
             patch.object(recap_handler, "traced_handler") as th,
         ):
-            recap_handler.lambda_handler({"canonical_league_id": "cid"}, None)
-            # _handle still receives the event.
-            impl.assert_called_once_with({"canonical_league_id": "cid"})
+            recap_handler.main()
+            impl.assert_called_once_with(
+                {
+                    "canonical_league_id": "cid",
+                    "platform": "SLEEPER",
+                    "native_league_id": "100",
+                    "correlation_id": "corr-1",
+                }
+            )
+        th.assert_called_once_with(
+            "recap_generator.handle", carrier={"traceparent": "00-abc-def-01"}
+        )
+
+    def test_main_without_trace_context_starts_fresh(self, recap_handler, monkeypatch):
+        monkeypatch.setenv("CANONICAL_LEAGUE_ID", "cid")
+        monkeypatch.delenv("TRACE_CONTEXT", raising=False)
+        with (
+            patch.object(recap_handler, "_handle", return_value={"status": "ok"}),
+            patch.object(recap_handler, "traced_handler") as th,
+        ):
+            recap_handler.main()
+        th.assert_called_once_with("recap_generator.handle", carrier=None)
+
+    def test_main_tolerates_invalid_trace_context(self, recap_handler, monkeypatch):
+        monkeypatch.setenv("CANONICAL_LEAGUE_ID", "cid")
+        monkeypatch.setenv("TRACE_CONTEXT", "not-json")
+        with (
+            patch.object(recap_handler, "_handle", return_value={"status": "ok"}),
+            patch.object(recap_handler, "traced_handler") as th,
+        ):
+            recap_handler.main()
         th.assert_called_once_with("recap_generator.handle", carrier=None)

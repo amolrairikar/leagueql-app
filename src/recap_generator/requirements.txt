@@ -1,3 +1,4 @@
+boto3
 openfeature-sdk
 opentelemetry-api
 opentelemetry-sdk

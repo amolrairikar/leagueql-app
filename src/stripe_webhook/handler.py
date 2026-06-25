@@ -33,7 +33,8 @@ from common.subscription import (
     expire_subscription,
     record_active_subscription,
 )
-from common.tracing import init_tracing, inject_context, traced_handler
+from common.recap_task import run_recap_task
+from common.tracing import init_tracing, traced_handler
 
 # Stripe credentials are SecureString SSM parameters fetched at cold start by
 # parameter *name* (the value never lands in a Lambda env var / TF state / CI).
@@ -43,11 +44,11 @@ _WEBHOOK_SECRET = get_secret_from_env_param("STRIPE_WEBHOOK_SECRET_SSM_PARAM")
 
 _retry_config = botocore.config.Config(retries={"mode": "standard"})
 _dynamodb = boto3.client("dynamodb", config=_retry_config)
-_lambda_client = boto3.client("lambda", config=_retry_config)
+_ecs_client = boto3.client("ecs", config=_retry_config)
 
 # Start an OTel trace for the activation path → Axiom (BE-021). Stripe delivers over
 # HTTP with no inbound W3C context, so the handler starts a fresh *root* span (see
-# lambda_handler) which then parents the recap invoke. A no-op unless Axiom is
+# lambda_handler) which then parents the recap task launch. A no-op unless Axiom is
 # configured, so tests / unconfigured envs are unaffected.
 init_tracing("leagueql-stripe-webhook")
 
@@ -162,34 +163,21 @@ def _subscription_id_from_event(event_type: str, obj) -> str | None:
 def _invoke_recap_generator(
     canonical_league_id: str, platform: str | None, native_league_id: str | None
 ) -> None:
-    """Fire-and-forget the recap-generator Lambda on a real activation (BE-022).
+    """Fire-and-forget the recap-generator Fargate task on a real activation (BE-022).
 
     Called only when ``record_active_subscription`` actually advanced (a real
     activation, not a stale/duplicate no-op) → immediate full backfill of the
     newly-premium league's weekly recaps. Runs inside the ``stripe_webhook.handle``
-    span, so ``inject_context`` carries a real W3C context and the recap span
-    attaches as a child (BE-021). A failed invoke never fails the webhook.
+    span, so the injected W3C context attaches the task's span as a child (BE-021).
+    A failed launch never fails the webhook.
     """
-    function_name = os.environ.get("RECAP_LAMBDA_NAME")
-    if not function_name:
-        logger.info("RECAP_LAMBDA_NAME unset; skipping recap generation trigger")
-        return
-    try:
-        _lambda_client.invoke(
-            FunctionName=function_name,
-            InvocationType="Event",
-            Payload=json.dumps(
-                {
-                    "canonical_league_id": canonical_league_id,
-                    "platform": platform,
-                    "native_league_id": native_league_id,
-                    "trace_context": inject_context({}),
-                }
-            ),
-        )
-        logger.info("Invoked recap generator for league=%s", canonical_league_id)
-    except Exception as exc:
-        logger.error("Failed to invoke recap generator: %s", exc)
+    run_recap_task(
+        _ecs_client,
+        canonical_league_id=canonical_league_id,
+        platform=platform,
+        native_league_id=native_league_id,
+        correlation_id="",
+    )
 
 
 def _process_event(stripe_event: dict) -> None:

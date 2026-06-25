@@ -269,7 +269,7 @@ class TestProcessingFailure:
 
 
 class TestRecapTrigger:
-    """The webhook fires the recap generator only on a real activation (BE-022)."""
+    """The webhook launches the recap task only on a real activation (BE-022)."""
 
     def _active_event(self, patched):
         patched.stripe.Webhook.construct_event.return_value = _stripe_event(
@@ -285,50 +285,27 @@ class TestRecapTrigger:
             },
         }
 
-    def test_fires_recap_invoke_when_subscription_advances(self, patched, monkeypatch):
-        monkeypatch.setenv("RECAP_LAMBDA_NAME", "leagueql-recap-generator-dev")
+    def test_launches_recap_task_when_subscription_advances(self, patched):
         self._active_event(patched)
         patched.record.return_value = True  # a real advance
-        with patch.object(patched.wh, "_lambda_client") as lam:
+        with patch.object(patched.wh, "run_recap_task") as run:
             resp = patched.wh.lambda_handler(_event(), None)
         assert resp["statusCode"] == 200
-        lam.invoke.assert_called_once()
-        kwargs = lam.invoke.call_args.kwargs
-        assert kwargs["FunctionName"] == "leagueql-recap-generator-dev"
-        assert kwargs["InvocationType"] == "Event"
-        payload = json.loads(kwargs["Payload"])
-        assert payload["canonical_league_id"] == "cid"
-        assert payload["platform"] == "ESPN"
-        assert payload["native_league_id"] == "999"
-        assert "trace_context" in payload
+        run.assert_called_once_with(
+            patched.wh._ecs_client,
+            canonical_league_id="cid",
+            platform="ESPN",
+            native_league_id="999",
+            correlation_id="",
+        )
 
-    def test_does_not_fire_when_subscription_is_noop(self, patched, monkeypatch):
-        monkeypatch.setenv("RECAP_LAMBDA_NAME", "leagueql-recap-generator-dev")
+    def test_does_not_fire_when_subscription_is_noop(self, patched):
         self._active_event(patched)
         patched.record.return_value = False  # stale/duplicate, non-advancing
-        with patch.object(patched.wh, "_lambda_client") as lam:
+        with patch.object(patched.wh, "run_recap_task") as run:
             resp = patched.wh.lambda_handler(_event(), None)
         assert resp["statusCode"] == 200
-        lam.invoke.assert_not_called()
-
-    def test_invoke_skipped_when_lambda_name_unset(self, patched, monkeypatch):
-        monkeypatch.delenv("RECAP_LAMBDA_NAME", raising=False)
-        self._active_event(patched)
-        patched.record.return_value = True
-        with patch.object(patched.wh, "_lambda_client") as lam:
-            patched.wh.lambda_handler(_event(), None)
-        lam.invoke.assert_not_called()
-
-    def test_failed_invoke_does_not_fail_webhook(self, patched, monkeypatch):
-        monkeypatch.setenv("RECAP_LAMBDA_NAME", "leagueql-recap-generator-dev")
-        self._active_event(patched)
-        patched.record.return_value = True
-        with patch.object(patched.wh, "_lambda_client") as lam:
-            lam.invoke.side_effect = RuntimeError("invoke failed")
-            resp = patched.wh.lambda_handler(_event(), None)
-        # The webhook still records the dedup marker and returns 200.
-        assert resp["statusCode"] == 200
-        patched.ddb.put_item.assert_called_once()
+        run.assert_not_called()
 
 
 class TestTracing:

@@ -15,13 +15,13 @@ only ever reads these precomputed items via [BE-005](BE-005-query-precomputed-vi
   [BE-019](BE-019-sleeper-transactions.md)).
 - Output schema: `docs/db/dynamodb_spec.md`.
 - **Recap trigger:** at the very end of `_process_manifest` (right after `write_metadata_items`),
-  the processor fires a fire-and-forget invoke of the recap-generator Lambda
-  ([BE-022](BE-022-ai-weekly-matchup-recap.md)) with `{canonical_league_id, platform,
-  correlation_id, trace_context}` so a completed onboard/refresh auto-generates the
-  newly-completed week's recap. The invoke is wrapped in try/except (a failed invoke never fails
-  the processor run) and runs inside the `processor.handle` span, so the recap span attaches as a
-  child (BE-021). The recap Lambda's premium gate + idempotent skip make this a cheap no-op for
-  non-premium leagues and already-recapped weeks.
+  the processor fire-and-forget launches the recap-generator **Fargate task** (via
+  `common.recap_task.run_recap_task` → `ecs:RunTask`, [BE-022](BE-022-ai-weekly-matchup-recap.md)),
+  passing `{canonical_league_id, platform, correlation_id, trace_context}` as container env
+  overrides so a completed onboard/refresh auto-generates the newly-completed week's recap. The
+  launch is wrapped in try/except (a failed launch never fails the processor run) and runs inside the
+  `processor.handle` span, so the recap span attaches as a child (BE-021). The task's premium gate +
+  idempotent skip make this a cheap no-op for non-premium leagues and already-recapped weeks.
 
 ## Computed Views
 - **TEAMS** (`TEAMS`): all teams across all seasons (owner, team name/logo, owner IDs).

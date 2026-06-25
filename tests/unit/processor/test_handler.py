@@ -536,36 +536,24 @@ class TestProcessorTracePropagation:
 
 
 class TestInvokeRecapGenerator:
-    """The processor fires the recap generator at end of run (BE-022)."""
+    """The processor launches the recap-generator Fargate task at end of run (BE-022)."""
 
-    def test_invokes_with_payload_when_configured(self, processor_handler, monkeypatch):
-        monkeypatch.setenv("RECAP_LAMBDA_NAME", "leagueql-recap-generator-dev")
-        lam = MagicMock()
-        with patch.object(processor_handler, "_lambda_client", lam):
-            processor_handler._invoke_recap_generator("cid", "SLEEPER")
-        lam.invoke.assert_called_once()
-        kwargs = lam.invoke.call_args.kwargs
-        assert kwargs["FunctionName"] == "leagueql-recap-generator-dev"
-        assert kwargs["InvocationType"] == "Event"
-        payload = json.loads(kwargs["Payload"])
-        assert payload["canonical_league_id"] == "cid"
-        assert payload["platform"] == "SLEEPER"
-        assert "trace_context" in payload
-
-    def test_noop_when_lambda_name_unset(self, processor_handler, monkeypatch):
-        monkeypatch.delenv("RECAP_LAMBDA_NAME", raising=False)
-        lam = MagicMock()
-        with patch.object(processor_handler, "_lambda_client", lam):
-            processor_handler._invoke_recap_generator("cid", "ESPN")
-        lam.invoke.assert_not_called()
-
-    def test_failed_invoke_is_swallowed(self, processor_handler, monkeypatch):
-        monkeypatch.setenv("RECAP_LAMBDA_NAME", "leagueql-recap-generator-dev")
-        lam = MagicMock()
-        lam.invoke.side_effect = RuntimeError("invoke failed")
-        with patch.object(processor_handler, "_lambda_client", lam):
-            # Must not raise — a failed invoke never fails the processor run.
-            processor_handler._invoke_recap_generator("cid", "ESPN")
+    def test_launches_recap_task_via_shared_helper(self, processor_handler):
+        token = processor_handler.correlation_id_var.set("corr-1")
+        try:
+            with (
+                patch.object(processor_handler, "run_recap_task") as run,
+                patch.object(processor_handler, "_ecs_client") as ecs,
+            ):
+                processor_handler._invoke_recap_generator("cid", "SLEEPER")
+        finally:
+            processor_handler.correlation_id_var.reset(token)
+        run.assert_called_once_with(
+            ecs,
+            canonical_league_id="cid",
+            platform="SLEEPER",
+            correlation_id="corr-1",
+        )
 
 
 class TestLambdaHandlerImpl:

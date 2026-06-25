@@ -62,10 +62,17 @@ _ENV = {
     "STRIPE_PRICE_ID_MONTHLY": "price_test_monthly",
     "STRIPE_PRICE_ID_YEARLY": "price_test_yearly",
     "STRIPE_TRIAL_PERIOD_DAYS": "14",
-    # BE-022: the processor + webhook fire the recap generator; the recap Lambda
-    # itself calls Bedrock by this model id (mocked per scenario).
-    "RECAP_LAMBDA_NAME": "recap-test",
+    # BE-022: the processor + webhook launch the recap-generator Fargate task; the
+    # task calls Bedrock by BEDROCK_MODEL_ID (mocked per scenario). These RECAP_TASK_*
+    # vars let the shared run_recap_task helper reach its ecs.run_task (asserted on a spy).
+    "RECAP_TASK_CLUSTER": "leagueql-test",
+    "RECAP_TASK_DEFINITION": "arn:aws:ecs:us-east-1:1:task-definition/recap-test:1",
+    "RECAP_TASK_CONTAINER": "recap-generator",
+    "RECAP_TASK_SUBNETS": "subnet-test",
+    "RECAP_TASK_SECURITY_GROUPS": "sg-test",
     "BEDROCK_MODEL_ID": "us.meta.llama3-3-70b-instruct-v1:0",
+    # Disable request pacing in tests so the recap component scenario never sleeps.
+    "RECAP_MIN_REQUEST_INTERVAL_SECONDS": "0",
 }
 
 
@@ -238,13 +245,13 @@ def _load_handlers(context) -> None:
         "recap_generator.handler", _SRC / "recap_generator" / "handler.py"
     )
 
-    # moto[s3,dynamodb] has no Lambda service, so point the processor's and webhook's
-    # recap-invoke clients at one shared spy. Scenarios assert the recap Lambda
-    # *would* be invoked, and (separately) invoke the recap handler directly.
-    recap_lambda_spy = MagicMock()
-    context.processor_handler._lambda_client = recap_lambda_spy
-    context.stripe_handler._lambda_client = recap_lambda_spy
-    context.recap_lambda_client = recap_lambda_spy
+    # moto[s3,dynamodb] has no ECS service, so point the processor's and webhook's ECS
+    # clients at one shared spy. Scenarios assert the recap task *would* be launched
+    # (run_recap_task → ecs.run_task), and (separately) run the recap handler directly.
+    recap_ecs_spy = MagicMock()
+    context.processor_handler._ecs_client = recap_ecs_spy
+    context.stripe_handler._ecs_client = recap_ecs_spy
+    context.recap_ecs_client = recap_ecs_spy
 
     # --- player metadata refresher (BE-010) --------------------------------
     pm_pkg = types.ModuleType("player_metadata")
@@ -305,7 +312,7 @@ def before_scenario(context, scenario):
     # scoped to the scenario under test.
     context.main.lambda_client.reset_mock()
     # Reset the shared recap-generator invoke spy (processor + webhook) too (BE-022).
-    context.recap_lambda_client.reset_mock()
+    context.recap_ecs_client.reset_mock()
     # Billing ships feature-flagged OFF (BE-017); default it ON for component
     # scenarios since the billing features assume it, along with the shared
     # ``premium_feature`` flag (BE-014). The "billing is disabled" step flips

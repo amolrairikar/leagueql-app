@@ -28,6 +28,9 @@ def _bootstrap_recap_generator():
     env = {
         "DYNAMODB_TABLE_NAME": "test-table",
         "BEDROCK_MODEL_ID": "us.meta.llama3-3-70b-instruct-v1:0",
+        # Disable request pacing so the parallel-generation tests never real-sleep
+        # (the rate limiter's interval is read at module import).
+        "RECAP_MIN_REQUEST_INTERVAL_SECONDS": "0",
     }
     with patch.dict(os.environ, env):
         with (

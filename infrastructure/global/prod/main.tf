@@ -397,14 +397,19 @@ module "processing-lambda-role" {
         ]
       },
       {
-        # BE-022: the processor fires the recap-generator Lambda at end of run.
-        Sid    = "InvokeRecapLambda"
+        # BE-022: the processor launches the recap-generator Fargate task at end of run.
+        Sid      = "RunRecapTask"
+        Effect   = "Allow"
+        Action   = ["ecs:RunTask"]
+        Resource = ["arn:aws:ecs:us-east-1:${var.account_id}:task-definition/leagueql-recap-generator-${var.environment}:*"]
+      },
+      {
+        Sid    = "PassRecapTaskRoles"
         Effect = "Allow"
-        Action = [
-          "lambda:InvokeFunction"
-        ]
+        Action = ["iam:PassRole"]
         Resource = [
-          "arn:aws:lambda:us-east-1:${var.account_id}:function:leagueql-recap-generator-${var.environment}"
+          module.recap-generator-task-role.role_arn,
+          module.recap-generator-task-exec-role.role_arn
         ]
       }
     ]
@@ -728,14 +733,19 @@ module "stripe-webhook-lambda-role" {
         ]
       },
       {
-        # BE-022: on a real activation the webhook fires the recap-generator Lambda.
-        Sid    = "InvokeRecapLambda"
+        # BE-022: on a real activation the webhook launches the recap-generator task.
+        Sid      = "RunRecapTask"
+        Effect   = "Allow"
+        Action   = ["ecs:RunTask"]
+        Resource = ["arn:aws:ecs:us-east-1:${var.account_id}:task-definition/leagueql-recap-generator-${var.environment}:*"]
+      },
+      {
+        Sid    = "PassRecapTaskRoles"
         Effect = "Allow"
-        Action = [
-          "lambda:InvokeFunction"
-        ]
+        Action = ["iam:PassRole"]
         Resource = [
-          "arn:aws:lambda:us-east-1:${var.account_id}:function:leagueql-recap-generator-${var.environment}"
+          module.recap-generator-task-role.role_arn,
+          module.recap-generator-task-exec-role.role_arn
         ]
       },
       {
@@ -766,10 +776,55 @@ module "stripe-webhook-lambda-role" {
 # Execution role for the AI weekly matchup recap generator (BE-022). Reads the
 # matchup/standings views, writes recap items, reads feature flags + the Axiom token
 # from SSM, and invokes the Bedrock Haiku 4.5 inference profile (us-east-1).
-module "recap-generator-lambda-role" {
+# AI weekly matchup recap generator runs as a Fargate task (BE-022) — a full
+# multi-season backfill at the model's low RPM quota can exceed the 15-min Lambda
+# cap. ECR repo for its image + the task role (app identity) and execution role.
+resource "aws_ecr_repository" "recap_generator" {
+  provider             = aws.primary
+  name                 = "leagueql-recap-generator-${var.environment}"
+  image_tag_mutability = "MUTABLE"
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    component   = "api"
+    managed-by  = "terraform"
+  }
+}
+
+resource "aws_ecr_lifecycle_policy" "recap_generator" {
+  provider   = aws.primary
+  repository = aws_ecr_repository.recap_generator.name
+
+  policy = jsonencode({
+    rules = [
+      {
+        rulePriority = 1
+        description  = "Keep only the last 10 images"
+        selection = {
+          tagStatus   = "any"
+          countType   = "imageCountMoreThan"
+          countNumber = 10
+        }
+        action = {
+          type = "expire"
+        }
+      }
+    ]
+  })
+}
+
+# Task role — the application identity the container assumes at runtime (trust is
+# ecs-tasks). Carries the data + Bedrock + SSM permissions; logging is the execution
+# role's job, so no log statements here.
+module "recap-generator-task-role" {
   source           = "../../modules/iam-role"
-  role_name        = "leagueql-${var.environment}-recap-generator-role"
-  role_description = "Execution role for the AI weekly matchup recap generator lambda."
+  role_name        = "leagueql-${var.environment}-recap-generator-task-role"
+  role_description = "Task role for the AI weekly matchup recap generator Fargate task."
   trust_policy_json = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -777,7 +832,7 @@ module "recap-generator-lambda-role" {
         Action = "sts:AssumeRole"
         Effect = "Allow"
         Principal = {
-          Service = "lambda.amazonaws.com"
+          Service = "ecs-tasks.amazonaws.com"
         }
       }
     ]
@@ -785,27 +840,6 @@ module "recap-generator-lambda-role" {
   role_policy_json = jsonencode({
     Version = "2012-10-17"
     Statement = [
-      {
-        Sid    = "CreateLogGroups"
-        Effect = "Allow"
-        Action = [
-          "logs:CreateLogGroup"
-        ]
-        Resource = [
-          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/lambda/leagueql-recap-generator-${var.environment}"
-        ]
-      },
-      {
-        Sid    = "CreateLogEvents"
-        Effect = "Allow"
-        Action = [
-          "logs:CreateLogStream",
-          "logs:PutLogEvents"
-        ]
-        Resource = [
-          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/lambda/leagueql-recap-generator-${var.environment}:*"
-        ]
-      },
       {
         Sid    = "ReadWriteDynamoDB"
         Effect = "Allow"
@@ -838,14 +872,13 @@ module "recap-generator-lambda-role" {
         ]
       },
       {
-        # BE-022: Bedrock's "Model access" console page is retired — access to
-        # Anthropic models is now an AWS Marketplace subscription on the account.
-        # These let the recap Lambda self-subscribe on first invoke; otherwise
-        # Converse fails with AccessDeniedException citing aws-marketplace:Subscribe
-        # / ViewSubscriptions. The subscription is account-wide and one-time.
-        # ViewSubscriptions takes no resource/product condition; Subscribe can be
-        # tightened with an `aws-marketplace:ProductId` condition once the Haiku 4.5
-        # Marketplace product ID is known.
+        # BE-022: Bedrock's "Model access" console page is retired — access to Bedrock
+        # models is now an AWS Marketplace subscription on the account. These let the
+        # task self-subscribe on first run; otherwise Converse fails with an
+        # AccessDeniedException citing aws-marketplace:Subscribe / ViewSubscriptions.
+        # The subscription is account-wide and one-time. ViewSubscriptions takes no
+        # resource/product condition; Subscribe can be tightened with an
+        # `aws-marketplace:ProductId` condition once the Marketplace product ID is known.
         Sid    = "BedrockMarketplaceSubscribe"
         Effect = "Allow"
         Action = [
@@ -868,8 +901,8 @@ module "recap-generator-lambda-role" {
         ]
       },
       {
-        # BE-021: the recap Lambda continues the upstream OTel trace and exports to
-        # Axiom; the ingest token is a SecureString SSM parameter (never in TF state).
+        # BE-021: the task continues the upstream OTel trace and exports to Axiom; the
+        # ingest token is a SecureString SSM parameter (never in TF state).
         Sid    = "ReadAxiomSsmParameter"
         Effect = "Allow"
         Action = [
@@ -878,6 +911,67 @@ module "recap-generator-lambda-role" {
         Resource = [
           "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/axiom/api_token",
           "arn:aws:ssm:us-west-2:${var.account_id}:parameter/leagueql/${var.environment}/axiom/api_token"
+        ]
+      }
+    ]
+  })
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    component   = "api"
+    managed-by  = "terraform"
+  }
+}
+
+# Execution role — used by the ECS agent (not the app) to pull the image from ECR and
+# ship container logs to the task's CloudWatch log group.
+module "recap-generator-task-exec-role" {
+  source           = "../../modules/iam-role"
+  role_name        = "leagueql-${var.environment}-recap-generator-task-exec-role"
+  role_description = "Execution role for the AI weekly matchup recap generator Fargate task."
+  trust_policy_json = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ecs-tasks.amazonaws.com"
+        }
+      }
+    ]
+  })
+  role_policy_json = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "ECRAuthToken"
+        Effect   = "Allow"
+        Action   = ["ecr:GetAuthorizationToken"]
+        Resource = "*"
+      },
+      {
+        Sid    = "ECRPull"
+        Effect = "Allow"
+        Action = [
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:BatchGetImage"
+        ]
+        Resource = [
+          aws_ecr_repository.recap_generator.arn
+        ]
+      },
+      {
+        Sid    = "WriteTaskLogs"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = [
+          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/ecs/leagueql-recap-generator-${var.environment}:*"
         ]
       }
     ]
