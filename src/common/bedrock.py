@@ -25,8 +25,13 @@ import botocore.config
 from common.logging_utils import logger
 
 # Adaptive retry mode handles Bedrock throttling (RPM/TPM) backoff for us, which
-# matters under the parallel multi-week backfill the recap Lambda runs.
-_retry_config = botocore.config.Config(retries={"mode": "adaptive"})
+# matters under the parallel multi-week backfill the recap Lambda runs. Adaptive
+# mode adds a client-side token-bucket rate limiter that *slows the request rate*
+# whenever it sees a ``ThrottlingException`` — but it only helps if each call has
+# enough attempts to ride out the backoff, so we raise ``max_attempts`` well above
+# the default of 3. Combined with the bounded worker pool in the handler, this keeps
+# the backfill under the model's RPM/TPM quota instead of hammering it.
+_retry_config = botocore.config.Config(retries={"mode": "adaptive", "max_attempts": 10})
 _bedrock_client = boto3.client("bedrock-runtime", config=_retry_config)
 
 # Voice + hard fact-fidelity guardrail. The guardrail is the one real gap observed
@@ -36,9 +41,19 @@ _SYSTEM_PROMPT = (
     "You are a fantasy football columnist writing a weekly matchup recap. Write a "
     "medium-long column in a lighthearted-but-journalistic voice: it should read "
     "like a real sports column, with playful roasts where they are deserved. "
-    "Output a single punchy headline on the first line, then a blank line, then the "
-    "body as plain prose paragraphs separated by blank lines. Do NOT use markdown, "
-    "bullet points, or headers in the body.\n\n"
+    "Output a single headline on the first line, then a blank line, then the body as "
+    "plain prose paragraphs separated by blank lines. Do NOT use markdown, bullet "
+    "points, or headers in the body.\n\n"
+    "THE HEADLINE — make it genuinely creative, the best line in the column:\n"
+    "- Be witty and surprising. Reach for clever wordplay, puns, alliteration, or a "
+    "vivid metaphor; a pop-culture or sports-history riff is welcome when it fits.\n"
+    "- Hook it to the single most dramatic, funny, or lopsided thing that actually "
+    "happened that week — the blowout, the nail-biter, the bench disaster, the "
+    "upset.\n"
+    "- Avoid generic, templated headlines. Never just 'Week N Recap' or "
+    "'Team A beats Team B' — those are banned.\n"
+    "- Keep it punchy (roughly 4-12 words) and still grounded: the cleverness must "
+    "come from the real events, never from invented facts.\n\n"
     "STRICT FACT FIDELITY — this is mandatory:\n"
     "- Use the team and manager/display names EXACTLY as provided. Never expand, "
     "guess, or invent a real name. A username like 'chris_j' must stay 'Chris' or "

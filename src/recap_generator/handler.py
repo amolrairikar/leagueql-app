@@ -41,7 +41,11 @@ _table = boto3.resource("dynamodb", config=_retry_config).Table(_table_name)
 
 # Bounded concurrency for the Converse calls: respects Bedrock RPM/TPM quotas while
 # keeping a full multi-season backfill (~160 weeks) inside the 900s Lambda timeout.
-_MAX_WORKERS = 8
+# Kept conservative by default because a freshly-subscribed Bedrock model can have a
+# low on-demand request quota; tunable via ``RECAP_MAX_WORKERS`` so the burst rate
+# can be matched to the model's quota (or a granted quota increase) without a code
+# change. Paired with the adaptive client-side rate limiter in ``common.bedrock``.
+_MAX_WORKERS = max(1, int(os.environ.get("RECAP_MAX_WORKERS", "3")))
 
 # How many top performers from each side to include in the highlights, trimmed to
 # keep the prompt's input tokens low.

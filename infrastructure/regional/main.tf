@@ -150,6 +150,12 @@ module "recap_generator_lambda" {
     # one-line change here.
     BEDROCK_MODEL_ID = "us.meta.llama3-3-70b-instruct-v1:0"
 
+    # Parallel Converse calls during a backfill. Kept low to stay under the model's
+    # Bedrock on-demand RPM/TPM quota (a freshly-subscribed model starts low); raise
+    # it here — no code change — after a Bedrock service-quota increase. Pairs with
+    # the adaptive client-side rate limiter + retries in common/bedrock.py.
+    RECAP_MAX_WORKERS = "3"
+
     # Feature flags via SSM (BE-017): the recap Lambda reads the global `billing`
     # and `premium_feature` flags to server-side gate generation. Same SSM source.
     FEATURE_FLAGS_SSM_PARAM = "/leagueql/${var.environment}/feature-flags"

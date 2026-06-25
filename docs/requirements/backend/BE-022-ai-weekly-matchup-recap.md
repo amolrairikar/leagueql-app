@@ -25,13 +25,18 @@ safe.
 
 ## Scope
 - **Bedrock helper — `src/common/bedrock.py`** (vendored into the recap Lambda zip). A module-level
-  `boto3.client("bedrock-runtime", config=_retry_config)` using **adaptive** retry mode (handles
-  Bedrock `ThrottlingException` backoff). Exposes `generate_recap(highlights: dict) -> dict` which
+  `boto3.client("bedrock-runtime", config=_retry_config)` using **adaptive** retry mode with a
+  raised `max_attempts` (10) — adaptive mode's client-side token-bucket rate limiter slows the
+  request rate on a `ThrottlingException`, and the extra attempts let each call ride out the backoff
+  rather than failing fast. Exposes `generate_recap(highlights: dict) -> dict` which
   calls `client.converse(modelId=<BEDROCK_MODEL_ID>, system=[{text: voice}], messages=[…],
   inferenceConfig={"maxTokens": 2000})` and parses the response into `{"headline", "body"}` (body =
   `\n\n`-joined paragraphs, no markdown).
   - **Voice (system prompt):** lighthearted-but-journalistic column, roasts where deserved, a single
-    headline line then body paragraphs.
+    headline line then body paragraphs. The headline is explicitly steered to be **creative** —
+    wit/wordplay/vivid imagery hooked to the week's most dramatic real moment, with generic
+    "Week N recap" / "A beats B" templates banned (cleverness must still come from real events, never
+    invented facts).
   - **Name / fact-fidelity guardrail (required in the system prompt):** use the team and
     manager/display names **exactly as provided** and **never invent real names or facts** not
     present in the highlights — no fabricated surnames from usernames (`chris_j` stays
@@ -57,9 +62,11 @@ safe.
   - **Build highlights** per matchup (both teams' display name + record + score, winner/margin, each
     side's top 1–2 starters and top bench from the `starters`/`bench` `PlayerStat` lists, playoff
     round if any); trim PlayerStat detail to keep input tokens low.
-  - **Generate in parallel:** `concurrent.futures.ThreadPoolExecutor(max_workers=8)` over the
-    remaining pairs, each calling `generate_recap(...)`. Per-week failures are caught and logged so
-    one failure never aborts the batch.
+  - **Generate in parallel:** `concurrent.futures.ThreadPoolExecutor` over the remaining pairs, each
+    calling `generate_recap(...)`. The worker count defaults to **3** and is tunable via the
+    `RECAP_MAX_WORKERS` env var so the burst rate can be matched to the model's Bedrock RPM/TPM quota
+    (raise it after a quota increase, no code change). Per-week failures are caught and logged so one
+    failure never aborts the batch.
   - **Store** one item per generated week: `PK=LEAGUE#{canonical_league_id}`,
     `SK=MATCHUP_RECAP#{season}#WEEK#{week:02d}`,
     `data={headline, body, generated_at, model}`.
@@ -108,12 +115,15 @@ safe.
 - **No matchup data for a league/season:** the work list is empty → nothing generated, no error.
 - **Already-recapped week:** skipped via the idempotent existence check; re-runs (both triggers) only
   generate still-missing weeks. A recap is **never** regenerated once written.
-- **Bedrock failure / throttle on one week:** caught and logged; the batch continues and writes every
-  other week. The missing week is retried by the next invoke (idempotent skip leaves it on the work
-  list). Adaptive retry absorbs transient throttling first.
+- **Bedrock failure / throttle on one week:** the bounded worker pool (`RECAP_MAX_WORKERS`) plus
+  adaptive retry (client-side rate limiter + raised `max_attempts`) keep the batch under the model's
+  quota; a call that still exhausts retries is caught and logged so the batch continues and writes
+  every other week. The missing week is retried by the next invoke (idempotent skip leaves it on the
+  work list). If throttling is persistent, lower `RECAP_MAX_WORKERS` and/or request a Bedrock
+  service-quota increase for the model.
 - **Renewal / re-refresh re-trigger:** safe — both triggers re-run the same idempotent enumeration;
   only genuinely-missing weeks cost Bedrock spend.
-- **Timeout:** `max_workers=8` keeps ~160 weeks ≈ ~2 min wall time, well inside the 900s Lambda; the
+- **Timeout:** the bounded worker pool keeps even a full multi-season backfill well inside the 900s Lambda; the
   DLQ + async retry config is the backstop for hard failures (idempotency makes a retry safe).
 - **Fire-and-forget invoke failure:** the webhook/processor wrap the invoke in try/except, so a
   failed invoke never fails the webhook (still 200) or the processor run.
