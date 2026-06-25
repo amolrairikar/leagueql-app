@@ -5,11 +5,11 @@ Vendored into the recap-generator Lambda's deployment zip. Wraps a single
 style) and the Converse call that turns a week's matchup highlights into the
 AI-written recap column.
 
-The model is parameterized by the ``BEDROCK_MODEL_ID`` env var. Haiku 4.5 is
-inference-profile-only, so this is the US cross-region inference profile ID
-``us.anthropic.claude-haiku-4-5-20251001-v1:0`` — the bare foundation-model ID
-``anthropic.claude-haiku-4-5-20251001-v1:0`` fails ("on-demand throughput isn't
-supported"). Swapping models is a one-line config change.
+The model is parameterized by the ``BEDROCK_MODEL_ID`` env var (currently Meta
+Llama 3.3 70B Instruct, ``meta.llama3-3-70b-instruct-v1:0``). Because the call goes
+through the model-agnostic Bedrock **Converse** API, swapping to any other
+Converse-capable Bedrock model (Anthropic, Meta, etc.) is a one-line config change
+with no code change here.
 The client uses **adaptive** retry mode so Bedrock ``ThrottlingException`` backoff
 is handled by botocore before a parallel batch ever sees an error.
 """

@@ -824,19 +824,17 @@ module "recap-generator-lambda-role" {
         ]
       },
       {
-        # BE-022: generate recaps via the Claude Haiku 4.5 cross-region inference
-        # profile in us-east-1, which fans out to the underlying foundation models
-        # (region/version wildcarded). Widened to Sonnet 4.6 for A/B comparison.
+        # BE-022: generate recaps via Meta Llama 3.3 70B Instruct on Bedrock. Permit
+        # both the on-demand foundation-model ID and the US cross-region inference
+        # profile (region/version wildcarded) so either invocation path works.
         Sid    = "InvokeBedrockRecapModels"
         Effect = "Allow"
         Action = [
           "bedrock:InvokeModel"
         ]
         Resource = [
-          "arn:aws:bedrock:us-east-1:${var.account_id}:inference-profile/us.anthropic.claude-haiku-4-5*",
-          "arn:aws:bedrock:us-east-1:${var.account_id}:inference-profile/us.anthropic.claude-sonnet-4-6*",
-          "arn:aws:bedrock:*::foundation-model/anthropic.claude-haiku-4-5*",
-          "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-4-6*"
+          "arn:aws:bedrock:us-east-1:${var.account_id}:inference-profile/us.meta.llama3-3-70b-instruct*",
+          "arn:aws:bedrock:*::foundation-model/meta.llama3-3-70b-instruct*"
         ]
       },
       {
