@@ -270,8 +270,8 @@ Represents matchups for a given week in the fantasy league.
 | `team_b_bench` | List\<Object\> | Team B's bench with player stats (see **PlayerStat** below) |
 | `team_b_primary_owner_id` | String | Platform user ID of team B's primary owner |
 | `team_b_secondary_owner_id` | String \| null | Platform user ID of team B's co-owner |
-| `playoff_tier_type` | String | Playoff bracket type. Enum: `NONE`, `WINNERS_BRACKET` |
-| `playoff_round` | String \| null | Human-readable round name (e.g. `"Semifinals"`); null for regular season |
+| `playoff_tier_type` | String | Playoff bracket type. Enum: `NONE`, `WINNERS_BRACKET`, `WINNERS_CONSOLATION_LADDER`, `LOSERS_BRACKET` |
+| `playoff_round` | String \| null | Human-readable round name; `WINNERS_BRACKET` → `"Quarterfinals"`/`"Semifinals"`/`"Finals"`, `WINNERS_CONSOLATION_LADDER` → `"Winners Consolation"`, `LOSERS_BRACKET` → `"Losers Bracket"`; null for regular season (`NONE`) |
 | `winner` | String | Team ID of the winner |
 | `loser` | String | Team ID of the loser |
 | `week` | String | Week number (e.g. `"1"`) |
@@ -328,7 +328,8 @@ Represents matchups for a given week in the fantasy league.
 <summary><b>MATCHUP_RECAP</b></summary>
 
 Caches the AI-written weekly recap column for a single completed week (BE-022). Built from the
-`MATCHUPS`/`STANDINGS` views by the **recap-generator Fargate task**, which generates each recap
+`MATCHUPS` view plus the week-accurate `WEEKLY_STANDINGS` snapshot (falling back to the final
+`STANDINGS` for playoff weeks) by the **recap-generator Fargate task**, which generates each recap
 synchronously via the Anthropic API (Claude Haiku 4.5) and writes the item directly; read back through
 the query API (`MATCHUP_RECAP#{season}#WEEK#{week}`). One item per `(season, week)`; written
 idempotently (`attribute_not_exists(SK)` conditional put) and never regenerated once present.

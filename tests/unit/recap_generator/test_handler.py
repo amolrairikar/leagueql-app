@@ -57,14 +57,19 @@ def make_table(
     weeks_by_season: dict[str, dict[str, list]],
     standings_by_season: dict[str, list],
     existing_by_season: dict[str, list[str]] | None = None,
+    weekly_by_season: dict[str, list] | None = None,
 ) -> MagicMock:
     existing_by_season = existing_by_season or {}
+    weekly_by_season = weekly_by_season or {}
     table = MagicMock()
 
     def get_item(Key, **_):
         sk = Key["SK"]
         if sk == "METADATA":
             return {"Item": metadata} if metadata else {}
+        if sk.startswith("WEEKLY_STANDINGS#"):
+            season = sk.split("#")[1]
+            return {"Item": {"data": weekly_by_season.get(season, [])}}
         if sk.startswith("STANDINGS#"):
             season = sk.split("#")[1]
             return {"Item": {"data": standings_by_season.get(season, [])}}
@@ -239,6 +244,60 @@ class TestIdempotency:
         assert result["failed"] == 1
         # Marker left pending for the next run.
         table.delete_item.assert_not_called()
+
+
+class TestWeekAccurateRecord:
+    def _highlights_for(self, gen) -> dict:
+        # generate_recap is called positionally with the week's highlights dict.
+        return (
+            gen.call_args.args[0]
+            if gen.call_args.args
+            else gen.call_args.kwargs["highlights"]
+        )
+
+    def test_uses_weekly_record_not_final_season_record(self, generator):
+        # Final standings says 5-8-0; the Week 7 snapshot says 5-2-0 — the recap must
+        # see the as-of-week record, not the end-of-season record.
+        table = make_table(
+            markers=[_pending("123")],
+            metadata={"subscription_end_time": _future_iso()},
+            seasons=["2024"],
+            weeks_by_season={"2024": {"07": [_matchup()]}},
+            standings_by_season={"2024": [{"team_id": "1", "record": "5-8-0"}]},
+            weekly_by_season={
+                "2024": [{"snapshot_week": "7", "team_id": "1", "record": "5-2-0"}]
+            },
+        )
+        with (
+            patch.object(generator, "_table", table),
+            patch.object(generator, "generate_recap", return_value=_RECAP) as gen,
+            patch.object(generator, "_throttle"),
+        ):
+            generator._handle()
+        highlights = self._highlights_for(gen)
+        assert highlights["matchups"][0]["team_a"]["record"] == "5-2-0"
+
+    def test_falls_back_to_final_standings_when_week_has_no_snapshot(self, generator):
+        # A playoff week ("15") with no WEEKLY_STANDINGS snapshot falls back to the
+        # final standings record.
+        table = make_table(
+            markers=[_pending("123")],
+            metadata={"subscription_end_time": _future_iso()},
+            seasons=["2024"],
+            weeks_by_season={"2024": {"15": [_matchup()]}},
+            standings_by_season={"2024": [{"team_id": "1", "record": "9-5-0"}]},
+            weekly_by_season={
+                "2024": [{"snapshot_week": "7", "team_id": "1", "record": "5-2-0"}]
+            },
+        )
+        with (
+            patch.object(generator, "_table", table),
+            patch.object(generator, "generate_recap", return_value=_RECAP) as gen,
+            patch.object(generator, "_throttle"),
+        ):
+            generator._handle()
+        highlights = self._highlights_for(gen)
+        assert highlights["matchups"][0]["team_a"]["record"] == "9-5-0"
 
 
 class TestPartialFailure:

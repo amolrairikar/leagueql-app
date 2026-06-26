@@ -123,3 +123,10 @@ class TestParseRecap:
     def test_system_prompt_includes_fact_fidelity_guardrail(self):
         assert "chris_j" in recap_llm._SYSTEM_PROMPT
         assert "Never invent" in recap_llm._SYSTEM_PROMPT
+
+    def test_system_prompt_playoff_headline_rule(self):
+        prompt = recap_llm._SYSTEM_PROMPT
+        assert "WINNER'S BRACKET" in prompt
+        assert "playoff_round" in prompt
+        assert "Winners Consolation" in prompt
+        assert "Losers Bracket" in prompt

@@ -86,11 +86,23 @@ def _handle() -> dict:
         logger.info("No pending recap work")
         return {"status": "completed", "leagues": 0, "written": 0, "failed": 0}
 
+    logger.info(
+        "Recap generator starting: %d pending league(s) (model=%s, max_rpm=%s)",
+        len(markers),
+        _MODEL_ID,
+        _MAX_RPM,
+    )
     written = 0
     failed = 0
-    for marker in markers:
+    for index, marker in enumerate(markers, start=1):
         canonical_league_id = marker["canonical_league_id"]
         correlation_id_var.set(marker.get("correlation_id") or "")
+        logger.info(
+            "Processing league %d/%d: %s",
+            index,
+            len(markers),
+            canonical_league_id,
+        )
         outcome = _process_league(canonical_league_id)
         written += outcome["written"]
         failed += outcome["failed"]
@@ -124,20 +136,47 @@ def _process_league(canonical_league_id: str) -> dict:
         _delete_marker(canonical_league_id)
         return {"written": 0, "failed": 0}
 
+    seasons = _get_league_seasons(canonical_league_id)
+    logger.info(
+        "League %s: %d season(s) to scan (%s)",
+        canonical_league_id,
+        len(seasons),
+        ", ".join(seasons) or "none",
+    )
     written = 0
     failed = 0
-    for season in _get_league_seasons(canonical_league_id):
+    for season in seasons:
         weeks = _get_matchup_weeks(canonical_league_id, season)
         if not weeks:
             continue
-        standings = _get_standings(canonical_league_id, season)
+        # Cumulative record AS OF each week (WEEKLY_STANDINGS); fall back to the
+        # season-final STANDINGS for weeks with no snapshot (e.g. playoff weeks), so a
+        # Week 7 recap shows the Week 7 record, not the end-of-season record.
+        final_standings = _get_standings(canonical_league_id, season)
+        weekly_standings = _get_weekly_standings(canonical_league_id, season)
         existing = _get_existing_recap_weeks(canonical_league_id, season)
-        for week, matchups in weeks.items():
-            if week in existing:
-                continue
+        missing = {w: m for w, m in weeks.items() if w not in existing}
+        if not missing:
+            logger.info(
+                "League %s season %s: all %d week(s) already recapped",
+                canonical_league_id,
+                season,
+                len(weeks),
+            )
+            continue
+        logger.info(
+            "League %s season %s: generating %d of %d week(s) (%d already present)",
+            canonical_league_id,
+            season,
+            len(missing),
+            len(weeks),
+            len(existing),
+        )
+        for week, matchups in missing.items():
+            week_standings = weekly_standings.get(_week_int(week)) or final_standings
             try:
                 if _generate_and_write(
-                    canonical_league_id, season, week, matchups, standings
+                    canonical_league_id, season, week, matchups, week_standings
                 ):
                     written += 1
             except Exception:
@@ -151,12 +190,18 @@ def _process_league(canonical_league_id: str) -> dict:
 
     if failed == 0:
         # Every missing week is now written (or was already) — clear the marker.
+        logger.info(
+            "League %s recap pass complete: %d written; clearing marker",
+            canonical_league_id,
+            written,
+        )
         _delete_marker(canonical_league_id)
     else:
         logger.warning(
-            "Leaving recap marker pending for league=%s (%d week(s) failed); next run "
-            "retries them",
+            "Leaving recap marker pending for league=%s (%d written, %d week(s) "
+            "failed); next run retries them",
             canonical_league_id,
+            written,
             failed,
         )
     return {"written": written, "failed": failed}
@@ -167,6 +212,13 @@ def _generate_and_write(
 ) -> bool:
     """Generate one week's recap and write it idempotently. Returns True if newly written."""
     highlights = _build_highlights(season, week, matchups, standings)
+    logger.info(
+        "Generating recap for league=%s season=%s week=%s (%d matchup(s))",
+        canonical_league_id,
+        season,
+        week,
+        len(highlights.get("matchups", [])),
+    )
     _throttle()
     recap = generate_recap(highlights)
     try:
@@ -185,12 +237,25 @@ def _generate_and_write(
             },
             ConditionExpression="attribute_not_exists(SK)",
         )
+        logger.info(
+            "Wrote recap for league=%s season=%s week=%s: %r",
+            canonical_league_id,
+            season,
+            week,
+            recap["headline"],
+        )
         return True
     except ClientError as exc:
         if (
             exc.response.get("Error", {}).get("Code")
             == "ConditionalCheckFailedException"
         ):
+            logger.info(
+                "Recap already present for league=%s season=%s week=%s; skipping write",
+                canonical_league_id,
+                season,
+                week,
+            )
             return False  # already written — idempotent
         raise
 
@@ -291,12 +356,46 @@ def _get_matchup_weeks(canonical_league_id: str, season: str) -> dict[str, list]
 
 
 def _get_standings(canonical_league_id: str, season: str) -> dict[str, dict]:
-    """Return ``{team_id: standings_row}`` for the season, for records/context."""
+    """Return ``{team_id: standings_row}`` for the season's **final** standings.
+
+    Used as the per-week fallback for weeks with no ``WEEKLY_STANDINGS`` snapshot
+    (e.g. playoff weeks); regular-season weeks use :func:`_get_weekly_standings`.
+    """
     resp = _table.get_item(
         Key={"PK": f"LEAGUE#{canonical_league_id}", "SK": f"STANDINGS#{season}"}
     )
     rows = _convert_decimals(resp.get("Item", {}).get("data", []))
     return {str(row.get("team_id")): row for row in rows}
+
+
+def _get_weekly_standings(
+    canonical_league_id: str, season: str
+) -> dict[int, dict[str, dict]]:
+    """Return ``{snapshot_week: {team_id: standings_row}}`` from ``WEEKLY_STANDINGS``.
+
+    Each row's ``record`` is the team's cumulative record **through that week**, so a
+    week's recap can show the standings as they were at the time — not the end-of-season
+    record. ``snapshot_week`` covers regular-season weeks only.
+    """
+    resp = _table.get_item(
+        Key={"PK": f"LEAGUE#{canonical_league_id}", "SK": f"WEEKLY_STANDINGS#{season}"}
+    )
+    rows = _convert_decimals(resp.get("Item", {}).get("data", []))
+    by_week: dict[int, dict[str, dict]] = {}
+    for row in rows:
+        week = _week_int(row.get("snapshot_week"))
+        if week is None:
+            continue
+        by_week.setdefault(week, {})[str(row.get("team_id"))] = row
+    return by_week
+
+
+def _week_int(value) -> int | None:
+    """Parse a week label (``"7"`` or zero-padded ``"07"``) to an int, or ``None``."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _get_existing_recap_weeks(canonical_league_id: str, season: str) -> set[str]:

@@ -44,9 +44,14 @@ generation time** (a few seconds each), so a backlog clears over one or more 15-
     headline line + `\n\n`-joined body paragraphs (no markdown). Haiku 4.5 still accepts `temperature`;
     `output_config.effort` and extended thinking are **not** used (effort errors on Haiku 4.5). Raises on
     an empty/refused response or after the SDK exhausts retries, so the caller leaves the marker pending.
-  - **Voice (system prompt)** unchanged: lighthearted-but-journalistic column, roasts where deserved, a
+  - **Voice (system prompt):** lighthearted-but-journalistic column, roasts where deserved, a
     single **creative** headline (wit/wordplay hooked to the week's most dramatic real moment; generic
     "Week N recap" / "A beats B" templates banned) then body paragraphs.
+  - **Playoff headline rule (in the prompt):** on **playoff weeks** (any matchup carries a
+    `playoff_round`), the headline must be anchored to a **winner's bracket** game — a `playoff_round` of
+    `Quarterfinals`, `Semifinals`, or `Finals`, preferring the highest-stakes round present (Finals >
+    Semifinals > Quarterfinals) — and must **never** be built around a **consolation/losers** game
+    (`playoff_round` of `Winners Consolation` or `Losers Bracket`); those may still appear in the body.
   - **Name / fact-fidelity guardrail (required in the prompt)** unchanged: use team and manager/display
     names **exactly as provided**, **never invent real names or facts** (`chris_j` stays
     "Chris"/"chris_j", never "Chris Johnson"); every number, player, and outcome must trace to the input.
@@ -67,10 +72,13 @@ generation time** (a few seconds each), so a backlog clears over one or more 15-
   - **Enumerate all seasons** (GSI1 `LEAGUE_LOOKUP` merge) → completed weeks (`MATCHUPS#{season}#`
     prefix) → **drop already-recapped weeks** (existence check on
     `MATCHUP_RECAP#{season}#WEEK#{week:02d}`) → **build highlights** per matchup (both teams' display name
-    + record + score, winner/margin, each side's top 1–2 starters + top bench, playoff round if any) →
-    for each missing `(season, week)`, pace via the rate limiter, call `generate_recap`, and **write**
-    `MATCHUP_RECAP#{season}#WEEK#{week:02d}` `data={headline, body, generated_at, model}` with
-    `ConditionExpression="attribute_not_exists(SK)"`. Read `STANDINGS#{season}` once per season.
+    + **record as of that week** + score, winner/margin, each side's top 1–2 starters + top bench, playoff
+    round if any) → for each missing `(season, week)`, pace via the rate limiter, call `generate_recap`,
+    and **write** `MATCHUP_RECAP#{season}#WEEK#{week:02d}` `data={headline, body, generated_at, model}`
+    with `ConditionExpression="attribute_not_exists(SK)"`. The week-accurate record comes from the
+    `WEEKLY_STANDINGS#{season}` snapshot for that week (cumulative record *through* that week), falling
+    back to the season-final `STANDINGS#{season}` for weeks with no snapshot (e.g. playoff weeks) — so a
+    Week 7 recap shows the Week 7 record, not the end-of-season record. Both views are read once per season.
   - **Idempotent:** already-recapped weeks are skipped before generation; a conditional-check failure on
     the put (a concurrent/duplicate write) is treated as "already written", not an error.
   - **Marker lifecycle:** delete the league's marker only when **every** missing week was written; if any
@@ -147,6 +155,8 @@ generation time** (a few seconds each), so a backlog clears over one or more 15-
       recap for members and 404s for a week not yet generated.
 - [ ] Recaps use team/manager names exactly as provided and contain no fabricated names, stats, or events
       not present in the highlights.
+- [ ] On a **playoff week**, the headline centers on a **winner's bracket** game (Finals/Semifinals/
+      Quarterfinals) and not on a consolation or losers-bracket game.
 - [ ] The Bedrock batch pipeline (drainer + completion Lambdas, batch bucket, batch/Marketplace IAM,
       `RECAP_JOB` manifest, `in_flight` status) is **removed**; generation runs entirely through the
       scheduled `recap_generator` Fargate task.
