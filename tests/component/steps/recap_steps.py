@@ -1,15 +1,13 @@
-"""Steps for the AI weekly matchup recap batch pipeline component test (BE-022)."""
+"""Steps for the AI weekly matchup recap generator component test (BE-022)."""
 
-import json
 from unittest.mock import patch
 
 from behave import given, then, when
 from boto3.dynamodb.conditions import Key
 from common_steps import get_item, put_item
 
-# Fixed job ARN the patched ``submit_batch_job`` returns, so the manifest key and the
-# simulated completion event line up across steps.
-JOB_ARN = "arn:aws:bedrock:us-east-1:000000000000:model-invocation-job/comptest"
+# The recap the patched ``generate_recap`` returns for every missing week.
+_RECAP = {"headline": "Big Week", "body": "Para one.\n\nPara two."}
 
 
 def _matchup(week2: str) -> dict:
@@ -107,54 +105,27 @@ def step_seed_marker(context, canonical):
     )
 
 
-@when("the recap drainer runs")
-def step_run_drainer(context):
+def _run_generator(context):
+    """Run the generator with the Anthropic call (generate_recap) mocked."""
     with patch.object(
-        context.recap_drainer, "submit_batch_job", return_value=JOB_ARN
+        context.recap_generator, "generate_recap", return_value=_RECAP
     ) as spy:
-        context.drainer_result = context.recap_drainer._handle()
-    context.drainer_submit = spy
+        context.generator_result = context.recap_generator._handle()
+    context.generator_generate = spy
 
 
-@when("Bedrock finishes the batch job")
-def step_bedrock_finishes(context):
-    """Simulate Bedrock writing one output record per input record to the job's S3
-    output prefix (the manifest records exactly which records were submitted)."""
-    manifest = get_item(context, f"RECAP_JOB#{JOB_ARN}", "MANIFEST")
-    assert manifest, "drainer wrote no job manifest"
-    bucket, _, prefix = manifest["output_uri"][len("s3://") :].partition("/")
-    lines = [
-        json.dumps(
-            {
-                "recordId": record_id,
-                "modelOutput": {"generation": "Big Week\n\nPara one.\n\nPara two."},
-            }
-        )
-        for record_id in manifest["records"]
-    ]
-    context.s3.put_object(
-        Bucket=bucket,
-        Key=prefix + "records.jsonl.out",
-        Body="\n".join(lines).encode("utf-8"),
-    )
+@when("the recap generator runs")
+def step_run_generator(context):
+    _run_generator(context)
 
 
-@when("the recap completion runs for the job")
-def step_run_completion(context):
-    event = {"detail": {"batchJobArn": JOB_ARN, "status": "Completed"}}
-    context.completion_result = context.recap_completion._handle(event)
-
-
-@given('the recap batch pipeline has fully run for league "{canonical}"')
-def step_full_pipeline(context, canonical):
-    step_run_drainer(context)
-    step_bedrock_finishes(context)
-    step_run_completion(context)
+@given('the recap generator has fully run for league "{canonical}"')
+def step_full_run(context, canonical):
+    _run_generator(context)
 
 
 @then(
-    'a MATCHUP_RECAP item exists for league "{canonical}" season "{season}" '
-    'week "{week2}"'
+    'a MATCHUP_RECAP item exists for league "{canonical}" season "{season}" week "{week2}"'
 )
 def step_recap_item_exists(context, canonical, season, week2):
     item = get_item(
@@ -164,7 +135,7 @@ def step_recap_item_exists(context, canonical, season, week2):
     recap = item["data"][0]
     assert recap["headline"], "recap headline missing"
     assert recap["body"], "recap body missing"
-    assert recap["model"] == "us.meta.llama3-3-70b-instruct-v1:0"
+    assert recap["model"] == "claude-haiku-4-5"
 
 
 @then('no MATCHUP_RECAP items exist for league "{canonical}"')
@@ -177,15 +148,17 @@ def step_no_recap_items(context, canonical):
     assert not resp.get("Items"), "expected no recap items"
 
 
-@then("the recap drainer submitted a job for {count:d} records")
-def step_drainer_submitted(context, count):
-    assert context.drainer_result["status"] == "submitted", context.drainer_result
-    assert context.drainer_result["records"] == count, context.drainer_result
+@then("the recap generator wrote {count:d} recaps")
+def step_generator_wrote(context, count):
+    assert context.generator_result["status"] == "completed", context.generator_result
+    assert context.generator_result["written"] == count, context.generator_result
 
 
-@then("the recap drainer submitted no job")
-def step_drainer_no_job(context):
-    assert context.drainer_result["status"] != "submitted", context.drainer_result
+@then("the recap generator generated no recaps")
+def step_generator_no_generation(context):
+    assert not context.generator_generate.called, (
+        "expected generate_recap not to be called"
+    )
 
 
 @then('the recap queue marker for league "{canonical}" is cleared')

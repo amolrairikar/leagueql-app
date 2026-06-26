@@ -173,8 +173,8 @@ def _invoke_recap_generator(
 
     Called only when ``record_active_subscription`` actually advanced (a real
     activation, not a stale/duplicate no-op), so redelivered events don't re-enqueue.
-    The recap-drainer later batches the newly-premium league's full backfill. A failed
-    enqueue never fails the webhook.
+    The recap generator later generates the newly-premium league's full backfill. A
+    failed enqueue never fails the webhook.
     """
     record_pending_recap(
         canonical_league_id=canonical_league_id,

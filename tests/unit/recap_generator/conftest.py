@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-_SRC = Path(__file__).parents[3] / "src" / "recap_drainer"
+_SRC = Path(__file__).parents[3] / "src" / "recap_generator"
 
 
 def _load_module(unique_name: str, path: Path) -> object:
@@ -18,22 +18,19 @@ def _load_module(unique_name: str, path: Path) -> object:
 
 
 @pytest.fixture(scope="session", autouse=True)
-def _bootstrap_recap_drainer():
-    """Load the drainer handler under a unique name with boto3 mocked.
+def _bootstrap_recap_generator():
+    """Load the generator handler under a unique name with boto3 mocked.
 
-    The handler creates a DynamoDB resource + S3 client at import and pulls in
-    ``common.bedrock`` (which creates a ``bedrock`` client at import); all are mocked
-    so no AWS credentials/network are needed. ``RECAP_MIN_BATCH_RECORDS`` is read at
-    import, so default it to 1 (submit eagerly); tests that exercise the hold path
-    patch ``_MIN_BATCH_RECORDS`` directly.
+    The handler creates a DynamoDB resource at import; it is mocked so no AWS
+    credentials/network are needed. ``common.recap_llm`` is imported but builds its
+    Anthropic client lazily, so no SDK/network is touched at import. ``RECAP_MAX_RPM``
+    is read at import; set it very high so the rate limiter never actually sleeps in
+    tests.
     """
     env = {
         "DYNAMODB_TABLE_NAME": "test-table",
-        "BEDROCK_MODEL_ID": "us.meta.llama3-3-70b-instruct-v1:0",
-        "RECAP_BATCH_BUCKET": "test-bucket",
-        "RECAP_BATCH_ROLE_ARN": "arn:aws:iam::1:role/batch",
-        "RECAP_MIN_BATCH_RECORDS": "1",
-        "RECAP_STALE_INFLIGHT_HOURS": "6",
+        "RECAP_MODEL_ID": "claude-haiku-4-5",
+        "RECAP_MAX_RPM": "1000000",
     }
     with patch.dict(os.environ, env):
         with (
@@ -42,21 +39,20 @@ def _bootstrap_recap_drainer():
         ):
             mock_client.return_value = MagicMock()
             mock_resource.return_value.Table.return_value = MagicMock()
-            _load_module("recap_drainer.handler", _SRC / "handler.py")
+            _load_module("recap_generator.handler", _SRC / "handler.py")
     yield
 
 
 @pytest.fixture
-def drainer():
-    return sys.modules["recap_drainer.handler"]
+def generator():
+    return sys.modules["recap_generator.handler"]
 
 
 @pytest.fixture(autouse=True)
 def aws_env(monkeypatch):
     monkeypatch.setenv("DYNAMODB_TABLE_NAME", "test-table")
-    monkeypatch.setenv("BEDROCK_MODEL_ID", "us.meta.llama3-3-70b-instruct-v1:0")
-    monkeypatch.setenv("RECAP_BATCH_BUCKET", "test-bucket")
-    monkeypatch.setenv("RECAP_BATCH_ROLE_ARN", "arn:aws:iam::1:role/batch")
+    monkeypatch.setenv("RECAP_MODEL_ID", "claude-haiku-4-5")
+    monkeypatch.setenv("RECAP_MAX_RPM", "1000000")
 
 
 @pytest.fixture(autouse=True)

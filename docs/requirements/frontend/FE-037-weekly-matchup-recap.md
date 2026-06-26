@@ -3,12 +3,14 @@
 ## Description
 A premium section on the `/matchups` page that shows an **AI-written weekly recap column** for the
 selected week — a medium-long, lighthearted-but-journalistic write-up of that week's matchups, with
-a headline and body paragraphs. The prose is **precomputed asynchronously** via a Bedrock batch
-inference job (the recap-drainer + recap-completion Lambdas,
+a headline and body paragraphs. The prose is **precomputed asynchronously** by the scheduled
+recap-generator Fargate task (Anthropic Claude Haiku 4.5,
 [BE-022](../backend/BE-022-ai-weekly-matchup-recap.md)) and cached in DynamoDB; this feature only
 **reads** the cached text through the existing query API
 ([BE-005](../backend/BE-005-query-precomputed-views-api.md)). There is no client-side generation and
-no request-path LLM call.
+no request-path LLM call. Behavior here is unchanged — weeks without a cached recap still show the
+"generating" empty state — only the end-to-end latency differs: a recap now appears within roughly the
+generator's cron interval plus a few seconds of generation, rather than a batch turnaround.
 
 The section lives on `/matchups`, below the Weekly Awards section
 ([FE-032](FE-032-weekly-awards-superlatives.md)), and tracks the page's existing season + week

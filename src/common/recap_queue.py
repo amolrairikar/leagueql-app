@@ -1,15 +1,14 @@
 """Shared pending-recap enqueue for LeagueQL (BE-022).
 
-Vendored into the processor + Stripe-webhook deployment zips. Replaces the old
-``ecs:RunTask`` launcher: instead of starting generation compute, the triggers record
-a lightweight **pending-work marker** in DynamoDB. The recap-drainer Lambda later
-aggregates every pending league's missing weeks into one Bedrock batch job.
+Vendored into the processor + Stripe-webhook deployment zips. Instead of starting
+generation compute, the triggers record a lightweight **pending-work marker** in
+DynamoDB. The recap generator (a scheduled Fargate task, BE-022) later reads the queue
+and generates each pending league's missing weeks synchronously.
 
-The marker is **one item per league** (``PK=RECAP_QUEUE``, ``SK=PENDING#{league}``),
-written with a conditional put that will **not clobber an ``in_flight`` marker** — a
-league already mid-job stays mid-job and its newly-completed weeks are picked up on
-the next enqueue after that job finishes. A re-trigger of a ``pending`` league simply
-refreshes the marker, so the queue never duplicates.
+The marker is **one item per league** (``PK=RECAP_QUEUE``, ``SK=PENDING#{league}``); a
+re-trigger of a ``pending`` league simply refreshes the marker, so the queue never
+duplicates. (The conditional put still guards against clobbering a legacy ``in_flight``
+status, which the single-consumer generator never sets — a harmless no-op.)
 
 No-op when billing is disabled or in the non-east region (``RECAP_QUEUE_TABLE``
 unset). A failed put is swallowed so enqueue never fails the webhook or the processor.

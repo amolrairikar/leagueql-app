@@ -328,10 +328,10 @@ Represents matchups for a given week in the fantasy league.
 <summary><b>MATCHUP_RECAP</b></summary>
 
 Caches the AI-written weekly recap column for a single completed week (BE-022). Built from the
-`MATCHUPS`/`STANDINGS` views by the **recap-completion Lambda** from a Bedrock **batch inference** job
-(submitted by the **recap-drainer Lambda**) and read back through the query API
-(`MATCHUP_RECAP#{season}#WEEK#{week}`). One item per `(season, week)`; written idempotently and never
-regenerated once present.
+`MATCHUPS`/`STANDINGS` views by the **recap-generator Fargate task**, which generates each recap
+synchronously via the Anthropic API (Claude Haiku 4.5) and writes the item directly; read back through
+the query API (`MATCHUP_RECAP#{season}#WEEK#{week}`). One item per `(season, week)`; written
+idempotently (`attribute_not_exists(SK)` conditional put) and never regenerated once present.
 
 | Attribute | Type | Required | Description |
 |---|---|---|---|
@@ -346,7 +346,7 @@ regenerated once present.
 | `headline` | String | A single headline line for the week |
 | `body` | String | The recap prose; paragraphs joined by `\n\n` (no markdown) |
 | `generated_at` | String | ISO 8601 (UTC) timestamp the recap was generated |
-| `model` | String | The Bedrock model ID used (e.g. `us.meta.llama3-3-70b-instruct-v1:0`) |
+| `model` | String | The Anthropic model ID used (e.g. `claude-haiku-4-5`) |
 
 **Example:**
 ```json
@@ -358,7 +358,7 @@ regenerated once present.
       "headline": "Week 1: Fireworks, Faceplants, and a Last-Second Heartbreak",
       "body": "The season opened with a bang...\n\nMeanwhile, in the week's ugliest win...",
       "generated_at": "2025-09-10T13:45:00+00:00",
-      "model": "us.meta.llama3-3-70b-instruct-v1:0"
+      "model": "claude-haiku-4-5"
     }
   ]
 }
@@ -371,25 +371,23 @@ regenerated once present.
 A lightweight pending-work marker recording that a league needs a recap pass (BE-022). Written
 idempotently by the Stripe webhook (on activation) and the processor (at the end of every
 onboard/refresh) via `record_pending_recap`; **one marker per league** (a re-trigger refreshes it, so
-the queue never duplicates). The **recap-drainer Lambda** queries the `RECAP_QUEUE` partition each
-tick, aggregates the pending leagues' missing weeks into one Bedrock batch job, and flips each marker
-to `in_flight`; the **recap-completion Lambda** deletes the marker on success or resets it to `pending`
-on a failed/expired job. These markers live in their own single partition (`PK=RECAP_QUEUE`), separate
-from the `LEAGUE#{league_id}` items, so the drainer reads the whole queue with one query.
+the queue never duplicates). The **recap-generator Fargate task** queries the `RECAP_QUEUE` partition
+each tick, generates each pending league's missing weeks synchronously, and deletes the marker once all
+of that league's weeks are written (leaving it pending if any week failed, for the next run to retry).
+These markers live in their own single partition (`PK=RECAP_QUEUE`), separate from the
+`LEAGUE#{league_id}` items, so the generator reads the whole queue with one query.
 
 | Attribute | Type | Required | Description |
 |---|---|---|---|
 | `PK` | String | Yes | `RECAP_QUEUE` (a single shared partition holding every pending marker) |
 | `SK` | String | Yes | `PENDING#{canonical_league_id}` (one marker per league) |
 | `canonical_league_id` | String | Yes | The league needing recaps |
-| `platform` | String | No | `espn` / `sleeper` (carried through for the drainer/logging) |
+| `platform` | String | No | `espn` / `sleeper` (carried through for logging) |
 | `native_league_id` | String | No | Platform-native league id, when known |
-| `status` | String | Yes | `pending` (awaiting a drain) or `in_flight` (records submitted in a batch job) |
-| `job_id` | String | No | The Bedrock batch job id this marker was submitted in (set when `in_flight`) |
+| `status` | String | Yes | `pending` (awaiting a generator run) |
 | `correlation_id` | String | No | Trigger correlation id, for log correlation |
-| `trace_context` | String | No | JSON W3C trace carrier from the trigger (log correlation only; the drainer roots its own trace) |
+| `trace_context` | String | No | JSON W3C trace carrier from the trigger (log correlation only; the generator roots its own trace) |
 | `enqueued_at` | String | Yes | ISO 8601 (UTC) timestamp the marker was last written |
-| `submitted_at` | String | No | ISO 8601 (UTC) timestamp the marker was flipped to `in_flight` (drives the stale-in-flight reset) |
 
 **Example:**
 ```json
@@ -402,42 +400,6 @@ from the `LEAGUE#{league_id}` items, so the drainer reads the whole queue with o
   "correlation_id": "abc-123",
   "trace_context": "{}",
   "enqueued_at": "2025-09-10T13:40:00+00:00"
-}
-```
-</details>
-
-<details>
-<summary><b>RECAP_JOB / batch-job manifest</b></summary>
-
-Maps a submitted Bedrock batch inference job back to the `(league, season, week)` each output record
-belongs to (BE-022). Written by the **recap-drainer Lambda** when it submits a job and read by the
-**recap-completion Lambda** when the job's *Batch Inference Job State Change* event fires, so the
-completion handler can route each `modelOutput` record to the right `MATCHUP_RECAP` SK and find the
-job's S3 output. Deleted once the job's outputs are written. Lives in its own partition
-(`PK=RECAP_JOB#{job_id}`).
-
-| Attribute | Type | Required | Description |
-|---|---|---|---|
-| `PK` | String | Yes | `RECAP_JOB#{job_id}` (the Bedrock job's id/name) |
-| `SK` | String | Yes | `MANIFEST` |
-| `output_uri` | String | Yes | `s3://…/output/{job}/` prefix Bedrock writes the output JSONL under |
-| `model` | String | Yes | The Bedrock model id used (stored on each generated `MATCHUP_RECAP`) |
-| `league_ids` | List\<String\> | Yes | The canonical league ids whose markers were flipped to `in_flight` for this job (for the success delete / failure reset) |
-| `records` | Map | Yes | `recordId → {canonical_league_id, season, week}` routing map |
-| `submitted_at` | String | Yes | ISO 8601 (UTC) timestamp the job was submitted |
-
-**Example:**
-```json
-{
-  "PK": "RECAP_JOB#leagueql-recap-20250910T1340",
-  "SK": "MANIFEST",
-  "output_uri": "s3://leagueql-recap-batch-prod/output/leagueql-recap-20250910T1340/",
-  "model": "us.meta.llama3-3-70b-instruct-v1:0",
-  "league_ids": ["123456789"],
-  "records": {
-    "123456789#2025#W01": { "canonical_league_id": "123456789", "season": "2025", "week": "01" }
-  },
-  "submitted_at": "2025-09-10T13:40:05+00:00"
 }
 ```
 </details>

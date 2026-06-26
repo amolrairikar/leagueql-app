@@ -34,7 +34,7 @@ ddb_client = boto3.client("dynamodb", config=_retry_config)
 def _invoke_recap_generator(canonical_league_id: str, platform: str) -> None:
     """Enqueue a pending-recap marker at end of run (BE-022).
 
-    Fires for both onboard and refresh; the recap-drainer's premium gate + idempotent
+    Fires for both onboard and refresh; the recap generator's premium gate + idempotent
     skip make it a cheap no-op for non-premium leagues and already-recapped weeks. A
     failed enqueue never fails the processor.
     """
@@ -1467,7 +1467,7 @@ def _process_manifest(
     if previous_version_id is None:
         update_league_count(delta=1)
 
-    # Enqueue a pending-recap marker for the newly-completed week (BE-022). The
-    # recap-drainer batches it; idempotent + premium-gated downstream, so this is a
-    # cheap no-op for non-premium leagues and already-recapped weeks.
+    # Enqueue a pending-recap marker for the newly-completed week (BE-022). The recap
+    # generator task picks it up on its next tick; idempotent + premium-gated downstream,
+    # so this is a cheap no-op for non-premium leagues and already-recapped weeks.
     _invoke_recap_generator(canonical_league_id, platform)

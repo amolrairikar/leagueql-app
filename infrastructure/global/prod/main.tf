@@ -743,49 +743,70 @@ module "stripe-webhook-lambda-role" {
   }
 }
 
-# Execution role for the AI weekly matchup recap generator (BE-022). Reads the
-# matchup/standings views, writes recap items, reads feature flags + the Axiom token
-# from SSM, and invokes the Bedrock Haiku 4.5 inference profile (us-east-1).
-# AI weekly matchup recaps via Bedrock batch inference (BE-022): the drainer Lambda
-# (scheduled) submits jobs and the completion Lambda (EventBridge on job state change)
-# writes the results. Three roles: the two Lambda execution roles + the Bedrock batch
-# service role Bedrock assumes to read input / write output in S3.
+# AI weekly matchup recaps (BE-022) run as a scheduled Fargate task that generates each
+# recap synchronously via the Anthropic API (Claude Haiku 4.5). Three IAM roles mirror
+# the Sleeper refresher's Fargate roles — the task role (app identity), the execution
+# role (ECR pull + logs), and the EventBridge-invoke role (RunTask) — plus the ECR repo
+# the CI-built image is pushed to.
+resource "aws_ecr_repository" "recap_generator" {
+  provider             = aws.primary
+  name                 = "leagueql-recap-generator-${var.environment}"
+  image_tag_mutability = "MUTABLE"
 
-# Drainer Lambda role — enumerates the queue + views, builds batch input, submits the
-# Bedrock job, writes the manifest, flips markers.
-module "recap-drainer-role" {
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    component   = "api"
+    managed-by  = "terraform"
+  }
+}
+
+resource "aws_ecr_lifecycle_policy" "recap_generator" {
+  provider   = aws.primary
+  repository = aws_ecr_repository.recap_generator.name
+
+  policy = jsonencode({
+    rules = [
+      {
+        rulePriority = 1
+        description  = "Keep only the last 10 images"
+        selection = {
+          tagStatus   = "any"
+          countType   = "imageCountMoreThan"
+          countNumber = 10
+        }
+        action = {
+          type = "expire"
+        }
+      }
+    ]
+  })
+}
+
+# Task role — the application identity the container assumes at runtime: reads the queue
+# + matchup/standings views, writes recap items, and reads the feature flags, Axiom
+# token, and Anthropic API key from SSM.
+module "recap-generator-task-role" {
   source           = "../../modules/iam-role"
-  role_name        = "leagueql-${var.environment}-recap-drainer-role"
-  role_description = "Execution role for the AI weekly matchup recap drainer Lambda."
+  role_name        = "leagueql-${var.environment}-recap-generator-task-role"
+  role_description = "Task role for the AI weekly matchup recap generator Fargate task."
   trust_policy_json = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
         Action    = "sts:AssumeRole"
         Effect    = "Allow"
-        Principal = { Service = "lambda.amazonaws.com" }
+        Principal = { Service = "ecs-tasks.amazonaws.com" }
       }
     ]
   })
   role_policy_json = jsonencode({
     Version = "2012-10-17"
     Statement = [
-      {
-        Sid    = "WriteLambdaLogGroup"
-        Effect = "Allow"
-        Action = ["logs:CreateLogGroup"]
-        Resource = [
-          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/lambda/leagueql-recap-drainer-${var.environment}"
-        ]
-      },
-      {
-        Sid    = "WriteLambdaLogs"
-        Effect = "Allow"
-        Action = ["logs:CreateLogStream", "logs:PutLogEvents"]
-        Resource = [
-          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/lambda/leagueql-recap-drainer-${var.environment}:*"
-        ]
-      },
       {
         Sid    = "ReadWriteDynamoDB"
         Effect = "Allow"
@@ -803,47 +824,21 @@ module "recap-drainer-role" {
         ]
       },
       {
-        # Batch input JSONL lands here; Bedrock reads it via the batch service role.
-        Sid    = "WriteBatchInput"
-        Effect = "Allow"
-        Action = ["s3:PutObject", "s3:GetObject"]
-        Resource = [
-          "arn:aws:s3:::leagueql-${var.environment}-recap-batch-${var.account_id}/*"
-        ]
-      },
-      {
-        # BE-022: submit + inspect Bedrock batch inference jobs (separate quota lane).
-        Sid    = "ManageBedrockBatchJobs"
-        Effect = "Allow"
-        Action = [
-          "bedrock:CreateModelInvocationJob",
-          "bedrock:GetModelInvocationJob",
-          "bedrock:ListModelInvocationJobs"
-        ]
-        Resource = "*"
-      },
-      {
-        # PassRole so Bedrock can assume the batch service role for the job's S3 I/O.
-        Sid      = "PassBedrockBatchRole"
-        Effect   = "Allow"
-        Action   = ["iam:PassRole"]
-        Resource = [module.recap-batch-service-role.role_arn]
-      },
-      {
-        # BE-022: first-run self-subscribe to the Llama 3.3 70B Bedrock Marketplace
-        # product (account-wide, one-time). Drop once an admin subscribes out-of-band.
-        Sid      = "BedrockMarketplaceSubscribe"
-        Effect   = "Allow"
-        Action   = ["aws-marketplace:Subscribe", "aws-marketplace:ViewSubscriptions"]
-        Resource = "*"
-      },
-      {
         # BE-017: premium gate reads the global billing / premium_feature flags.
         Sid    = "ReadFeatureFlagsSsmParameter"
         Effect = "Allow"
         Action = ["ssm:GetParameter"]
         Resource = [
           "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/feature-flags"
+        ]
+      },
+      {
+        # BE-022: the Anthropic API key (SecureString) fetched at runtime by name.
+        Sid    = "ReadAnthropicKeySsmParameter"
+        Effect = "Allow"
+        Action = ["ssm:GetParameter"]
+        Resource = [
+          "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/anthropic/api_key"
         ]
       },
       {
@@ -866,18 +861,19 @@ module "recap-drainer-role" {
   }
 }
 
-# Completion Lambda role — reads finished jobs' output from S3 and writes recaps.
-module "recap-completion-role" {
+# Execution role — used by the ECS agent (not the app) to pull the image from ECR and
+# ship container logs to the task's CloudWatch log group.
+module "recap-generator-task-exec-role" {
   source           = "../../modules/iam-role"
-  role_name        = "leagueql-${var.environment}-recap-completion-role"
-  role_description = "Execution role for the AI weekly matchup recap completion Lambda."
+  role_name        = "leagueql-${var.environment}-recap-generator-task-exec-role"
+  role_description = "Execution role for the AI weekly matchup recap generator Fargate task."
   trust_policy_json = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
         Action    = "sts:AssumeRole"
         Effect    = "Allow"
-        Principal = { Service = "lambda.amazonaws.com" }
+        Principal = { Service = "ecs-tasks.amazonaws.com" }
       }
     ]
   })
@@ -885,54 +881,27 @@ module "recap-completion-role" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "WriteLambdaLogGroup"
-        Effect = "Allow"
-        Action = ["logs:CreateLogGroup"]
-        Resource = [
-          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/lambda/leagueql-recap-completion-${var.environment}"
-        ]
+        Sid      = "ECRAuthToken"
+        Effect   = "Allow"
+        Action   = ["ecr:GetAuthorizationToken"]
+        Resource = "*"
       },
       {
-        Sid    = "WriteLambdaLogs"
+        Sid    = "ECRPull"
+        Effect = "Allow"
+        Action = [
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:BatchGetImage"
+        ]
+        Resource = [aws_ecr_repository.recap_generator.arn]
+      },
+      {
+        Sid    = "WriteTaskLogs"
         Effect = "Allow"
         Action = ["logs:CreateLogStream", "logs:PutLogEvents"]
         Resource = [
-          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/lambda/leagueql-recap-completion-${var.environment}:*"
-        ]
-      },
-      {
-        Sid    = "ReadWriteDynamoDB"
-        Effect = "Allow"
-        Action = [
-          "dynamodb:GetItem",
-          "dynamodb:PutItem",
-          "dynamodb:UpdateItem",
-          "dynamodb:DeleteItem"
-        ]
-        Resource = [module.dynamodb.primary_table_arn]
-      },
-      {
-        Sid    = "ReadBatchOutput"
-        Effect = "Allow"
-        Action = ["s3:GetObject", "s3:ListBucket"]
-        Resource = [
-          "arn:aws:s3:::leagueql-${var.environment}-recap-batch-${var.account_id}",
-          "arn:aws:s3:::leagueql-${var.environment}-recap-batch-${var.account_id}/*"
-        ]
-      },
-      {
-        # Alert on a failed/expired batch job.
-        Sid      = "PublishSNSFailureAlerts"
-        Effect   = "Allow"
-        Action   = ["sns:Publish"]
-        Resource = ["arn:aws:sns:us-east-1:${var.account_id}:leagueql-lambda-alerts-${var.environment}-east"]
-      },
-      {
-        Sid    = "ReadAxiomSsmParameter"
-        Effect = "Allow"
-        Action = ["ssm:GetParameter"]
-        Resource = [
-          "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/axiom/api_token"
+          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/ecs/leagueql-recap-generator-${var.environment}:*"
         ]
       }
     ]
@@ -946,22 +915,18 @@ module "recap-completion-role" {
   }
 }
 
-# Bedrock batch service role — Bedrock assumes this to read the input JSONL and write
-# the output JSONL in the batch bucket (passed as the job's roleArn).
-module "recap-batch-service-role" {
+# Invoke role assumed by the EventBridge schedule rule to launch the generator task.
+module "recap-generator-events-role" {
   source           = "../../modules/iam-role"
-  role_name        = "leagueql-${var.environment}-recap-batch-${var.account_id}-role"
-  role_description = "Service role Bedrock assumes for recap batch inference S3 I/O."
+  role_name        = "leagueql-${var.environment}-recap-generator-events-role"
+  role_description = "Role assumed by EventBridge to run the AI recap generator task."
   trust_policy_json = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
         Action    = "sts:AssumeRole"
         Effect    = "Allow"
-        Principal = { Service = "bedrock.amazonaws.com" }
-        Condition = {
-          StringEquals = { "aws:SourceAccount" = var.account_id }
-        }
+        Principal = { Service = "events.amazonaws.com" }
       }
     ]
   })
@@ -969,12 +934,18 @@ module "recap-batch-service-role" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "ReadWriteBatchIO"
+        Sid      = "RunTask"
+        Effect   = "Allow"
+        Action   = ["ecs:RunTask"]
+        Resource = ["arn:aws:ecs:us-east-1:${var.account_id}:task-definition/leagueql-recap-generator-${var.environment}:*"]
+      },
+      {
+        Sid    = "PassTaskRoles"
         Effect = "Allow"
-        Action = ["s3:GetObject", "s3:PutObject", "s3:ListBucket"]
+        Action = ["iam:PassRole"]
         Resource = [
-          "arn:aws:s3:::leagueql-${var.environment}-recap-batch-${var.account_id}",
-          "arn:aws:s3:::leagueql-${var.environment}-recap-batch-${var.account_id}/*"
+          module.recap-generator-task-role.role_arn,
+          module.recap-generator-task-exec-role.role_arn
         ]
       }
     ]

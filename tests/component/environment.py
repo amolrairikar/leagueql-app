@@ -63,16 +63,11 @@ _ENV = {
     "STRIPE_PRICE_ID_YEARLY": "price_test_yearly",
     "STRIPE_TRIAL_PERIOD_DAYS": "14",
     # BE-022: the processor + webhook enqueue a pending-recap marker into this table;
-    # the recap-drainer batches the work into a Bedrock job (BEDROCK_MODEL_ID), writes
-    # input/output JSONL to the batch bucket, and the completion Lambda writes recaps.
-    "RECAP_QUEUE_TABLE": TABLE_NAME,
-    "RECAP_BATCH_BUCKET": BUCKET_NAME,
-    "RECAP_BATCH_ROLE_ARN": "arn:aws:iam::1:role/recap-batch",
-    "BEDROCK_MODEL_ID": "us.meta.llama3-3-70b-instruct-v1:0",
-    # Submit eagerly in tests (no minimum-batch hold) and never treat a fresh job as
-    # stale.
-    "RECAP_MIN_BATCH_RECORDS": "1",
-    "RECAP_STALE_INFLIGHT_HOURS": "6",
+    # the recap-generator (Fargate task) reads the queue and writes a MATCHUP_RECAP item
+    # per missing week via the Anthropic API (generate_recap is patched per scenario).
+    "RECAP_MODEL_ID": "claude-haiku-4-5",
+    # Effectively disable the rate limiter in tests (no real sleeps between writes).
+    "RECAP_MAX_RPM": "1000000",
 }
 
 
@@ -237,17 +232,13 @@ def _load_handlers(context) -> None:
         "stripe_webhook.handler", _SRC / "stripe_webhook" / "handler.py"
     )
 
-    # --- recap batch pipeline (BE-022) -------------------------------------
-    # The drainer + completion Lambdas import only common.* (incl. common.bedrock,
-    # which creates a ``bedrock`` control-plane client at import — fine under moto
-    # since the only Bedrock call, submit_batch_job, is patched per scenario). Their
-    # module-level table + S3 client are moto-backed, so the drain → S3 input/manifest
-    # → completion → MATCHUP_RECAP write runs end to end.
-    context.recap_drainer = _load_module(
-        "recap_drainer.handler", _SRC / "recap_drainer" / "handler.py"
-    )
-    context.recap_completion = _load_module(
-        "recap_completion.handler", _SRC / "recap_completion" / "handler.py"
+    # --- recap generator (BE-022) ------------------------------------------
+    # The generator imports only common.* (incl. common.recap_llm, which builds its
+    # Anthropic client lazily — no SDK/network at import). Its module-level table is
+    # moto-backed, so enqueue → generate (patched per scenario) → MATCHUP_RECAP write
+    # runs end to end.
+    context.recap_generator = _load_module(
+        "recap_generator.handler", _SRC / "recap_generator" / "handler.py"
     )
 
     # The processor + webhook now *enqueue* (a real DynamoDB marker) rather than launch

@@ -8,6 +8,7 @@ python_version = "3.13"
 
 [packages]
 aiohttp = "*"
+anthropic = "*"
 asyncio = "*"
 duckdb = "*"
 fastapi = "*"
