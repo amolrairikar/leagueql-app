@@ -52,10 +52,19 @@ generation time** (a few seconds each), so a backlog clears over one or more 15-
     `Quarterfinals`, `Semifinals`, or `Finals`, preferring the highest-stakes round present (Finals >
     Semifinals > Quarterfinals) — and must **never** be built around a **consolation/losers** game
     (`playoff_round` of `Winners Consolation` or `Losers Bracket`); those may still appear in the body.
-  - **Name / fact-fidelity guardrail (required in the prompt)** unchanged: use team and manager/display
+  - **Name / fact-fidelity guardrail (required in the prompt):** use team and manager/display
     names **exactly as provided**, **never invent real names or facts** (`chris_j` stays
     "Chris"/"chris_j", never "Chris Johnson"); every number, player, and outcome must trace to the input.
-    An obvious deduction from the data is allowed.
+  - **Future-reference guardrail (required in the prompt):** looking ahead is allowed by default — the
+    base prompt lets a recap discuss upcoming matchups, playoff implications, and what the week means for
+    the rest of the season (framed as prediction, never an invented future result stated as fact). The one
+    exception is the **Finals**, which has no next week: `generate_recap` inspects the highlights and, when
+    **any** matchup carries a `playoff_round` of **`Finals`** (`_has_finals`), appends a `_FINALS_DIRECTIVE`
+    to the system prompt that **forbids** any next-week / next-round / future-matchup talk and tells the
+    model to crown the champion and close the book. The lockout is **data-gated** — present exactly when a
+    Finals game is in the week, rather than relying on the model to recognize the terminal round itself —
+    which is the deterministic fix for a Finals recap once claiming the champion advanced to a nonexistent
+    following week.
 - **Enqueue — `src/common/recap_queue.py`** (`record_pending_recap(...)`, vendored into webhook +
   processor): writes an **idempotent** pending marker (`PK=RECAP_QUEUE`,
   `SK=PENDING#{canonical_league_id}`, `status="pending"`, plus `correlation_id`/`trace_context`). **One
@@ -155,6 +164,9 @@ generation time** (a few seconds each), so a backlog clears over one or more 15-
       recap for members and 404s for a week not yet generated.
 - [ ] Recaps use team/manager names exactly as provided and contain no fabricated names, stats, or events
       not present in the highlights.
+- [ ] A non-Finals recap may discuss upcoming matchups and playoff implications; a week whose highlights
+      contain a `Finals` matchup is sent the Finals directive and its recap makes no next-week / next-round /
+      future-matchup claim (no "reaches the finals next week").
 - [ ] On a **playoff week**, the headline centers on a **winner's bracket** game (Finals/Semifinals/
       Quarterfinals) and not on a consolation or losers-bracket game.
 - [ ] The Bedrock batch pipeline (drainer + completion Lambdas, batch bucket, batch/Marketplace IAM,

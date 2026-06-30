@@ -130,3 +130,64 @@ class TestParseRecap:
         assert "playoff_round" in prompt
         assert "Winners Consolation" in prompt
         assert "Losers Bracket" in prompt
+
+    def test_system_prompt_allows_looking_ahead_by_default(self):
+        prompt = recap_llm._SYSTEM_PROMPT
+        # Forward-looking talk is allowed in general...
+        assert "Looking ahead is fine" in prompt
+        # ...and the Finals lockout is NOT baked into the base prompt (it is appended
+        # only on a Finals week by _build_system_prompt).
+        assert "THIS IS THE FINALS" not in prompt
+        # The prior blanket allowance that licensed fabricated forward matchups is gone.
+        assert "obvious deductions" not in prompt
+
+
+class TestFinalsGating:
+    def test_has_finals_true_when_any_matchup_is_finals(self):
+        highlights = {
+            "matchups": [
+                {"playoff_round": "Semifinals"},
+                {"playoff_round": "Finals"},
+            ]
+        }
+        assert recap_llm._has_finals(highlights) is True
+
+    @pytest.mark.parametrize(
+        "highlights",
+        [
+            {"matchups": []},
+            {"matchups": [{"playoff_round": None}, {"playoff_round": "Semifinals"}]},
+            {},
+        ],
+    )
+    def test_has_finals_false_without_finals_matchup(self, highlights):
+        assert recap_llm._has_finals(highlights) is False
+
+    def test_build_system_prompt_appends_finals_directive(self):
+        prompt = recap_llm._build_system_prompt(
+            {"matchups": [{"playoff_round": "Finals"}]}
+        )
+        assert prompt.startswith(recap_llm._SYSTEM_PROMPT)
+        assert recap_llm._FINALS_DIRECTIVE in prompt
+        assert "THIS IS THE FINALS" in prompt
+
+    def test_build_system_prompt_base_only_without_finals(self):
+        assert (
+            recap_llm._build_system_prompt(
+                {"matchups": [{"playoff_round": "Semifinals"}]}
+            )
+            == recap_llm._SYSTEM_PROMPT
+        )
+
+    def test_generate_recap_sends_finals_directive_for_finals_week(self):
+        client = MagicMock()
+        client.messages.create.return_value = _response("Champ Crowned\n\nBody.")
+        highlights = {
+            "season": "2024",
+            "week": 17,
+            "matchups": [{"playoff_round": "Finals"}],
+        }
+        with patch.object(recap_llm, "_client", client):
+            recap_llm.generate_recap(highlights)
+        sent_system = client.messages.create.call_args.kwargs["system"]
+        assert recap_llm._FINALS_DIRECTIVE in sent_system

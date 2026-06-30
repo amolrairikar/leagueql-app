@@ -60,9 +60,27 @@ _SYSTEM_PROMPT = (
     "- Never invent statistics, scores, players, injuries, transactions, or events "
     "that are not present in the provided highlights. Every number, player, and "
     "outcome you mention must trace directly to the input.\n"
-    "- You MAY state obvious deductions that follow from the data (e.g. that the two "
-    "semifinal winners will meet in the final). That is not fabrication.\n"
+    "- Looking ahead is fine: you may discuss upcoming matchups, playoff implications, "
+    "and what the week means for the rest of the season. Keep any such speculation "
+    "clearly framed as a prediction, and never present an invented future result as a "
+    "fact that already happened.\n"
     "If a detail is not in the highlights, leave it out."
+)
+
+# Appended to the system prompt ONLY for a week whose highlights contain a 'Finals'
+# matchup (see :func:`_has_finals`). The Finals is the last game of the season, so any
+# "next week" / "next round" talk is necessarily fabricated — a Finals recap once
+# claimed the champion advanced to a nonexistent following week. Gating this on the data
+# (rather than trusting the model to recognize the terminal round) makes the lockout
+# deterministic: it is present exactly when a Finals game is.
+_FINALS_DIRECTIVE = (
+    "THIS IS THE FINALS — THE LAST GAME OF THE SEASON:\n"
+    "- One or more matchups this week has a 'playoff_round' of 'Finals'. The bracket is "
+    "OVER: the winner is the league champion and there is NO next week, next round, or "
+    "future matchup.\n"
+    "- Do NOT speculate about, predict, or imply any game beyond this one. Overriding the "
+    "general 'looking ahead is fine' guidance, here you must NOT mention a future matchup, "
+    "a next round, or the season continuing. Crown the champion and close the book."
 )
 
 # Cap output so a single recap stays bounded (and cheap) regardless of how many
@@ -95,6 +113,26 @@ def _get_client():
     return _client
 
 
+def _has_finals(highlights: dict) -> bool:
+    """True when any matchup in the week is a 'Finals' game (the terminal round)."""
+    return any(
+        (matchup.get("playoff_round") or "") == "Finals"
+        for matchup in highlights.get("matchups", [])
+    )
+
+
+def _build_system_prompt(highlights: dict) -> str:
+    """Base voice/fidelity prompt, plus the Finals lockout on a Finals week.
+
+    Forward-looking talk is allowed in general, but a week containing a 'Finals' matchup
+    has no next week to look ahead to, so the deterministic ``_FINALS_DIRECTIVE`` is
+    appended to forbid any future-matchup speculation there.
+    """
+    if _has_finals(highlights):
+        return f"{_SYSTEM_PROMPT}\n\n{_FINALS_DIRECTIVE}"
+    return _SYSTEM_PROMPT
+
+
 def generate_recap(highlights: dict) -> dict:
     """Generate one week's recap synchronously and parse it into ``{headline, body}``.
 
@@ -114,7 +152,7 @@ def generate_recap(highlights: dict) -> dict:
         model=os.environ["RECAP_MODEL_ID"],
         max_tokens=_MAX_GEN_LEN,
         temperature=_TEMPERATURE,
-        system=_SYSTEM_PROMPT,
+        system=_build_system_prompt(highlights),
         messages=[{"role": "user", "content": json.dumps(highlights)}],
     )
     if response.stop_reason == "max_tokens":
