@@ -49,6 +49,13 @@ PREMIUM_FEATURE = "premium_feature"
 # Surfaced to the SPA via GET /feature-flags; the backend enforces nothing.
 BANNER = "banner"
 
+# Kill-switch for AI weekly matchup recap generation (BE-022). Unlike every other
+# flag this one defaults **ON**: recaps run unless the config explicitly carries
+# ``{"recap": {"enabled": false}}``. This lets a single environment (e.g. DEV)
+# suppress the per-generation LLM spend without a prod SSM change, while billing
+# stays on so subscription features remain testable. See ``is_recap_enabled``.
+RECAP = "recap"
+
 # The variant names are cosmetic; what matters is the boolean each maps to.
 _ON = "on"
 _OFF = "off"
@@ -153,6 +160,21 @@ def is_enabled(flag_name: str) -> bool:
 def is_billing_enabled() -> bool:
     """Return whether Stripe billing (BE-014 / BE-015) is enabled."""
     return is_enabled("billing")
+
+
+def is_recap_enabled() -> bool:
+    """Return whether AI recap generation is enabled (default: **on**).
+
+    Recaps are a kill-switch, not a normal opt-in flag: they run unless the
+    feature-flag config explicitly carries ``{"recap": {"enabled": false}}``. An
+    absent flag — including local dev and tests with no SSM source — leaves recaps
+    enabled, so passing ``True`` as the OpenFeature default returns ``True`` for an
+    unregistered flag and ``False`` only when the flag is registered OFF. This lets
+    DEV suppress the LLM spend by adding the flag OFF, with no prod change (BE-022).
+    """
+    if _flags_enabled:
+        _refresh_if_stale()
+    return _client.get_boolean_value(RECAP, True)
 
 
 def is_feature_paywalled(flag_name: str) -> bool:

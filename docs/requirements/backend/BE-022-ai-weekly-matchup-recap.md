@@ -68,11 +68,14 @@ generation time** (a few seconds each), so a backlog clears over one or more 15-
 - **Enqueue — `src/common/recap_queue.py`** (`record_pending_recap(...)`, vendored into webhook +
   processor): writes an **idempotent** pending marker (`PK=RECAP_QUEUE`,
   `SK=PENDING#{canonical_league_id}`, `status="pending"`, plus `correlation_id`/`trace_context`). **One
-  marker per league** (a re-trigger refreshes it). No-op when billing is disabled or in the **non-east
-  region**; a failed put is swallowed so enqueue never fails the webhook (still 200) or the processor run.
+  marker per league** (a re-trigger refreshes it). No-op when billing is disabled, the `recap`
+  kill-switch flag is OFF ([BE-017](BE-017-feature-flags.md)), or in the **non-east region**; a failed
+  put is swallowed so enqueue never fails the webhook (still 200) or the processor run.
 - **Generator — `src/recap_generator/handler.py`** (east-only Fargate task; container entrypoint `main()`
   run via `python handler.py`; EventBridge cron, every 15 min):
-  - No-op when `is_billing_enabled()` ([BE-017](BE-017-feature-flags.md)) is off.
+  - No-op when `is_billing_enabled()` is off, or when the `recap` kill-switch flag is OFF
+    (`is_recap_enabled()` false, [BE-017](BE-017-feature-flags.md)) — the latter lets DEV suppress the
+    LLM spend while `billing` stays on for subscription testing.
   - Query all `PK=RECAP_QUEUE` `PENDING#` markers.
   - **Per league, premium gate before any spend:** read the `METADATA` item; when the premium feature is
     paywalled (`is_feature_paywalled("premium_feature")`) and the league is **not** active
@@ -129,6 +132,9 @@ generation time** (a few seconds each), so a backlog clears over one or more 15-
 - **Non-premium league:** the generator's premium gate deletes the marker and generates nothing → no
   spend. (Trigger A only fires on a real activation.)
 - **Billing disabled (BE-017):** enqueue no-ops and the generator no-ops; nothing is generated.
+- **`recap` kill-switch OFF (BE-017):** enqueue and the generator both no-op even while `billing`
+  is ON — no LLM spend — so DEV can exercise subscription features without paying for recaps. The
+  flag defaults ON (absent ⇒ recaps run), so prod needs no change.
 - **No matchup data for a league/season:** the league contributes zero weeks; no error; marker cleared.
 - **Already-recapped week:** skipped by the existence check before generation; the conditional put also
   makes a concurrent duplicate write a harmless no-op. **Never** regenerated once written.
@@ -154,6 +160,8 @@ generation time** (a few seconds each), so a backlog clears over one or more 15-
 - [ ] A **non-premium** league (paywalled + no active subscription) generates **nothing** and incurs no
       spend — the generator's gate deletes its marker.
 - [ ] With billing disabled, both enqueue and the generator no-op immediately.
+- [ ] With the `recap` kill-switch flag OFF (and `billing` ON), both enqueue and the generator no-op
+      immediately — no LLM spend; with the flag absent, recaps run as normal.
 - [ ] A per-week generation failure **leaves the league's marker pending** (next run retries) while the
       other weeks are still written; a write that loses the conditional-put race is treated as
       already-written, not a failure.

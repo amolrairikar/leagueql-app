@@ -42,6 +42,17 @@ UI. `banner` is one such flag: it gates the in-app informational banner
 ([FE-030](../frontend/FE-030-informational-banner.md)). The backend enforces nothing for it —
 it is resolved like any other flag and surfaced to the SPA via `GET /feature-flags`.
 
+The **`recap`** flag is a backend-only **kill-switch** for AI weekly matchup recap generation
+([BE-022](BE-022-ai-weekly-matchup-recap.md)). Unlike every other flag it **defaults ON**:
+recaps run unless the parameter explicitly carries `{"recap": {"enabled": false}}`. The helper
+`is_recap_enabled()` returns `_client.get_boolean_value("recap", True)` — an unregistered flag
+falls back to the `True` default (recaps on), and only a flag registered OFF returns `False`. The
+recap **enqueue** (`record_pending_recap`) and the **generator** (`recap_generator`) each no-op
+when it is off, so a single environment (e.g. DEV) can suppress the per-generation LLM spend by
+adding the flag OFF **while `billing` stays on** (subscription features remain testable), with no
+prod SSM change. It is not exposed via `GET /feature-flags` (backend enforcement only; the read
+path already shows nothing when no recap exists).
+
 The frontend resolves the same flags at runtime via the public `GET /feature-flags` endpoint
 ([FE-026](../frontend/FE-026-feature-flags.md)); both tiers read the same SSM source, so
 they always agree.
@@ -61,9 +72,10 @@ they always agree.
   is set) via the `ssm` `GetParameter` API with a small in-process TTL cache (an initial fetch at
   cold start → re-fetch on a TTL, `FEATURE_FLAGS_TTL_SECONDS`, default 45s), registers an
   OpenFeature `InMemoryProvider`, and exposes `is_enabled(name)`, `is_billing_enabled()`, and
-  `is_feature_paywalled(flag_name)` (= `is_billing_enabled() and is_enabled(flag_name)`), plus the
-  `PREMIUM_FEATURE` (shared premium-feature) and `BANNER` (FE-030) flag-name constants. A test-only
-  `_override_for_testing({...})` swaps the active flag map.
+  `is_feature_paywalled(flag_name)` (= `is_billing_enabled() and is_enabled(flag_name)`), and
+  `is_recap_enabled()` (= `get_boolean_value("recap", True)`, the default-on recap kill-switch),
+  plus the `PREMIUM_FEATURE` (shared premium-feature), `BANNER` (FE-030), and `RECAP` (BE-022)
+  flag-name constants. A test-only `_override_for_testing({...})` swaps the active flag map.
 - Source of truth: an AWS SSM Parameter Store parameter (per environment, per region) named
   `/leagueql/<env>/feature-flags`, serving the same `{ "billing": { "enabled": false }, ... }` JSON
   shape the module parses. Like the Stripe/Axiom/Discord SSM values, it is **created and edited
@@ -80,6 +92,10 @@ they always agree.
     returns early when `is_feature_paywalled(paywall_flag)` is false (billing off or the
     feature's flag off). No production endpoint calls it yet.
   - `src/stripe_webhook/handler.py` — `lambda_handler` returns a `200` no-op when billing is off.
+  - `src/common/recap_queue.py` — `record_pending_recap` no-ops when `is_recap_enabled()` is off
+    (in addition to the billing/region no-ops).
+  - `src/recap_generator/handler.py` — `_handle` returns `{"status": "skipped",
+    "reason": "recap_disabled"}` when `is_recap_enabled()` is off, before any LLM spend.
 - Dependency: `openfeature-sdk` + `boto3` (boto3/botocore already present). `FEATURE_FLAGS_SSM_PARAM`
   is set on the API and stripe_webhook Lambdas (`infrastructure/regional/main.tf`); the execution
   roles grant `ssm:GetParameter` on the feature-flag parameter in both regions
@@ -100,6 +116,8 @@ they always agree.
 - **Parameter missing / never populated:** `GetParameter` raises `ParameterNotFound`, treated as a
   fetch error → all off on the initial load.
 - **Unknown flag name / spec without `enabled`:** `is_enabled` returns the `False` default.
+- **`recap` flag absent (default / local / tests):** `is_recap_enabled()` falls back to its `True`
+  default, so recaps stay on; only an explicit `{"recap": {"enabled": false}}` disables them.
 - **Toggle latency:** a console edit takes effect after the next TTL refresh
   (≤ `FEATURE_FLAGS_TTL_SECONDS`) — seconds, not instant.
 
@@ -118,10 +136,15 @@ they always agree.
 - [ ] Editing the feature-flag parameter value in the SSM console changes backend behavior within
       the TTL window **without a redeploy**.
 - [ ] `GET /feature-flags` is unauthenticated and returns the resolved global flag map.
+- [ ] `is_recap_enabled()` defaults **on** (`True`) when the `recap` flag is absent, and only an
+      explicit `{"recap": {"enabled": false}}` returns `False`.
+- [ ] With `recap` OFF, both `record_pending_recap` and the recap generator no-op (no LLM spend)
+      even while `billing` is ON.
 
 ## Sources
 `src/common/feature_flags.py`, `src/api/routes.py` (`get_feature_flags`, billing endpoints),
-`src/api/helpers.py`, `src/stripe_webhook/handler.py`,
+`src/api/helpers.py`, `src/stripe_webhook/handler.py`, `src/common/recap_queue.py`,
+`src/recap_generator/handler.py` (`recap` kill-switch, BE-022),
 `infrastructure/regional/main.tf`, `infrastructure/global/{dev,prod}/main.tf`
 (`ssm:GetParameter` grants; the parameter itself is set out-of-band), `docs/api/openapi_spec.yaml`
 (`/feature-flags`),

@@ -167,6 +167,17 @@ class TestGating:
         assert result["status"] == "skipped"
         gen.assert_not_called()
 
+    def test_recap_flag_disabled_skips(self, patched):
+        # Billing stays ON (subscription features still testable) but the recap
+        # kill-switch is OFF ⇒ the generator no-ops before any LLM spend (BE-017).
+        from common import feature_flags
+
+        generator, table, gen, throttle = patched
+        feature_flags._override_for_testing({"billing": True, "recap": False})
+        result = generator._handle()
+        assert result == {"status": "skipped", "reason": "recap_disabled"}
+        gen.assert_not_called()
+
     def test_no_markers_completes(self, generator):
         table = make_table(
             markers=[],

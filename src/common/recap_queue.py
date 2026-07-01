@@ -10,8 +10,9 @@ re-trigger of a ``pending`` league simply refreshes the marker, so the queue nev
 duplicates. (The conditional put still guards against clobbering a legacy ``in_flight``
 status, which the single-consumer generator never sets — a harmless no-op.)
 
-No-op when billing is disabled or in the non-east region (``RECAP_QUEUE_TABLE``
-unset). A failed put is swallowed so enqueue never fails the webhook or the processor.
+No-op when billing is disabled, the ``recap`` kill-switch flag is OFF (BE-017), or in
+the non-east region (``RECAP_QUEUE_TABLE`` unset). A failed put is swallowed so enqueue
+never fails the webhook or the processor.
 """
 
 import datetime
@@ -21,7 +22,7 @@ import os
 import boto3
 from botocore.exceptions import ClientError
 
-from common.feature_flags import is_billing_enabled
+from common.feature_flags import is_billing_enabled, is_recap_enabled
 from common.logging_utils import logger
 from common.tracing import inject_context
 
@@ -51,6 +52,9 @@ def record_pending_recap(
         return
     if not is_billing_enabled():
         logger.info("Billing disabled; skipping recap enqueue")
+        return
+    if not is_recap_enabled():
+        logger.info("Recaps disabled by feature flag; skipping recap enqueue")
         return
 
     item = {

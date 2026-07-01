@@ -14,6 +14,9 @@ pending marker is deleted only when **all** its missing weeks were written; if a
 raised, the marker is left pending so the next scheduled run retries the rest. Running as
 a Fargate task (not a Lambda) means a large backlog drains in one run without a 15-minute
 timeout. Roots its own trace (BE-021).
+
+No-ops when billing is disabled or the ``recap`` kill-switch flag is OFF (BE-017) — the
+latter lets DEV suppress the LLM spend while keeping billing on for subscription testing.
 """
 
 import datetime
@@ -30,6 +33,7 @@ from common.feature_flags import (
     PREMIUM_FEATURE,
     is_billing_enabled,
     is_feature_paywalled,
+    is_recap_enabled,
 )
 from common.logging_utils import correlation_id_var, logger
 from common.recap_llm import generate_recap
@@ -80,6 +84,10 @@ def _handle() -> dict:
     if not is_billing_enabled():
         logger.info("Billing disabled; recap generator skipped")
         return {"status": "skipped", "reason": "billing_disabled"}
+
+    if not is_recap_enabled():
+        logger.info("Recaps disabled by feature flag; recap generator skipped")
+        return {"status": "skipped", "reason": "recap_disabled"}
 
     markers = _get_pending_markers()
     if not markers:

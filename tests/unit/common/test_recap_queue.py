@@ -75,6 +75,12 @@ class TestRecordPendingRecap:
         recap_queue.record_pending_recap(canonical_league_id="123")
         table.put_item.assert_not_called()
 
+    def test_noop_when_recap_flag_disabled(self, table):
+        # Billing stays ON but the recap kill-switch is OFF ⇒ no enqueue (BE-017).
+        feature_flags._override_for_testing({"billing": True, "recap": False})
+        recap_queue.record_pending_recap(canonical_league_id="123")
+        table.put_item.assert_not_called()
+
     def test_inflight_conflict_is_swallowed(self, table):
         table.put_item.side_effect = _conditional_error()
         # Must not raise.
