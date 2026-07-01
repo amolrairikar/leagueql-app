@@ -92,6 +92,17 @@ def build_provider(service_name: str):
     BotocoreInstrumentor().instrument()
     RequestsInstrumentor().instrument()
 
+    # The recap generator talks to the Anthropic API over httpx (BE-022); instrument it
+    # when the optional package is present so the LLM call shows up as a child span.
+    # Guarded so every other handler — which doesn't ship the httpx instrumentation —
+    # still builds a provider without it.
+    try:
+        from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+
+        HTTPXClientInstrumentor().instrument()
+    except Exception:
+        logger.info("httpx OTel instrumentation unavailable; skipping")
+
     _provider = provider
     return provider
 

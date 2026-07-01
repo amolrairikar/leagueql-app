@@ -62,6 +62,16 @@ event-driven webhook.
   `subscription_end_time` to the past (gate flips to expired live). When the recorded
   subscription is *trialing*, it also writes the durable `TRIAL_USED` record keyed by the
   `(platform, native_league_id)` read from the subscription metadata (see the trial edge case).
+  When `record_active_subscription(...)` returns `True` (a real activation, not a stale/duplicate
+  no-op), the webhook also fire-and-forget launches the recap-generator **Fargate task** (via
+  `common.recap_task.run_recap_task` → `ecs:RunTask`, [BE-022](BE-022-ai-weekly-matchup-recap.md)) to
+  backfill the newly-premium league's weekly recaps; a failed launch is swallowed (the webhook still
+  returns 200). The webhook is now an **OTel-traced Lambda**
+  ([BE-021](BE-021-async-chain-otel-propagation.md)): it calls
+  `init_tracing("leagueql-stripe-webhook")` at module load and wraps `lambda_handler` in
+  `traced_handler("stripe_webhook.handle", root=True)` (Stripe delivers over HTTP with no inbound
+  W3C context, so it starts a **root** span), which parents the recap task's span so the activation
+  path is one continuous trace.
 - **Billing portal endpoint** (Clerk-authed): `POST /billing-portal-session` — returns a
   Stripe Billing Portal URL for the user's Customer (update card / cancel). Cancellation is
   configured to take effect **immediately** (not at period end). Backs the frontend "Manage

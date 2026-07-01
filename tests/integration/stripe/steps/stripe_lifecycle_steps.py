@@ -65,6 +65,11 @@ def _create_subscription(context, *, payment_method, trial_period_days=None):
             "canonical_league_id": context.test_canonical_id,
             "platform": context.platform,
             "native_league_id": context.test_league_id,
+            # Marks this as a CI subscription so the deployed webhook converges
+            # subscription state (what these scenarios assert) but skips the
+            # recap enqueue — no Bedrock spend / recap writes on the shared dev
+            # league (BE-022).
+            "integration_test": "leagueql-stripe-lifecycle",
         },
     }
     if trial_period_days is not None:

@@ -12,6 +12,7 @@ Feature: Onboard-to-processed pipeline (BE-001, BE-004)
     And a METADATA item exists for the onboarded league
     When the processor processes the onboarded league
     Then a JOB_STATUS "COMPLETED" exists for the job
+    And the recap generator was invoked after processing
     And the league has at least one "TEAMS#2024" item
     And the league has at least one "MATCHUPS#2024" item
     And the league has at least one "STANDINGS#2024" item

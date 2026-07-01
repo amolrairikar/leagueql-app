@@ -268,6 +268,83 @@ class TestProcessingFailure:
         patched.ddb.put_item.assert_not_called()
 
 
+class TestRecapTrigger:
+    """The webhook launches the recap task only on a real activation (BE-022)."""
+
+    def _active_event(self, patched):
+        patched.stripe.Webhook.construct_event.return_value = _stripe_event(
+            "checkout.session.completed", {"subscription": "sub_1"}
+        )
+        patched.stripe.Subscription.retrieve.return_value = {
+            "status": "active",
+            "current_period_end": _FUTURE_TS,
+            "metadata": {
+                "canonical_league_id": "cid",
+                "platform": "ESPN",
+                "native_league_id": "999",
+            },
+        }
+
+    def test_enqueues_recap_when_subscription_advances(self, patched):
+        self._active_event(patched)
+        patched.record.return_value = True  # a real advance
+        with patch.object(patched.wh, "record_pending_recap") as enqueue:
+            resp = patched.wh.lambda_handler(_event(), None)
+        assert resp["statusCode"] == 200
+        enqueue.assert_called_once_with(
+            canonical_league_id="cid",
+            platform="ESPN",
+            native_league_id="999",
+            correlation_id="",
+        )
+
+    def test_does_not_fire_when_subscription_is_noop(self, patched):
+        self._active_event(patched)
+        patched.record.return_value = False  # stale/duplicate, non-advancing
+        with patch.object(patched.wh, "record_pending_recap") as enqueue:
+            resp = patched.wh.lambda_handler(_event(), None)
+        assert resp["statusCode"] == 200
+        enqueue.assert_not_called()
+
+    def test_does_not_fire_for_integration_test_subscription(self, patched):
+        # CI lifecycle subscriptions advance state (so subscription_end_time still
+        # converges) but carry an integration_test marker, so the recap enqueue is
+        # skipped — no Bedrock spend on the shared dev league (BE-022).
+        self._active_event(patched)
+        patched.stripe.Subscription.retrieve.return_value["metadata"][
+            "integration_test"
+        ] = "leagueql-stripe-lifecycle"
+        patched.record.return_value = True  # a real advance
+        with patch.object(patched.wh, "record_pending_recap") as enqueue:
+            resp = patched.wh.lambda_handler(_event(), None)
+        assert resp["statusCode"] == 200
+        enqueue.assert_not_called()
+
+
+class TestTracing:
+    """The webhook is a traced Lambda starting a root span (BE-021)."""
+
+    def test_lambda_handler_wraps_in_root_span(self, webhook_handler):
+        with (
+            patch.object(
+                webhook_handler, "_handle", return_value={"statusCode": 200}
+            ) as impl,
+            patch.object(webhook_handler, "traced_handler") as th,
+        ):
+            result = webhook_handler.lambda_handler(_event(), None)
+        assert result == {"statusCode": 200}
+        th.assert_called_once_with("stripe_webhook.handle", root=True)
+        impl.assert_called_once()
+
+    def test_returns_200_with_tracing_unconfigured(self, patched):
+        # The real (no-op) traced_handler is used here; behavior is unchanged.
+        patched.stripe.Webhook.construct_event.return_value = _stripe_event(
+            "unhandled.event", {}
+        )
+        resp = patched.wh.lambda_handler(_event(), None)
+        assert resp["statusCode"] == 200
+
+
 class TestHelpers:
     def test_current_period_end_falls_back_to_items(self, webhook_handler):
         sub = {"items": {"data": [{"current_period_end": _FUTURE_TS}]}}

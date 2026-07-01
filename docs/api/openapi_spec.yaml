@@ -220,6 +220,7 @@ paths:
               - MATCHUPS
               - SEASON_STANDINGS
               - TRANSACTIONS
+              - MATCHUP_RECAP
             example: "SEASON_STANDINGS"
       responses:
         "200":

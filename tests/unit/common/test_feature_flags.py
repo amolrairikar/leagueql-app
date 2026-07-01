@@ -100,6 +100,22 @@ class TestIsFeaturePaywalled:
         assert ff.is_feature_paywalled("does-not-exist") is False
 
 
+class TestIsRecapEnabled:
+    def test_defaults_on_when_flag_absent(self):
+        # The recap kill-switch defaults ON: an absent flag (the common case,
+        # including local/tests) leaves recaps running.
+        ff._override_for_testing({"billing": True})
+        assert ff.is_recap_enabled() is True
+
+    def test_explicit_off_disables(self):
+        ff._override_for_testing({"billing": True, "recap": False})
+        assert ff.is_recap_enabled() is False
+
+    def test_explicit_on_enables(self):
+        ff._override_for_testing({"recap": True})
+        assert ff.is_recap_enabled() is True
+
+
 class TestIsEnabled:
     def test_unknown_flag_defaults_false(self):
         ff._override_for_testing({"billing": True})

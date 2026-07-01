@@ -14,6 +14,11 @@ variable "image_tag" {
   default     = "latest"
 }
 
+variable "recap_generator_image_tag" {
+  description = "Container image tag for the AI recap generator Fargate task (BE-022; content-addressed in CI)"
+  type        = string
+  default     = "latest"
+}
 
 variable "clerk_issuer_url" {
   description = "Clerk Frontend API URL, used as JWT issuer (e.g. https://xxx.clerk.accounts.dev)"

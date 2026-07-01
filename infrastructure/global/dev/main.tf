@@ -364,6 +364,8 @@ module "processing-lambda-role" {
           "${local.primary_bucket_arn}/player-stats/*"
         ]
       }
+      # BE-022: the processor enqueues a pending-recap marker via dynamodb:PutItem
+      # (covered by the DynamoDB write statement above); no ECS/RunTask grant needed.
     ]
   })
 
@@ -671,6 +673,236 @@ module "stripe-webhook-lambda-role" {
         Resource = [
           "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/feature-flags",
           "arn:aws:ssm:us-west-2:${var.account_id}:parameter/leagueql/${var.environment}/feature-flags"
+        ]
+      },
+      {
+        # BE-021: the webhook is now a traced Lambda and exports OTel spans to Axiom;
+        # the ingest token is a SecureString SSM parameter (set out-of-band, never in
+        # TF state). Grant read on both regions' copies.
+        Sid    = "ReadAxiomSsmParameter"
+        Effect = "Allow"
+        Action = [
+          "ssm:GetParameter"
+        ]
+        Resource = [
+          "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/axiom/api_token",
+          "arn:aws:ssm:us-west-2:${var.account_id}:parameter/leagueql/${var.environment}/axiom/api_token"
+        ]
+      }
+    ]
+  })
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    component   = "api"
+    managed-by  = "terraform"
+  }
+}
+
+# AI weekly matchup recaps (BE-022) run as a scheduled Fargate task that generates each
+# recap synchronously via the Anthropic API (Claude Haiku 4.5). Three IAM roles mirror
+# the Sleeper refresher's Fargate roles — the task role (app identity), the execution
+# role (ECR pull + logs), and the EventBridge-invoke role (RunTask) — plus the ECR repo
+# the CI-built image is pushed to.
+resource "aws_ecr_repository" "recap_generator" {
+  provider             = aws.primary
+  name                 = "leagueql-recap-generator-${var.environment}"
+  image_tag_mutability = "MUTABLE"
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    component   = "api"
+    managed-by  = "terraform"
+  }
+}
+
+resource "aws_ecr_lifecycle_policy" "recap_generator" {
+  provider   = aws.primary
+  repository = aws_ecr_repository.recap_generator.name
+
+  policy = jsonencode({
+    rules = [
+      {
+        rulePriority = 1
+        description  = "Keep only the last 10 images"
+        selection = {
+          tagStatus   = "any"
+          countType   = "imageCountMoreThan"
+          countNumber = 10
+        }
+        action = {
+          type = "expire"
+        }
+      }
+    ]
+  })
+}
+
+# Task role — the application identity the container assumes at runtime: reads the queue
+# + matchup/standings views, writes recap items, and reads the feature flags, Axiom
+# token, and Anthropic API key from SSM.
+module "recap-generator-task-role" {
+  source           = "../../modules/iam-role"
+  role_name        = "leagueql-${var.environment}-recap-generator-task-role"
+  role_description = "Task role for the AI weekly matchup recap generator Fargate task."
+  trust_policy_json = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action    = "sts:AssumeRole"
+        Effect    = "Allow"
+        Principal = { Service = "ecs-tasks.amazonaws.com" }
+      }
+    ]
+  })
+  role_policy_json = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "ReadWriteDynamoDB"
+        Effect = "Allow"
+        Action = [
+          "dynamodb:GetItem",
+          "dynamodb:Query",
+          "dynamodb:PutItem",
+          "dynamodb:UpdateItem",
+          "dynamodb:DeleteItem",
+          "dynamodb:BatchGetItem"
+        ]
+        Resource = [
+          module.dynamodb.primary_table_arn,
+          "${module.dynamodb.primary_table_arn}/index/GSI1"
+        ]
+      },
+      {
+        # BE-017: premium gate reads the global billing / premium_feature flags.
+        Sid    = "ReadFeatureFlagsSsmParameter"
+        Effect = "Allow"
+        Action = ["ssm:GetParameter"]
+        Resource = [
+          "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/feature-flags"
+        ]
+      },
+      {
+        # BE-022: the Anthropic API key (SecureString) fetched at runtime by name.
+        Sid    = "ReadAnthropicKeySsmParameter"
+        Effect = "Allow"
+        Action = ["ssm:GetParameter"]
+        Resource = [
+          "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/anthropic/api_key"
+        ]
+      },
+      {
+        # BE-021: export OTel spans to Axiom; token is a SecureString SSM parameter.
+        Sid    = "ReadAxiomSsmParameter"
+        Effect = "Allow"
+        Action = ["ssm:GetParameter"]
+        Resource = [
+          "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/axiom/api_token"
+        ]
+      }
+    ]
+  })
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    component   = "api"
+    managed-by  = "terraform"
+  }
+}
+
+# Execution role — used by the ECS agent (not the app) to pull the image from ECR and
+# ship container logs to the task's CloudWatch log group.
+module "recap-generator-task-exec-role" {
+  source           = "../../modules/iam-role"
+  role_name        = "leagueql-${var.environment}-recap-generator-task-exec-role"
+  role_description = "Execution role for the AI weekly matchup recap generator Fargate task."
+  trust_policy_json = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action    = "sts:AssumeRole"
+        Effect    = "Allow"
+        Principal = { Service = "ecs-tasks.amazonaws.com" }
+      }
+    ]
+  })
+  role_policy_json = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "ECRAuthToken"
+        Effect   = "Allow"
+        Action   = ["ecr:GetAuthorizationToken"]
+        Resource = "*"
+      },
+      {
+        Sid    = "ECRPull"
+        Effect = "Allow"
+        Action = [
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:BatchGetImage"
+        ]
+        Resource = [aws_ecr_repository.recap_generator.arn]
+      },
+      {
+        Sid    = "WriteTaskLogs"
+        Effect = "Allow"
+        Action = ["logs:CreateLogStream", "logs:PutLogEvents"]
+        Resource = [
+          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/ecs/leagueql-recap-generator-${var.environment}:*"
+        ]
+      }
+    ]
+  })
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    component   = "api"
+    managed-by  = "terraform"
+  }
+}
+
+# Invoke role assumed by the EventBridge schedule rule to launch the generator task.
+module "recap-generator-events-role" {
+  source           = "../../modules/iam-role"
+  role_name        = "leagueql-${var.environment}-recap-generator-events-role"
+  role_description = "Role assumed by EventBridge to run the AI recap generator task."
+  trust_policy_json = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action    = "sts:AssumeRole"
+        Effect    = "Allow"
+        Principal = { Service = "events.amazonaws.com" }
+      }
+    ]
+  })
+  role_policy_json = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "RunTask"
+        Effect   = "Allow"
+        Action   = ["ecs:RunTask"]
+        Resource = ["arn:aws:ecs:us-east-1:${var.account_id}:task-definition/leagueql-recap-generator-${var.environment}:*"]
+      },
+      {
+        Sid    = "PassTaskRoles"
+        Effect = "Allow"
+        Action = ["iam:PassRole"]
+        Resource = [
+          module.recap-generator-task-role.role_arn,
+          module.recap-generator-task-exec-role.role_arn
         ]
       }
     ]

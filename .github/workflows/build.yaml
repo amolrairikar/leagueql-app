@@ -166,6 +166,7 @@ jobs:
       ENVIRONMENT: ${{ needs.set-env.outputs.environment }}
     outputs:
       image_tag: ${{ steps.meta.outputs.image_tag }}
+      recap_image_tag: ${{ steps.meta.outputs.recap_image_tag }}
 
     steps:
       - name: Checkout code
@@ -185,49 +186,49 @@ jobs:
         env:
           AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
         run: |
-          # Content-addressed tag: a hash of the image's build inputs — the refresher
+          # Content-addressed tags: a hash of each image's build inputs — its source
           # directory (which includes the Dockerfile + requirements.txt) and the vendored
-          # common/ package. git rev-parse HEAD:<dir> is that directory's tree object, so
-          # the tag only changes when a file inside changes. As a result the task
-          # definition is re-registered only when the image content actually changes, not
-          # on every unrelated commit.
+          # common/ package. git rev-parse HEAD:<dir> is that directory's tree object, so a
+          # tag only changes when a file inside changes; the task definition is then
+          # re-registered only when the image content actually changes.
           TAG="$( { git rev-parse "HEAD:src/sleeper_player_stats_refresher"; \
                     git rev-parse "HEAD:src/common"; } | sha256sum | cut -c1-12 )"
+          RECAP_TAG="$( { git rev-parse "HEAD:src/recap_generator"; \
+                          git rev-parse "HEAD:src/common"; } | sha256sum | cut -c1-12 )"
           REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com"
-          REPO="leagueql-sleeper-player-stats-refresher-${ENVIRONMENT}"
           echo "image_tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "recap_image_tag=$RECAP_TAG" >> "$GITHUB_OUTPUT"
           echo "registry=$REGISTRY" >> "$GITHUB_OUTPUT"
-          echo "repo=$REPO" >> "$GITHUB_OUTPUT"
+          echo "sleeper_repo=leagueql-sleeper-player-stats-refresher-${ENVIRONMENT}" >> "$GITHUB_OUTPUT"
+          echo "recap_repo=leagueql-recap-generator-${ENVIRONMENT}" >> "$GITHUB_OUTPUT"
 
-      - name: Check whether image already exists in ECR
-        id: exists
+      - name: Build and push Fargate images
+        env:
+          REGISTRY: ${{ steps.meta.outputs.registry }}
         run: |
-          if aws ecr describe-images --region us-east-1 \
-               --repository-name "${{ steps.meta.outputs.repo }}" \
-               --image-ids imageTag="${{ steps.meta.outputs.image_tag }}" >/dev/null 2>&1; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-            echo "Image tag ${{ steps.meta.outputs.image_tag }} already in ECR — skipping build/push."
-          else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Log in to Amazon ECR
-        if: steps.exists.outputs.exists == 'false'
-        run: |
-          aws ecr get-login-password --region us-east-1 \
-            | docker login --username AWS --password-stdin "${{ steps.meta.outputs.registry }}"
-
-      - name: Build, tag, and push image
-        if: steps.exists.outputs.exists == 'false'
-        run: |
-          IMAGE="${{ steps.meta.outputs.registry }}/${{ steps.meta.outputs.repo }}"
-          docker build \
-            -f src/sleeper_player_stats_refresher/Dockerfile \
-            -t "$IMAGE:${{ steps.meta.outputs.image_tag }}" \
-            -t "$IMAGE:latest" \
-            ./src
-          docker push "$IMAGE:${{ steps.meta.outputs.image_tag }}"
-          docker push "$IMAGE:latest"
+          set -euo pipefail
+          login_done=false
+          # Build + push one image only when its content-addressed tag is not already
+          # in ECR. Shared ./src build context vendors common/ alongside each handler.
+          build_push() {
+            local repo="$1" tag="$2" dockerfile="$3"
+            if aws ecr describe-images --region us-east-1 \
+                 --repository-name "$repo" --image-ids imageTag="$tag" >/dev/null 2>&1; then
+              echo "Image $repo:$tag already in ECR — skipping build/push."
+              return 0
+            fi
+            if [ "$login_done" = false ]; then
+              aws ecr get-login-password --region us-east-1 \
+                | docker login --username AWS --password-stdin "$REGISTRY"
+              login_done=true
+            fi
+            local image="$REGISTRY/$repo"
+            docker build -f "$dockerfile" -t "$image:$tag" -t "$image:latest" ./src
+            docker push "$image:$tag"
+            docker push "$image:latest"
+          }
+          build_push "${{ steps.meta.outputs.sleeper_repo }}" "${{ steps.meta.outputs.image_tag }}" "src/sleeper_player_stats_refresher/Dockerfile"
+          build_push "${{ steps.meta.outputs.recap_repo }}" "${{ steps.meta.outputs.recap_image_tag }}" "src/recap_generator/Dockerfile"
 
   deploy-lambda-artifacts:
     name: Deploy Lambda Artifacts - ${{ needs.set-env.outputs.environment }}
@@ -338,6 +339,7 @@ jobs:
             -var="environment=${{ env.ENVIRONMENT }}" \
             -var="aws_region=${{ matrix.region }}" \
             -var="image_tag=${{ needs.deploy-fargate-image.outputs.image_tag }}" \
+            -var="recap_generator_image_tag=${{ needs.deploy-fargate-image.outputs.recap_image_tag }}" \
             -var="clerk_issuer_url=${{ env.CLERK_ISSUER_URL }}" \
             -var="clerk_jwt_audience=${{ secrets.CLERK_JWT_AUDIENCE }}"
 

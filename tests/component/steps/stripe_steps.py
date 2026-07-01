@@ -289,3 +289,18 @@ def step_no_webhook_marker(context, event_id):
 @then("the duplicate subscription was canceled")
 def step_dup_canceled(context):
     assert context.cancel_mock.called, "cancel not called"
+
+
+@then('the recap generator was invoked for league "{canonical}"')
+def step_recap_invoked_for_league(context, canonical):
+    # BE-022: a real activation enqueues a pending-recap marker (mocked spy).
+    spy = context.recap_enqueue_spy
+    assert spy.called, "recap enqueue was not called"
+    assert spy.call_args.kwargs["canonical_league_id"] == canonical
+
+
+@then("the recap generator was invoked {count:d} time")
+def step_recap_invoked_n_times(context, count):
+    assert context.recap_enqueue_spy.call_count == count, (
+        f"expected {count} recap enqueue(s), got {context.recap_enqueue_spy.call_count}"
+    )

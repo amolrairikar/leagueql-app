@@ -270,8 +270,8 @@ Represents matchups for a given week in the fantasy league.
 | `team_b_bench` | List\<Object\> | Team B's bench with player stats (see **PlayerStat** below) |
 | `team_b_primary_owner_id` | String | Platform user ID of team B's primary owner |
 | `team_b_secondary_owner_id` | String \| null | Platform user ID of team B's co-owner |
-| `playoff_tier_type` | String | Playoff bracket type. Enum: `NONE`, `WINNERS_BRACKET` |
-| `playoff_round` | String \| null | Human-readable round name (e.g. `"Semifinals"`); null for regular season |
+| `playoff_tier_type` | String | Playoff bracket type. Enum: `NONE`, `WINNERS_BRACKET`, `WINNERS_CONSOLATION_LADDER`, `LOSERS_BRACKET` |
+| `playoff_round` | String \| null | Human-readable round name; `WINNERS_BRACKET` → `"Quarterfinals"`/`"Semifinals"`/`"Finals"`, `WINNERS_CONSOLATION_LADDER` → `"Winners Consolation"`, `LOSERS_BRACKET` → `"Losers Bracket"`; null for regular season (`NONE`) |
 | `winner` | String | Team ID of the winner |
 | `loser` | String | Team ID of the loser |
 | `week` | String | Week number (e.g. `"1"`) |
@@ -320,6 +320,87 @@ Represents matchups for a given week in the fantasy league.
       "season": "2025"
     }
   ]
+}
+```
+</details>
+
+<details>
+<summary><b>MATCHUP_RECAP</b></summary>
+
+Caches the AI-written weekly recap column for a single completed week (BE-022). Built from the
+`MATCHUPS` view plus the week-accurate `WEEKLY_STANDINGS` snapshot (falling back to the final
+`STANDINGS` for playoff weeks) by the **recap-generator Fargate task**, which generates each recap
+synchronously via the Anthropic API (Claude Haiku 4.5) and writes the item directly; read back through
+the query API (`MATCHUP_RECAP#{season}#WEEK#{week}`). One item per `(season, week)`; written
+idempotently (`attribute_not_exists(SK)` conditional put) and never regenerated once present.
+
+| Attribute | Type | Required | Description |
+|---|---|---|---|
+| `PK` | String | Yes | `LEAGUE#{league_id}` |
+| `SK` | String | Yes | `MATCHUP_RECAP#{season}#WEEK#{week}` (week zero-padded to two digits, e.g. `MATCHUP_RECAP#2025#WEEK#01`) |
+| `data` | List\<Object\> | Yes | A single-element list holding the cached recap (a list so the query API and `queryLeague<RecapItem>` contract — which always return a list — hold, consistent with every other view) |
+
+**`data[0]` object:**
+
+| Attribute | Type | Description |
+|---|---|---|
+| `headline` | String | A single headline line for the week |
+| `body` | String | The recap prose; paragraphs joined by `\n\n` (no markdown) |
+| `generated_at` | String | ISO 8601 (UTC) timestamp the recap was generated |
+| `model` | String | The Anthropic model ID used (e.g. `claude-haiku-4-5`) |
+
+**Example:**
+```json
+{
+  "PK": "LEAGUE#123456789",
+  "SK": "MATCHUP_RECAP#2025#WEEK#01",
+  "data": [
+    {
+      "headline": "Week 1: Fireworks, Faceplants, and a Last-Second Heartbreak",
+      "body": "The season opened with a bang...\n\nMeanwhile, in the week's ugliest win...",
+      "generated_at": "2025-09-10T13:45:00+00:00",
+      "model": "claude-haiku-4-5"
+    }
+  ]
+}
+```
+</details>
+
+<details>
+<summary><b>RECAP_QUEUE / pending-recap marker</b></summary>
+
+A lightweight pending-work marker recording that a league needs a recap pass (BE-022). Written
+idempotently by the Stripe webhook (on activation) and the processor (at the end of every
+onboard/refresh) via `record_pending_recap`; **one marker per league** (a re-trigger refreshes it, so
+the queue never duplicates). The **recap-generator Fargate task** queries the `RECAP_QUEUE` partition
+each tick, generates each pending league's missing weeks synchronously, and deletes the marker once all
+of that league's weeks are written (leaving it pending if any week failed, for the next run to retry).
+These markers live in their own single partition (`PK=RECAP_QUEUE`), separate from the
+`LEAGUE#{league_id}` items, so the generator reads the whole queue with one query.
+
+| Attribute | Type | Required | Description |
+|---|---|---|---|
+| `PK` | String | Yes | `RECAP_QUEUE` (a single shared partition holding every pending marker) |
+| `SK` | String | Yes | `PENDING#{canonical_league_id}` (one marker per league) |
+| `canonical_league_id` | String | Yes | The league needing recaps |
+| `platform` | String | No | `espn` / `sleeper` (carried through for logging) |
+| `native_league_id` | String | No | Platform-native league id, when known |
+| `status` | String | Yes | `pending` (awaiting a generator run) |
+| `correlation_id` | String | No | Trigger correlation id, for log correlation |
+| `trace_context` | String | No | JSON W3C trace carrier from the trigger (log correlation only; the generator roots its own trace) |
+| `enqueued_at` | String | Yes | ISO 8601 (UTC) timestamp the marker was last written |
+
+**Example:**
+```json
+{
+  "PK": "RECAP_QUEUE",
+  "SK": "PENDING#123456789",
+  "canonical_league_id": "123456789",
+  "platform": "sleeper",
+  "status": "pending",
+  "correlation_id": "abc-123",
+  "trace_context": "{}",
+  "enqueued_at": "2025-09-10T13:40:00+00:00"
 }
 ```
 </details>

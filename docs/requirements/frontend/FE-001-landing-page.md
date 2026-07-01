@@ -17,8 +17,9 @@ Rendered with the marketing `Header` (not the app sidebar layout).
   Shows two subscription plans — **Monthly $1.99/month** and **Yearly $8.99/year** (the yearly
   plan is highlighted as the best value, ~62% cheaper than 12 monthly payments) — notes that all
   subscriptions come with a 14-day trial, and lists the **premium features** a subscription
-  unlocks (the **Schedule-swap simulator**, [FE-031](FE-031-schedule-swap-simulator.md), and
-  **Weekly awards**, [FE-032](FE-032-weekly-awards-superlatives.md)). Plans
+  unlocks (the **Schedule-swap simulator**, [FE-031](FE-031-schedule-swap-simulator.md),
+  **Weekly awards**, [FE-032](FE-032-weekly-awards-superlatives.md), and **Recaps** — the AI
+  matchup recap, [FE-037](FE-037-weekly-matchup-recap.md), with season recaps planned). Plans
   and premium features come from `PRICING_PLANS` / `PREMIUM_FEATURES` in `constants.ts`. The table
   is **informational** — there is no per-plan CTA (checkout needs a connected league), and the
   blurb notes a subscription is shared across the whole league (every member gets access) and that
