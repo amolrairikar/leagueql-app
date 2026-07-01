@@ -18,7 +18,11 @@ Rendered with the marketing `Header` (not the app sidebar layout).
   plan is highlighted as the best value, ~62% cheaper than 12 monthly payments) — notes that all
   subscriptions come with a 14-day trial, and lists the **premium features** a subscription
   unlocks (the **Schedule-swap simulator**, [FE-031](FE-031-schedule-swap-simulator.md),
-  **Weekly awards**, [FE-032](FE-032-weekly-awards-superlatives.md), and **Recaps** — the AI
+  **Weekly awards**, [FE-032](FE-032-weekly-awards-superlatives.md), the **Analytics page**,
+  [FE-033](FE-033-score-distribution-analytics.md) / [FE-034](FE-034-power-rankings-trend.md) /
+  [FE-036](FE-036-positional-scoring-breakdown.md), **Lineup efficiency**,
+  [FE-035](FE-035-lineup-efficiency.md), the **Draft value chart**,
+  [FE-038](FE-038-draft-value-scatter.md), and **Recaps** — the AI
   matchup recap, [FE-037](FE-037-weekly-matchup-recap.md), with season recaps planned). Plans
   and premium features come from `PRICING_PLANS` / `PREMIUM_FEATURES` in `constants.ts`. The table
   is **informational** — there is no per-plan CTA (checkout needs a connected league), and the

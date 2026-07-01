@@ -1,6 +1,21 @@
 import { type ReactNode, Suspense, use, useMemo, useState } from 'react';
 
+import {
+  ALL_POSITIONS,
+  computeDraftScatter,
+  positionLabel,
+} from './compute-draft-scatter';
+import { DraftScatterChart } from './draft-scatter-chart';
+
+import type { Platform } from '@/components/api/types';
 import { TeamAvatar } from '@/components/team-avatar';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import {
@@ -8,9 +23,11 @@ import {
   getDraftData,
 } from '@/features/draft_grades/api-calls';
 import SeasonSelect from '@/features/season_select/season-select';
+import { SubscriptionGuard } from '@/features/subscription/subscription-guard';
 import { avatarColor } from '@/lib/color-constants';
 import { positionColorMeta } from '@/lib/color-constants';
 import { getLeagueCookies, isDemoMode } from '@/lib/cookie-handler';
+import { isBillingEnabled } from '@/lib/feature-flags';
 import { type Result, toResult } from '@/lib/result';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -460,6 +477,115 @@ function DraftRecapContent({
   );
 }
 
+// ── Draft value scatter (premium) ─────────────────────────────────────────────
+
+function ScatterSkeleton() {
+  return (
+    <div className="p-3.5">
+      <Skeleton className="w-full h-80" />
+    </div>
+  );
+}
+
+// Reads the season's draft picks, filters them by the selected position, and
+// plots draft position vs. season points (FE-038). Its own component so the
+// SubscriptionGuard can leave it unmounted while locked — the DRAFT data is never
+// fetched then. Suspends on `promise`, so hooks run before the result branches.
+function DraftScatterInner({ promise }: { promise: Promise<DraftResult> }) {
+  const result = use(promise);
+  const [position, setPosition] = useState<string>(ALL_POSITIONS);
+
+  if (!result.ok) {
+    return (
+      <p className="text-[13px] text-muted-foreground text-center py-8">
+        {result.error}
+      </p>
+    );
+  }
+
+  const data = computeDraftScatter(result.data);
+
+  if (data.points.length === 0) {
+    return (
+      <p className="text-[13px] text-muted-foreground text-center py-8">
+        No scored draft picks to chart for this season yet.
+      </p>
+    );
+  }
+
+  const points =
+    position === ALL_POSITIONS
+      ? data.points
+      : data.points.filter((p) => p.position === position);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2.5">
+        <span className="text-[12px] font-medium text-muted-foreground">
+          Position
+        </span>
+        <Select value={position} onValueChange={setPosition}>
+          <SelectTrigger
+            size="sm"
+            className="w-40"
+            aria-label="Filter position"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL_POSITIONS}>All positions</SelectItem>
+            {data.positions.map((pos) => (
+              <SelectItem key={pos} value={pos}>
+                {positionLabel(pos)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <DraftScatterChart points={points} />
+    </div>
+  );
+}
+
+/**
+ * Premium scatterplot of draft position vs. season points for a season (FE-038),
+ * with a position dropdown filter. Fetches its own `DRAFT` data (the same
+ * `getDraftData` the board uses) so the {@link SubscriptionGuard} can leave it
+ * unmounted — and unfetched — while locked.
+ */
+export function DraftValueScatter({
+  leagueId,
+  platform,
+  season,
+  auction,
+}: {
+  leagueId: string;
+  platform: Platform;
+  season: string;
+  auction: boolean;
+}) {
+  const promise = useMemo(
+    (): Promise<DraftResult> =>
+      leagueId && season
+        ? toResult(
+            getDraftData(leagueId, platform, season, auction).then(
+              (res) => res.data,
+            ),
+            'Failed to load draft data.',
+          )
+        : Promise.resolve({ ok: true as const, data: [] }),
+    [leagueId, platform, season, auction],
+  );
+
+  return (
+    <div className="bg-card border border-border/50 rounded-lg p-5 overflow-x-auto">
+      <Suspense fallback={<ScatterSkeleton />}>
+        <DraftScatterInner promise={promise} />
+      </Suspense>
+    </div>
+  );
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function DraftRecap() {
@@ -502,6 +628,28 @@ export default function DraftRecap() {
             onDemoAuctionChange={setDemoAuction}
           />
         </Suspense>
+
+        {/* Premium draft-value scatter (FE-038). Gated on the billing master flag
+            too so the header doesn't orphan above a hidden section when billing
+            is off — the SubscriptionGuard renders nothing in that case. */}
+        {isBillingEnabled() && seasons.length > 0 && (
+          <div className="mt-8">
+            <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-2.5">
+              Draft value
+            </p>
+            <SubscriptionGuard
+              featureFlag="premium_feature"
+              featureLabel="Draft value"
+            >
+              <DraftValueScatter
+                leagueId={leagueId}
+                platform={platform}
+                season={selectedSeason}
+                auction={isDemo && demoAuction}
+              />
+            </SubscriptionGuard>
+          </div>
+        )}
       </div>
     </div>
   );

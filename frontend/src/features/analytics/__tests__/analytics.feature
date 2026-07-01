@@ -14,7 +14,7 @@ Feature: Weekly score distribution (FE-033)
     When I open the score distribution
     And I hover over the manager "Alice"
     Then I see the tooltip stat "Median"
-    And I see the tooltip stat "IQR"
+    And I see the tooltip stat "Std dev"
 
   Scenario: A season without regular-season data shows an empty state
     Given the season has no regular-season matchups

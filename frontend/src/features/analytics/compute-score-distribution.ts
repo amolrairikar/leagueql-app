@@ -1,7 +1,10 @@
 import type { MatchupItem } from '@/components/api/types';
 
-/** A manager's box-and-whisker stats over their regular-season weekly scores. */
-export interface BoxStats {
+/** Number of x-samples the shared density grid is evaluated on. */
+const GRID_SIZE = 80;
+
+/** A manager's ridgeline (joy-plot) stats over their regular-season weekly scores. */
+export interface RidgeStats {
   teamId: string;
   ownerUsername: string;
   teamName: string;
@@ -13,21 +16,25 @@ export interface BoxStats {
   median: number;
   q3: number;
   max: number;
+  mean: number;
   iqr: number;
-  /** Most extreme scores still within the Tukey fences (the whisker ends). */
-  whiskerLow: number;
-  whiskerHigh: number;
-  /** Scores outside `q1 - 1.5*iqr` … `q3 + 1.5*iqr`, ascending. */
-  outliers: number[];
+  /** Sample standard deviation of `scores`, or 0 for a single score. */
+  stdev: number;
+  /** Gaussian-KDE density sampled at each x in the shared {@link ScoreDistributionData.grid}. */
+  density: number[];
 }
 
 export interface ScoreDistributionData {
   /** Managers sorted by median desc, tie-broken on username. */
-  teams: BoxStats[];
+  teams: RidgeStats[];
   /** Smallest score across all managers (for a shared x-scale), or 0 when empty. */
   globalMin: number;
   /** Largest score across all managers (for a shared x-scale), or 0 when empty. */
   globalMax: number;
+  /** Shared x-grid every manager's `density` is sampled on (ascending). */
+  grid: number[];
+  /** Largest density value across all managers, for a shared vertical scale (at least 1). */
+  maxDensity: number;
 }
 
 /** A regular-season game is one with no playoff tier (`NONE` or absent). */
@@ -57,14 +64,62 @@ export function quantile(sorted: number[], p: number): number {
 }
 
 /**
- * Build per-manager weekly-score box-plot stats from a season's matchups (FE-033).
+ * Gaussian kernel-density estimate of `sorted` evaluated at each point in `grid`.
+ * Returns a proper density (integrates to ~1 over the real line).
+ */
+export function gaussianKde(
+  sorted: number[],
+  bandwidth: number,
+  grid: number[],
+): number[] {
+  const n = sorted.length;
+  const norm = 1 / (n * bandwidth * Math.sqrt(2 * Math.PI));
+  return grid.map((gx) => {
+    let sum = 0;
+    for (const s of sorted) {
+      const u = (gx - s) / bandwidth;
+      sum += Math.exp(-0.5 * u * u);
+    }
+    return sum * norm;
+  });
+}
+
+/** Sample (n-1) standard deviation, or 0 for fewer than two values. */
+export function sampleStdev(values: number[]): number {
+  const n = values.length;
+  if (n < 2) return 0;
+  const mean = values.reduce((a, b) => a + b, 0) / n;
+  const variance = values.reduce((a, s) => a + (s - mean) ** 2, 0) / (n - 1);
+  return Math.sqrt(variance);
+}
+
+/**
+ * Silverman's rule-of-thumb bandwidth, `0.9 * min(stdev, iqr/1.349) * n^(-1/5)`.
+ * Falls back to `fallback` (a small fraction of the global range) when the sample
+ * is degenerate — a single score or zero spread — so the ridge still renders.
+ */
+function bandwidthFor(
+  sorted: number[],
+  stdev: number,
+  iqr: number,
+  fallback: number,
+): number {
+  const n = sorted.length;
+  if (n < 2) return fallback;
+  const spread = iqr > 0 ? Math.min(stdev, iqr / 1.349) : stdev;
+  const bw = 0.9 * spread * Math.pow(n, -1 / 5);
+  return bw > 0 ? bw : fallback;
+}
+
+/**
+ * Build per-manager weekly-score ridgeline stats from a season's matchups (FE-033).
  *
  * Each matchup contributes its two scored sides as (team, score) points. Only
  * regular-season games count; byes (a side with no finite score) and self-matchup
  * placeholders (`team_a_id === team_b_id`) are skipped. Quartiles use linear
- * interpolation; whiskers extend to the most extreme points within the Tukey
- * fences (`q1 - 1.5*iqr` … `q3 + 1.5*iqr`), and points beyond the fences are
- * outliers. Managers are sorted by median desc, tie-broken on username.
+ * interpolation; each manager's distribution is smoothed into a Gaussian KDE curve
+ * sampled on a shared x-grid so the ridges are directly comparable. Managers are
+ * sorted by median desc, tie-broken on username.
  */
 export function computeScoreDistribution(
   matchups: MatchupItem[],
@@ -99,37 +154,24 @@ export function computeScoreDistribution(
     }
   }
 
-  const teams: BoxStats[] = [];
+  // First pass: five-number summary + mean for each manager.
+  const teams: RidgeStats[] = [];
   for (const [id, raw] of scoresByTeam) {
     const scores = [...raw].sort((a, b) => a - b);
-    const min = scores[0];
-    const max = scores[scores.length - 1];
     const q1 = quantile(scores, 0.25);
-    const median = quantile(scores, 0.5);
     const q3 = quantile(scores, 0.75);
-    const iqr = q3 - q1;
-    const lowFence = q1 - 1.5 * iqr;
-    const highFence = q3 + 1.5 * iqr;
-
-    const whiskerLow = scores.find((s) => s >= lowFence) ?? min;
-    let whiskerHigh = max;
-    for (const s of scores) {
-      if (s <= highFence) whiskerHigh = s;
-    }
-    const outliers = scores.filter((s) => s < lowFence || s > highFence);
-
     teams.push({
       ...meta.get(id)!,
       scores,
-      min,
+      min: scores[0],
       q1,
-      median,
+      median: quantile(scores, 0.5),
       q3,
-      max,
-      iqr,
-      whiskerLow,
-      whiskerHigh,
-      outliers,
+      max: scores[scores.length - 1],
+      mean: scores.reduce((a, b) => a + b, 0) / scores.length,
+      iqr: q3 - q1,
+      stdev: sampleStdev(scores),
+      density: [], // filled below, once the shared grid is known
     });
   }
 
@@ -141,5 +183,30 @@ export function computeScoreDistribution(
   const globalMin = teams.length ? Math.min(...teams.map((t) => t.min)) : 0;
   const globalMax = teams.length ? Math.max(...teams.map((t) => t.max)) : 0;
 
-  return { teams, globalMin, globalMax };
+  // Shared x-grid spanning the padded global range, plus a degenerate-sample
+  // bandwidth fallback keyed to that range.
+  const range = globalMax - globalMin || 1;
+  const lo = globalMin - range * 0.05;
+  const hi = globalMax + range * 0.05;
+  const grid = Array.from(
+    { length: GRID_SIZE },
+    (_, i) => lo + ((hi - lo) * i) / (GRID_SIZE - 1),
+  );
+  const fallbackBw = range * 0.03;
+
+  // Second pass: sample each manager's KDE onto the shared grid.
+  let maxDensity = 0;
+  for (const t of teams) {
+    const bw = bandwidthFor(t.scores, t.stdev, t.iqr, fallbackBw);
+    t.density = gaussianKde(t.scores, bw, grid);
+    for (const d of t.density) if (d > maxDensity) maxDensity = d;
+  }
+
+  return {
+    teams,
+    globalMin,
+    globalMax,
+    grid,
+    maxDensity: maxDensity || 1,
+  };
 }

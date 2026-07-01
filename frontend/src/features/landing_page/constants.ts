@@ -144,6 +144,10 @@ export const PREMIUM_FEATURES: PremiumFeature[] = [
     desc: 'See how many points each manager left on the bench each week: the optimal legal lineup vs. what they actually started, with a slot-by-slot start/sit report (FLEX/superflex aware).',
   },
   {
+    title: 'Draft value chart',
+    desc: "A scatterplot of every draft pick's position against their points scored so you can analyze trends on the best round to pick a particular position.",
+  },
+  {
     title: 'Recaps',
     desc: 'AI-written recap columns that turn your league’s data into narrative: a lighthearted-but-journalistic write-up of each week’s matchups.',
   },

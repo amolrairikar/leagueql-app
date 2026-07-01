@@ -8,12 +8,19 @@
  */
 import '@testing-library/jest-dom/vitest';
 
+import { configure } from '@testing-library/dom';
 import { afterAll, afterEach, beforeAll, beforeEach, vi } from 'vitest';
 
 import { server } from './msw/server';
 
 import { clearApiCache } from '@/lib/api-client';
 import { setFlagsForTesting } from '@/lib/feature-flags';
+
+// The default `findBy*` async timeout (1000ms) is too tight for a loaded CI
+// runner: async data load + render (e.g. the home dashboard's headline stats)
+// occasionally exceeds it there while passing locally, causing flaky
+// "Unable to find element" failures. Raise it globally for all component tests.
+configure({ asyncUtilTimeout: 5000 });
 
 vi.mock('@clerk/react', () => import('./clerk-mock'));
 

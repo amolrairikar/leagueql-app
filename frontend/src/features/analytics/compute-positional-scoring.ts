@@ -38,6 +38,11 @@ export const POSITION_ORDER = [
   OTHER_POSITION,
 ] as const;
 
+/** A regular-season game is one with no playoff tier (`NONE` or absent). */
+function isRegularSeason(m: MatchupItem): boolean {
+  return !m.playoff_tier_type || m.playoff_tier_type === 'NONE';
+}
+
 /** Coerce a starter's points to a finite number, treating junk as 0. */
 function points(p: PlayerStat): number {
   const n = Number(p.points_scored);
@@ -62,10 +67,11 @@ interface TeamMeta {
 }
 
 /**
- * Sum each manager's season starter points by real position (FE-036). Every
- * matchup counts — regular-season and playoff weeks alike — so all managers span
- * the same number of weeks; only byes (a side with no finite score) and
- * self-matchup placeholders (`team_a_id === team_b_id`) are skipped. FLEX and
+ * Sum each manager's season starter points by real position (FE-036). Only
+ * regular-season matchups count (a playoff tier other than `NONE` is skipped),
+ * matching the Score Distribution and Power Rankings charts; byes (a side with no
+ * finite score) and self-matchup placeholders (`team_a_id === team_b_id`) are also
+ * skipped. FLEX and
  * superflex points roll into the player's actual position (RB/WR/TE/QB), and any
  * position without a dedicated color folds into {@link OTHER_POSITION}. Managers
  * are returned sorted by total points (highest first), tie-broken on username.
@@ -89,6 +95,7 @@ export function computePositionalScoring(
   };
 
   for (const m of matchups) {
+    if (!isRegularSeason(m)) continue;
     if (m.team_a_id === m.team_b_id) continue;
     const aScore = Number(m.team_a_score);
     const bScore = Number(m.team_b_score);

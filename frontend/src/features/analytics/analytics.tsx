@@ -2,10 +2,10 @@ import { Info } from 'lucide-react';
 import { Suspense, use, useMemo, useState } from 'react';
 
 import { getSeasonMatchups, type MatchupItem } from './api-calls';
-import { BoxPlot } from './box-plot';
 import { computePositionalScoring } from './compute-positional-scoring';
 import { computePowerRankings } from './compute-power-rankings';
 import { computeScoreDistribution } from './compute-score-distribution';
+import { JoyPlot } from './joy-plot';
 import { PositionalScoringChart } from './positional-scoring-chart';
 import { PowerRankingsChart } from './power-rankings-chart';
 
@@ -49,7 +49,7 @@ function ScoreDistributionInner({
     );
   }
 
-  return <BoxPlot data={data} />;
+  return <JoyPlot data={data} />;
 }
 
 function SkeletonChart() {
@@ -188,7 +188,7 @@ export function PositionalScoring({
 }
 
 /**
- * Premium box-and-whisker chart of each manager's weekly scores for a season
+ * Premium ridgeline (joy) chart of each manager's weekly scores for a season
  * (FE-033). Kept as its own component so the {@link SubscriptionGuard} can leave
  * it unmounted while locked — its `MATCHUPS` data is never fetched then.
  */

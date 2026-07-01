@@ -116,7 +116,7 @@ describe('computePositionalScoring', () => {
     expect(byName.get('Alice')!.byPosition).toEqual({ Other: 12 });
   });
 
-  it('includes playoff weeks (every week counts)', () => {
+  it('excludes playoff weeks (regular season only)', () => {
     const { teams } = computePositionalScoring([
       game('1', 'T1', 100, [starter('QB', 20)], 'T2', 90, [starter('QB', 18)]),
       game(
@@ -131,8 +131,8 @@ describe('computePositionalScoring', () => {
       ),
     ]);
     const alice = teams.find((t) => t.ownerUsername === 'Alice')!;
-    // Both the regular-season and playoff week contribute.
-    expect(alice.byPosition).toEqual({ QB: 50 });
+    // Only the regular-season week contributes; the playoff week is excluded.
+    expect(alice.byPosition).toEqual({ QB: 20 });
   });
 
   it('skips byes (a side with no finite score) and self-matchup placeholders', () => {
