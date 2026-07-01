@@ -34,11 +34,13 @@ FLEX bucket.
   the other analytics compute files).
 
 ## Score scope
-**Every week counts** — regular-season *and* playoff weeks (bracket and consolation games alike).
-Unlike the Power Rankings chart, playoff weeks are intentionally **included** so every manager
-spans the same number of weeks and the totals reflect the whole season. The only matchups skipped
-are **byes** (a side with no finite score) and **self-matchup placeholders**
-(`team_a_id === team_b_id`), matching the existing compute guards.
+**Only regular-season weeks count.** A game is regular-season when it has no playoff tier
+(`playoff_tier_type` is `NONE` or absent); playoff weeks (bracket and consolation games alike) are
+**excluded**, matching the Score Distribution ([FE-033](FE-033-score-distribution-analytics.md))
+and Power Rankings ([FE-034](FE-034-power-rankings-trend.md)) charts so all three read from the
+same scope. Beyond the playoff filter, the only matchups skipped are **byes** (a side with no
+finite score) and **self-matchup placeholders** (`team_a_id === team_b_id`), matching the existing
+compute guards.
 
 ## Scope
 - Third chart on the existing `/analytics` page ([FE-033](FE-033-score-distribution-analytics.md)),
@@ -73,7 +75,9 @@ are **byes** (a side with no finite score) and **self-matchup placeholders**
 - **IDP / unusual positions:** any position without a dedicated color folds into a single "Other"
   segment rather than being dropped.
 - **Non-finite player points:** a starter whose `points_scored` is not a finite number counts as 0.
-- **Season in progress:** bars reflect only the weeks played so far.
+- **Playoff weeks:** matchups with a `playoff_tier_type` other than `NONE` are excluded; only
+  regular-season games contribute.
+- **Season in progress:** bars reflect only the regular-season weeks played so far.
 - **No `MATCHUPS` data (404) or load failure:** surface an inline message; never throw.
 - **No matchup data at all:** show an empty-state message instead of an empty chart.
 - **Locked (expired subscription):** the gated component is not mounted and never fetches.
@@ -86,8 +90,8 @@ are **byes** (a side with no finite score) and **self-matchup placeholders**
       superflex rolled into the actual position), with `D/ST` normalized to `DEF` and unrecognized
       positions grouped under "Other"; the aggregation is unit-tested.
 - [ ] Bars are ordered by total points descending, tie-broken on `ownerUsername`.
-- [ ] Every week (regular season and playoffs) contributes; byes and self-matchup placeholders are
-      excluded.
+- [ ] Only regular-season weeks contribute (playoff-tier matchups are excluded); byes and
+      self-matchup placeholders are also excluded.
 - [ ] Switching the page season selector recomputes the chart.
 - [ ] When `premium_feature` (and `billing`) is enabled and the league subscription is
       expired/absent, the section shows a blurred lock overlay instead of the chart and **does not

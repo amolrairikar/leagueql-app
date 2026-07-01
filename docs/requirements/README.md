@@ -78,6 +78,7 @@ criteria. Frontend, backend, and extension features are kept separate.
 | [FE-035](frontend/FE-035-lineup-efficiency.md) | Lineup Efficiency / Points Left on Bench (Box-score premium) |
 | [FE-036](frontend/FE-036-positional-scoring-breakdown.md) | Positional Scoring Breakdown (Analytics premium) |
 | [FE-037](frontend/FE-037-weekly-matchup-recap.md) | Weekly Matchup Recap (Matchups premium) |
+| [FE-038](frontend/FE-038-draft-value-scatter.md) | Draft Value Scatter (Draft Recap premium) |
 
 ## Extension (`extension/`)
 | ID | Feature |
