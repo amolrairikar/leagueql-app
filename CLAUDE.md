@@ -86,6 +86,11 @@ reflect the new behavior.
   with backend API changes.
 - Data model: [`docs/db/dynamodb_spec.md`](docs/db/dynamodb_spec.md) — keep in sync with
   precomputed view / item schema changes.
+- Architecture diagram: [`docs/architecture/`](docs/architecture/README.md) — diagram-as-code
+  (`architecture_diagram.py`) rendered to `leagueql_architecture.png`. **When a new component
+  is deployed (Lambda, Fargate task, queue, data store, scheduled job, external integration,
+  worker, …) or an existing one is removed/rewired, update `architecture_diagram.py` and
+  regenerate the PNG in the same change** (`pipenv run python docs/architecture/architecture_diagram.py`).
 
 ## Tech stack (orientation)
 - **Backend:** FastAPI + Python on AWS API Gateway + Lambda; data in DynamoDB, raw payloads
