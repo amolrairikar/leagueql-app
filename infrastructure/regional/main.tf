@@ -206,6 +206,10 @@ resource "aws_cloudwatch_event_rule" "recap_generator_schedule" {
   name                = "leagueql-recap-generator-${var.environment}-schedule"
   description         = "Periodic tick that generates queued weekly AI recaps"
   schedule_expression = "rate(15 minutes)"
+  # Disabled in both DEV and PROD for now to avoid Fargate compute cost from the 15-minute
+  # tick; the rule + target are kept so the task can still be run manually (RunTask /
+  # console). Flip back to ENABLED to resume the automatic schedule.
+  state = "DISABLED"
 
   tags = {
     environment = var.environment

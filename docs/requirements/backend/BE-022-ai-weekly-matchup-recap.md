@@ -119,7 +119,10 @@ generation time** (a few seconds each), so a backlog clears over one or more 15-
     `in_flight` marker status are gone.
   - **Added (modeled on the Sleeper player stats refresher Fargate task, BE-011):** the
     `recap_generator` **ECS task definition** on the shared `leagueql-<env>` cluster, an EventBridge
-    **cron** rule (rate 15 min) with an `ecs_target` RunTask, the **ECR repo** `leagueql-recap-generator-<env>`
+    **cron** rule (rate 15 min, `state` **DISABLED in both dev and prod for now** — the rule +
+    target are kept for manual RunTask/console invocation but the tick is off to avoid Fargate
+    compute cost; flip to ENABLED to resume) with an `ecs_target` RunTask, the **ECR repo**
+    `leagueql-recap-generator-<env>`
     + lifecycle (CI builds/pushes the image), the **task role** (DynamoDB R/W + GSI1; feature-flags,
     Axiom, and Anthropic-key SSM reads), the **execution role** (ECR pull + task log group), the
     **EventBridge-invoke role** (`ecs:RunTask` + `iam:PassRole`), and an event-based **task-failed**
