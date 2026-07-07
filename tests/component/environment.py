@@ -62,7 +62,7 @@ _ENV = {
     "STRIPE_PRICE_ID_MONTHLY": "price_test_monthly",
     "STRIPE_PRICE_ID_YEARLY": "price_test_yearly",
     "STRIPE_TRIAL_PERIOD_DAYS": "14",
-    # BE-022: the processor + webhook enqueue a pending-recap marker into this table;
+    # BE-021: the processor + webhook enqueue a pending-recap marker into this table;
     # the recap-generator (Fargate task) reads the queue and writes a MATCHUP_RECAP item
     # per missing week via the Anthropic API (generate_recap is patched per scenario).
     "RECAP_MODEL_ID": "claude-haiku-4-5",
@@ -232,7 +232,7 @@ def _load_handlers(context) -> None:
         "stripe_webhook.handler", _SRC / "stripe_webhook" / "handler.py"
     )
 
-    # --- recap generator (BE-022) ------------------------------------------
+    # --- recap generator (BE-021) ------------------------------------------
     # The generator imports only common.* (incl. common.recap_llm, which builds its
     # Anthropic client lazily — no SDK/network at import). Its module-level table is
     # moto-backed, so enqueue → generate (patched per scenario) → MATCHUP_RECAP write
@@ -308,7 +308,7 @@ def before_scenario(context, scenario):
     # Reset the API's Lambda-invoke spy each scenario so payload assertions are
     # scoped to the scenario under test.
     context.main.lambda_client.reset_mock()
-    # Reset the shared recap enqueue spy (processor + webhook) too (BE-022).
+    # Reset the shared recap enqueue spy (processor + webhook) too (BE-021).
     context.recap_enqueue_spy.reset_mock()
     # Billing ships feature-flagged OFF (BE-017); default it ON for component
     # scenarios since the billing features assume it, along with the shared

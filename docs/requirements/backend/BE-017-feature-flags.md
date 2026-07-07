@@ -43,7 +43,7 @@ UI. `banner` is one such flag: it gates the in-app informational banner
 it is resolved like any other flag and surfaced to the SPA via `GET /feature-flags`.
 
 The **`recap`** flag is a backend-only **kill-switch** for AI weekly matchup recap generation
-([BE-022](BE-022-ai-weekly-matchup-recap.md)). Unlike every other flag it **defaults ON**:
+([BE-021](BE-021-ai-weekly-matchup-recap.md)). Unlike every other flag it **defaults ON**:
 recaps run unless the parameter explicitly carries `{"recap": {"enabled": false}}`. The helper
 `is_recap_enabled()` returns `_client.get_boolean_value("recap", True)` — an unregistered flag
 falls back to the `True` default (recaps on), and only a flag registered OFF returns `False`. The
@@ -74,7 +74,7 @@ they always agree.
   OpenFeature `InMemoryProvider`, and exposes `is_enabled(name)`, `is_billing_enabled()`, and
   `is_feature_paywalled(flag_name)` (= `is_billing_enabled() and is_enabled(flag_name)`), and
   `is_recap_enabled()` (= `get_boolean_value("recap", True)`, the default-on recap kill-switch),
-  plus the `PREMIUM_FEATURE` (shared premium-feature), `BANNER` (FE-030), and `RECAP` (BE-022)
+  plus the `PREMIUM_FEATURE` (shared premium-feature), `BANNER` (FE-030), and `RECAP` (BE-021)
   flag-name constants. A test-only `_override_for_testing({...})` swaps the active flag map.
 - Source of truth: an AWS SSM Parameter Store parameter (per environment, per region) named
   `/leagueql/<env>/feature-flags`, serving the same `{ "billing": { "enabled": false }, ... }` JSON
@@ -144,7 +144,7 @@ they always agree.
 ## Sources
 `src/common/feature_flags.py`, `src/api/routes.py` (`get_feature_flags`, billing endpoints),
 `src/api/helpers.py`, `src/stripe_webhook/handler.py`, `src/common/recap_queue.py`,
-`src/recap_generator/handler.py` (`recap` kill-switch, BE-022),
+`src/recap_generator/handler.py` (`recap` kill-switch, BE-021),
 `infrastructure/regional/main.tf`, `infrastructure/global/{dev,prod}/main.tf`
 (`ssm:GetParameter` grants; the parameter itself is set out-of-band), `docs/api/openapi_spec.yaml`
 (`/feature-flags`),

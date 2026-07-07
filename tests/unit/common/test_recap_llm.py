@@ -1,4 +1,4 @@
-"""Unit tests for the Anthropic recap helper (BE-022)."""
+"""Unit tests for the Anthropic recap helper (BE-021)."""
 
 import json
 from types import SimpleNamespace

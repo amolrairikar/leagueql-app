@@ -2,7 +2,7 @@ import { queryLeague } from '@/components/api/leagues';
 import type { MatchupItem, Platform } from '@/components/api/types';
 import { ApiError } from '@/lib/api-client';
 
-/** One cached AI weekly matchup recap (BE-022 / FE-037). */
+/** One cached AI weekly matchup recap (BE-021 / FE-035). */
 export interface RecapItem {
   headline: string;
   body: string;

@@ -327,7 +327,7 @@ Represents matchups for a given week in the fantasy league.
 <details>
 <summary><b>MATCHUP_RECAP</b></summary>
 
-Caches the AI-written weekly recap column for a single completed week (BE-022). Built from the
+Caches the AI-written weekly recap column for a single completed week (BE-021). Built from the
 `MATCHUPS` view plus the week-accurate `WEEKLY_STANDINGS` snapshot (falling back to the final
 `STANDINGS` for playoff weeks) by the **recap-generator Fargate task**, which generates each recap
 synchronously via the Anthropic API (Claude Haiku 4.5) and writes the item directly; read back through
@@ -369,7 +369,7 @@ idempotently (`attribute_not_exists(SK)` conditional put) and never regenerated 
 <details>
 <summary><b>RECAP_QUEUE / pending-recap marker</b></summary>
 
-A lightweight pending-work marker recording that a league needs a recap pass (BE-022). Written
+A lightweight pending-work marker recording that a league needs a recap pass (BE-021). Written
 idempotently by the Stripe webhook (on activation) and the processor (at the end of every
 onboard/refresh) via `record_pending_recap`; **one marker per league** (a re-trigger refreshes it, so
 the queue never duplicates). The **recap-generator Fargate task** queries the `RECAP_QUEUE` partition

@@ -26,7 +26,7 @@ locals {
   stripe_webhook_role_arn   = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-stripe-webhook-role"
   discord_notifier_role_arn = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-discord-notifier-role"
 
-  # AI weekly matchup recaps (BE-022) run as a scheduled Fargate task that generates
+  # AI weekly matchup recaps (BE-021) run as a scheduled Fargate task that generates
   # each recap synchronously via the Anthropic API (Claude Haiku 4.5). The task +
   # execution + EventBridge-invoke roles are created in infrastructure/global; ARNs are
   # reconstructed here from their names. The shared DynamoDB table doubles as the
@@ -73,7 +73,7 @@ module "onboarder_lambda" {
     S3_BUCKET_NAME      = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
     SNS_TOPIC_ARN       = var.environment == "prod" ? aws_sns_topic.lambda_alerts[0].arn : ""
 
-    # OpenTelemetry trace-context propagation → Axiom (BE-021). A no-op unless set.
+    # OpenTelemetry trace-context propagation → Axiom (BE-020). A no-op unless set.
     # The ingest token is fetched at runtime from SSM by *name* (value never lands
     # here / in TF state / in CI); dataset is per-env so dev traffic never pollutes
     # prod. ENVIRONMENT tags spans' deployment.environment.
@@ -110,12 +110,12 @@ module "processor_lambda" {
     S3_BUCKET_NAME      = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
     SNS_TOPIC_ARN       = var.environment == "prod" ? aws_sns_topic.lambda_alerts[0].arn : ""
 
-    # Enqueue a pending-recap marker at end of run (BE-022); the recap generator task
+    # Enqueue a pending-recap marker at end of run (BE-021); the recap generator task
     # picks it up on its next tick. Idempotent + premium-gated downstream, so this is
     # a cheap DynamoDB write. The queue lives in the shared table.
     RECAP_QUEUE_TABLE = "leagueql-table-${var.environment}"
 
-    # OpenTelemetry trace-context propagation → Axiom (BE-021). A no-op unless set.
+    # OpenTelemetry trace-context propagation → Axiom (BE-020). A no-op unless set.
     # The ingest token is fetched at runtime from SSM by *name* (value never lands
     # here / in TF state / in CI); dataset is per-env so dev traffic never pollutes
     # prod. ENVIRONMENT tags spans' deployment.environment.
@@ -133,7 +133,7 @@ module "processor_lambda" {
   }
 }
 
-# ── AI weekly matchup recap generator: Fargate task (BE-022) ──────────────────
+# ── AI weekly matchup recap generator: Fargate task (BE-021) ──────────────────
 # A scheduled task drains the RECAP_QUEUE partition and generates each missing week's
 # recap synchronously via the Anthropic API (Claude Haiku 4.5), pacing calls under the
 # account's ~50 RPM ceiling. Runs as a Fargate task (not a Lambda) so a large backlog
@@ -175,7 +175,7 @@ resource "aws_ecs_task_definition" "recap_generator" {
         # Pace synchronous calls under the account's ~50 RPM ceiling (tier-dependent).
         { name = "RECAP_MAX_RPM", value = "45" },
         { name = "FEATURE_FLAGS_SSM_PARAM", value = "/leagueql/${var.environment}/feature-flags" },
-        # OpenTelemetry → Axiom (BE-021). A no-op unless these resolve.
+        # OpenTelemetry → Axiom (BE-020). A no-op unless these resolve.
         { name = "ENVIRONMENT", value = var.environment },
         { name = "AXIOM_API_TOKEN_SSM_PARAM", value = "/leagueql/${var.environment}/axiom/api_token" },
         { name = "AXIOM_DATASET", value = "leagueql-${var.environment}" },
@@ -368,12 +368,12 @@ module "stripe_webhook_lambda" {
     FEATURE_FLAGS_SSM_PARAM = "/leagueql/${var.environment}/feature-flags"
 
     # On a real subscription activation, enqueue a pending-recap marker so the
-    # recap generator task backfills the newly-premium league's weekly recaps (BE-022).
+    # recap generator task backfills the newly-premium league's weekly recaps (BE-021).
     # The queue is the shared table (available in both regions); in the non-east region
     # this resolves to "" and the webhook's enqueue no-ops (Stripe only calls east).
     RECAP_QUEUE_TABLE = local.region == "east" ? "leagueql-table-${var.environment}" : ""
 
-    # The webhook is now an OTel-traced Lambda (BE-021): it starts the root span for
+    # The webhook is now an OTel-traced Lambda (BE-020): it starts the root span for
     # the activation path. A no-op unless set.
     ENVIRONMENT               = var.environment
     AXIOM_API_TOKEN_SSM_PARAM = "/leagueql/${var.environment}/axiom/api_token"
@@ -473,7 +473,7 @@ module "sleeper_refresh_lambda" {
     DYNAMODB_TABLE_NAME   = "leagueql-table-${var.environment}"
     ONBOARDER_LAMBDA_NAME = "leagueql-onboarder-${var.environment}"
 
-    # OpenTelemetry trace-context propagation → Axiom (BE-021). A no-op unless set.
+    # OpenTelemetry trace-context propagation → Axiom (BE-020). A no-op unless set.
     # The ingest token is fetched at runtime from SSM by *name* (value never lands
     # here / in TF state / in CI); dataset is per-env so dev traffic never pollutes
     # prod. ENVIRONMENT tags spans' deployment.environment.
@@ -870,7 +870,7 @@ resource "aws_cloudwatch_metric_alarm" "processor_errors" {
 }
 
 # The recap generator's failure monitoring is the event-based ECS Task State Change
-# rule defined alongside its task definition above (BE-022) — a one-shot Fargate task
+# rule defined alongside its task definition above (BE-021) — a one-shot Fargate task
 # emits no per-run Lambda "Errors" metric.
 
 resource "aws_cloudwatch_metric_alarm" "sleeper_refresh_errors" {

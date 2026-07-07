@@ -1,4 +1,4 @@
-"""Unit tests for the pending-recap enqueue helper (BE-022)."""
+"""Unit tests for the pending-recap enqueue helper (BE-021)."""
 
 from unittest.mock import MagicMock, patch
 

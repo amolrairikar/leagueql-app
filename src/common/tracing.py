@@ -1,4 +1,4 @@
-"""Shared OpenTelemetry tracing bootstrap + W3C context propagation (BE-021).
+"""Shared OpenTelemetry tracing bootstrap + W3C context propagation (BE-020).
 
 Vendored into every function's deployment zip via
 ``scripts/deployment_scripts/build_lambda_zip.sh``. Framework-agnostic: the API
@@ -92,7 +92,7 @@ def build_provider(service_name: str):
     BotocoreInstrumentor().instrument()
     RequestsInstrumentor().instrument()
 
-    # The recap generator talks to the Anthropic API over httpx (BE-022); instrument it
+    # The recap generator talks to the Anthropic API over httpx (BE-021); instrument it
     # when the optional package is present so the LLM call shows up as a child span.
     # Guarded so every other handler — which doesn't ship the httpx instrumentation —
     # still builds a provider without it.

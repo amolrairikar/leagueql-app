@@ -488,7 +488,7 @@ function ScatterSkeleton() {
 }
 
 // Reads the season's draft picks, filters them by the selected position, and
-// plots draft position vs. season points (FE-038). Its own component so the
+// plots draft position vs. season points (FE-036). Its own component so the
 // SubscriptionGuard can leave it unmounted while locked — the DRAFT data is never
 // fetched then. Suspends on `promise`, so hooks run before the result branches.
 function DraftScatterInner({ promise }: { promise: Promise<DraftResult> }) {
@@ -548,7 +548,7 @@ function DraftScatterInner({ promise }: { promise: Promise<DraftResult> }) {
 }
 
 /**
- * Premium scatterplot of draft position vs. season points for a season (FE-038),
+ * Premium scatterplot of draft position vs. season points for a season (FE-036),
  * with a position dropdown filter. Fetches its own `DRAFT` data (the same
  * `getDraftData` the board uses) so the {@link SubscriptionGuard} can leave it
  * unmounted — and unfetched — while locked.
@@ -629,7 +629,7 @@ export default function DraftRecap() {
           />
         </Suspense>
 
-        {/* Premium draft-value scatter (FE-038). Gated on the billing master flag
+        {/* Premium draft-value scatter (FE-036). Gated on the billing master flag
             too so the header doesn't orphan above a hidden section when billing
             is off — the SubscriptionGuard renders nothing in that case. */}
         {isBillingEnabled() && seasons.length > 0 && (

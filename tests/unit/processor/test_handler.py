@@ -512,7 +512,7 @@ _FAKE_QUERIES = {
 
 
 class TestProcessorTracePropagation:
-    """The processor continues the onboarder's trace from the manifest metadata (BE-021)."""
+    """The processor continues the onboarder's trace from the manifest metadata (BE-020)."""
 
     def test_continues_trace_from_manifest_metadata(self, processor_handler):
         mock_s3 = MagicMock()
@@ -536,7 +536,7 @@ class TestProcessorTracePropagation:
 
 
 class TestInvokeRecapGenerator:
-    """The processor enqueues a pending-recap marker at end of run (BE-022)."""
+    """The processor enqueues a pending-recap marker at end of run (BE-021)."""
 
     def test_enqueues_via_shared_helper(self, processor_handler):
         token = processor_handler.correlation_id_var.set("corr-1")
@@ -593,7 +593,7 @@ class TestLambdaHandlerImpl:
         # league_name extracted from the most recent season and passed through.
         assert write_meta.call_args[1]["league_name"] == "My League"
         assert write_meta.call_args[1]["refresh"] is False
-        # The recap generator is fired at the end of every run (BE-022).
+        # The recap generator is fired at the end of every run (BE-021).
         recap.assert_called_once_with("canonical-abc", "ESPN")
 
     def test_sleeper_refresh_reads_previous_manifest_and_player_data(

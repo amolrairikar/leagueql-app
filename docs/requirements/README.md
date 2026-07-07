@@ -8,8 +8,11 @@ Each document contains: feature ID + title, description, scope, edge cases, and 
 criteria. Frontend, backend, and extension features are kept separate.
 
 ## Conventions
-- **IDs:** `BE-xxx` (backend), `FE-xxx` (frontend), `EXT-xxx` (extension). IDs are stable —
-  never reuse a retired ID.
+- **IDs:** `BE-xxx` (backend), `FE-xxx` (frontend), `EXT-xxx` (extension). IDs are stable in
+  day-to-day work — don't renumber existing docs for an ordinary add/change, and give a new
+  feature the next free ID in its prefix. Renumbering (including reusing a freed ID) is allowed
+  only as part of a **deliberate, one-shot consolidation** that renumbers docs and rewrites every
+  reference in the same change.
 - **One feature per file**, named `<ID>-<kebab-title>.md`.
 - New feature → add a doc here and link it in this index before implementation.
 
@@ -35,9 +38,9 @@ criteria. Frontend, backend, and extension features are kept separate.
 | [BE-017](backend/BE-017-feature-flags.md) | Feature Flags (OpenFeature + SSM Parameter Store) |
 | [BE-018](backend/BE-018-league-access-tracking.md) | League Access Tracking |
 | [BE-019](backend/BE-019-sleeper-transactions.md) | Sleeper Transactions (Waivers, Trades, Free Agents) |
-| [BE-020](backend/BE-020-api-otel-tracing.md) | API OpenTelemetry Tracing → Axiom |
-| [BE-021](backend/BE-021-async-chain-otel-propagation.md) | Async Chain OpenTelemetry Trace Propagation |
-| [BE-022](backend/BE-022-ai-weekly-matchup-recap.md) | AI Weekly Matchup Recap |
+| [BE-020](backend/BE-020-backend-otel-tracing.md) | Backend OpenTelemetry Tracing → Axiom (API + async chain) |
+| [BE-021](backend/BE-021-ai-weekly-matchup-recap.md) | AI Weekly Matchup Recap |
+| [BE-022](backend/BE-022-yahoo-oauth.md) | Yahoo OAuth Authorization & Token Management |
 
 ## Frontend (`frontend/`)
 | ID | Feature |
@@ -73,12 +76,11 @@ criteria. Frontend, backend, and extension features are kept separate.
 | [FE-030](frontend/FE-030-informational-banner.md) | Informational Banner |
 | [FE-031](frontend/FE-031-schedule-swap-simulator.md) | Schedule-Swap Simulator (Standings premium) |
 | [FE-032](frontend/FE-032-weekly-awards-superlatives.md) | Weekly Awards & Superlatives (Matchups premium) |
-| [FE-033](frontend/FE-033-score-distribution-analytics.md) | Weekly Score Distribution (Analytics premium page) |
-| [FE-034](frontend/FE-034-power-rankings-trend.md) | Power Rankings Trend (Analytics premium) |
-| [FE-035](frontend/FE-035-lineup-efficiency.md) | Lineup Efficiency / Points Left on Bench (Box-score premium) |
-| [FE-036](frontend/FE-036-positional-scoring-breakdown.md) | Positional Scoring Breakdown (Analytics premium) |
-| [FE-037](frontend/FE-037-weekly-matchup-recap.md) | Weekly Matchup Recap (Matchups premium) |
-| [FE-038](frontend/FE-038-draft-value-scatter.md) | Draft Value Scatter (Draft Recap premium) |
+| [FE-033](frontend/FE-033-analytics-page.md) | Analytics Page — Score Distribution, Power Rankings & Positional Scoring (premium) |
+| [FE-034](frontend/FE-034-lineup-efficiency.md) | Lineup Efficiency / Points Left on Bench (Box-score premium) |
+| [FE-035](frontend/FE-035-weekly-matchup-recap.md) | Weekly Matchup Recap (Matchups premium) |
+| [FE-036](frontend/FE-036-draft-value-scatter.md) | Draft Value Scatter (Draft Recap premium) |
+| [FE-037](frontend/FE-037-connect-yahoo-league.md) | Connect Yahoo League (OAuth Account Linking) |
 
 ## Extension (`extension/`)
 | ID | Feature |

@@ -14,7 +14,7 @@ when the league is already up to date based on current NFL state.
 - NFL state + latest-matchup checks: `get_nfl_state`, `get_latest_stored_matchup`.
 - **Recap generation:** a refresh runs through the processor, which fires the recap-generator
   Lambda at end of run ([BE-004](BE-004-data-processing-pipeline.md) /
-  [BE-022](BE-022-ai-weekly-matchup-recap.md)) so a premium league's newly-completed week gets an
+  [BE-021](BE-021-ai-weekly-matchup-recap.md)) so a premium league's newly-completed week gets an
   AI recap; idempotent + premium-gated, so it is a no-op otherwise.
 
 ## Edge Cases

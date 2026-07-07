@@ -1,8 +1,8 @@
-"""Shared pending-recap enqueue for LeagueQL (BE-022).
+"""Shared pending-recap enqueue for LeagueQL (BE-021).
 
 Vendored into the processor + Stripe-webhook deployment zips. Instead of starting
 generation compute, the triggers record a lightweight **pending-work marker** in
-DynamoDB. The recap generator (a scheduled Fargate task, BE-022) later reads the queue
+DynamoDB. The recap generator (a scheduled Fargate task, BE-021) later reads the queue
 and generates each pending league's missing weeks synchronously.
 
 The marker is **one item per league** (``PK=RECAP_QUEUE``, ``SK=PENDING#{league}``); a

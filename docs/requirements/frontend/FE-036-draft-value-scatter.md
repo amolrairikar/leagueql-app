@@ -1,4 +1,4 @@
-# FE-038: Draft Value Scatter (Draft Recap premium)
+# FE-036: Draft Value Scatter (Draft Recap premium)
 
 ## Description
 A premium section on the **Draft Recap** page (`/draft_recap`), shown below the draft board under
@@ -12,8 +12,7 @@ top of the page drives which draft the scatter reads.
 Everything is computed **entirely client-side** from the season's `DRAFT` view (the same
 `getDraftData` the draft board already fetches), so there is no backend, no new DynamoDB view, and
 no API change. It mirrors the Analytics premium charts
-([FE-033](FE-033-score-distribution-analytics.md) / [FE-034](FE-034-power-rankings-trend.md) /
-[FE-036](FE-036-positional-scoring-breakdown.md)): a pure transform of an existing precomputed view,
+([FE-033](FE-033-analytics-page.md)): a pure transform of an existing precomputed view,
 gated behind `SubscriptionGuard`.
 
 ## Point construction

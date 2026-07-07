@@ -1,4 +1,4 @@
-Feature: Positional scoring breakdown (FE-036)
+Feature: Positional scoring breakdown (FE-033)
   The premium Analytics page renders a stacked bar chart of each manager's season
   starter points split by position, computed client-side from the MATCHUPS view and
   gated behind the premium_feature flag.

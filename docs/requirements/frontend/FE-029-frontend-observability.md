@@ -5,7 +5,7 @@ Adds browser-side observability to the React app, exported to **Axiom**:
 - **Distributed tracing** via the OpenTelemetry Web SDK — a document-load span on initial load,
   route-change spans, and a `fetch` span for every API call. The fetch instrumentation injects a
   `traceparent` header **only** on calls to the API origin, so browser spans link to the API Lambda
-  server span ([BE-020](../backend/BE-020-api-otel-tracing.md)) into one end-to-end trace.
+  server span ([BE-020](../backend/BE-020-backend-otel-tracing.md)) into one end-to-end trace.
 - **RUM / Web Vitals** — Axiom has no turnkey RUM product, so Core Web Vitals (LCP, CLS, INP, FCP,
   TTFB) are captured with the `web-vitals` library and emitted as short spans (value + rating as
   attributes), dashboards built in Axiom from that data.

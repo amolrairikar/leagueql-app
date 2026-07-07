@@ -1,4 +1,4 @@
-"""Shared Anthropic recap generation for LeagueQL (BE-022).
+"""Shared Anthropic recap generation for LeagueQL (BE-021).
 
 Vendored into the recap-generator container image. Recaps are produced **synchronously**
 via the Anthropic Messages API (Claude Haiku 4.5, model ``RECAP_MODEL_ID`` =
@@ -94,7 +94,7 @@ _TEMPERATURE = 0.7
 _MAX_RETRIES = 4
 
 # Built lazily on first use so this module imports without the SDK, and so the client is
-# constructed after the recap-generator installs OTel httpx instrumentation (BE-021).
+# constructed after the recap-generator installs OTel httpx instrumentation (BE-020).
 _client = None
 
 

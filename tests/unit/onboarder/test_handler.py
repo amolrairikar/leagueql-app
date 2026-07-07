@@ -7,7 +7,7 @@ import requests
 
 
 class TestTraceContextPropagation:
-    """The handler continues the upstream trace carried in the event (BE-021)."""
+    """The handler continues the upstream trace carried in the event (BE-020)."""
 
     def test_handler_continues_trace_from_event_carrier(self, onboarder_handler):
         event = {"trace_context": {"traceparent": "00-abc-def-01"}}

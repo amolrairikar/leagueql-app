@@ -87,7 +87,7 @@ function PowerRankingsInner({ promise }: { promise: Promise<MatchupsResult> }) {
 }
 
 /**
- * Premium multi-line power-rankings trend chart for a season (FE-034). Like
+ * Premium multi-line power-rankings trend chart for a season (FE-033). Like
  * {@link ScoreDistribution} it is its own component so the {@link SubscriptionGuard}
  * can leave it unmounted while locked — its `MATCHUPS` data is never fetched then.
  */
@@ -152,7 +152,7 @@ function PositionalScoringInner({
 
 /**
  * Premium stacked-bar chart of each manager's season starter points split by
- * position (FE-036). Like {@link PowerRankings} it is its own component so the
+ * position (FE-033). Like {@link PowerRankings} it is its own component so the
  * {@link SubscriptionGuard} can leave it unmounted while locked — its `MATCHUPS`
  * data is never fetched then.
  */

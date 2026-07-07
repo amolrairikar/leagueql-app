@@ -12,7 +12,7 @@ import {
 import { avatarColor } from '@/lib/color-constants';
 
 /**
- * Multi-line power-rankings bump chart (FE-034). Each manager is one line of
+ * Multi-line power-rankings bump chart (FE-033). Each manager is one line of
  * their weekly league rank (1 = best, drawn at the top via a reversed y-axis),
  * derived from the blended power score, so the lines visibly cross over as teams
  * rise and fall. Mirrors the wins progression chart on the standings page: a

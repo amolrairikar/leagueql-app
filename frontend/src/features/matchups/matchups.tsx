@@ -508,7 +508,7 @@ export default function Matchups() {
               />
             </SubscriptionGuard>
 
-            {/* AI weekly matchup recap (FE-037). Same billing-gated pattern as
+            {/* AI weekly matchup recap (FE-035). Same billing-gated pattern as
                 Weekly Awards: the header is gated on isBillingEnabled so it never
                 orphans, and the column itself is behind SubscriptionGuard. */}
             <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mt-8 mb-2.5">

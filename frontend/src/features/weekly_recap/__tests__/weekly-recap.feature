@@ -1,4 +1,4 @@
-Feature: Weekly matchup recap (FE-037)
+Feature: Weekly matchup recap (FE-035)
   The matchups page hosts a premium weekly-recap section: an AI-written recap
   column (headline + body paragraphs) for the selected week, read from the cached
   MATCHUP_RECAP view. It is gated behind the premium_feature flag.

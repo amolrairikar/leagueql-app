@@ -11,7 +11,7 @@ wordmark and theme toggle.
   API in `src/features/sidebar/api-calls.ts`.
 - Nav items: Home, Standings, Matchups, Playoff Bracket, Manager Comparison, Manager
   History, Draft Recap, Draft Grades, Player Records, Matchup Records, and Analytics. The
-  **Analytics** tab is a premium page ([FE-033](FE-033-score-distribution-analytics.md)) and is
+  **Analytics** tab is a premium page ([FE-033](FE-033-analytics-page.md)) and is
   hidden when the `billing` master flag is off ([FE-026](FE-026-feature-flags.md)).
 - Settings items include "Manage Subscription", which opens the subscription dialog
   ([FE-021](FE-021-subscription-access-control.md)).
