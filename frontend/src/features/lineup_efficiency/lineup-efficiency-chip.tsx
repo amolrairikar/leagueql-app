@@ -25,7 +25,7 @@ const FEATURE_LABEL = 'Lineup efficiency';
 
 /**
  * Premium lineup-efficiency chip shown under a team's name in the box score
- * (FE-035). Unlocked it reads `⚡ {pct}% efficient` and opens a slot-by-slot
+ * (FE-034). Unlocked it reads `⚡ {pct}% efficient` and opens a slot-by-slot
  * start/sit report; locked it reads `🔒 Lineup efficiency` and opens the paywall.
  *
  * Because it lives inside a shared, mostly-free component it gates via the

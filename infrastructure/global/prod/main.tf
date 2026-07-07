@@ -189,7 +189,7 @@ module "onboarding-lambda-role" {
         ]
       },
       {
-        # BE-021: the chain Lambdas continue the OTel trace and export to Axiom; the
+        # BE-020: the chain Lambdas continue the OTel trace and export to Axiom; the
         # ingest token is a SecureString SSM parameter (set out-of-band, never in TF state).
         Sid    = "ReadAxiomSsmParameter"
         Effect = "Allow"
@@ -319,7 +319,7 @@ module "processing-lambda-role" {
         ]
       },
       {
-        # BE-021: the chain Lambdas continue the OTel trace and export to Axiom; the
+        # BE-020: the chain Lambdas continue the OTel trace and export to Axiom; the
         # ingest token is a SecureString SSM parameter (set out-of-band, never in TF state).
         Sid    = "ReadAxiomSsmParameter"
         Effect = "Allow"
@@ -396,7 +396,7 @@ module "processing-lambda-role" {
           "arn:aws:sns:us-east-1:${var.account_id}:leagueql-lambda-alerts-${var.environment}-east"
         ]
       }
-      # BE-022: the processor enqueues a pending-recap marker via dynamodb:PutItem
+      # BE-021: the processor enqueues a pending-recap marker via dynamodb:PutItem
       # (covered by WriteDynamoDB above); no ECS/RunTask grant needed.
     ]
   })
@@ -719,7 +719,7 @@ module "stripe-webhook-lambda-role" {
         ]
       },
       {
-        # BE-021: the webhook is now a traced Lambda and exports OTel spans to Axiom;
+        # BE-020: the webhook is now a traced Lambda and exports OTel spans to Axiom;
         # the ingest token is a SecureString SSM parameter (set out-of-band, never in
         # TF state). Grant read on both regions' copies.
         Sid    = "ReadAxiomSsmParameter"
@@ -743,7 +743,7 @@ module "stripe-webhook-lambda-role" {
   }
 }
 
-# AI weekly matchup recaps (BE-022) run as a scheduled Fargate task that generates each
+# AI weekly matchup recaps (BE-021) run as a scheduled Fargate task that generates each
 # recap synchronously via the Anthropic API (Claude Haiku 4.5). Three IAM roles mirror
 # the Sleeper refresher's Fargate roles — the task role (app identity), the execution
 # role (ECR pull + logs), and the EventBridge-invoke role (RunTask) — plus the ECR repo
@@ -833,7 +833,7 @@ module "recap-generator-task-role" {
         ]
       },
       {
-        # BE-022: the Anthropic API key (SecureString) fetched at runtime by name.
+        # BE-021: the Anthropic API key (SecureString) fetched at runtime by name.
         Sid    = "ReadAnthropicKeySsmParameter"
         Effect = "Allow"
         Action = ["ssm:GetParameter"]
@@ -842,7 +842,7 @@ module "recap-generator-task-role" {
         ]
       },
       {
-        # BE-021: export OTel spans to Axiom; token is a SecureString SSM parameter.
+        # BE-020: export OTel spans to Axiom; token is a SecureString SSM parameter.
         Sid    = "ReadAxiomSsmParameter"
         Effect = "Allow"
         Action = ["ssm:GetParameter"]
@@ -1341,7 +1341,7 @@ module "sleeper-refresh-lambda-role" {
         ]
       },
       {
-        # BE-021: the chain Lambdas continue the OTel trace and export to Axiom; the
+        # BE-020: the chain Lambdas continue the OTel trace and export to Axiom; the
         # ingest token is a SecureString SSM parameter (set out-of-band, never in TF state).
         Sid    = "ReadAxiomSsmParameter"
         Effect = "Allow"

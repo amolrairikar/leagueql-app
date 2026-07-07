@@ -45,7 +45,7 @@ export function comparePositions(a: string, b: string): number {
 }
 
 /**
- * Builds the draft-value scatter from a season's draft picks (FE-038). A pick is
+ * Builds the draft-value scatter from a season's draft picks (FE-036). A pick is
  * plotted only when both axes are finite — `total_points` and `overall_pick_number`
  * must be finite numbers — so picks with no end-of-season scoring row (null
  * `total_points`, e.g. Sleeper D/ST and kickers) are omitted rather than drawn at

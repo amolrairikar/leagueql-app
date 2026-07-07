@@ -20,7 +20,9 @@ extension (`EXT-xxx`) features — frontend and backend features are kept in sep
    **before** implementing it. The doc and the code must land in the same change.
 4. **Create a new doc** for any genuinely new feature: add `<ID>-<kebab-title>.md` in the
    appropriate subdirectory and link it in `docs/requirements/README.md`. Use the next free
-   ID in that prefix and never reuse a retired ID.
+   ID in that prefix; don't renumber existing docs or reuse a freed ID for ordinary work.
+   Renumbering (including reusing a freed ID) is reserved for a **deliberate, one-shot
+   consolidation** that renames the docs and rewrites every reference in the same change.
 
 If a code change reveals that a doc is wrong or out of date, fix the doc as part of that
 change. Requirements docs should never silently drift from the code.

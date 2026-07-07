@@ -1,4 +1,4 @@
-"""Steps for the AI weekly matchup recap generator component test (BE-022)."""
+"""Steps for the AI weekly matchup recap generator component test (BE-021)."""
 
 from unittest.mock import patch
 
@@ -170,7 +170,7 @@ def step_marker_cleared(context, canonical):
 
 @then("the recap generator was invoked after processing")
 def step_recap_invoked_after_processing(context):
-    # BE-022: the processor enqueues a pending-recap marker at end of run (the shared
+    # BE-021: the processor enqueues a pending-recap marker at end of run (the shared
     # enqueue spy stands in for the real record_pending_recap DynamoDB write).
     assert context.recap_enqueue_spy.called, (
         "recap enqueue was not called at end of processing"

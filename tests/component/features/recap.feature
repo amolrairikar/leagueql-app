@@ -1,4 +1,4 @@
-Feature: AI weekly matchup recap generation (BE-022)
+Feature: AI weekly matchup recap generation (BE-021)
   The recap-generator Fargate task reads a premium league's pending marker, enumerates
   every season's completed weeks, and writes a MATCHUP_RECAP item for each missing week
   by calling the Anthropic API. The API call (generate_recap) is mocked; DynamoDB is real

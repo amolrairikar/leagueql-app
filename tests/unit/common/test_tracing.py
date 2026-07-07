@@ -1,4 +1,4 @@
-"""Tests for src/common/tracing.py — shared OTel bootstrap + W3C propagation (BE-021).
+"""Tests for src/common/tracing.py — shared OTel bootstrap + W3C propagation (BE-020).
 
 The disabled path is the default in tests and must be a true no-op (no provider, no
 network, no instrumentation). The enabled wiring patches the lazily-imported OTel

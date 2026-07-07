@@ -49,7 +49,7 @@ PREMIUM_FEATURE = "premium_feature"
 # Surfaced to the SPA via GET /feature-flags; the backend enforces nothing.
 BANNER = "banner"
 
-# Kill-switch for AI weekly matchup recap generation (BE-022). Unlike every other
+# Kill-switch for AI weekly matchup recap generation (BE-021). Unlike every other
 # flag this one defaults **ON**: recaps run unless the config explicitly carries
 # ``{"recap": {"enabled": false}}``. This lets a single environment (e.g. DEV)
 # suppress the per-generation LLM spend without a prod SSM change, while billing
@@ -170,7 +170,7 @@ def is_recap_enabled() -> bool:
     absent flag — including local dev and tests with no SSM source — leaves recaps
     enabled, so passing ``True`` as the OpenFeature default returns ``True`` for an
     unregistered flag and ``False`` only when the flag is registered OFF. This lets
-    DEV suppress the LLM spend by adding the flag OFF, with no prod change (BE-022).
+    DEV suppress the LLM spend by adding the flag OFF, with no prod change (BE-021).
     """
     if _flags_enabled:
         _refresh_if_stale()

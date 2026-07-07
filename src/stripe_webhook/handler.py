@@ -45,7 +45,7 @@ _WEBHOOK_SECRET = get_secret_from_env_param("STRIPE_WEBHOOK_SECRET_SSM_PARAM")
 _retry_config = botocore.config.Config(retries={"mode": "standard"})
 _dynamodb = boto3.client("dynamodb", config=_retry_config)
 
-# Start an OTel trace for the activation path → Axiom (BE-021). Stripe delivers over
+# Start an OTel trace for the activation path → Axiom (BE-020). Stripe delivers over
 # HTTP with no inbound W3C context, so the handler starts a fresh *root* span (see
 # lambda_handler). A no-op unless Axiom is configured, so tests / unconfigured envs
 # are unaffected.
@@ -66,7 +66,7 @@ _TERMINAL_STATUSES = {"canceled", "unpaid", "incomplete_expired"}
 WEBHOOK_EVENT_TTL_SECONDS = 7 * 24 * 60 * 60
 
 # Subscription-metadata key the CI Stripe lifecycle suite stamps on the test-mode
-# subscriptions it creates against the dev webhook (BE-022). Subscription state still
+# subscriptions it creates against the dev webhook (BE-021). Subscription state still
 # converges as the suite asserts, but the recap enqueue is suppressed so CI runs
 # never queue Bedrock spend or pollute the shared dev league with recaps.
 # Real checkout subscriptions never carry this key (see src/api/routes.py).
@@ -169,7 +169,7 @@ def _subscription_id_from_event(event_type: str, obj) -> str | None:
 def _invoke_recap_generator(
     canonical_league_id: str, platform: str | None, native_league_id: str | None
 ) -> None:
-    """Enqueue a pending-recap marker on a real activation (BE-022).
+    """Enqueue a pending-recap marker on a real activation (BE-021).
 
     Called only when ``record_active_subscription`` actually advanced (a real
     activation, not a stale/duplicate no-op), so redelivered events don't re-enqueue.
@@ -239,9 +239,9 @@ def _process_event(stripe_event: dict) -> None:
                 native_league_id=native_league_id,
             )
             # Only a real advance (not a stale/duplicate no-op) triggers the recap
-            # backfill, so redelivered events don't re-invoke the generator (BE-022).
+            # backfill, so redelivered events don't re-invoke the generator (BE-021).
             # CI lifecycle test subscriptions advance state too, so skip the launch
-            # for them to avoid Bedrock spend on the shared dev league (BE-022).
+            # for them to avoid Bedrock spend on the shared dev league (BE-021).
             if applied and not _get(sub_metadata, _INTEGRATION_TEST_METADATA_KEY):
                 _invoke_recap_generator(
                     canonical_league_id, native_platform, native_league_id
@@ -275,7 +275,7 @@ def lambda_handler(event, context) -> dict[str, str | int]:
 
     Wraps :func:`_handle` in a fresh **root** span (Stripe delivers over HTTP with
     no inbound W3C context), then force-flushes spans before the Lambda freezes
-    (BE-021). A no-op when tracing is disabled, so behavior is unchanged in tests /
+    (BE-020). A no-op when tracing is disabled, so behavior is unchanged in tests /
     unconfigured envs.
     """
     with traced_handler("stripe_webhook.handle", root=True):

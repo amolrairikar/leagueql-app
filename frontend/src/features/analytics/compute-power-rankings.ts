@@ -26,7 +26,7 @@ export interface PowerRankingsData {
   teams: PowerTeam[];
 }
 
-/** Blend weights for the transparent power score (see FE-034). */
+/** Blend weights for the transparent power score (see FE-033). */
 export const POWER_WEIGHTS = {
   allPlay: 0.5,
   pointsFor: 0.3,
@@ -80,7 +80,7 @@ function recencyForm(history: number[]): number {
 
 /**
  * Build per-manager weekly power-score trend lines from a season's matchups
- * (FE-034). The point plotted at week W is cumulative through W and blends three
+ * (FE-033). The point plotted at week W is cumulative through W and blends three
  * explainable, 0–100-normalized components:
  *
  *   powerScore(W) = 0.50·AP + 0.30·PF + 0.20·FORM

@@ -1,4 +1,4 @@
-"""AI weekly matchup recap generator — scheduled Fargate task for LeagueQL (BE-022).
+"""AI weekly matchup recap generator — scheduled Fargate task for LeagueQL (BE-021).
 
 Runs on an EventBridge cron (every 15 min) as a one-shot ECS Fargate task. Each run it
 processes the whole ``RECAP_QUEUE`` partition: for every pending league it premium-gates,
@@ -13,7 +13,7 @@ Generation is paced under the account's ~50 RPM ceiling by an in-process rate li
 pending marker is deleted only when **all** its missing weeks were written; if any week
 raised, the marker is left pending so the next scheduled run retries the rest. Running as
 a Fargate task (not a Lambda) means a large backlog drains in one run without a 15-minute
-timeout. Roots its own trace (BE-021).
+timeout. Roots its own trace (BE-020).
 
 No-ops when billing is disabled or the ``recap`` kill-switch flag is OFF (BE-017) — the
 latter lets DEV suppress the LLM spend while keeping billing on for subscription testing.
@@ -40,7 +40,7 @@ from common.recap_llm import generate_recap
 from common.tracing import init_tracing, traced_handler
 
 # Roots its own trace (no upstream carrier): the scheduled run processes many leagues, so
-# it cannot continue any single trigger's span (BE-021). A no-op unless Axiom is configured.
+# it cannot continue any single trigger's span (BE-020). A no-op unless Axiom is configured.
 init_tracing("leagueql-recap-generator")
 
 _retry_config = botocore.config.Config(retries={"mode": "standard"})

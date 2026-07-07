@@ -15,7 +15,7 @@ variable "image_tag" {
 }
 
 variable "recap_generator_image_tag" {
-  description = "Container image tag for the AI recap generator Fargate task (BE-022; content-addressed in CI)"
+  description = "Container image tag for the AI recap generator Fargate task (BE-021; content-addressed in CI)"
   type        = string
   default     = "latest"
 }

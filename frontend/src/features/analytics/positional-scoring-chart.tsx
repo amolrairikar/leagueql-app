@@ -35,7 +35,7 @@ function positionLabel(position: string): string {
 
 /**
  * Stacked horizontal bar chart of each manager's total season starter points,
- * split by real position (FE-036). One bar per manager (rows so long names stay
+ * split by real position (FE-033). One bar per manager (rows so long names stay
  * legible), segments stacked QB→K→Other and colored from the shared position
  * palette ({@link positionColorMeta}), whose accents are tuned for contrast so
  * adjacent segments stay distinct. A pure render of the

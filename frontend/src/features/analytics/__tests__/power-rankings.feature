@@ -1,4 +1,4 @@
-Feature: Power rankings trend (FE-034)
+Feature: Power rankings trend (FE-033)
   The premium Analytics page renders a multi-line power-rankings trend chart for the
   selected season, computed client-side from the MATCHUPS view and gated behind the
   premium_feature flag.

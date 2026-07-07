@@ -87,7 +87,7 @@ def upload_results_to_s3(
             metadata["reprocess_all"] = "true"
         # Carry W3C trace context (traceparent/tracestate) in the object metadata so
         # the processor — triggered by this manifest's S3 event — continues the trace
-        # (BE-021). A no-op when tracing is disabled. S3 lowercases metadata keys and
+        # (BE-020). A no-op when tracing is disabled. S3 lowercases metadata keys and
         # the W3C header names are already lowercase, so the propagator round-trips.
         inject_context(metadata)
 

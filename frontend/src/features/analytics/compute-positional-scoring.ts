@@ -67,7 +67,7 @@ interface TeamMeta {
 }
 
 /**
- * Sum each manager's season starter points by real position (FE-036). Only
+ * Sum each manager's season starter points by real position (FE-033). Only
  * regular-season matchups count (a playoff tier other than `NONE` is skipped),
  * matching the Score Distribution and Power Rankings charts; byes (a side with no
  * finite score) and self-matchup placeholders (`team_a_id === team_b_id`) are also

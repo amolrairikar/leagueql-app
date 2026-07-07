@@ -1,4 +1,4 @@
-Feature: Draft value scatter (FE-038)
+Feature: Draft value scatter (FE-036)
   The premium Draft Recap scatterplot plots each scored pick's draft position against
   its season points, filterable by a single position dropdown, computed client-side
   from the DRAFT view and gated behind the premium_feature flag.

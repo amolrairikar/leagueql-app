@@ -1,4 +1,4 @@
-"""Unit tests for the recap-generator Fargate task (BE-022)."""
+"""Unit tests for the recap-generator Fargate task (BE-021)."""
 
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch

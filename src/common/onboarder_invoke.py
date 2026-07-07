@@ -4,7 +4,7 @@ Vendored into every function's deployment zip. Centralizes the async invoke
 payload contract (``body`` / ``requestType`` / ``canonicalLeagueId`` /
 ``correlation_id`` / ``trace_context``) shared by the API and the Sleeper refresh
 job. ``trace_context`` carries W3C trace context so the onboarder continues the
-caller's OpenTelemetry trace (BE-021); it is empty when tracing is disabled.
+caller's OpenTelemetry trace (BE-020); it is empty when tracing is disabled.
 """
 
 import json
@@ -50,7 +50,7 @@ def invoke_onboarder(
         "correlation_id": correlation_id,
         "ownerUserId": owner_user_id,
         "reprocessAll": reprocess_all,
-        # W3C trace context so the onboarder continues the caller's trace (BE-021).
+        # W3C trace context so the onboarder continues the caller's trace (BE-020).
         # Empty ``{}`` when tracing is disabled (tests / unconfigured), so the
         # contract is unchanged in those contexts.
         "trace_context": inject_context({}),

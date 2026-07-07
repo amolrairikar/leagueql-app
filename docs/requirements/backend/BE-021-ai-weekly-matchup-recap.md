@@ -1,10 +1,10 @@
-# BE-022: AI Weekly Matchup Recap
+# BE-021: AI Weekly Matchup Recap
 
 ## Description
 Generates an **AI-written weekly recap column** for each completed week of a league's matchups —
 medium-long, lighthearted-but-journalistic prose with roasts where warranted — from the existing
 precomputed matchup highlights, and caches it in DynamoDB as a `MATCHUP_RECAP#{season}#WEEK#{week}`
-item. The frontend ([FE-037](../frontend/FE-037-weekly-matchup-recap.md)) reads the cached text
+item. The frontend ([FE-035](../frontend/FE-035-weekly-matchup-recap.md)) reads the cached text
 through the existing query API ([BE-005](BE-005-query-precomputed-views-api.md)); generation never
 happens on the request path.
 
@@ -32,7 +32,7 @@ The pipeline is **two decoupled stages**, both premium-gated + idempotent:
    missing weeks were written; if any week failed, the marker is left pending and the next run retries
    the rest.
 
-FE-037 shows a **"recaps generating"** state for weeks that do not yet have a `MATCHUP_RECAP` item
+FE-035 shows a **"recaps generating"** state for weeks that do not yet have a `MATCHUP_RECAP` item
 (rather than treating absence as missing data). End-to-end latency is the **cron interval + per-recap
 generation time** (a few seconds each), so a backlog clears over one or more 15-minute ticks.
 
@@ -95,7 +95,7 @@ generation time** (a few seconds each), so a backlog clears over one or more 15-
     the put (a concurrent/duplicate write) is treated as "already written", not an error.
   - **Marker lifecycle:** delete the league's marker only when **every** missing week was written; if any
     week raised, log and **leave the marker pending** so the next scheduled run retries the rest.
-- **Tracing ([BE-021](BE-021-async-chain-otel-propagation.md)):** the scheduled run processes many
+- **Tracing ([BE-020](BE-020-backend-otel-tracing.md)):** the scheduled run processes many
   leagues, so it **roots its own trace** (`recap_generator.handle`) rather than continuing any one
   trigger's span; each marker still carries the trigger's `correlation_id` for log correlation. The
   Anthropic SDK calls over **httpx**, so `common/tracing.py` instruments httpx (guarded — only the
@@ -150,7 +150,7 @@ generation time** (a few seconds each), so a backlog clears over one or more 15-
 - **Enqueue failure:** swallowed — never fails the webhook (still 200) or the processor run; the next
   trigger re-enqueues.
 - **Latency:** end-to-end = cron interval + per-recap generation time; no recap is immediate, including
-  for a just-subscribed league. FE-037 shows a generating state for weeks with no item yet.
+  for a just-subscribed league. FE-035 shows a generating state for weeks with no item yet.
 - **Tracing unconfigured:** `init_tracing`/`traced_handler` are no-ops; the run is untraced with
   `correlation_id`-only logging. An Axiom export error never changes the outcome.
 

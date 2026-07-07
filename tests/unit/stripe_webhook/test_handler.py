@@ -269,7 +269,7 @@ class TestProcessingFailure:
 
 
 class TestRecapTrigger:
-    """The webhook launches the recap task only on a real activation (BE-022)."""
+    """The webhook launches the recap task only on a real activation (BE-021)."""
 
     def _active_event(self, patched):
         patched.stripe.Webhook.construct_event.return_value = _stripe_event(
@@ -309,7 +309,7 @@ class TestRecapTrigger:
     def test_does_not_fire_for_integration_test_subscription(self, patched):
         # CI lifecycle subscriptions advance state (so subscription_end_time still
         # converges) but carry an integration_test marker, so the recap enqueue is
-        # skipped — no Bedrock spend on the shared dev league (BE-022).
+        # skipped — no Bedrock spend on the shared dev league (BE-021).
         self._active_event(patched)
         patched.stripe.Subscription.retrieve.return_value["metadata"][
             "integration_test"
@@ -322,7 +322,7 @@ class TestRecapTrigger:
 
 
 class TestTracing:
-    """The webhook is a traced Lambda starting a root span (BE-021)."""
+    """The webhook is a traced Lambda starting a root span (BE-020)."""
 
     def test_lambda_handler_wraps_in_root_span(self, webhook_handler):
         with (

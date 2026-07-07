@@ -20,7 +20,7 @@ from utils import correlation_id_var, logger, publish_failure
 from queries import QUERIES
 
 # Continue the trace the onboarder propagated via the manifest's S3 metadata → Axiom
-# (BE-021). A no-op unless Axiom is configured, so tests / unconfigured envs are
+# (BE-020). A no-op unless Axiom is configured, so tests / unconfigured envs are
 # unaffected.
 init_tracing("leagueql-processor")
 
@@ -32,7 +32,7 @@ ddb_client = boto3.client("dynamodb", config=_retry_config)
 
 
 def _invoke_recap_generator(canonical_league_id: str, platform: str) -> None:
-    """Enqueue a pending-recap marker at end of run (BE-022).
+    """Enqueue a pending-recap marker at end of run (BE-021).
 
     Fires for both onboard and refresh; the recap generator's premium gate + idempotent
     skip make it a cheap no-op for non-premium leagues and already-recapped weeks. A
@@ -1267,7 +1267,7 @@ def _lambda_handler_impl(event, context) -> None:
     # season the normal refresh diff would select.
     reprocess_all = manifest_metadata.get("reprocess_all") == "true"
 
-    # Continue the onboarder's trace across the S3 event (BE-021): the heavy
+    # Continue the onboarder's trace across the S3 event (BE-020): the heavy
     # processing and its DynamoDB/S3 child spans hang off this span. A no-op when
     # tracing is disabled.
     with traced_handler("processor.handle", carrier=manifest_metadata):
@@ -1293,7 +1293,7 @@ def _process_manifest(
     """Build and persist every precomputed view for the onboarded league.
 
     Split out from :func:`_lambda_handler_impl` so the work runs inside the
-    ``processor.handle`` span that continues the onboarder's trace (BE-021).
+    ``processor.handle`` span that continues the onboarder's trace (BE-020).
     """
     platform = next(iter(manifest))
     all_seasons = manifest[platform]
@@ -1467,7 +1467,7 @@ def _process_manifest(
     if previous_version_id is None:
         update_league_count(delta=1)
 
-    # Enqueue a pending-recap marker for the newly-completed week (BE-022). The recap
+    # Enqueue a pending-recap marker for the newly-completed week (BE-021). The recap
     # generator task picks it up on its next tick; idempotent + premium-gated downstream,
     # so this is a cheap no-op for non-premium leagues and already-recapped weeks.
     _invoke_recap_generator(canonical_league_id, platform)

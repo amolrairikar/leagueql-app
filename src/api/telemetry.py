@@ -2,9 +2,9 @@
 
 The provider/exporter, Axiom gating, and ``botocore``/``requests`` instrumentation
 live in the shared :mod:`common.tracing` (also used by the async onboarding chain,
-BE-021). This module adds the **FastAPI-specific** pieces on top: auto-instrumenting
+BE-020). This module adds the **FastAPI-specific** pieces on top: auto-instrumenting
 the app and force-flushing spans per request. The trace started here is continued
-through the async chain via W3C context propagation (see BE-021).
+through the async chain via W3C context propagation (see BE-020).
 
 Design notes:
 - No ``opentelemetry`` import happens at module load. The SDK / instrumentation are
