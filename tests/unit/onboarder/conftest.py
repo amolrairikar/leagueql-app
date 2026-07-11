@@ -101,3 +101,18 @@ def onboarder_handler():
 def aws_env(monkeypatch):
     monkeypatch.setenv("DYNAMODB_TABLE_NAME", "test-table")
     monkeypatch.setenv("S3_BUCKET_NAME", "test-bucket")
+
+
+@pytest.fixture(autouse=True)
+def default_sleeper_resolution(onboarder_handler):
+    """Default the Sleeper previous_league_id chain walk to "no prior league".
+
+    The handler now walks the chain for every Sleeper ONBOARD/REFRESH with no known
+    canonical, so patch it to return None by default — ONBOARD tests treat the league
+    as new and REFRESH tests as not-onboarded. Tests exercising a renewal override this
+    with their own patch.
+    """
+    with patch.object(
+        onboarder_handler, "resolve_sleeper_canonical_league_id", return_value=None
+    ):
+        yield

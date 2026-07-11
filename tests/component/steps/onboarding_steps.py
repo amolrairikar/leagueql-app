@@ -52,6 +52,17 @@ def _run_onboarder(
     }
     if getattr(context, "canonical", None):
         event["canonicalLeagueId"] = context.canonical
+    # The handler walks the Sleeper previous_league_id chain (a real HTTP call) for any
+    # ONBOARD/REFRESH without a known canonical. Stub it so resolution is driven by the
+    # scenario (``context.resolved_canonical``, default None = a brand-new league) instead
+    # of hitting the network; the real chain walk is covered by unit tests.
+    resolve_patch = patch.object(
+        context.onboarder_handler,
+        "resolve_sleeper_canonical_league_id",
+        return_value=getattr(context, "resolved_canonical", None),
+    )
+    resolve_patch.start()
+    context._patches.append(resolve_patch)
     ctx = MagicMock(aws_request_id="req", function_name="onboarder-test")
     context.onboard_response = context.onboarder_handler.lambda_handler(event, ctx)
     parsed = json.loads(context.onboard_response["body"])
@@ -116,6 +127,30 @@ def step_onboard_http_error(context):
     patcher.start()
     context._patches.append(patcher)
     _run_onboarder(context, "ESPN", "555", "ONBOARD", {"season": "2024"})
+
+
+@given('the Sleeper previous_league_id chain resolves to canonical "{canonical}"')
+def step_chain_resolves(context, canonical):
+    # Drives the stubbed resolve_sleeper_canonical_league_id in _run_onboarder so a
+    # renewed Sleeper season (new league ID) maps back to an already-onboarded league.
+    context.resolved_canonical = canonical
+
+
+@then('exactly one un-overwritten METADATA exists for canonical "{canonical}"')
+def step_single_metadata_preserved(context, canonical):
+    from boto3.dynamodb.conditions import Key
+
+    table = context.ddb_resource.Table(context.table_name)
+    resp = table.query(
+        KeyConditionExpression=Key("PK").eq(f"LEAGUE#{canonical}")
+        & Key("SK").eq("METADATA")
+    )
+    items = resp["Items"]
+    assert len(items) == 1, f"expected exactly one METADATA, got {len(items)}"
+    # A duplicate/overwrite from the ONBOARD write path would replace the seeded
+    # METADATA with one that drops the original owner (no ownerUserId on this event),
+    # so a surviving owner_user_id proves the original record was preserved.
+    assert items[0].get("owner_user_id"), "METADATA was overwritten by onboarding"
 
 
 @when("the processor processes the onboarded league")

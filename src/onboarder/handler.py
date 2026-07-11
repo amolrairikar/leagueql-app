@@ -108,13 +108,24 @@ def _handle(event, context) -> dict[str, str | int]:
     canonical_league_id = event.get("canonicalLeagueId")
     is_new_season_refresh = False
 
+    # Sleeper renews a league each season under a brand-new league ID linked back to the
+    # prior season via previous_league_id. When we don't already know the canonical league
+    # — for either an ONBOARD or a REFRESH — walk that chain to see whether this ID is a
+    # renewal of a league we have already onboarded (BE-001 / BE-002):
+    #   * chain resolves an existing canonical -> the league is already onboarded and this
+    #     is just a new season to register, so fold it into the new-season-refresh path
+    #     (register the new league ID's LEAGUE_LOOKUP against the existing canonical and
+    #     never write a second METADATA record);
+    #   * no match on ONBOARD -> a genuinely new league; fall through and mint a canonical;
+    #   * no match on REFRESH -> the league was never onboarded; 404 as before.
     if (
-        request_type == "REFRESH"
+        request_type in ("ONBOARD", "REFRESH")
         and not canonical_league_id
         and body.get("platform") == "SLEEPER"
     ):
         logger.info(
-            "Sleeper REFRESH received with no canonical league ID; walking previous_league_id chain for league %s",
+            "Sleeper %s received with no canonical league ID; walking previous_league_id chain for league %s",
+            request_type,
             body.get("leagueId"),
         )
         try:
@@ -150,7 +161,18 @@ def _handle(event, context) -> dict[str, str | int]:
                 ),
             }
 
-        if not canonical_league_id:
+        if canonical_league_id:
+            # Already-onboarded league, new season. Reuse the existing canonical and take
+            # the new-season-refresh write path so the original METADATA (owner, members,
+            # onboarded_at) is preserved instead of overwritten — an ONBOARD of a renewal
+            # is handled exactly like a refresh.
+            is_new_season_refresh = True
+            request_type = "REFRESH"
+            logger.info(
+                "Resolved canonical_league_id=%s for new Sleeper season; handling as new-season refresh (is_new_season_refresh=True)",
+                canonical_league_id,
+            )
+        elif request_type == "REFRESH":
             logger.warning(
                 "Could not resolve canonical league ID for Sleeper league %s; league has not been onboarded",
                 body.get("leagueId"),
@@ -165,11 +187,11 @@ def _handle(event, context) -> dict[str, str | int]:
                     }
                 ),
             }
-        is_new_season_refresh = True
-        logger.info(
-            "Resolved canonical_league_id=%s for new Sleeper season; is_new_season_refresh=True",
-            canonical_league_id,
-        )
+        else:
+            logger.info(
+                "Sleeper league %s is not a renewal of an onboarded league; proceeding as a new onboard",
+                body.get("leagueId"),
+            )
 
     try:
         onboarding_service = OnboardingService(

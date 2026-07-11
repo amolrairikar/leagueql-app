@@ -20,8 +20,22 @@ and an incremented `LEAGUE_COUNT`.
   `s2`/`swid` (private ESPN only)).
 
 ## Edge Cases
-- **League already onboarded:** `ONBOARD` on an existing canonical league returns `200`
-  with "League already onboarded" instead of re-running the pipeline.
+- **League already onboarded:** `ONBOARD` on a league ID already present in `LEAGUE_LOOKUP`
+  returns `200` with "League already onboarded" (the API's exact-match lookup) instead of
+  re-running the pipeline. A **renewed** Sleeper season carries a *new* league ID that is not
+  yet in `LEAGUE_LOOKUP`, so it does not short-circuit here — see the renewed-season edge case
+  below.
+- **Onboarding a renewed Sleeper season:** Sleeper renews a league each season under a
+  brand-new league ID linked to the prior season via `previous_league_id`. Onboarding such an
+  ID walks that chain (`resolve_sleeper_canonical_league_id`, the same resolution `REFRESH`
+  uses) to see whether it renews an already-onboarded league. If it resolves an existing
+  canonical, the onboarder **reuses that canonical** and is handled exactly like a new-season
+  refresh ([BE-002](BE-002-league-refresh.md)): it registers a new `LEAGUE_LOOKUP` for the new
+  league ID pointing at the existing canonical, **preserves** the original `METADATA` (owner,
+  members, `onboarded_at`), and does **not** create a second league or a duplicate `METADATA`.
+  Only a chain that resolves nothing (a genuinely new league) mints a fresh canonical and
+  writes a new `METADATA`. If the renewed season has not started yet (offseason), it follows
+  the not-yet-started no-op behavior below rather than failing with `NOT_STARTED`.
 - **Private ESPN league:** requires `s2` + `swid` cookies; these are passed once for
   onboarding and must never be logged or persisted.
 - **ESPN requires `season`:** the most recent active season is mandatory for ESPN; absent
@@ -39,9 +53,10 @@ and an incremented `LEAGUE_COUNT`.
   list (`SleeperClient._get_league_seasons`) so they never reach S3, the processor, or any
   precomputed view; only seasons with `status` of `in_season` or `complete` are kept. As a
   result the not-yet-started season never appears in any dropdown, chart, or calculation,
-  and is picked up automatically once it flips to `in_season`. Onboarding a Sleeper league
-  whose **only** season is not-yet-started fails with a friendly `NOT_STARTED` message
-  rather than writing empty records.
+  and is picked up automatically once it flips to `in_season`. Onboarding a **new** Sleeper
+  league whose **only** season is not-yet-started fails with a friendly `NOT_STARTED` message
+  rather than writing empty records. (A renewed season of an *already-onboarded* league is
+  instead a no-op success — see the renewed-season edge case above.)
 - **Invalid/expired ESPN credentials:** classified as `ESPN_AUTH` failure with a
   user-friendly message; job recorded as `FAILED`.
 - **Platform API unreachable / rate limited / partial data:** onboarding fails cleanly;
@@ -70,6 +85,11 @@ and an incremented `LEAGUE_COUNT`.
       `201` with `{ detail, data: { correlation_id } }` and invokes the onboarder Lambda.
 - [ ] A duplicate `ONBOARD` for an already-onboarded league returns `200` and does not
       re-trigger the pipeline.
+- [ ] `ONBOARD` of a renewed Sleeper season (new league ID) whose `previous_league_id` chain
+      resolves to an already-onboarded canonical reuses that canonical: it writes a new
+      `LEAGUE_LOOKUP` for the new league ID, does **not** write a second `METADATA` (the
+      original owner/members are preserved) and does **not** increment `LEAGUE_COUNT`; a chain
+      that resolves nothing mints a fresh canonical instead.
 - [ ] ESPN onboards require `season`; private ESPN leagues require `s2` + `swid`.
 - [ ] `s2` / `swid` cookie values never appear in logs or persisted DynamoDB/S3 items.
 - [ ] On success: a canonical league UUID, `METADATA`, per-platform `LEAGUE_LOOKUP`, and

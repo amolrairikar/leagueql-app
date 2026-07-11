@@ -27,6 +27,18 @@ Feature: Onboard-to-processed pipeline (BE-001, BE-004)
     Then the API responds with status 200
     And the query response has 2 row(s)
 
+  Scenario: Onboarding a renewed Sleeper season reuses the existing league without a duplicate METADATA (BE-001)
+    # A Sleeper league renews under a new league ID linked by previous_league_id. Onboarding
+    # it must fold into the existing canonical league, registering the new ID's LEAGUE_LOOKUP
+    # and preserving the original METADATA — never creating a second, separate league.
+    Given Sleeper player metadata and stats are cached in S3
+    And a LEAGUE_LOOKUP exists for league "100" platform "SLEEPER" canonical "canon-prior"
+    And the Sleeper previous_league_id chain resolves to canonical "canon-prior"
+    When the onboarder runs an ONBOARD for "SLEEPER" league "200" with fixture "sleeper/raw_data_2024.json"
+    Then the onboarder returns status 200
+    And a LEAGUE_LOOKUP exists for onboarded league "200" platform "SLEEPER"
+    And exactly one un-overwritten METADATA exists for canonical "canon-prior"
+
   Scenario: An upstream auth failure records a FAILED job and writes no METADATA
     When the onboarder fails to reach the platform
     Then the onboarder returns status 502

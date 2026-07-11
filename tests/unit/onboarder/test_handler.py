@@ -116,11 +116,102 @@ class TestLambdaHandlerSleeperRefreshNoCanonicalId:
         assert result["statusCode"] == 500
 
 
+class TestLambdaHandlerSleeperOnboardRenewal:
+    """A Sleeper ONBOARD walks the previous_league_id chain too: a renewal of an
+    already-onboarded league must reuse the existing canonical (no duplicate METADATA),
+    while a genuinely new league mints a fresh one."""
+
+    def test_onboard_renewal_reuses_existing_canonical_as_refresh(
+        self, onboarder_handler
+    ):
+        # Onboarding a renewed Sleeper season whose prior season is already onboarded
+        # resolves the existing canonical and is folded into the new-season-refresh path.
+        event = {
+            "requestType": "ONBOARD",
+            "body": {"leagueId": "new-season-lg", "platform": "SLEEPER"},
+        }
+        svc = MagicMock()
+        svc.canonical_league_id = "canonical-abc"
+        with (
+            patch.object(
+                onboarder_handler,
+                "resolve_sleeper_canonical_league_id",
+                return_value="canonical-abc",
+            ),
+            patch.object(
+                onboarder_handler, "OnboardingService", return_value=svc
+            ) as mock_cls,
+        ):
+            result = onboarder_handler.lambda_handler(event, MagicMock())
+
+        assert result["statusCode"] == 200
+        kwargs = mock_cls.call_args.kwargs
+        assert kwargs["canonical_league_id"] == "canonical-abc"
+        assert kwargs["is_new_season_refresh"] is True
+        # Folded into the refresh write path so the original METADATA is preserved.
+        assert kwargs["request_type"] == "REFRESH"
+
+    def test_onboard_new_league_mints_fresh_canonical(self, onboarder_handler):
+        # No prior season resolves, so ONBOARD proceeds as a brand-new league: the
+        # canonical is minted inside OnboardingService, not reused, and it stays ONBOARD.
+        event = {
+            "requestType": "ONBOARD",
+            "body": {"leagueId": "brand-new-lg", "platform": "SLEEPER"},
+        }
+        svc = MagicMock()
+        svc.canonical_league_id = "minted-uuid"
+        with (
+            patch.object(
+                onboarder_handler,
+                "resolve_sleeper_canonical_league_id",
+                return_value=None,
+            ),
+            patch.object(
+                onboarder_handler, "OnboardingService", return_value=svc
+            ) as mock_cls,
+        ):
+            result = onboarder_handler.lambda_handler(event, MagicMock())
+
+        assert result["statusCode"] == 200
+        kwargs = mock_cls.call_args.kwargs
+        assert kwargs["canonical_league_id"] is None
+        assert kwargs["is_new_season_refresh"] is False
+        assert kwargs["request_type"] == "ONBOARD"
+
+    def test_onboard_renewal_not_started_is_noop_success(self, onboarder_handler):
+        # A renewed season still in the offseason (no started seasons) resolves the
+        # existing canonical and, folded into REFRESH, is a no-op success rather than a
+        # NOT_STARTED failure — the new season registers once it flips to in_season.
+        event = {
+            "requestType": "ONBOARD",
+            "correlation_id": "corr-1",
+            "body": {"leagueId": "new-season-lg", "platform": "SLEEPER"},
+        }
+        svc = MagicMock()
+        svc.canonical_league_id = "canonical-abc"
+        svc.client.get_seasons.return_value = []
+        with (
+            patch.object(
+                onboarder_handler,
+                "resolve_sleeper_canonical_league_id",
+                return_value="canonical-abc",
+            ),
+            patch.object(onboarder_handler, "OnboardingService", return_value=svc),
+            patch.object(onboarder_handler, "write_job_status") as mock_wjs,
+        ):
+            result = onboarder_handler.lambda_handler(event, MagicMock())
+
+        assert result["statusCode"] == 200
+        assert json.loads(result["body"])["status"] == "succeeded"
+        svc.run.assert_not_called()
+        assert mock_wjs.call_args.args[1] == "COMPLETED"
+
+
 class TestLambdaHandlerServiceInitErrors:
     def test_key_error_in_init_returns_400(self, onboarder_handler):
         event = {
             "requestType": "ONBOARD",
-            "body": {"platform": "SLEEPER"},
+            "body": {"leagueId": "123", "platform": "SLEEPER"},
         }
         with patch.object(
             onboarder_handler, "OnboardingService", side_effect=KeyError("leagueId")
