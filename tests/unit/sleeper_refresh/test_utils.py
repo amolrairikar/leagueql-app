@@ -94,6 +94,52 @@ class TestGetSleeperLeagues:
             result = sleeper_refresh_utils.get_sleeper_leagues()
         assert result == []
 
+    def test_includes_pending_renewal_alongside_current_season(
+        self, sleeper_refresh_utils
+    ):
+        # A league mid-renewal: the current season's lookup (with seasons) plus a pending
+        # lookup for the not-yet-started season (pending_season marker, no seasons). Both
+        # league IDs must be refreshed so the pending season attaches once it starts.
+        mock_ddb = MagicMock()
+        mock_ddb.query.return_value = {
+            "Items": [
+                {
+                    "canonical_league_id": {"S": "canonical-abc"},
+                    "league_id": {"S": "lg-2025"},
+                    "seasons": {"SS": ["2024", "2025"]},
+                },
+                {
+                    "canonical_league_id": {"S": "canonical-abc"},
+                    "league_id": {"S": "lg-2026"},
+                    "pending_season": {"S": "2026"},
+                },
+            ]
+        }
+        with patch.object(sleeper_refresh_utils, "_dynamodb_client", mock_ddb):
+            result = sleeper_refresh_utils.get_sleeper_leagues()
+        assert {r["league_id"] for r in result} == {"lg-2025", "lg-2026"}
+        assert all(r["canonical_league_id"] == "canonical-abc" for r in result)
+
+    def test_pending_lookup_excluded_from_most_recent_selection(
+        self, sleeper_refresh_utils
+    ):
+        # A pending (season-less) lookup must never be chosen as a canonical's most
+        # recent season — it is only polled as a pending extra, not as the main refresh.
+        mock_ddb = MagicMock()
+        mock_ddb.query.return_value = {
+            "Items": [
+                {
+                    "canonical_league_id": {"S": "c1"},
+                    "league_id": {"S": "lg-2026"},
+                    "pending_season": {"S": "2026"},
+                },
+            ]
+        }
+        with patch.object(sleeper_refresh_utils, "_dynamodb_client", mock_ddb):
+            result = sleeper_refresh_utils.get_sleeper_leagues()
+        # Only the pending poll entry, no most-recent entry (it has no real seasons yet).
+        assert result == [{"league_id": "lg-2026", "canonical_league_id": "c1"}]
+
     def test_multiple_canonical_ids_returns_one_per(self, sleeper_refresh_utils):
         mock_ddb = MagicMock()
         mock_ddb.query.return_value = {

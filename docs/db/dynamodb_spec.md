@@ -70,9 +70,10 @@ Mapping allowing for lookup of a ESPN/SLEEPER league ID to its canonical league 
 | `PK` | String | Yes | `LEAGUE#{league_id}#PLATFORM#{platform}` |
 | `SK` | String | Yes | `LEAGUE_LOOKUP` |
 | `canonical_league_id` | String | Yes | The UUID associated with this league |
-| `seasons` | List\<String\> | Yes | List of seasons onboarded (e.g. `["2022", "2023", "2024"]`) |
+| `seasons` | List\<String\> | No | List of seasons onboarded (e.g. `["2022", "2023", "2024"]`). Absent on a **pending** renewal lookup (see below), which has no started season yet. |
 | `platform` | String | Yes | The platform the league belongs to (e.g., "ESPN", "SLEEPER") |
 | `league_id` | String | Yes | The league ID for the platform |
+| `pending_season` | String | No | Present only on a **pending** Sleeper renewal lookup: the not-yet-started season being awaited (e.g. `"2026"`). See below. |
 
 **Example:**
 ```json
@@ -83,6 +84,30 @@ Mapping allowing for lookup of a ESPN/SLEEPER league ID to its canonical league 
   "seasons": ["2022", "2023", "2024"],
   "platform": "ESPN",
   "league_id": "12345678"
+}
+```
+
+**Pending renewal variant (Sleeper).** A Sleeper league renews each season under a brand-new
+`league_id` linked to the prior season by `previous_league_id`. When a user connects the
+renewed season before it starts (`pre_draft`/`drafting`), the new ID is registered as a
+*pending* `LEAGUE_LOOKUP` — it carries `canonical_league_id` (the existing league) and a
+`pending_season` marker, but **no `seasons`** (an empty DynamoDB string set is invalid, and the
+season must not surface in any dropdown until it has data). This is essential because Sleeper
+only links seasons *backwards*, so a discarded new ID could never be re-discovered. The
+scheduled auto-refresh ([BE-012](../requirements/backend/BE-012-scheduled-sleeper-auto-refresh.md))
+polls pending lookups and promotes this item to a normal lookup — adding `seasons` and removing
+`pending_season` — the first run after the season flips to `in_season`
+([BE-001](../requirements/backend/BE-001-league-onboarding.md) /
+[BE-002](../requirements/backend/BE-002-league-refresh.md)).
+
+```json
+{
+  "PK": "LEAGUE#1377908026471645184#PLATFORM#SLEEPER",
+  "SK": "LEAGUE_LOOKUP",
+  "canonical_league_id": "uuid-string",
+  "platform": "SLEEPER",
+  "league_id": "1377908026471645184",
+  "pending_season": "2026"
 }
 ```
 </details>

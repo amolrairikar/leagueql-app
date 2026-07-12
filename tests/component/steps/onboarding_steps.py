@@ -17,22 +17,26 @@ from common_steps import get_item, load_fixture
 class _FakeClient:
     """Stand-in for ESPNClient/SleeperClient returning canned fixture data."""
 
-    def __init__(self, raw_data):
+    def __init__(self, raw_data, pending_season=None):
         self._raw = raw_data
         self._seasons = sorted({str(item["season"]) for item in raw_data})
+        self._pending_season = pending_season
 
     def get_seasons(self):
         return self._seasons
+
+    def get_pending_season(self):
+        return self._pending_season
 
     async def fetch_all(self):
         return self._raw
 
 
-def _patch_build_client(context, raw_data):
+def _patch_build_client(context, raw_data, pending_season=None):
     patcher = patch.object(
         context.onboarding_service_mod.OnboardingService,
         "_build_client",
-        lambda self, **kwargs: _FakeClient(raw_data),
+        lambda self, **kwargs: _FakeClient(raw_data, pending_season=pending_season),
     )
     patcher.start()
     context._patches.append(patcher)
@@ -52,6 +56,17 @@ def _run_onboarder(
     }
     if getattr(context, "canonical", None):
         event["canonicalLeagueId"] = context.canonical
+    # The handler walks the Sleeper previous_league_id chain (a real HTTP call) for any
+    # ONBOARD/REFRESH without a known canonical. Stub it so resolution is driven by the
+    # scenario (``context.resolved_canonical``, default None = a brand-new league) instead
+    # of hitting the network; the real chain walk is covered by unit tests.
+    resolve_patch = patch.object(
+        context.onboarder_handler,
+        "resolve_sleeper_canonical_league_id",
+        return_value=getattr(context, "resolved_canonical", None),
+    )
+    resolve_patch.start()
+    context._patches.append(resolve_patch)
     ctx = MagicMock(aws_request_id="req", function_name="onboarder-test")
     context.onboard_response = context.onboarder_handler.lambda_handler(event, ctx)
     parsed = json.loads(context.onboard_response["body"])
@@ -116,6 +131,54 @@ def step_onboard_http_error(context):
     patcher.start()
     context._patches.append(patcher)
     _run_onboarder(context, "ESPN", "555", "ONBOARD", {"season": "2024"})
+
+
+@when(
+    'the onboarder runs an ONBOARD for "{platform}" league "{league_id}" '
+    'with no started seasons pending "{pending}"'
+)
+def step_onboard_pending(context, platform, league_id, pending):
+    # An offseason renewal: no usable seasons yet, but the not-yet-started season is
+    # reported as pending so the new league ID can be registered for later pickup.
+    _patch_build_client(context, [], pending_season=pending)
+    _run_onboarder(context, platform, league_id, "ONBOARD")
+
+
+@given('the Sleeper previous_league_id chain resolves to canonical "{canonical}"')
+def step_chain_resolves(context, canonical):
+    # Drives the stubbed resolve_sleeper_canonical_league_id in _run_onboarder so a
+    # renewed Sleeper season (new league ID) maps back to an already-onboarded league.
+    context.resolved_canonical = canonical
+
+
+@then(
+    'a pending LEAGUE_LOOKUP exists for league "{league_id}" '
+    'pending season "{season}" canonical "{canonical}"'
+)
+def step_pending_lookup(context, league_id, season, canonical):
+    item = get_item(context, f"LEAGUE#{league_id}#PLATFORM#SLEEPER", "LEAGUE_LOOKUP")
+    assert item, "no pending LEAGUE_LOOKUP written"
+    assert item["canonical_league_id"] == canonical
+    assert item.get("pending_season") == season
+    # No seasons set yet — the not-yet-started season must not surface until it has data.
+    assert "seasons" not in item
+
+
+@then('exactly one un-overwritten METADATA exists for canonical "{canonical}"')
+def step_single_metadata_preserved(context, canonical):
+    from boto3.dynamodb.conditions import Key
+
+    table = context.ddb_resource.Table(context.table_name)
+    resp = table.query(
+        KeyConditionExpression=Key("PK").eq(f"LEAGUE#{canonical}")
+        & Key("SK").eq("METADATA")
+    )
+    items = resp["Items"]
+    assert len(items) == 1, f"expected exactly one METADATA, got {len(items)}"
+    # A duplicate/overwrite from the ONBOARD write path would replace the seeded
+    # METADATA with one that drops the original owner (no ownerUserId on this event),
+    # so a surviving owner_user_id proves the original record was preserved.
+    assert items[0].get("owner_user_id"), "METADATA was overwritten by onboarding"
 
 
 @when("the processor processes the onboarded league")

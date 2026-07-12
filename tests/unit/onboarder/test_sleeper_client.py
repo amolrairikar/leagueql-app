@@ -259,6 +259,45 @@ class TestSleeperClientGetSeasons:
         assert "2024" in seasons
 
 
+class TestSleeperClientPendingSeason:
+    def test_pending_season_recorded_for_not_started_refresh(
+        self, onboarder_sleeper_client
+    ):
+        # A renewed offseason season (pre_draft) is skipped from the usable seasons but
+        # remembered as pending, mapped to its new league ID.
+        http_resp = _mock_http_response(
+            {
+                "season": "2026",
+                "league_id": "league-2026",
+                "previous_league_id": "league-2025",
+                "status": "pre_draft",
+            }
+        )
+        with patch("requests.get", return_value=http_resp):
+            client = onboarder_sleeper_client.SleeperClient(
+                "league-2026", is_refresh=True
+            )
+        assert client.season_mapping == {}
+        assert client.pending_seasons == {"2026": "league-2026"}
+        assert client.get_pending_season() == "2026"
+
+    def test_get_pending_season_returns_most_recent(self, onboarder_sleeper_client):
+        client = onboarder_sleeper_client.SleeperClient.__new__(
+            onboarder_sleeper_client.SleeperClient
+        )
+        client.pending_seasons = {"2025": "league-2025", "2026": "league-2026"}
+        assert client.get_pending_season() == "2026"
+
+    def test_get_pending_season_none_when_no_pending(self, onboarder_sleeper_client):
+        http_resp = _mock_http_response(
+            {"season": "2024", "league_id": "league-2024", "previous_league_id": "0"}
+        )
+        with patch("requests.get", return_value=http_resp):
+            client = onboarder_sleeper_client.SleeperClient("league-2024")
+        assert client.pending_seasons == {}
+        assert client.get_pending_season() is None
+
+
 class TestSleeperClientConstructRequestUrl:
     def _make_client(self, onboarder_sleeper_client):
         http_resp = _mock_http_response(

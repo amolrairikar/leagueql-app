@@ -161,6 +161,10 @@ class SleeperClient:
     def __init__(self, league_id: str, is_refresh: bool = False):
         """Constructor."""
         self.league_id = league_id
+        # season -> league_id for seasons that exist on Sleeper but have not started yet
+        # (pre_draft/drafting). Populated by _get_league_seasons; used to register a
+        # renewed season's league ID as pending (BE-001 / BE-012).
+        self.pending_seasons: dict[str, str] = {}
         self.season_mapping = self._get_league_seasons(is_refresh=is_refresh)
         self.request_urls = self._build_all_request_urls()
 
@@ -196,6 +200,12 @@ class SleeperClient:
                     status,
                     self.league_id,
                 )
+                # Remember the skipped season so a renewal can be registered as pending
+                # (its league ID mapped to the canonical) for later auto-refresh pickup.
+                season = data.get("season")
+                league_id_val = data.get("league_id")
+                if season and league_id_val:
+                    self.pending_seasons[season] = league_id_val
             else:
                 try:
                     result[data["season"]] = data["league_id"]
@@ -221,6 +231,16 @@ class SleeperClient:
     def get_seasons(self) -> list[str]:
         """Returns the list of seasons this league has been active."""
         return list(self.season_mapping.keys())
+
+    def get_pending_season(self) -> str | None:
+        """Return the most recent not-yet-started season, or None if there are none.
+
+        Used to register a renewed Sleeper season's league ID as pending when a
+        refresh/onboard resolves an existing league but the new season has not begun.
+        """
+        if not self.pending_seasons:
+            return None
+        return max(self.pending_seasons, key=int)
 
     def _construct_request_url(
         self, league_id: str, data_type: str, week: int | None = None

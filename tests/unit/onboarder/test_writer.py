@@ -257,6 +257,9 @@ class TestWriteLeagueRecords:
         assert len(items) == 1
         assert "Update" in items[0]
         assert items[0]["Update"]["Key"]["SK"] == {"S": "LEAGUE_LOOKUP"}
+        # Promoting a pending renewal to a real season drops the pending marker; a no-op
+        # on an ordinary refresh where it was never set (BE-012).
+        assert "REMOVE pending_season" in items[0]["Update"]["UpdateExpression"]
 
     def test_refresh_new_season_uses_put(self, onboarder_writer, monkeypatch):
         monkeypatch.setenv("DYNAMODB_TABLE_NAME", "test-table")
@@ -301,4 +304,51 @@ class TestWriteLeagueRecords:
                     canonical_league_id="canonical-abc",
                     seasons=["2024"],
                     request_type="ONBOARD",
+                )
+
+
+class TestWritePendingLeagueLookup:
+    def test_writes_seasonless_lookup_with_marker(self, onboarder_writer, monkeypatch):
+        # A renewed, not-yet-started season is registered as a LEAGUE_LOOKUP that maps
+        # the new league ID to the existing canonical, carries a pending_season marker,
+        # and deliberately has NO seasons set (so it never surfaces in a dropdown).
+        monkeypatch.setenv("DYNAMODB_TABLE_NAME", "test-table")
+        mock_ddb = MagicMock()
+        with patch.object(onboarder_writer, "_dynamodb", mock_ddb):
+            onboarder_writer.write_pending_league_lookup(
+                league_id="league-2026",
+                platform="SLEEPER",
+                canonical_league_id="canonical-abc",
+                pending_season="2026",
+            )
+        item = mock_ddb.put_item.call_args[1]["Item"]
+        assert item["PK"] == {"S": "LEAGUE#league-2026#PLATFORM#SLEEPER"}
+        assert item["SK"] == {"S": "LEAGUE_LOOKUP"}
+        assert item["canonical_league_id"] == {"S": "canonical-abc"}
+        assert item["pending_season"] == {"S": "2026"}
+        assert "seasons" not in item
+
+    def test_missing_env_var_raises_key_error(self, onboarder_writer, monkeypatch):
+        monkeypatch.delenv("DYNAMODB_TABLE_NAME", raising=False)
+        with pytest.raises(KeyError):
+            onboarder_writer.write_pending_league_lookup(
+                league_id="league-2026",
+                platform="SLEEPER",
+                canonical_league_id="canonical-abc",
+                pending_season="2026",
+            )
+
+    def test_dynamodb_client_error_propagates(self, onboarder_writer, monkeypatch):
+        monkeypatch.setenv("DYNAMODB_TABLE_NAME", "test-table")
+        mock_ddb = MagicMock()
+        mock_ddb.put_item.side_effect = botocore.exceptions.ClientError(
+            {"Error": {"Code": "InternalError", "Message": "fail"}}, "PutItem"
+        )
+        with patch.object(onboarder_writer, "_dynamodb", mock_ddb):
+            with pytest.raises(botocore.exceptions.ClientError):
+                onboarder_writer.write_pending_league_lookup(
+                    league_id="league-2026",
+                    platform="SLEEPER",
+                    canonical_league_id="canonical-abc",
+                    pending_season="2026",
                 )
