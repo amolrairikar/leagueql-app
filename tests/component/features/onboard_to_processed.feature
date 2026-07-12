@@ -39,6 +39,18 @@ Feature: Onboard-to-processed pipeline (BE-001, BE-004)
     And a LEAGUE_LOOKUP exists for onboarded league "200" platform "SLEEPER"
     And exactly one un-overwritten METADATA exists for canonical "canon-prior"
 
+  Scenario: Onboarding an offseason Sleeper renewal registers a pending lookup (BE-001, BE-012)
+    # The renewed season hasn't started (pre_draft), so there's nothing to process yet, but
+    # the new league ID must still be persisted (pointing at the existing canonical, marked
+    # pending) so the scheduled auto-refresh can attach the season once it begins.
+    Given Sleeper player metadata and stats are cached in S3
+    And a LEAGUE_LOOKUP exists for league "100" platform "SLEEPER" canonical "canon-prior"
+    And the Sleeper previous_league_id chain resolves to canonical "canon-prior"
+    When the onboarder runs an ONBOARD for "SLEEPER" league "200" with no started seasons pending "2026"
+    Then the onboarder returns status 200
+    And a pending LEAGUE_LOOKUP exists for league "200" pending season "2026" canonical "canon-prior"
+    And exactly one un-overwritten METADATA exists for canonical "canon-prior"
+
   Scenario: An upstream auth failure records a FAILED job and writes no METADATA
     When the onboarder fails to reach the platform
     Then the onboarder returns status 502

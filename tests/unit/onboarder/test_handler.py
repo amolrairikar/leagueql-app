@@ -178,10 +178,13 @@ class TestLambdaHandlerSleeperOnboardRenewal:
         assert kwargs["is_new_season_refresh"] is False
         assert kwargs["request_type"] == "ONBOARD"
 
-    def test_onboard_renewal_not_started_is_noop_success(self, onboarder_handler):
+    def test_onboard_renewal_not_started_registers_pending_and_noops(
+        self, onboarder_handler
+    ):
         # A renewed season still in the offseason (no started seasons) resolves the
         # existing canonical and, folded into REFRESH, is a no-op success rather than a
-        # NOT_STARTED failure — the new season registers once it flips to in_season.
+        # NOT_STARTED failure — but the new league ID is registered as pending so the
+        # auto-refresh can attach the season once it flips to in_season.
         event = {
             "requestType": "ONBOARD",
             "correlation_id": "corr-1",
@@ -190,6 +193,7 @@ class TestLambdaHandlerSleeperOnboardRenewal:
         svc = MagicMock()
         svc.canonical_league_id = "canonical-abc"
         svc.client.get_seasons.return_value = []
+        svc.client.get_pending_season.return_value = "2026"
         with (
             patch.object(
                 onboarder_handler,
@@ -198,6 +202,9 @@ class TestLambdaHandlerSleeperOnboardRenewal:
             ),
             patch.object(onboarder_handler, "OnboardingService", return_value=svc),
             patch.object(onboarder_handler, "write_job_status") as mock_wjs,
+            patch.object(
+                onboarder_handler, "write_pending_league_lookup"
+            ) as mock_pending,
         ):
             result = onboarder_handler.lambda_handler(event, MagicMock())
 
@@ -205,6 +212,71 @@ class TestLambdaHandlerSleeperOnboardRenewal:
         assert json.loads(result["body"])["status"] == "succeeded"
         svc.run.assert_not_called()
         assert mock_wjs.call_args.args[1] == "COMPLETED"
+        mock_pending.assert_called_once_with(
+            league_id="new-season-lg",
+            platform="SLEEPER",
+            canonical_league_id="canonical-abc",
+            pending_season="2026",
+        )
+
+    def test_pending_refresh_poll_not_yet_started_leaves_record_untouched(
+        self, onboarder_handler
+    ):
+        # The auto-refresh polls an already-pending ID by passing the canonical in, so
+        # the chain walk is skipped (is_new_season_refresh stays False). While the season
+        # is still not started it is a no-op that must NOT rewrite the pending lookup.
+        event = {
+            "requestType": "REFRESH",
+            "correlation_id": "corr-1",
+            "canonicalLeagueId": "canonical-abc",
+            "body": {"leagueId": "new-season-lg", "platform": "SLEEPER"},
+        }
+        svc = MagicMock()
+        svc.canonical_league_id = "canonical-abc"
+        svc.client.get_seasons.return_value = []
+        with (
+            patch.object(onboarder_handler, "OnboardingService", return_value=svc),
+            patch.object(onboarder_handler, "write_job_status") as mock_wjs,
+            patch.object(
+                onboarder_handler, "write_pending_league_lookup"
+            ) as mock_pending,
+        ):
+            result = onboarder_handler.lambda_handler(event, MagicMock())
+
+        assert result["statusCode"] == 200
+        assert mock_wjs.call_args.args[1] == "COMPLETED"
+        mock_pending.assert_not_called()
+
+    def test_renewal_not_started_without_pending_season_skips_registration(
+        self, onboarder_handler
+    ):
+        # Defensive: if the skipped season carried no resolvable season number, no
+        # pending lookup is written (its marker requires a value) — still a no-op success.
+        event = {
+            "requestType": "ONBOARD",
+            "correlation_id": "corr-1",
+            "body": {"leagueId": "new-season-lg", "platform": "SLEEPER"},
+        }
+        svc = MagicMock()
+        svc.canonical_league_id = "canonical-abc"
+        svc.client.get_seasons.return_value = []
+        svc.client.get_pending_season.return_value = None
+        with (
+            patch.object(
+                onboarder_handler,
+                "resolve_sleeper_canonical_league_id",
+                return_value="canonical-abc",
+            ),
+            patch.object(onboarder_handler, "OnboardingService", return_value=svc),
+            patch.object(onboarder_handler, "write_job_status"),
+            patch.object(
+                onboarder_handler, "write_pending_league_lookup"
+            ) as mock_pending,
+        ):
+            result = onboarder_handler.lambda_handler(event, MagicMock())
+
+        assert result["statusCode"] == 200
+        mock_pending.assert_not_called()
 
 
 class TestLambdaHandlerServiceInitErrors:

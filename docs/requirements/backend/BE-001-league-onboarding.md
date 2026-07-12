@@ -34,8 +34,13 @@ and an incremented `LEAGUE_COUNT`.
   league ID pointing at the existing canonical, **preserves** the original `METADATA` (owner,
   members, `onboarded_at`), and does **not** create a second league or a duplicate `METADATA`.
   Only a chain that resolves nothing (a genuinely new league) mints a fresh canonical and
-  writes a new `METADATA`. If the renewed season has not started yet (offseason), it follows
-  the not-yet-started no-op behavior below rather than failing with `NOT_STARTED`.
+  writes a new `METADATA`. If the renewed season has not started yet (offseason), it is a no-op
+  success that registers the new league ID as a **pending** `LEAGUE_LOOKUP` (new ID → existing
+  canonical, `pending_season` marker, no `seasons`) rather than failing with `NOT_STARTED`; the
+  scheduled auto-refresh ([BE-012](BE-012-scheduled-sleeper-auto-refresh.md)) then polls it and
+  attaches the season once it starts. Persisting the new ID is essential: Sleeper only links
+  seasons backwards via `previous_league_id`, so a discarded new ID could never be
+  re-discovered.
 - **Private ESPN league:** requires `s2` + `swid` cookies; these are passed once for
   onboarding and must never be logged or persisted.
 - **ESPN requires `season`:** the most recent active season is mandatory for ESPN; absent

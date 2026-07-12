@@ -82,6 +82,22 @@ def get_sleeper_leagues() -> list[dict]:
             {"league_id": best["league_id"], "canonical_league_id": canonical_id}
         )
 
+    # Also refresh pending renewals: a renewed Sleeper season is registered as a
+    # LEAGUE_LOOKUP with a `pending_season` marker and no `seasons` set (BE-001 /
+    # BE-012) before its season starts. Poll each so the season attaches automatically
+    # once it flips to in_season (the refresh then promotes it to a real season). These
+    # are additional to a canonical's most-recent real season above, so a league
+    # mid-renewal is refreshed on both its current and its pending league ID.
+    for item in items:
+        canonical_league_id = item.get("canonical_league_id", {}).get("S")
+        league_id = item.get("league_id", {}).get("S")
+        seasons = item.get("seasons", {}).get("SS", [])
+        pending_season = item.get("pending_season", {}).get("S")
+        if canonical_league_id and league_id and pending_season and not seasons:
+            result.append(
+                {"league_id": league_id, "canonical_league_id": canonical_league_id}
+            )
+
     return result
 
 

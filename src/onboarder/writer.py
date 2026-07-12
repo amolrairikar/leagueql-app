@@ -104,6 +104,61 @@ def upload_results_to_s3(
         raise
 
 
+def write_pending_league_lookup(
+    league_id: str,
+    platform: str,
+    canonical_league_id: str,
+    pending_season: str,
+) -> None:
+    """
+    Register a renewed Sleeper season's league ID before its season has started.
+
+    A renewed Sleeper league gets a brand-new league ID each season, but that season
+    carries no usable data until it flips to ``in_season`` (BE-001 / BE-002). We still
+    persist the new ID -> canonical mapping the moment the user hands it to us, because
+    Sleeper only links seasons *backwards* (via ``previous_league_id``): without this
+    record the scheduled auto-refresh could never discover the new season, and the
+    association would be silently lost until a manual re-onboard.
+
+    The item is written **without** a ``seasons`` set — an empty DynamoDB string set is
+    invalid, and the not-yet-started season must not surface in any dropdown until it has
+    data. A ``pending_season`` marker records which season we are waiting on; the
+    scheduled Sleeper auto-refresh (BE-012) polls pending lookups each run and the refresh
+    promotes this item (adds ``seasons``, drops the marker) once the season starts.
+
+    Args:
+        league_id: The renewed season's new Sleeper league ID.
+        platform: The platform (always ``SLEEPER`` for this path).
+        canonical_league_id: The existing canonical league this renewal belongs to.
+        pending_season: The not-yet-started season being awaited (e.g. ``"2026"``).
+    """
+    try:
+        table_name = os.environ["DYNAMODB_TABLE_NAME"]
+        logger.info(
+            "Registering pending Sleeper season %s: league_id=%s canonical_league_id=%s",
+            pending_season,
+            league_id,
+            canonical_league_id,
+        )
+        _dynamodb.put_item(
+            TableName=table_name,
+            Item={
+                "PK": {"S": f"LEAGUE#{league_id}#PLATFORM#{platform}"},
+                "SK": {"S": "LEAGUE_LOOKUP"},
+                "canonical_league_id": {"S": canonical_league_id},
+                "platform": {"S": platform},
+                "league_id": {"S": league_id},
+                "pending_season": {"S": pending_season},
+            },
+        )
+    except KeyError:
+        logger.error("Environment variable 'DYNAMODB_TABLE_NAME' not set!")
+        raise
+    except botocore.exceptions.ClientError as e:
+        logger.error("Error occurred while writing pending LEAGUE_LOOKUP: %s", e)
+        raise
+
+
 def write_league_records(
     league_id: str,
     platform: str,
@@ -177,7 +232,10 @@ def write_league_records(
                             "PK": {"S": f"LEAGUE#{league_id}#PLATFORM#{platform}"},
                             "SK": {"S": "LEAGUE_LOOKUP"},
                         },
-                        "UpdateExpression": "ADD seasons :s SET platform = :p, league_id = :l",
+                        # REMOVE pending_season promotes a pending (not-yet-started)
+                        # renewal lookup to a real season once it starts; a no-op on the
+                        # common refresh where the marker was never set (BE-001 / BE-012).
+                        "UpdateExpression": "ADD seasons :s SET platform = :p, league_id = :l REMOVE pending_season",
                         "ExpressionAttributeValues": {
                             ":s": {"SS": seasons},
                             ":p": {"S": platform},

@@ -31,12 +31,18 @@ when the league is already up to date based on current NFL state.
   refresh, not skipped. (See memory: AI recap idempotency.)
 - **Sleeper league not yet in `LEAGUE_LOOKUP`:** allowed — the onboarder resolves the
   canonical league via the `previous_league_id` chain (does not 404 like ESPN would).
-- **New Sleeper season not yet started:** when a refresh resolves only a not-yet-started
-  season (latest league `status` is `pre_draft`/`drafting`, e.g. an offseason renewal), the
-  onboarder finds no usable seasons and treats the refresh as a **no-op success** — it does
-  not fetch, does not write a `LEAGUE_LOOKUP` for the new season's league ID, and marks the
-  `JOB_STATUS` `COMPLETED` so the frontend stops polling. The new season's league ID is only
-  registered once it flips to `in_season`. (See [BE-001](BE-001-league-onboarding.md).)
+- **New Sleeper season not yet started:** when a refresh/onboard resolves an existing league
+  but only a not-yet-started season (latest league `status` is `pre_draft`/`drafting`, e.g. an
+  offseason renewal), the onboarder finds no usable seasons and treats it as a **no-op
+  success** — it does not fetch data and marks the `JOB_STATUS` `COMPLETED` so the frontend
+  stops polling. It **does** register the new league ID as a **pending** `LEAGUE_LOOKUP`
+  (mapped to the existing canonical, marked `pending_season`, with no `seasons` yet) so the
+  scheduled auto-refresh ([BE-012](BE-012-scheduled-sleeper-auto-refresh.md)) can poll it and
+  promote it to a real season once it flips to `in_season`. (Sleeper only links seasons
+  backwards, so without this record the new season could never be auto-discovered — see
+  [BE-001](BE-001-league-onboarding.md).) A poll of an **already-pending** league ID (the
+  canonical is passed in, so the chain walk is skipped) that is still not started leaves the
+  pending record untouched.
 - **Refresh of a non-existent ESPN league:** returns `404`.
 - **NFL state fetch fails:** refresh should still be allowed to proceed (degrade safely).
 
@@ -50,9 +56,11 @@ when the league is already up to date based on current NFL state.
       `LEAGUE_COUNT` is not incremented.
 - [ ] ESPN refreshes use the user-entered latest season.
 - [ ] On success `last_refresh_at` is updated to enforce the next cooldown window.
-- [ ] A refresh that resolves only a not-yet-started Sleeper season (`pre_draft`/`drafting`)
-      is a no-op: no fetch, no `LEAGUE_LOOKUP` write for the new season ID, `JOB_STATUS`
-      marked `COMPLETED`.
+- [ ] A refresh/onboard that resolves an existing league but only a not-yet-started Sleeper
+      season (`pre_draft`/`drafting`) is a no-op success (`JOB_STATUS` `COMPLETED`, no fetch)
+      that registers a **pending** `LEAGUE_LOOKUP` (new league ID → existing canonical,
+      `pending_season` marker, no `seasons`); a later poll of an already-pending ID leaves it
+      untouched until the season starts.
 
 ## Authorization (BE-016)
 Refresh is **owner-gated** ([BE-016](BE-016-league-ownership-authorization.md)): a non-owner caller gets `403`.
