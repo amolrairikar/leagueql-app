@@ -115,11 +115,6 @@ defineFeature(feature, (test) => {
       expect(screen.getByText(title)).toBeInTheDocument();
     };
     and(/^I see "(.*)" listed as a premium feature$/, assertPremiumFeature);
-    and(/^I see "(.*)" listed as a premium feature$/, assertPremiumFeature);
-    and(/^I see "(.*)" listed as a premium feature$/, assertPremiumFeature);
-    and(/^I see "(.*)" listed as a premium feature$/, assertPremiumFeature);
-    and(/^I see "(.*)" listed as a premium feature$/, assertPremiumFeature);
-    and(/^I see "(.*)" listed as a premium feature$/, assertPremiumFeature);
   });
 
   test('With billing disabled the pricing table is hidden', ({

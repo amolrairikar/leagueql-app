@@ -1,7 +1,7 @@
 Feature: Weekly awards & superlatives (FE-032)
-  The matchups page hosts a premium weekly-awards section: per-week award cards (highest
+  The matchups page hosts a free weekly-awards section: per-week award cards (highest
   and lowest score, biggest blowout, narrowest win, best loss, worst win) plus a week-to-date
-  tally of how many each manager has collected. It is gated behind the premium_feature flag.
+  tally of how many each manager has collected.
 
   Scenario: Awards render for a week with games
     Given a season of matchups is available
@@ -19,9 +19,3 @@ Feature: Weekly awards & superlatives (FE-032)
     Given the matchup data fails to load
     When I open the weekly awards
     Then I see "Failed to load weekly awards."
-
-  Scenario: An expired subscription shows the locked overlay without fetching data
-    Given the premium_feature flag is on and the league subscription has expired
-    When I open the gated weekly awards
-    Then I see the paywall heading "Weekly awards & superlatives is a premium feature"
-    And the weekly awards are not rendered

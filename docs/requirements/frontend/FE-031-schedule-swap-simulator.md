@@ -1,7 +1,7 @@
 # FE-031: Schedule-Swap Simulator
 
 ## Description
-A premium section on the `/standings` page that answers the league's eternal "I'm unlucky"
+A free section on the `/standings` page that answers the league's eternal "I'm unlucky"
 argument: **"What would each team's record be if it had played another manager's schedule?"**
 
 For the selected season it renders an N×N matrix computed entirely client-side from the
@@ -22,15 +22,8 @@ reading its own row at a glance sees whether it was schedule-lucky or schedule-u
 - Component: `src/features/schedule_swap/schedule-swap.tsx`; pure transform in
   `compute-schedule-swap.ts`; data fetch reuses `getSeasonMatchups`
   (`MATCHUPS#{season}#`, [BE-005](../backend/BE-005-query-precomputed-views-api.md)).
-- **Premium-gated:** wrapped in `SubscriptionGuard` with the shared `premium_feature`
-  flag ([FE-021](FE-021-subscription-access-control.md) /
-  [FE-026](FE-026-feature-flags.md)). While `billing` is off the whole section — its header and
-  the gated matrix — is **hidden**; with `billing` on but `premium_feature` off the guard is a
-  pass-through and the section renders for everyone. When gated and the subscription is
-  expired/absent, the guard renders a **blurred lock overlay** in place of the matrix and the
-  `ScheduleSwap` component is **not mounted**, so its `MATCHUPS` data is never fetched while
-  locked (the rest of the standings page still loads normally). The section header is gated on
-  `isBillingEnabled` so it disappears with the section when `billing` is off.
+- **Free:** the section and its header always render for everyone; there is no subscription
+  gating.
 
 ## Swap algorithm
 - Only **regular-season** matchups count (`playoff_tier_type` is `NONE`/absent); playoff and
@@ -63,14 +56,8 @@ reading its own row at a glance sees whether it was schedule-lucky or schedule-u
 - [ ] Cells are color-scaled relative to the row team's actual wins (more = green, fewer =
       red).
 - [ ] Switching the season selector recomputes the matrix.
-- [ ] When `premium_feature` (and `billing`) is enabled and the league subscription is
-      expired/absent, the section shows a blurred lock overlay (with a Subscribe CTA for the
-      owner) instead of the matrix, and **does not fetch** the `MATCHUPS` data. With `billing` off
-      the section and its header are hidden; with `billing` on but `premium_feature` off it renders
-      for everyone.
+- [ ] The section renders for everyone, with no subscription gating.
 - [ ] A `MATCHUPS` load failure or fewer-than-two-teams season renders a message, not a crash.
 
 ## Sources
-`src/features/schedule_swap/`, `src/features/season_standings/season-standings.tsx`,
-`src/features/subscription/subscription-guard.tsx`,
-`src/features/subscription/subscription-required.tsx` (blurred lock overlay).
+`src/features/schedule_swap/`, `src/features/season_standings/season-standings.tsx`.

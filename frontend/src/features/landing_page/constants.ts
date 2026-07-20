@@ -128,26 +128,6 @@ export const PRICING_PLANS: PricingPlan[] = [
 // Features unlocked by a subscription (freemium model). Everything else is free.
 export const PREMIUM_FEATURES: PremiumFeature[] = [
   {
-    title: 'Schedule-swap simulator',
-    desc: "See what every team's record would be under each other manager's schedule. Find out who was schedule-lucky and who got robbed.",
-  },
-  {
-    title: 'Weekly awards',
-    desc: 'Weekly superlatives that crown the highest scorer, biggest blowout, closest call, and other standout performances for each week.',
-  },
-  {
-    title: 'Analytics page',
-    desc: "A dedicated analytics suite that turns a season's matchup data into charts: scoring consistency, week-by-week power rankings, and where each team's points come from.",
-  },
-  {
-    title: 'Lineup efficiency',
-    desc: 'See how many points each manager left on the bench each week: the optimal legal lineup vs. what they actually started, with a slot-by-slot start/sit report (FLEX/superflex aware).',
-  },
-  {
-    title: 'Draft value chart',
-    desc: "A scatterplot of every draft pick's position against their points scored so you can analyze trends on the best round to pick a particular position.",
-  },
-  {
     title: 'Recaps',
     desc: 'AI-written recap columns that turn your league’s data into narrative: a lighthearted-but-journalistic write-up of each week’s matchups.',
   },

@@ -1,7 +1,7 @@
 Feature: Draft value scatter (FE-036)
-  The premium Draft Recap scatterplot plots each scored pick's draft position against
+  The free Draft Recap scatterplot plots each scored pick's draft position against
   its season points, filterable by a single position dropdown, computed client-side
-  from the DRAFT view and gated behind the premium_feature flag.
+  from the DRAFT view.
 
   Scenario: The scatter renders a legend of the positions present
     Given a season of scored draft picks is available
@@ -25,9 +25,3 @@ Feature: Draft value scatter (FE-036)
     Given the draft data fails to load
     When I open the draft value scatter
     Then I see "Failed to load draft data."
-
-  Scenario: An expired subscription shows the locked overlay without fetching data
-    Given the premium_feature flag is on and the league subscription has expired
-    When I open the gated draft value scatter
-    Then I see the paywall heading "Draft value is a premium feature"
-    And the draft value scatter is not rendered

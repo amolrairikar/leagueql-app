@@ -5,14 +5,7 @@ import { defineFeature, loadFeature } from 'jest-cucumber';
 import { DraftValueScatter } from '../draft-recap';
 
 import type { DraftPickItem } from '@/features/draft_grades/api-calls';
-import { SubscriptionGuard } from '@/features/subscription/subscription-guard';
-import { setFlagsForTesting } from '@/lib/feature-flags';
-import {
-  leagueMetadata,
-  leagueQuery,
-  leagueQueryError,
-  server,
-} from '@/test/msw/server';
+import { leagueQuery, leagueQueryError, server } from '@/test/msw/server';
 import { renderRoute } from '@/test/render';
 
 const feature = loadFeature(
@@ -69,10 +62,6 @@ const DRAFT_UNSCORED: DraftPickItem[] = [
   pick({ overall_pick_number: 1, position: 'QB', total_points: null }),
   pick({ overall_pick_number: 2, position: 'DEF', total_points: null }),
 ];
-
-function isoIn(days: number): string {
-  return new Date(Date.now() + days * 86400000).toISOString();
-}
 
 async function openScatter() {
   await renderRoute(
@@ -151,47 +140,6 @@ defineFeature(feature, (test) => {
     when('I open the draft value scatter', openScatter);
     then(/^I see "(.*)"$/, async (text) => {
       expect(await screen.findByText(text)).toBeInTheDocument();
-    });
-  });
-
-  test('An expired subscription shows the locked overlay without fetching data', ({
-    given,
-    when,
-    then,
-    and,
-  }) => {
-    given(
-      'the premium_feature flag is on and the league subscription has expired',
-      () => {
-        setFlagsForTesting({ billing: true, premium_feature: true });
-        // No DRAFT handler is registered. With MSW's onUnhandledRequest: 'error',
-        // a data fetch would fail the test — so this also proves the gated
-        // component never fetches while locked.
-        server.use(leagueMetadata({ subscription_end_time: isoIn(-1) }));
-      },
-    );
-    when('I open the gated draft value scatter', async () => {
-      await renderRoute(
-        <SubscriptionGuard
-          featureFlag="premium_feature"
-          featureLabel="Draft value"
-        >
-          <DraftValueScatter
-            leagueId="100"
-            platform="SLEEPER"
-            season="2024"
-            auction={false}
-          />
-        </SubscriptionGuard>,
-        { league },
-      );
-    });
-    then(/^I see the paywall heading "(.*)"$/, async (text) => {
-      expect(await screen.findByText(text)).toBeInTheDocument();
-    });
-    and('the draft value scatter is not rendered', () => {
-      // The position filter never mounts, so its dropdown is absent.
-      expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
     });
   });
 });

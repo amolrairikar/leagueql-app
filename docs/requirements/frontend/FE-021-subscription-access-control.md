@@ -3,16 +3,17 @@
 > **Premium paywall, feature-flagged ([FE-026](FE-026-feature-flags.md)).** LeagueQL is
 > **freemium**: the app is free except for **premium features**. A `SubscriptionGuard` gates a
 > premium section only when **both** the `billing` master flag **and** the shared `premium_feature`
-> flag are ON. The schedule-swap simulator ([FE-031](FE-031-schedule-swap-simulator.md)) is the
-> first wrapped premium section; every premium feature shares the `premium_feature` flag and is
-> gated identically. When `billing` is OFF (the current default) the guard hides the section
-> entirely; with `billing` ON but `premium_feature` OFF the guard renders the section for free.
+> flag are ON. The AI weekly matchup recap ([FE-035](FE-035-weekly-matchup-recap.md)) is the only
+> wrapped premium section (the schedule-swap simulator, weekly awards, analytics, lineup efficiency,
+> and draft value chart are now free). When `billing` is OFF (the current default) the guard hides
+> the section entirely; with `billing` ON but `premium_feature` OFF the guard renders the section
+> for free.
 
 ## Description
 Provides the `SubscriptionGuard` used to gate a **premium** route on an active subscription, plus
-the "Manage Subscription" sidebar entry point. The schedule-swap simulator
-([FE-031](FE-031-schedule-swap-simulator.md)) is the first wrapped premium section; the analytics
-pages and the Migrate League wizard remain free. When wrapped, the guard reads the current
+the "Manage Subscription" sidebar entry point. The AI weekly matchup recap
+([FE-035](FE-035-weekly-matchup-recap.md)) is the only wrapped premium section; everything else in
+the app (including the Migrate League wizard) is free. When wrapped, the guard reads the current
 league's `subscription_end_time` (from
 `GET /leagues/{id}` via the existing `getLeague` accessor) and, when the subscription is expired
 or absent, replaces the gated section with a **blurred lock overlay** — a non-interactive,
@@ -42,8 +43,8 @@ handling.
   `billing` is on but the named flag is off, otherwise it consumes `useSubscription` and renders
   the locked overlay when expired
   **instead of** the gated children (so the premium feature is never mounted and its data is not
-  fetched). The schedule-swap simulator (FE-031) renders it with `featureFlag="premium_feature"`;
-  every premium section uses the same shared flag. Also exercised by component tests in isolation.
+  fetched). The AI weekly matchup recap (FE-035) renders it with `featureFlag="premium_feature"`.
+  Also exercised by component tests in isolation.
 - Locked overlay: `frontend/src/features/subscription/subscription-required.tsx` — a blurred,
   non-interactive skeleton behind a lock icon with feature-specific copy (driven by the optional
   `featureLabel`) and a primary **Subscribe** button that starts checkout
@@ -55,7 +56,7 @@ handling.
   expiring-soon alert dot.
 
 ## Edge Cases
-- **Schedule-swap wrapped (FE-031):** the simulator is paywalled only when both flags are ON; with
+- **AI recap wrapped (FE-035):** the recap is paywalled only when both flags are ON; with
   `billing` OFF the section (including its header) is hidden, and with `billing` ON but
   `premium_feature` OFF it renders for everyone.
 - **Billing master flag OFF (current default):** the guard renders nothing everywhere a section is
@@ -86,7 +87,7 @@ handling.
   non-expiring in the bypass and error cases, and `expiringSoon` is false while loading).
 
 ## Acceptance Criteria
-- [ ] The schedule-swap simulator (FE-031) is paywalled only when both `billing` and
+- [ ] The AI weekly matchup recap (FE-035) is paywalled only when both `billing` and
       `premium_feature` are ON; with `billing` OFF the section (and its header) is hidden, and with
       `billing` ON but `premium_feature` OFF it renders for everyone.
 - [ ] When a section is wrapped with both `billing` and `premium_feature` ON, it shows the blurred

@@ -17,12 +17,8 @@ Rendered with the marketing `Header` (not the app sidebar layout).
   Shows two subscription plans — **Monthly $1.99/month** and **Yearly $8.99/year** (the yearly
   plan is highlighted as the best value, ~62% cheaper than 12 monthly payments) — notes that all
   subscriptions come with a 14-day trial, and lists the **premium features** a subscription
-  unlocks (the **Schedule-swap simulator**, [FE-031](FE-031-schedule-swap-simulator.md),
-  **Weekly awards**, [FE-032](FE-032-weekly-awards-superlatives.md), the **Analytics page**,
-  [FE-033](FE-033-analytics-page.md), **Lineup efficiency**,
-  [FE-034](FE-034-lineup-efficiency.md), the **Draft value chart**,
-  [FE-036](FE-036-draft-value-scatter.md), and **Recaps** — the AI
-  matchup recap, [FE-035](FE-035-weekly-matchup-recap.md), with season recaps planned). Plans
+  unlocks (**Recaps** — the AI matchup recap, [FE-035](FE-035-weekly-matchup-recap.md), with
+  season recaps planned — the only remaining premium feature; everything else is free). Plans
   and premium features come from `PRICING_PLANS` / `PREMIUM_FEATURES` in `constants.ts`. The table
   is **informational** — there is no per-plan CTA (checkout needs a connected league), and the
   blurb notes a subscription is shared across the whole league (every member gets access) and that
@@ -53,8 +49,8 @@ Rendered with the marketing `Header` (not the app sidebar layout).
 - [ ] CTAs route to sign in / connect league (or into the app for signed-in users) and to
       demo mode.
 - [ ] With `billing` ON, a pricing table below the feature grid shows the Monthly ($1.99/month) and
-      Yearly ($8.99/year) plans and lists the premium features (the Schedule-swap simulator and
-      Weekly awards), with no per-plan CTA; with `billing` OFF it is hidden.
+      Yearly ($8.99/year) plans and lists the premium features (Recaps — the AI matchup recap),
+      with no per-plan CTA; with `billing` OFF it is hidden.
 - [ ] The Docs nav link resolves to `/docs`; the Changelog nav link resolves to the in-app
       `/changelog` page ([FE-028](FE-028-changelog-page.md)).
 - [ ] Layout is responsive on mobile and desktop.

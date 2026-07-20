@@ -74,19 +74,13 @@ const navItems = [
   { title: 'Draft Grades', url: '/draft_grades', icon: GraduationCap },
   { title: 'Player Records', url: '/player_records', icon: Star },
   { title: 'Matchup Records', url: '/matchup_records', icon: Zap },
+  { title: 'Analytics', url: '/analytics', icon: ChartColumnBig },
 ];
 
 // Transactions (waivers/trades/free agents) only exist for Sleeper leagues — ESPN
 // exposes no equivalent data — so the nav entry is Sleeper-gated (BE-019 / FE-027).
 const sleeperOnlyNavItems = [
   { title: 'Transactions', url: '/transactions', icon: Repeat },
-];
-
-// The Analytics page is entirely premium (FE-033): its body is wrapped in
-// SubscriptionGuard, which renders nothing when the `billing` master flag is off
-// (FE-026), so the tab would lead to a blank page. Gate the nav entry on billing.
-const billingOnlyNavItems = [
-  { title: 'Analytics', url: '/analytics', icon: ChartColumnBig },
 ];
 
 export function AppSidebar() {
@@ -115,7 +109,7 @@ export function AppSidebar() {
     getLeagueCookies();
   // Insert the Sleeper-only items right after "Draft Grades" so Transactions sits
   // among the draft entries rather than at the very bottom of the nav.
-  let visibleNavItems = [...navItems];
+  const visibleNavItems = [...navItems];
   if (currentPlatform === 'SLEEPER') {
     const draftGradesIdx = visibleNavItems.findIndex(
       (i) => i.url === '/draft_grades',
@@ -123,10 +117,6 @@ export function AppSidebar() {
     const at =
       draftGradesIdx === -1 ? visibleNavItems.length : draftGradesIdx + 1;
     visibleNavItems.splice(at, 0, ...sleeperOnlyNavItems);
-  }
-  // Analytics is premium; only show it when billing is enabled (FE-026 / FE-033).
-  if (billingEnabled) {
-    visibleNavItems = [...visibleNavItems, ...billingOnlyNavItems];
   }
   const refreshLeagueUrl = currentLeagueId
     ? `/connect_league?leagueId=${encodeURIComponent(currentLeagueId)}&platform=${currentPlatform.toLowerCase()}`

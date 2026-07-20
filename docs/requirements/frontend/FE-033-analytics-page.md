@@ -1,9 +1,9 @@
-# FE-033: Analytics Page (Premium)
+# FE-033: Analytics Page
 
 ## Description
 A dedicated top-level **Analytics** page (`/analytics`, [FE-014](FE-014-navigation-sidebar.md)
-sidebar tab) whose body is a stack of premium charts, all scoped to a single **page-level season
-selector**. The whole page is premium: the sidebar tab and page body are gated together. Three
+sidebar tab) whose body is a stack of charts, all scoped to a single **page-level season
+selector**. The page is **free** — the sidebar tab and page body are always available. Three
 charts are stacked in order:
 
 1. **Weekly Score Distribution** — a per-manager ridgeline ("joy") plot of weekly scores.
@@ -14,20 +14,9 @@ Everything is computed **entirely client-side** from the season's `MATCHUPS` vie
 the Matchups and Standings pages already fetch), so there is no backend, no new DynamoDB view, and
 no API change. Each chart is a pure transform of an existing precomputed view, mirroring the
 Schedule-Swap Simulator ([FE-031](FE-031-schedule-swap-simulator.md)) and Weekly Awards
-([FE-032](FE-032-weekly-awards-superlatives.md)) pattern. Unlike FE-031/FE-032, which are premium
-**sections embedded on existing pages**, the entire Analytics page is premium.
+([FE-032](FE-032-weekly-awards-superlatives.md)) pattern.
 
 ## Shared behavior (all charts)
-
-### Premium gating
-Each chart section is wrapped in its **own** `SubscriptionGuard` with the shared `premium_feature`
-flag ([FE-021](FE-021-subscription-access-control.md) / [FE-026](FE-026-feature-flags.md)). With
-`billing` on but `premium_feature` off the guard is a pass-through and the charts render for
-everyone; when gated and the subscription is expired/absent, the guard renders a **blurred lock
-overlay** in place of the chart and the gated component is **not mounted**, so its `MATCHUPS` data
-is never fetched while locked. Because the **whole page** is premium, while `billing` is off the
-**Analytics sidebar tab is hidden entirely** (the guard renders `null`, so the tab would otherwise
-lead to a blank page) — the nav entry is gated on `isBillingEnabled`.
 
 ### Score scope (shared across all three charts)
 Only **regular-season** weeks are included (`playoff_tier_type` is `NONE`/absent). Playoff weeks are
@@ -44,8 +33,6 @@ three analytics compute files.
 - **Season in progress:** every chart reflects only the regular-season weeks played so far.
 - **No `MATCHUPS` data (404) or load failure:** surface an inline message; never throw.
 - **No regular-season matchup data at all:** show an empty-state message instead of an empty chart.
-- **Locked (expired subscription):** the gated component is not mounted and never fetches.
-- **Billing off:** the Analytics sidebar tab and the whole page are hidden entirely.
 
 ## Chart 1 — Weekly Score Distribution (ridgeline / joy plot)
 The page's first chart is a per-manager **ridgeline ("joy") plot** of weekly scores for the selected
@@ -172,12 +159,11 @@ single "Other" segment rather than being dropped. *Non-finite player points* —
 - Chart 3 — Positional Scoring: recharts stacked bar chart `positional-scoring-chart.tsx`; pure
   transform `compute-positional-scoring.ts`; `src/lib/position-constants.ts` (`POS_NORMALIZE`),
   `src/lib/color-constants.ts` (`positionColorMeta`).
-- **Premium-gated (whole page):** see *Shared behavior → Premium gating* above. Nav entry gated on
-  `isBillingEnabled` ([FE-026](FE-026-feature-flags.md)); each section wrapped in
-  `SubscriptionGuard` with the shared `premium_feature` flag.
+- **Free:** the page is not gated; the Analytics sidebar nav entry is a permanent free item and the
+  page body always renders.
 
 ## Acceptance Criteria
-- [ ] An **Analytics** tab appears in the sidebar (when `billing` is on) and routes to `/analytics`;
+- [ ] An **Analytics** tab appears in the sidebar and routes to `/analytics`;
       switching the page season selector recomputes all three charts.
 - [ ] **Score Distribution:** renders a per-manager ridgeline (joy) chart, one overlapping Gaussian
       KDE ridge per manager on a shared x-grid and shared vertical scale, sorted by median
@@ -193,10 +179,7 @@ single "Other" segment rather than being dropped. *Non-finite player points* —
       aggregation is unit-tested.
 - [ ] Across all three charts, only regular-season weeks contribute; byes and self-matchup
       placeholders are excluded.
-- [ ] When `premium_feature` (and `billing`) is enabled and the league subscription is
-      expired/absent, each section shows a blurred lock overlay instead of the chart and **does not
-      fetch** the `MATCHUPS` data. With `billing` on but `premium_feature` off the charts render for
-      everyone; with `billing` off the Analytics tab is hidden.
+- [ ] The Analytics page and its charts render for everyone, with no subscription gating.
 - [ ] A `MATCHUPS` load failure renders an inline message, and a season with no regular-season
       matchup data (or, for Power Rankings, fewer than two managers) renders an empty-state message —
       neither crashes.
@@ -207,5 +190,4 @@ single "Other" segment rather than being dropped. *Non-finite player points* —
 `positional-scoring-chart.tsx`, `compute-positional-scoring.ts`), `src/app/app.tsx` (route),
 `src/features/sidebar/app-sidebar.tsx` (nav item), `src/features/season_select/season-select.tsx`,
 `src/lib/position-constants.ts` (`POS_NORMALIZE`), `src/lib/color-constants.ts`
-(`avatarColor`, `positionColorMeta`), `src/features/subscription/subscription-guard.tsx`,
-`src/features/subscription/subscription-required.tsx` (blurred lock overlay).
+(`avatarColor`, `positionColorMeta`).

@@ -1,15 +1,14 @@
 # FE-034: Lineup Efficiency / Points Left on the Bench
 
 ## Description
-A premium **chip in the box score**, shown directly below each team's logo/name, that answers
+A free **chip in the box score**, shown directly below each team's logo/name, that answers
 the league's eternal "my lineups betray me" argument: **how many points did this manager leave
 on the bench by starting the wrong players?**
 
 For the team-week shown in that box score it computes, entirely client-side, the **optimal
 legal starting lineup** from the combined `starters + bench` pool and compares it to what the
 manager actually started:
-- Unlocked, the chip reads **`⚡ {N}% efficient`** (lineup-efficiency % = actual points ÷
-  optimal points).
+- The chip reads **`⚡ {N}% efficient`** (lineup-efficiency % = actual points ÷ optimal points).
 - Clicking it opens a **Start/Sit Report** dialog listing the slot-by-slot mistakes — for each
   suboptimal slot, who was started, who was the optimal choice, and the point delta — plus a
   footer with total **points left on the bench** and the efficiency %.
@@ -27,23 +26,9 @@ eligibility** (FLEX/superflex), so the optimizer respects the league's roster sl
   `position`, and the starter's `fantasy_position` slot) — **no new data fetch** of any kind.
   Component: `src/features/lineup_efficiency/lineup-efficiency-chip.tsx`; pure transform in
   `compute-lineup-efficiency.ts`.
-- Advertised on the landing-page pricing table as a premium feature
-  (`src/features/landing_page/constants.ts`, `PREMIUM_FEATURES`).
-- **Premium-gated** on the shared `premium_feature` flag ([FE-021](FE-021-subscription-access-control.md) /
-  [FE-026](FE-026-feature-flags.md)). Because it is embedded in a shared, mostly-free component,
-  it gates via the flag/subscription **primitives directly** (`isBillingEnabled`,
-  `isEnabled('premium_feature')`, `isDemoMode`, `useSubscription`) rather than wrapping
-  `SubscriptionGuard` (whose locked state is a full-section paywall card unsuitable for an inline
-  chip):
-  - `billing` master flag off → the chip renders **nothing** (the premium system does not exist
-    yet, so the feature must not leak out for free).
-  - `billing` on but `premium_feature` off → the chip is **free** (shows the % and the report for
-    everyone).
-  - `premium_feature` on, subscription **expired/absent** → the chip reads `🔒 Lineup
-    efficiency` (no %), and clicking opens a dialog whose body is the shared
-    `SubscriptionRequired` paywall (Subscribe CTA for the owner, "ask the owner" for non-owners).
-  - **Demo mode** → unlocked so visitors can explore, with a small "Premium" hint in the dialog
-    ([FE-015](FE-015-demo-mode.md)).
+- **Free:** the chip always renders (regardless of `billing`, subscription, or demo mode); the
+  only reason it shows nothing is a lack of bench data to measure. It carries no subscription
+  gating and does not read the subscription primitives.
 
 ## Lineup optimizer algorithm
 - **Slot template:** there is no stored per-league roster configuration anywhere queryable, so
@@ -84,27 +69,18 @@ eligibility** (FLEX/superflex), so the optimizer respects the league's roster sl
 - **Negative-scoring players:** the optimizer may leave a slot empty rather than start a
   net-negative player.
 - **Mixed-platform defense labels** (`D/ST` vs `DEF`): normalized so either fills the defense slot.
-- **Loading subscription state:** while the subscription status resolves, the chip shows the
-  neutral label rather than flashing the efficiency % to a not-yet-confirmed subscriber.
 
 ## Acceptance Criteria
 - [ ] In a box score with bench data, each team shows a lineup-efficiency chip below its name.
-- [ ] Unlocked, the chip reads `{N}% efficient`; clicking opens a Start/Sit Report listing the
+- [ ] The chip reads `{N}% efficient`; clicking opens a Start/Sit Report listing the
       suboptimal slots (started vs optimal player and the point delta) and the points-left footer.
 - [ ] The optimal lineup respects FLEX/superflex slot eligibility and is the true maximum (a
       greedy slot-fill that mis-handles overlapping flex slots would under-count).
-- [ ] When `premium_feature` (and `billing`) is enabled and the league subscription is
-      expired/absent, the chip reads `🔒 Lineup efficiency` (no %) and the dialog shows the
-      paywall instead of the report. With `billing` off the chip is hidden; with `billing` on but
-      `premium_feature` off it renders for everyone.
+- [ ] The chip renders for everyone, with no subscription gating (including when `billing` is off).
 - [ ] A box score with no bench data (e.g. ESPN before 2018) shows no chip.
 - [ ] A perfect lineup shows 100% and the perfect-lineup dialog state.
-- [ ] Lineup efficiency is listed as a premium feature on the landing-page pricing table.
 
 ## Sources
 `src/features/lineup_efficiency/` (`compute-lineup-efficiency.ts`,
 `lineup-efficiency-chip.tsx`), `src/components/box-score-card.tsx`,
-`src/lib/position-constants.ts` (`POS_NORMALIZE`),
-`src/features/subscription/subscription-required.tsx` (paywall),
-`src/features/subscription/use-subscription.ts`, `src/lib/feature-flags.ts`,
-`src/features/landing_page/constants.ts` (`PREMIUM_FEATURES`).
+`src/lib/position-constants.ts` (`POS_NORMALIZE`).

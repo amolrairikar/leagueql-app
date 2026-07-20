@@ -31,8 +31,8 @@ On top of the master flag, the **`premium_feature`** flag implements the freemiu
 ([FE-021](FE-021-subscription-access-control.md)). With `billing` ON, a premium section's
 `SubscriptionGuard` paywalls when `premium_feature` is **ON** and renders the feature free when it
 is **OFF** (rolled out, not yet paywalled). With `billing` OFF the section is hidden regardless of
-`premium_feature`. Every premium feature shares this one flag. The schedule-swap simulator
-([FE-031](FE-031-schedule-swap-simulator.md)) is the first section wrapped with it.
+`premium_feature`. The AI weekly matchup recap
+([FE-035](FE-035-weekly-matchup-recap.md)) is the only section wrapped with it.
 
 The backend resolves the same flags from the same SSM source and is the real enforcement
 boundary ([BE-014](../backend/BE-014-subscription-access-control.md)), so even with the UI flag
@@ -98,8 +98,7 @@ momentarily stale the API gate still governs access.
 - [ ] With `billing` OFF, the `/docs` user guide hides the Subscribing, Free Trial, and
       Managing Billing sections while still rendering the rest of the guide.
 - [ ] With `billing` OFF, no `getLeague`-driven subscription poll runs for the guard or sidebar.
-- [ ] `premium_feature` is the shared flag every premium feature gates on; the schedule-swap
-      simulator (FE-031) is wrapped with it.
+- [ ] `premium_feature` is the flag the AI weekly matchup recap (FE-035) is wrapped with.
 - [ ] An unknown flag evaluates to `false`.
 - [ ] Editing the feature-flag parameter value in the SSM console changes the UI within the refresh
       window **without a rebuild**.

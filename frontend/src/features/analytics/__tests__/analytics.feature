@@ -1,7 +1,6 @@
 Feature: Weekly score distribution (FE-033)
-  The premium Analytics page renders a per-manager box-and-whisker chart of weekly
-  scores for the selected season, computed client-side from the MATCHUPS view and
-  gated behind the premium_feature flag.
+  The Analytics page renders a per-manager box-and-whisker chart of weekly scores
+  for the selected season, computed client-side from the MATCHUPS view.
 
   Scenario: The chart renders for a season with regular-season games
     Given a season of regular-season matchups is available
@@ -25,9 +24,3 @@ Feature: Weekly score distribution (FE-033)
     Given the matchup data fails to load
     When I open the score distribution
     Then I see "Failed to load score-distribution data."
-
-  Scenario: An expired subscription shows the locked overlay without fetching data
-    Given the premium_feature flag is on and the league subscription has expired
-    When I open the gated score distribution
-    Then I see the paywall heading "Analytics is a premium feature"
-    And the score distribution chart is not rendered
