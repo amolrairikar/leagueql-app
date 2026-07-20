@@ -31,8 +31,9 @@ navigation — there is no separate selector. It renders the recap for the **sel
     the recap (headline + body) to the clipboard so it can be pasted into a group chat; the button
     shows a copy icon by default and swaps to a check mark for ~2s after a successful copy.
 - **Premium-gated:** wrapped in `SubscriptionGuard` with the shared `premium_feature` flag
-  ([FE-021](FE-021-subscription-access-control.md) / [FE-026](FE-026-feature-flags.md)) — identical
-  to Weekly Awards. While `billing` is off the whole section (header + gated content) is **hidden**;
+  ([FE-021](FE-021-subscription-access-control.md) / [FE-026](FE-026-feature-flags.md)). This is the
+  **only** remaining premium section (Weekly Awards and the other former premium features are now
+  free). While `billing` is off the whole section (header + gated content) is **hidden**;
   with `billing` on but `premium_feature` off the guard is a pass-through and the section renders for
   everyone. When gated and the subscription is expired/absent, the guard renders a blurred lock
   overlay and the `WeeklyRecap` component is **not mounted**, so its recap data is never fetched while

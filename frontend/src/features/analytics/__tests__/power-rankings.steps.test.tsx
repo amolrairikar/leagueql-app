@@ -4,14 +4,7 @@ import { defineFeature, loadFeature } from 'jest-cucumber';
 import { PowerRankings } from '../analytics';
 
 import type { MatchupItem } from '@/components/api/types';
-import { SubscriptionGuard } from '@/features/subscription/subscription-guard';
-import { setFlagsForTesting } from '@/lib/feature-flags';
-import {
-  leagueMetadata,
-  leagueQuery,
-  leagueQueryError,
-  server,
-} from '@/test/msw/server';
+import { leagueQuery, leagueQueryError, server } from '@/test/msw/server';
 import { renderRoute } from '@/test/render';
 
 const feature = loadFeature(
@@ -67,10 +60,6 @@ const MATCHUPS: MatchupItem[] = [
   game('3', 'T1', 95, 'T2', 105),
 ];
 
-function isoIn(days: number): string {
-  return new Date(Date.now() + days * 86400000).toISOString();
-}
-
 async function openChart() {
   await renderRoute(
     <PowerRankings leagueId="100" platform="SLEEPER" season="2024" />,
@@ -118,43 +107,6 @@ defineFeature(feature, (test) => {
     when('I open the power rankings', openChart);
     then(/^I see "(.*)"$/, async (text) => {
       expect(await screen.findByText(text)).toBeInTheDocument();
-    });
-  });
-
-  test('An expired subscription shows the locked overlay without fetching data', ({
-    given,
-    when,
-    then,
-    and,
-  }) => {
-    given(
-      'the premium_feature flag is on and the league subscription has expired',
-      () => {
-        setFlagsForTesting({ billing: true, premium_feature: true });
-        // No MATCHUPS handler is registered. With MSW's onUnhandledRequest:
-        // 'error', a data fetch would fail the test — so this scenario also
-        // proves the gated component never fetches while locked.
-        server.use(leagueMetadata({ subscription_end_time: isoIn(-1) }));
-      },
-    );
-    when('I open the gated power rankings', async () => {
-      await renderRoute(
-        <SubscriptionGuard
-          featureFlag="premium_feature"
-          featureLabel="Analytics"
-        >
-          <PowerRankings leagueId="100" platform="SLEEPER" season="2024" />
-        </SubscriptionGuard>,
-        { league },
-      );
-    });
-    then(/^I see the paywall heading "(.*)"$/, async (text) => {
-      expect(await screen.findByText(text)).toBeInTheDocument();
-    });
-    and('the power rankings chart is not rendered', () => {
-      // No manager from the chart legend renders, since the gated component
-      // never mounts.
-      expect(screen.queryByText('Alice')).not.toBeInTheDocument();
     });
   });
 });

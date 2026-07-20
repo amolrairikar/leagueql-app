@@ -488,29 +488,23 @@ export default function Matchups() {
           />
         </Suspense>
 
-        {/* The whole weekly-awards section (header + gated content) only exists
-            when billing is on; the guard hides the content when billing is off,
-            so gate the header here too to avoid an orphan label (FE-032). */}
+        {/* Weekly awards is a free section (FE-032) and always renders. */}
+        <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mt-8 mb-2.5">
+          Weekly awards &amp; superlatives
+        </p>
+        <WeeklyAwards
+          leagueId={leagueId}
+          platform={platform}
+          season={selectedSeason}
+          selectedWeek={selectedWeek}
+        />
+
+        {/* AI weekly matchup recap (FE-035) — the one remaining premium feature.
+            The whole section (header + gated content) only exists when billing is
+            on; the header is gated on isBillingEnabled so it never orphans, and the
+            column itself is behind SubscriptionGuard. */}
         {isBillingEnabled() && (
           <>
-            <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mt-8 mb-2.5">
-              Weekly awards &amp; superlatives
-            </p>
-            <SubscriptionGuard
-              featureFlag="premium_feature"
-              featureLabel="Weekly awards & superlatives"
-            >
-              <WeeklyAwards
-                leagueId={leagueId}
-                platform={platform}
-                season={selectedSeason}
-                selectedWeek={selectedWeek}
-              />
-            </SubscriptionGuard>
-
-            {/* AI weekly matchup recap (FE-035). Same billing-gated pattern as
-                Weekly Awards: the header is gated on isBillingEnabled so it never
-                orphans, and the column itself is behind SubscriptionGuard. */}
             <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mt-8 mb-2.5">
               Weekly matchup recap
             </p>

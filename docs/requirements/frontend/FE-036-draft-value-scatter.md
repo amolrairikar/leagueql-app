@@ -1,7 +1,7 @@
-# FE-036: Draft Value Scatter (Draft Recap premium)
+# FE-036: Draft Value Scatter (Draft Recap)
 
 ## Description
-A premium section on the **Draft Recap** page (`/draft_recap`), shown below the draft board under
+A free section on the **Draft Recap** page (`/draft_recap`), shown below the draft board under
 the header **"Draft value"**: a **scatterplot** of every drafted player, with **draft position**
 (the overall pick number) on the x-axis and **season points scored** on the y-axis. Each dot is one
 pick, colored by position, so the shape of draft value reads at a glance — where the steals were
@@ -11,9 +11,8 @@ top of the page drives which draft the scatter reads.
 
 Everything is computed **entirely client-side** from the season's `DRAFT` view (the same
 `getDraftData` the draft board already fetches), so there is no backend, no new DynamoDB view, and
-no API change. It mirrors the Analytics premium charts
-([FE-033](FE-033-analytics-page.md)): a pure transform of an existing precomputed view,
-gated behind `SubscriptionGuard`.
+no API change. It mirrors the Analytics charts
+([FE-033](FE-033-analytics-page.md)): a pure transform of an existing precomputed view.
 
 ## Point construction
 Each drafted pick becomes one dot:
@@ -37,7 +36,7 @@ the scatter rather than drawn at zero, so they don't create a false floor of bus
   mounts; it does not affect the draft board above.
 
 ## Scope
-- Premium section on the existing `/draft_recap` page ([FE-012](FE-012-draft-recap.md)), driven by
+- Free section on the existing `/draft_recap` page ([FE-012](FE-012-draft-recap.md)), driven by
   the same page-level season selector (and, in demo mode, the snake/auction toggle).
 - Component: `DraftValueScatter` wrapper + section in `src/features/draft_recap/draft-recap.tsx`;
   recharts scatter chart in `src/features/draft_recap/draft-scatter-chart.tsx`; pure transform in
@@ -48,13 +47,8 @@ the scatter rather than drawn at zero, so they don't create a false floor of bus
   (`positionColorMeta`, `src/lib/color-constants.ts`). Hovering a dot reveals a tooltip with the
   player name, drafting manager, points scored, and draft position. A legend below names each
   position present.
-- **Premium-gated:** the section is wrapped in `SubscriptionGuard` with the shared `premium_feature`
-  flag ([FE-021](FE-021-subscription-access-control.md) / [FE-026](FE-026-feature-flags.md)). With
-  `billing` on but `premium_feature` off the guard is a pass-through and the chart renders for
-  everyone; when gated and the subscription is expired/absent, the guard renders a blurred lock
-  overlay in place of the section and the gated component is **not mounted**, so its `DRAFT` data is
-  never fetched while locked. In **demo mode** the section renders with a "Premium" badge so demo
-  visitors can explore it.
+- **Free:** the section always renders for everyone (below the draft board, whenever the season has
+  draft data); there is no subscription gating.
 
 ## Edge Cases
 - **Missing scoring (null `total_points`):** the pick is omitted from the scatter (not drawn at
@@ -69,8 +63,6 @@ the scatter rather than drawn at zero, so they don't create a false floor of bus
   rather than crashing.
 - **No `DRAFT` data (404) or load failure:** surface an inline message; never throw.
 - **No scored picks at all:** show an empty-state message instead of an empty chart.
-- **Locked (expired subscription):** the gated component is not mounted and never fetches.
-- **Billing off:** the premium section is hidden entirely.
 
 ## Acceptance Criteria
 - [ ] The Draft Recap page renders a **Draft value** scatterplot below the draft board, one dot per
@@ -83,9 +75,7 @@ the scatter rather than drawn at zero, so they don't create a false floor of bus
 - [ ] A single position dropdown offers **All positions** plus each present position and filters the
       plotted dots; selecting a position with no scored picks does not crash.
 - [ ] Switching the page season selector recomputes the scatter.
-- [ ] When `premium_feature` (and `billing`) is enabled and the league subscription is
-      expired/absent, the section shows a blurred lock overlay instead of the scatter and **does not
-      fetch** the `DRAFT` data. With `billing` on but `premium_feature` off it renders for everyone.
+- [ ] The section renders for everyone, with no subscription gating.
 - [ ] A `DRAFT` load failure renders an inline message, and a season with no scored picks renders an
       empty-state message — neither crashes.
 
@@ -93,6 +83,4 @@ the scatter rather than drawn at zero, so they don't create a false floor of bus
 `src/features/draft_recap/` (`draft-recap.tsx`, `draft-scatter-chart.tsx`,
 `compute-draft-scatter.ts`), `src/features/draft_grades/api-calls.ts` (`getDraftData`,
 `DraftPickItem`), `src/lib/position-constants.ts` (`FANTASY_POSITION_ORDER`),
-`src/lib/color-constants.ts` (`positionColorMeta`),
-`src/features/subscription/subscription-guard.tsx`,
-`src/features/subscription/subscription-required.tsx` (blurred lock overlay).
+`src/lib/color-constants.ts` (`positionColorMeta`).

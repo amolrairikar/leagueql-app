@@ -54,10 +54,13 @@ proto.setPointerCapture ??= vi.fn();
 proto.releasePointerCapture ??= vi.fn();
 proto.scrollIntoView ??= vi.fn();
 
-// Node 22+ ships a built-in `localStorage` (plain object, no Storage methods)
-// that shadows jsdom's proper Web Storage implementation. Polyfill a spec-
-// compliant Storage so production code using window.localStorage works in tests.
-if (typeof window.localStorage.getItem !== 'function') {
+// Newer Node ships an experimental built-in `localStorage` that shadows jsdom's
+// proper Web Storage implementation: on some versions it's a plain object with no
+// Storage methods, and on others (Node 25+, without `--localstorage-file`) it's
+// disabled entirely so `window.localStorage` is `undefined`. Guard against both —
+// use optional chaining so a missing `localStorage` doesn't throw — and polyfill a
+// spec-compliant Storage so production code using window.localStorage works.
+if (typeof window.localStorage?.getItem !== 'function') {
   const store = new Map<string, string>();
   const storage: Storage = {
     get length() {

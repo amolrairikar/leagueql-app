@@ -17,6 +17,22 @@ export interface ChangelogRelease {
 // Newest release first.
 export const CHANGELOG: ChangelogRelease[] = [
   {
+    version: '1.2.0',
+    date: 'July 20, 2026',
+    sections: [
+      {
+        title: 'Added',
+        items: [
+          'Schedule-swap simulator on the standings page: see what every team’s record would be under each other manager’s schedule, and find out who was schedule-lucky or robbed.',
+          'Weekly awards & superlatives on the matchups page: per-week award cards (highest score, biggest blowout, closest call, and more) plus a running tally of who has collected the most.',
+          'Analytics page: weekly score distribution, week-by-week power rankings, and positional scoring breakdowns for any season.',
+          'Lineup efficiency in every box score: see how many points each manager left on the bench, with a slot-by-slot start/sit report.',
+          'Draft value chart on the draft recap page: a scatterplot of every pick’s draft position against the points the pick scored.',
+        ],
+      },
+    ],
+  },
+  {
     version: '1.1.1',
     date: 'June 14, 2026',
     sections: [

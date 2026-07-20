@@ -1,7 +1,6 @@
 Feature: Power rankings trend (FE-033)
-  The premium Analytics page renders a multi-line power-rankings trend chart for the
-  selected season, computed client-side from the MATCHUPS view and gated behind the
-  premium_feature flag.
+  The Analytics page renders a multi-line power-rankings trend chart for the
+  selected season, computed client-side from the MATCHUPS view.
 
   Scenario: The chart renders a line per manager for a season
     Given a season of regular-season matchups is available
@@ -18,9 +17,3 @@ Feature: Power rankings trend (FE-033)
     Given the matchup data fails to load
     When I open the power rankings
     Then I see "Failed to load power-rankings data."
-
-  Scenario: An expired subscription shows the locked overlay without fetching data
-    Given the premium_feature flag is on and the league subscription has expired
-    When I open the gated power rankings
-    Then I see the paywall heading "Analytics is a premium feature"
-    And the power rankings chart is not rendered

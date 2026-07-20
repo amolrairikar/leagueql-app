@@ -4,14 +4,7 @@ import { defineFeature, loadFeature } from 'jest-cucumber';
 import ScheduleSwap from '../schedule-swap';
 
 import type { MatchupItem } from '@/components/api/types';
-import { SubscriptionGuard } from '@/features/subscription/subscription-guard';
-import { setFlagsForTesting } from '@/lib/feature-flags';
-import {
-  leagueMetadata,
-  leagueQuery,
-  leagueQueryError,
-  server,
-} from '@/test/msw/server';
+import { leagueQuery, leagueQueryError, server } from '@/test/msw/server';
 import { renderRoute } from '@/test/render';
 
 const feature = loadFeature(
@@ -67,10 +60,6 @@ const MATCHUPS: MatchupItem[] = [
   game('2', 'T1', 110, 'T2', 80),
 ];
 
-function isoIn(days: number): string {
-  return new Date(Date.now() + days * 86400000).toISOString();
-}
-
 async function openSimulator() {
   await renderRoute(
     <ScheduleSwap leagueId="100" platform="SLEEPER" season="2024" />,
@@ -118,42 +107,6 @@ defineFeature(feature, (test) => {
     when('I open the schedule-swap simulator', openSimulator);
     then(/^I see "(.*)"$/, async (text) => {
       expect(await screen.findByText(text)).toBeInTheDocument();
-    });
-  });
-
-  test('An expired subscription shows the locked overlay without fetching data', ({
-    given,
-    when,
-    then,
-    and,
-  }) => {
-    given(
-      'the premium_feature flag is on and the league subscription has expired',
-      () => {
-        setFlagsForTesting({ billing: true, premium_feature: true });
-        // Note: no MATCHUPS handler is registered. With MSW's
-        // onUnhandledRequest: 'error', a schedule-swap data fetch would fail the
-        // test — so this scenario also proves the gated component never fetches.
-        server.use(leagueMetadata({ subscription_end_time: isoIn(-1) }));
-      },
-    );
-    when('I open the gated schedule-swap simulator', async () => {
-      await renderRoute(
-        <SubscriptionGuard
-          featureFlag="premium_feature"
-          featureLabel="Schedule-swap simulator"
-        >
-          <ScheduleSwap leagueId="100" platform="SLEEPER" season="2024" />
-        </SubscriptionGuard>,
-        { league },
-      );
-    });
-    then(/^I see the paywall heading "(.*)"$/, async (text) => {
-      expect(await screen.findByText(text)).toBeInTheDocument();
-    });
-    and('the schedule-swap matrix is not rendered', () => {
-      // No manager from the matrix renders, since the gated component never mounts.
-      expect(screen.queryByText('Alice')).not.toBeInTheDocument();
     });
   });
 });

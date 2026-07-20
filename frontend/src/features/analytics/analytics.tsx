@@ -18,7 +18,6 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import SeasonSelect from '@/features/season_select/season-select';
-import { SubscriptionGuard } from '@/features/subscription/subscription-guard';
 import { getLeagueCookies } from '@/lib/cookie-handler';
 import { type Result, toResult } from '@/lib/result';
 
@@ -87,9 +86,9 @@ function PowerRankingsInner({ promise }: { promise: Promise<MatchupsResult> }) {
 }
 
 /**
- * Premium multi-line power-rankings trend chart for a season (FE-033). Like
- * {@link ScoreDistribution} it is its own component so the {@link SubscriptionGuard}
- * can leave it unmounted while locked — its `MATCHUPS` data is never fetched then.
+ * Multi-line power-rankings trend chart for a season (FE-033). Its own component,
+ * mirroring {@link ScoreDistribution}, so each chart fetches its `MATCHUPS` data
+ * independently.
  */
 export function PowerRankings({
   leagueId,
@@ -151,10 +150,9 @@ function PositionalScoringInner({
 }
 
 /**
- * Premium stacked-bar chart of each manager's season starter points split by
- * position (FE-033). Like {@link PowerRankings} it is its own component so the
- * {@link SubscriptionGuard} can leave it unmounted while locked — its `MATCHUPS`
- * data is never fetched then.
+ * Stacked-bar chart of each manager's season starter points split by position
+ * (FE-033). Like {@link PowerRankings} it is its own component so each chart
+ * fetches its `MATCHUPS` data independently.
  */
 export function PositionalScoring({
   leagueId,
@@ -188,9 +186,9 @@ export function PositionalScoring({
 }
 
 /**
- * Premium ridgeline (joy) chart of each manager's weekly scores for a season
- * (FE-033). Kept as its own component so the {@link SubscriptionGuard} can leave
- * it unmounted while locked — its `MATCHUPS` data is never fetched then.
+ * Ridgeline (joy) chart of each manager's weekly scores for a season (FE-033).
+ * Kept as its own component so each chart fetches its `MATCHUPS` data
+ * independently.
  */
 export function ScoreDistribution({
   leagueId,
@@ -247,16 +245,11 @@ export default function Analytics() {
           Weekly score distribution
         </p>
 
-        <SubscriptionGuard
-          featureFlag="premium_feature"
-          featureLabel="Analytics"
-        >
-          <ScoreDistribution
-            leagueId={leagueId}
-            platform={platform}
-            season={selectedSeason}
-          />
-        </SubscriptionGuard>
+        <ScoreDistribution
+          leagueId={leagueId}
+          platform={platform}
+          season={selectedSeason}
+        />
 
         <div className="mb-2.5 mt-8">
           <TooltipProvider>
@@ -279,31 +272,21 @@ export default function Analytics() {
           </TooltipProvider>
         </div>
 
-        <SubscriptionGuard
-          featureFlag="premium_feature"
-          featureLabel="Analytics"
-        >
-          <PowerRankings
-            leagueId={leagueId}
-            platform={platform}
-            season={selectedSeason}
-          />
-        </SubscriptionGuard>
+        <PowerRankings
+          leagueId={leagueId}
+          platform={platform}
+          season={selectedSeason}
+        />
 
         <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-2.5 mt-8">
           Positional Scoring
         </p>
 
-        <SubscriptionGuard
-          featureFlag="premium_feature"
-          featureLabel="Analytics"
-        >
-          <PositionalScoring
-            leagueId={leagueId}
-            platform={platform}
-            season={selectedSeason}
-          />
-        </SubscriptionGuard>
+        <PositionalScoring
+          leagueId={leagueId}
+          platform={platform}
+          season={selectedSeason}
+        />
       </div>
     </div>
   );

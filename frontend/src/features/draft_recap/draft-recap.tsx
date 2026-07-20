@@ -23,11 +23,9 @@ import {
   getDraftData,
 } from '@/features/draft_grades/api-calls';
 import SeasonSelect from '@/features/season_select/season-select';
-import { SubscriptionGuard } from '@/features/subscription/subscription-guard';
 import { avatarColor } from '@/lib/color-constants';
 import { positionColorMeta } from '@/lib/color-constants';
 import { getLeagueCookies, isDemoMode } from '@/lib/cookie-handler';
-import { isBillingEnabled } from '@/lib/feature-flags';
 import { type Result, toResult } from '@/lib/result';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -488,9 +486,8 @@ function ScatterSkeleton() {
 }
 
 // Reads the season's draft picks, filters them by the selected position, and
-// plots draft position vs. season points (FE-036). Its own component so the
-// SubscriptionGuard can leave it unmounted while locked — the DRAFT data is never
-// fetched then. Suspends on `promise`, so hooks run before the result branches.
+// plots draft position vs. season points (FE-036). Suspends on `promise`, so
+// hooks run before the result branches.
 function DraftScatterInner({ promise }: { promise: Promise<DraftResult> }) {
   const result = use(promise);
   const [position, setPosition] = useState<string>(ALL_POSITIONS);
@@ -548,10 +545,9 @@ function DraftScatterInner({ promise }: { promise: Promise<DraftResult> }) {
 }
 
 /**
- * Premium scatterplot of draft position vs. season points for a season (FE-036),
- * with a position dropdown filter. Fetches its own `DRAFT` data (the same
- * `getDraftData` the board uses) so the {@link SubscriptionGuard} can leave it
- * unmounted — and unfetched — while locked.
+ * Scatterplot of draft position vs. season points for a season (FE-036), with a
+ * position dropdown filter. Fetches its own `DRAFT` data (the same `getDraftData`
+ * the board uses).
  */
 export function DraftValueScatter({
   leagueId,
@@ -629,25 +625,18 @@ export default function DraftRecap() {
           />
         </Suspense>
 
-        {/* Premium draft-value scatter (FE-036). Gated on the billing master flag
-            too so the header doesn't orphan above a hidden section when billing
-            is off — the SubscriptionGuard renders nothing in that case. */}
-        {isBillingEnabled() && seasons.length > 0 && (
+        {/* Draft-value scatter (FE-036) — a free section shown below the board. */}
+        {seasons.length > 0 && (
           <div className="mt-8">
             <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-2.5">
               Draft value
             </p>
-            <SubscriptionGuard
-              featureFlag="premium_feature"
-              featureLabel="Draft value"
-            >
-              <DraftValueScatter
-                leagueId={leagueId}
-                platform={platform}
-                season={selectedSeason}
-                auction={isDemo && demoAuction}
-              />
-            </SubscriptionGuard>
+            <DraftValueScatter
+              leagueId={leagueId}
+              platform={platform}
+              season={selectedSeason}
+              auction={isDemo && demoAuction}
+            />
           </div>
         )}
       </div>

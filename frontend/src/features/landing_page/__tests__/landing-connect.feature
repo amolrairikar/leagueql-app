@@ -15,11 +15,6 @@ Feature: Landing page connect routing (FE-001 / FE-002 / FE-025)
     When I open the landing page
     Then I see the "Monthly" plan priced "$1.99"
     And I see the "Yearly" plan priced "$8.99"
-    And I see "Schedule-swap simulator" listed as a premium feature
-    And I see "Weekly awards" listed as a premium feature
-    And I see "Analytics page" listed as a premium feature
-    And I see "Lineup efficiency" listed as a premium feature
-    And I see "Draft value chart" listed as a premium feature
     And I see "Recaps" listed as a premium feature
 
   Scenario: With billing disabled the pricing table is hidden
