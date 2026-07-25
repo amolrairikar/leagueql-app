@@ -9,8 +9,7 @@ demo-mode banner. The header shows the LeagueQL wordmark and theme toggle.
 - Layout: `AppLayout` in `src/app/app.tsx`; sidebar `src/features/sidebar/app-sidebar.tsx`;
   API in `src/features/sidebar/api-calls.ts`.
 - Nav items: Home, Standings, Matchups, Playoff Bracket, Manager Comparison, Manager
-  History, Draft Recap, Draft Grades, Player Records, Matchup Records, and Analytics. The
-  **Analytics** tab is a free page ([FE-033](FE-033-analytics-page.md)) and is always shown.
+  History, Draft Recap, Draft Grades, Player Records, and Matchup Records.
 
 ## Edge Cases
 - **Refresh from sidebar:** the refresh form is pre-filled and locked to the league the user
@@ -33,8 +32,7 @@ demo-mode banner. The header shows the LeagueQL wordmark and theme toggle.
   account menu still lives in the sidebar footer (desktop) / header (mobile).
 
 ## Acceptance Criteria
-- [ ] The sidebar links to all eleven analytics pages and they route correctly. The Analytics
-      page is free and its nav item is always shown.
+- [ ] The sidebar links to all ten analytics pages and they route correctly.
 - [ ] The sidebar exposes a refresh action pre-filled and locked to the current league, and
       surfaces cooldown/up-to-date/in-progress responses.
 - [ ] The layout is responsive: the sidebar collapses and toggles on mobile.

@@ -98,10 +98,14 @@ function extractRecords(
     const matchupScore = aScore + bScore;
     const margin = Math.abs(aScore - bScore);
 
-    // Highest Team Score - only the team with the higher score
-    if (aScore >= bScore) {
+    // Highest / Lowest Team Score - each team-game is an independent candidate, so
+    // both sides of the matchup are emitted separately (the subject team as teamA,
+    // its opponent as teamB). This lets a single matchup occupy multiple leaderboard
+    // slots when both of its scores rank (e.g. the season's two lowest scores were
+    // played head-to-head).
+    for (const type of ['highest_team_score', 'lowest_team_score'] as const) {
       records.push({
-        type: 'highest_team_score',
+        type,
         teamA: m.team_a_display_name,
         teamB: m.team_b_display_name,
         teamAColor: aColor,
@@ -114,42 +118,8 @@ function extractRecords(
         teamAScore: aScore,
         teamBScore: bScore,
       });
-    } else {
       records.push({
-        type: 'highest_team_score',
-        teamA: m.team_b_display_name,
-        teamB: m.team_a_display_name,
-        teamAColor: bColor,
-        teamBColor: aColor,
-        teamAInit: initials(m.team_b_display_name),
-        teamBInit: initials(m.team_a_display_name),
-        value: bScore,
-        season: m.season,
-        week,
-        teamAScore: bScore,
-        teamBScore: aScore,
-      });
-    }
-
-    // Lowest Team Score - only the team with the lower score
-    if (aScore <= bScore) {
-      records.push({
-        type: 'lowest_team_score',
-        teamA: m.team_a_display_name,
-        teamB: m.team_b_display_name,
-        teamAColor: aColor,
-        teamBColor: bColor,
-        teamAInit: initials(m.team_a_display_name),
-        teamBInit: initials(m.team_b_display_name),
-        value: aScore,
-        season: m.season,
-        week,
-        teamAScore: aScore,
-        teamBScore: bScore,
-      });
-    } else {
-      records.push({
-        type: 'lowest_team_score',
+        type,
         teamA: m.team_b_display_name,
         teamB: m.team_a_display_name,
         teamAColor: bColor,

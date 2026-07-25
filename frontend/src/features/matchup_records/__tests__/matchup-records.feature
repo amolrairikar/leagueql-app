@@ -7,6 +7,11 @@ Feature: Matchup records (FE-011)
     When I open the matchup records page
     Then I see the manager "Alice"
 
+  Scenario: Both teams in one matchup rank in the Lowest Team Score card
+    Given matchup records data is available
+    When I open the matchup records page
+    Then the "Lowest Team Score" card lists both "Alice" and "Bob"
+
   Scenario: A failed load surfaces an inline error
     Given the matchup records data fails to load
     When I open the matchup records page

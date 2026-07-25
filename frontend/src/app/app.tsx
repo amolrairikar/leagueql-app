@@ -22,7 +22,6 @@ import {
   SidebarTrigger,
 } from '@/components/ui/sidebar';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import Analytics from '@/features/analytics/analytics';
 import ChangelogPage from '@/features/changelog/changelog-page';
 import LeagueConnect from '@/features/connect_league/league-connect';
 import DraftGrades from '@/features/draft_grades/draft-grades';
@@ -122,7 +121,6 @@ const APP_LAYOUT_ROUTES: { path: string; element: React.ReactNode }[] = [
   { path: '/manager_history', element: <ManagerHistory /> },
   { path: '/player_records', element: <PlayerRecords /> },
   { path: '/matchup_records', element: <MatchupRecords /> },
-  { path: '/analytics', element: <Analytics /> },
   { path: '/draft_recap', element: <DraftRecap /> },
   { path: '/draft_grades', element: <DraftGrades /> },
   { path: '/transactions', element: <Transactions /> },
