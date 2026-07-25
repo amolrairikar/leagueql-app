@@ -33,7 +33,7 @@ describe('public/_headers (FE-024 security headers)', () => {
     expect(cspLine).toContain("base-uri 'self'");
   });
 
-  it('allowlists the Clerk, API, and Stripe runtime origins', () => {
+  it('allowlists the Clerk and API runtime origins', () => {
     // Clerk Frontend API + SDK + bot-protection script origins.
     expect(cspLine).toContain('https://clerk.leagueql.com');
     expect(cspLine).toContain('https://*.clerk.accounts.dev');
@@ -41,10 +41,12 @@ describe('public/_headers (FE-024 security headers)', () => {
     // The API for connect-src (prod + the build-time dev token).
     expect(cspLine).toContain('https://api.leagueql.com');
     expect(cspLine).toContain('__VITE_DEV_API_URL__');
-    // Stripe checkout/billing redirect targets.
-    expect(cspLine).toContain('https://*.stripe.com');
     // Buy Me A Coffee donate button image (About dialog).
     expect(cspLine).toContain('https://cdn.buymeacoffee.com');
+  });
+
+  it('does not allowlist Stripe origins (billing removed)', () => {
+    expect(cspLine).not.toContain('stripe.com');
   });
 
   it('permits inline styles and Clerk blob workers', () => {

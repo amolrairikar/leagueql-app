@@ -3,33 +3,33 @@ import { describe, expect, it } from 'vitest';
 
 import { FeatureFlagProvider } from '../feature-flags-provider';
 
-import { isBillingEnabled, setFlagsForTesting } from '@/lib/feature-flags';
+import { isBannerEnabled, setFlagsForTesting } from '@/lib/feature-flags';
 
 // A leaf that reads the synchronous flag helper, so the only way its text
 // updates is if FeatureFlagProvider forces a re-render on a provider change.
-function BillingProbe() {
-  return <span>billing:{isBillingEnabled() ? 'on' : 'off'}</span>;
+function BannerProbe() {
+  return <span>banner:{isBannerEnabled() ? 'on' : 'off'}</span>;
 }
 
 describe('FeatureFlagProvider', () => {
   it('re-renders flag call sites when the provider changes', async () => {
-    setFlagsForTesting({ billing: true });
+    setFlagsForTesting({ banner: true });
     render(
       <FeatureFlagProvider>
-        <BillingProbe />
+        <BannerProbe />
       </FeatureFlagProvider>,
     );
-    expect(await screen.findByText('billing:on')).toBeInTheDocument();
+    expect(await screen.findByText('banner:on')).toBeInTheDocument();
 
     // A runtime toggle swaps the provider; OpenFeature emits PROVIDER_READY
     // asynchronously, which the provider listens for and bumps state so the probe
     // re-evaluates the flag. Flush the microtask inside act so React commits.
     await act(async () => {
-      setFlagsForTesting({ billing: false });
+      setFlagsForTesting({ banner: false });
       await Promise.resolve();
     });
     await waitFor(() =>
-      expect(screen.getByText('billing:off')).toBeInTheDocument(),
+      expect(screen.getByText('banner:off')).toBeInTheDocument(),
     );
   });
 });

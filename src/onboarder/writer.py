@@ -248,10 +248,6 @@ def write_league_records(
             # the refresh's only DynamoDB write here is the LEAGUE_LOOKUP update.
             transact_items = [league_lookup_operation]
         else:
-            # ``subscription_end_time`` is intentionally NOT written here. It is set
-            # only server-side by the Stripe billing webhook (BE-014 / BE-015), so a
-            # freshly onboarded, unsubscribed league reads as expired until checkout
-            # completes. (Removes the BE-001 interim, client-spoofable input.)
             metadata_item = {
                 "PK": {"S": f"LEAGUE#{canonical_league_id}"},
                 "SK": {"S": "METADATA"},

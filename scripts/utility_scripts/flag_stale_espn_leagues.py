@@ -4,15 +4,11 @@ flag_stale_espn_leagues.py
 Scans every ESPN league in DynamoDB, determines how long since each was last
 refreshed, and flags leagues that are stale beyond a threshold (default: 1 year).
 Flagged leagues are deleted via the in-process ``delete_league`` API path (the same
-code that powers DELETE /leagues/{id}), so Stripe cancellation plus DynamoDB and S3
-cleanup all happen consistently.
+code that powers DELETE /leagues/{id}), so DynamoDB and S3 cleanup happen
+consistently.
 
 Staleness is measured from ``last_refresh_at`` when present, otherwise from
 ``onboarded_at`` (a league onboarded long ago but never refreshed still counts).
-
-Leagues with an active subscription (``now < subscription_end_time``) are always
-skipped, regardless of staleness — we never delete a paying customer's data, and
-``delete_league`` would also cancel their Stripe subscription.
 
 The script is dry-run by default — it only reports what would be deleted. Pass
 ``--execute`` to actually delete the flagged leagues.
@@ -127,26 +123,6 @@ def parse_timestamp(value: str) -> datetime.datetime:
     return parsed
 
 
-def has_active_subscription(metadata: dict, now: datetime.datetime) -> bool:
-    """
-    True when the league's subscription is still active (``now < subscription_end_time``).
-
-    Mirrors ``require_active_subscription`` in ``src/api/helpers.py``: an absent or
-    unparseable ``subscription_end_time`` is treated as expired (not active).
-    """
-    subscription_end_time = metadata.get("subscription_end_time")
-    if not subscription_end_time:
-        return False
-    try:
-        return parse_timestamp(subscription_end_time) > now
-    except ValueError:
-        logger.warning(
-            "Unparseable subscription_end_time %r; treating as expired",
-            subscription_end_time,
-        )
-        return False
-
-
 def parse_args(argv=None):
     p = argparse.ArgumentParser(
         description=(
@@ -202,18 +178,6 @@ def main(argv=None):
                 league_id,
                 canonical_league_id,
                 e.detail,
-            )
-            continue
-
-        # Never delete a paying customer's data, regardless of how stale it is — an
-        # active subscription means they're paying for ongoing access, and delete_league
-        # would also cancel their Stripe subscription.
-        if has_active_subscription(metadata, now):
-            logger.info(
-                "Skipping league %s (canonical %s): subscription active until %s",
-                league_id,
-                canonical_league_id,
-                metadata.get("subscription_end_time"),
             )
             continue
 

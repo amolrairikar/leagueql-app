@@ -46,20 +46,6 @@ def aws_env_vars():
         yield
 
 
-@pytest.fixture(autouse=True)
-def enable_billing_flag():
-    """Billing ships feature-flagged OFF (BE-017), but the billing endpoints in
-    this suite assume it is ON. Enable it — along with the shared ``premium_feature``
-    flag so the ``require_active_subscription`` gate (BE-014) is exercisable — for
-    every api test; the OFF-path tests flip a flag back within the test via
-    ``feature_flags._override_for_testing``."""
-    from common import feature_flags
-
-    feature_flags._override_for_testing({"billing": True, "premium_feature": True})
-    yield
-    feature_flags._override_for_testing({"billing": False})
-
-
 @pytest.fixture
 def mock_table():
     with patch("main.table") as mock:
@@ -151,17 +137,14 @@ def client(aws_env_vars):
 
 @pytest.fixture
 def league_lookup_item():
-    # A far-future subscription_end_time is included so the subscription gate
-    # passes in tests that stub a single generic get_item return_value (where the
-    # gate's METADATA read resolves to this same item). Harmless to lookup_league,
-    # which only reads canonical_league_id. owner_user_id matches the default
-    # authed user so the owner gate passes when this item doubles as METADATA.
+    # Harmless to lookup_league, which only reads canonical_league_id.
+    # owner_user_id matches the default authed user so the owner gate passes when
+    # this item doubles as METADATA.
     return {
         "PK": "LEAGUE#123#PLATFORM#SLEEPER",
         "SK": "LEAGUE_LOOKUP",
         "canonical_league_id": "canonical-abc",
         "seasons": {"2023", "2024"},
-        "subscription_end_time": "2999-01-01T00:00:00+00:00",
         "owner_user_id": DEFAULT_TEST_USER,
     }
 
@@ -171,15 +154,12 @@ def league_metadata_item():
     # Status no longer lives on METADATA — it is tracked in the JOB_STATUS item.
     # By default there is no in-flight job (no active_job_id), so the concurrency
     # guard lets requests through; guard tests add active_job_id explicitly.
-    # A far-future subscription_end_time keeps gated endpoints reachable by
-    # default; subscription tests override or drop it to exercise the 402 gate.
     # owner_user_id matches the default authed user so owner-gated endpoints
     # pass by default; 403 tests override the auth dependency to another user.
     return {
         "PK": "LEAGUE#canonical-abc",
         "SK": "METADATA",
         "league_name": "Test League",
-        "subscription_end_time": "2999-01-01T00:00:00+00:00",
         "owner_user_id": DEFAULT_TEST_USER,
         "members": {DEFAULT_TEST_USER},
     }

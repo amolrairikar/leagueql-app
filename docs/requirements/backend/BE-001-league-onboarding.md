@@ -78,12 +78,6 @@ and an incremented `LEAGUE_COUNT`.
 - **Auction vs. snake drafts:** both ESPN and Sleeper auction drafts must be handled
   (`bid_amount`, `nominating_team_id` populated for auction picks).
 - **Invalid `leagueId` format:** must match `^\d+$`; otherwise `422`.
-- **Subscription end time:** onboarding never writes `subscription_end_time`. A freshly
-  onboarded league has no subscription attribute and reads as **expired** until the Stripe
-  billing webhook sets it server-side after checkout (see
-  [BE-014](BE-014-subscription-access-control.md) / [BE-015](BE-015-stripe-billing.md)). The
-  former client-supplied `subscriptionEndTime` request field has been **removed** — it was a
-  spoofable stopgap that allowed self-granting a subscription and bypassing billing.
 
 ## Acceptance Criteria
 - [ ] `POST /leagues?requestType=ONBOARD` with a valid, not-yet-onboarded league returns
@@ -99,9 +93,6 @@ and an incremented `LEAGUE_COUNT`.
 - [ ] `s2` / `swid` cookie values never appear in logs or persisted DynamoDB/S3 items.
 - [ ] On success: a canonical league UUID, `METADATA`, per-platform `LEAGUE_LOOKUP`, and
       all precomputed view items exist; `LEAGUE_COUNT` is incremented by 1.
-- [ ] Onboarding never writes `subscription_end_time`; a freshly onboarded league's `METADATA`
-      item carries no subscription attribute (it is set only by the Stripe webhook —
-      [BE-015](BE-015-stripe-billing.md)). The request body has no `subscriptionEndTime` field.
 - [ ] The Sleeper `previous_league_id` chain walk terminates at the founding season for
       both terminator forms — string `"0"` and JSON `null` (`None`) — and never issues a
       request for league `None`.

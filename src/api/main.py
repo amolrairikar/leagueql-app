@@ -6,7 +6,6 @@ route handlers in ``routes.py``; both are wired together here. Helper functions
 are re-exported from this module so ``main.<helper>`` remains the public surface.
 """
 
-import functools
 import os
 from enum import Enum
 from typing import Any, Optional
@@ -14,7 +13,6 @@ from typing import Any, Optional
 import boto3
 import botocore.config
 import requests as http_requests  # noqa: F401  re-exported for test patch points
-import stripe
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from mangum import Mangum
@@ -28,7 +26,6 @@ from common.logging_utils import (  # noqa: F401
     logger,
     setup_logger,
 )
-from common.secrets import get_secret_from_env_param
 
 
 def _parse_cors_origins(raw: str) -> list[str]:
@@ -80,14 +77,6 @@ class Platform(CaseInsensitiveEnum):
     ESPN = "ESPN"
 
 
-class SubscriptionPlan(CaseInsensitiveEnum):
-    """Billing cadence chosen at checkout (BE-015). Each maps to its own Stripe
-    recurring price; both gate the same premium features identically."""
-
-    MONTHLY = "MONTHLY"
-    YEARLY = "YEARLY"
-
-
 class RequestType(CaseInsensitiveEnum):
     ONBOARD = "ONBOARD"
     REFRESH = "REFRESH"
@@ -103,7 +92,6 @@ class QueryType(CaseInsensitiveEnum):
     DRAFT = "DRAFT"
     TRANSACTIONS = "TRANSACTIONS"
     PLATFORM_MIGRATION = "PLATFORM_MIGRATION"
-    MATCHUP_RECAP = "MATCHUP_RECAP"
 
 
 QUERY_TYPE_TO_SK_BASE = {
@@ -115,7 +103,6 @@ QUERY_TYPE_TO_SK_BASE = {
     QueryType.DRAFT: "DRAFT",
     QueryType.TRANSACTIONS: "TRANSACTIONS",
     QueryType.PLATFORM_MIGRATION: "PLATFORM_MIGRATION",
-    QueryType.MATCHUP_RECAP: "MATCHUP_RECAP",
 }
 
 
@@ -174,71 +161,6 @@ lambda_client = boto3.client("lambda", config=_retry_config)
 s3_client = boto3.client("s3", config=_retry_config)
 S3_BUCKET = os.environ["S3_BUCKET_NAME"]
 
-# Stripe billing (BE-015). Config is environment-specific: DEV is wired with
-# sandbox (test) mode credentials/Price IDs and PROD with live mode. The secret
-# key is a SecureString SSM parameter fetched by parameter *name* (the value never
-# lands in a Lambda env var / TF state / CI); the non-sensitive Price ID and other
-# config stay plain env vars.
-#
-# The key is resolved **lazily on the first Stripe-touching request** rather than
-# at module import: the synchronous SSM round-trip dominated cold-start init
-# latency, and resolving it at import would also freeze the secret into a SnapStart
-# snapshot. ``ensure_stripe_api_key`` is called at each Stripe SDK call site; the
-# resolution is cached (``lru_cache``) so warm requests in the same execution
-# environment never re-fetch. ``get_secret_from_env_param`` returns ``""`` when
-# unconfigured so the module still imports / runs in contexts where billing is not
-# set up (e.g. unit tests, which patch ``main.stripe``).
-STRIPE_PRICE_ID_MONTHLY = os.environ.get("STRIPE_PRICE_ID_MONTHLY", "")
-STRIPE_PRICE_ID_YEARLY = os.environ.get("STRIPE_PRICE_ID_YEARLY", "")
-STRIPE_TRIAL_PERIOD_DAYS = int(os.environ.get("STRIPE_TRIAL_PERIOD_DAYS", "14"))
-
-
-def stripe_price_id_for_plan(plan: SubscriptionPlan) -> str:
-    """Return the Stripe recurring price ID for a checkout plan (BE-015)."""
-    return {
-        SubscriptionPlan.MONTHLY: STRIPE_PRICE_ID_MONTHLY,
-        SubscriptionPlan.YEARLY: STRIPE_PRICE_ID_YEARLY,
-    }[plan]
-
-
-STRIPE_CHECKOUT_SUCCESS_URL = os.environ.get(
-    "STRIPE_CHECKOUT_SUCCESS_URL", "https://leagueql.com/home?checkout=success"
-)
-STRIPE_CHECKOUT_CANCEL_URL = os.environ.get(
-    "STRIPE_CHECKOUT_CANCEL_URL", "https://leagueql.com/home"
-)
-STRIPE_BILLING_PORTAL_RETURN_URL = os.environ.get(
-    "STRIPE_BILLING_PORTAL_RETURN_URL", "https://leagueql.com/home"
-)
-
-
-@functools.lru_cache(maxsize=1)
-def _resolve_stripe_api_key() -> str:
-    """Fetch the Stripe secret key from SSM once per execution environment.
-
-    Cached so only the first Stripe-touching request pays the SSM round-trip;
-    every later call returns the memoized value. ``cache_clear()`` resets it (used
-    by tests).
-    """
-    return get_secret_from_env_param("STRIPE_SECRET_KEY_SSM_PARAM")
-
-
-def ensure_stripe_api_key() -> None:
-    """Set ``stripe.api_key`` from SSM on first use (BE-015).
-
-    Called at each Stripe SDK call site instead of resolving the key at module
-    import, keeping the synchronous SSM fetch off the cold-start init path (and out
-    of any SnapStart snapshot). The underlying fetch is memoized, so repeated calls
-    within an execution environment are effectively free.
-    """
-    stripe.api_key = _resolve_stripe_api_key()
-
-
-# How long a claimed in-flight checkout marker blocks a second checkout before it
-# self-heals (BE-015 Idempotency Layer 1). Configurable per environment
-# (Terraform sets a shorter window in dev); defaults to 30 minutes.
-CHECKOUT_PENDING_TTL_MINUTES = int(os.environ.get("CHECKOUT_PENDING_TTL_MINUTES", "30"))
-
 # Minimum interval between `last_accessed_at` writes for a single league (BE-018).
 # `get_league` already reads METADATA, so a fresher timestamp short-circuits the write;
 # this caps the tracking writes to at most one per league per hour by default.
@@ -252,8 +174,6 @@ LEAGUE_ACCESS_THROTTLE_SECONDS = int(
 from helpers import (  # noqa: E402, F401
     _query_all_keys,
     add_league_member,
-    cancel_league_subscription,
-    claim_pending_checkout,
     collect_league_keys,
     convert_decimals,
     create_job_status,
@@ -263,19 +183,13 @@ from helpers import (  # noqa: E402, F401
     get_league_metadata,
     get_league_seasons,
     get_nfl_state,
-    get_or_create_stripe_customer,
-    get_stripe_customer_id,
     is_job_in_progress,
     lookup_league,
     publish_failure,
     record_league_access,
-    require_active_subscription,
     require_league_member,
-    resolve_checkout_cancel_url,
-    resolve_checkout_success_url,
     require_league_owner,
     set_active_job,
-    trial_used_for_league,
     update_league_count,
 )
 

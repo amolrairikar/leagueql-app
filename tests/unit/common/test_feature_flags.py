@@ -63,62 +63,24 @@ def _reload_with_ssm(monkeypatch, client, ttl="45"):
     return importlib.reload(ff)
 
 
-class TestBillingFlag:
+class TestIsEnabled:
     def test_defaults_off_when_unconfigured(self):
-        # With no SSM env var (local / tests) there is no flag source, so every flag —
-        # billing included — reads off and the SSM client is never created.
+        # With no SSM env var (local / tests) there is no flag source, so every flag
+        # reads off and the SSM client is never created.
         assert ff._flags_enabled is False
         assert ff._ssm_client is None
-        assert ff.is_billing_enabled() is False
+        assert ff.is_enabled("banner") is False
 
     def test_override_on(self):
-        ff._override_for_testing({"billing": True})
-        assert ff.is_billing_enabled() is True
+        ff._override_for_testing({"banner": True})
+        assert ff.is_enabled("banner") is True
 
     def test_override_off(self):
-        ff._override_for_testing({"billing": False})
-        assert ff.is_billing_enabled() is False
+        ff._override_for_testing({"banner": False})
+        assert ff.is_enabled("banner") is False
 
-
-class TestIsFeaturePaywalled:
-    def test_both_flags_on_is_paywalled(self):
-        ff._override_for_testing({"billing": True, "premium_feature": True})
-        assert ff.is_feature_paywalled("premium_feature") is True
-
-    def test_billing_off_is_not_paywalled(self):
-        # Master flag off ⇒ no feature is paywalled, even if its own flag is on.
-        ff._override_for_testing({"billing": False, "premium_feature": True})
-        assert ff.is_feature_paywalled("premium_feature") is False
-
-    def test_feature_flag_off_is_not_paywalled(self):
-        # Billing on but the feature's own flag off ⇒ the feature is free.
-        ff._override_for_testing({"billing": True, "premium_feature": False})
-        assert ff.is_feature_paywalled("premium_feature") is False
-
-    def test_unknown_feature_flag_is_not_paywalled(self):
-        ff._override_for_testing({"billing": True})
-        assert ff.is_feature_paywalled("does-not-exist") is False
-
-
-class TestIsRecapEnabled:
-    def test_defaults_on_when_flag_absent(self):
-        # The recap kill-switch defaults ON: an absent flag (the common case,
-        # including local/tests) leaves recaps running.
-        ff._override_for_testing({"billing": True})
-        assert ff.is_recap_enabled() is True
-
-    def test_explicit_off_disables(self):
-        ff._override_for_testing({"billing": True, "recap": False})
-        assert ff.is_recap_enabled() is False
-
-    def test_explicit_on_enables(self):
-        ff._override_for_testing({"recap": True})
-        assert ff.is_recap_enabled() is True
-
-
-class TestIsEnabled:
     def test_unknown_flag_defaults_false(self):
-        ff._override_for_testing({"billing": True})
+        ff._override_for_testing({"banner": True})
         assert ff.is_enabled("does-not-exist") is False
 
     def test_arbitrary_flag(self):
@@ -142,55 +104,55 @@ class TestBuildFlags:
 
 class TestSsmSource:
     def test_initial_load_from_ssm(self, monkeypatch):
-        client = _FakeSsmClient([{"billing": {"enabled": True}}])
+        client = _FakeSsmClient([{"banner": {"enabled": True}}])
         mod = _reload_with_ssm(monkeypatch, client)
         assert mod._flags_enabled is True
-        assert mod.is_billing_enabled() is True
+        assert mod.is_enabled("banner") is True
         assert client.calls == 1
 
     def test_empty_value_defaults_off(self, monkeypatch):
         # An empty parameter value means "no flags" → all flags off.
         client = _FakeSsmClient([None])
         mod = _reload_with_ssm(monkeypatch, client)
-        assert mod.is_billing_enabled() is False
+        assert mod.is_enabled("banner") is False
 
     def test_initial_fetch_error_defaults_off(self, monkeypatch):
         # A missing parameter (ParameterNotFound) or any error on the initial fetch
         # fails safe to all-off.
         client = _FakeSsmClient([], get_error=RuntimeError("ParameterNotFound"))
         mod = _reload_with_ssm(monkeypatch, client)
-        assert mod.is_billing_enabled() is False
+        assert mod.is_enabled("banner") is False
 
     def test_refresh_picks_up_change(self, monkeypatch):
         client = _FakeSsmClient(
-            [{"billing": {"enabled": False}}, {"billing": {"enabled": True}}]
+            [{"banner": {"enabled": False}}, {"banner": {"enabled": True}}]
         )
         mod = _reload_with_ssm(monkeypatch, client, ttl="0")
-        # Initial load saw billing off...
-        assert mod._cached_config == {"billing": {"enabled": False}}
+        # Initial load saw the flag off...
+        assert mod._cached_config == {"banner": {"enabled": False}}
         # ...and TTL=0 means the next read refreshes and picks up the new value.
-        assert mod.is_billing_enabled() is True
+        assert mod.is_enabled("banner") is True
 
     def test_refresh_within_ttl_skips_fetch(self, monkeypatch):
-        client = _FakeSsmClient([{"billing": {"enabled": True}}])
+        client = _FakeSsmClient([{"banner": {"enabled": True}}])
         mod = _reload_with_ssm(monkeypatch, client, ttl="3600")
         before = client.calls
-        mod.is_billing_enabled()
-        mod.is_billing_enabled()
+        mod.is_enabled("banner")
+        mod.is_enabled("banner")
         assert client.calls == before
 
     def test_refresh_error_keeps_last_known(self, monkeypatch):
-        client = _FakeSsmClient([{"billing": {"enabled": True}}])
+        client = _FakeSsmClient([{"banner": {"enabled": True}}])
         mod = _reload_with_ssm(monkeypatch, client, ttl="0")
-        assert mod.is_billing_enabled() is True
+        assert mod.is_enabled("banner") is True
         client.fail_next = RuntimeError("transient")
         # A failed refresh keeps the last-known flags rather than flipping to a
         # surprise state.
-        assert mod.is_billing_enabled() is True
+        assert mod.is_enabled("banner") is True
 
     def test_unchanged_config_does_not_reset_provider(self, monkeypatch):
         client = _FakeSsmClient(
-            [{"billing": {"enabled": True}}, {"billing": {"enabled": True}}]
+            [{"banner": {"enabled": True}}, {"banner": {"enabled": True}}]
         )
         mod = _reload_with_ssm(monkeypatch, client, ttl="0")
         calls: list[dict] = []
@@ -201,5 +163,5 @@ class TestSsmSource:
             lambda config: calls.append(config) or original(config),
         )
         # Refresh fetches an identical config → provider is not re-registered.
-        assert mod.is_billing_enabled() is True
+        assert mod.is_enabled("banner") is True
         assert calls == []

@@ -8,11 +8,6 @@ Feature: Lineup efficiency chip (FE-034)
     When I open the start/sit report
     Then I see the benched player "WR Stud" listed as the optimal choice
 
-  Scenario: The chip renders even with billing disabled
-    Given the billing flag is off
-    When I view the box score chip for a manager who left points on the bench
-    Then the chip shows "53% efficient"
-
   Scenario: Without bench data no chip is shown
     When I view the box score chip for a season with no bench data
     Then no chip is rendered

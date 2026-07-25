@@ -52,7 +52,7 @@ per deploy, not in client code.
 - **No token in client:** the browser holds neither token nor dataset; both live only as Cloudflare
   secrets on the proxy. Inspecting the bundle/network reveals only same-origin `/ingest/traces`.
 - **`traceparent` scoping:** the header is injected only for the API origin
-  (`propagateTraceHeaderCorsUrls`), never for third parties (Clerk, Stripe, images).
+  (`propagateTraceHeaderCorsUrls`), never for third parties (Clerk, images).
 - **Exporter/proxy failure:** must never break the UI — span export errors are swallowed; the app
   renders and functions identically with telemetry down.
 - **CSP:** same-origin exporter means no `connect-src` change ([FE-024](FE-024-security-headers.md)

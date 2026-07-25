@@ -42,8 +42,7 @@ def step_seed_lookup(context, league_id, platform, canonical):
             "league_id": league_id,
         },
     )
-    # METADATA is read by most league endpoints; seed a permissive one (far-future
-    # subscription so gated endpoints are reachable by default). The default
+    # METADATA is read by most league endpoints; seed a permissive one. The default
     # authenticated caller is recorded as owner + member so owner-gated mutations
     # and ESPN read gating pass by default (LQL-01 / BE-016).
     owner = getattr(context, "default_user", "owner_user")
@@ -55,40 +54,10 @@ def step_seed_lookup(context, league_id, platform, canonical):
                 "SK": "METADATA",
                 "platform": platform,
                 "league_name": "Test League",
-                "subscription_end_time": "2999-01-01T00:00:00+00:00",
                 "owner_user_id": owner,
                 "members": {owner},
             },
         )
-
-
-@given('league "{canonical}" has subscription_end_time "{end_time}"')
-def step_set_subscription(context, canonical, end_time):
-    table = context.ddb_resource.Table(context.table_name)
-    table.update_item(
-        Key={"PK": f"LEAGUE#{canonical}", "SK": "METADATA"},
-        UpdateExpression="SET subscription_end_time = :t",
-        ExpressionAttributeValues={":t": end_time},
-    )
-
-
-@given('league "{canonical}" has no subscription_end_time')
-def step_clear_subscription(context, canonical):
-    table = context.ddb_resource.Table(context.table_name)
-    table.update_item(
-        Key={"PK": f"LEAGUE#{canonical}", "SK": "METADATA"},
-        UpdateExpression="REMOVE subscription_end_time",
-    )
-
-
-@given("billing is disabled")
-def step_billing_disabled(context):
-    # Flip the BE-017 billing master flag off for this scenario (before_scenario
-    # defaults it on). All handlers read the same OpenFeature provider, so this
-    # affects every premium gate, the billing endpoints, and the webhook.
-    from common import feature_flags
-
-    feature_flags._override_for_testing({"billing": False})
 
 
 @when('I GET "{path}"')

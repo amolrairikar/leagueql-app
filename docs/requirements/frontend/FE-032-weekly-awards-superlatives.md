@@ -37,8 +37,7 @@ then the winner's score, then the winner's username.
 - Component: `src/features/weekly_awards/weekly-awards.tsx`; pure transform in
   `compute-awards.ts`; data fetch reuses `getSeasonMatchups` (`MATCHUPS#{season}#`,
   [BE-005](../backend/BE-005-query-precomputed-views-api.md)).
-- **Free:** the section and its header always render for everyone; there is no subscription
-  gating.
+- **Free:** the section and its header always render for everyone.
 
 ## Week scope
 Awards are computed for **every week present in `MATCHUPS`** — both regular season and playoffs
@@ -75,7 +74,7 @@ Rows are sorted alphabetically by manager name.
       in the tally section.
 - [ ] Ties, byes, and self-matchup placeholders are excluded as described; an award with no
       eligible winner shows a placeholder card.
-- [ ] The section renders for everyone, with no subscription gating.
+- [ ] The section renders for everyone.
 - [ ] A `MATCHUPS` load failure renders an inline message, and a season with no matchup data
       renders an empty-state message — neither crashes.
 

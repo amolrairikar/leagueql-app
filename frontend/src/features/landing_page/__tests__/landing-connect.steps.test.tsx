@@ -7,7 +7,6 @@ import { expect } from 'vitest';
 
 import LeagueQLLanding from '../landing-page';
 
-import { setFlagsForTesting } from '@/lib/feature-flags';
 import { API, postJson, server } from '@/test/msw/server';
 import { renderRoute } from '@/test/render';
 
@@ -38,7 +37,6 @@ defineFeature(feature, (test) => {
             data: {
               seasons: ['2024'],
               league_name: 'L',
-              subscription_end_time: null,
               is_owner: false,
             },
           });
@@ -90,47 +88,6 @@ defineFeature(feature, (test) => {
 
     then('I am routed to the home page', async () => {
       expect(await screen.findByText('HOME PAGE')).toBeInTheDocument();
-    });
-  });
-
-  test('The pricing table shows the plans and premium features', ({
-    given,
-    when,
-    then,
-    and,
-  }) => {
-    given('billing is enabled', () => {
-      setFlagsForTesting({ billing: true });
-    });
-    when('I open the landing page', async () => {
-      await renderRoute(<LeagueQLLanding />, { route: '/' });
-    });
-    const assertPlan = (name: string, price: string) => {
-      expect(screen.getByText(name)).toBeInTheDocument();
-      expect(screen.getByText(price)).toBeInTheDocument();
-    };
-    then(/^I see the "(.*)" plan priced "(.*)"$/, assertPlan);
-    and(/^I see the "(.*)" plan priced "(.*)"$/, assertPlan);
-    const assertPremiumFeature = (title: string) => {
-      expect(screen.getByText(title)).toBeInTheDocument();
-    };
-    and(/^I see "(.*)" listed as a premium feature$/, assertPremiumFeature);
-  });
-
-  test('With billing disabled the pricing table is hidden', ({
-    given,
-    when,
-    then,
-  }) => {
-    given('billing is disabled', () => {
-      setFlagsForTesting({ billing: false });
-    });
-    when('I open the landing page', async () => {
-      await renderRoute(<LeagueQLLanding />, { route: '/' });
-    });
-    then('the pricing table is not shown', () => {
-      expect(screen.queryByText('Pricing')).not.toBeInTheDocument();
-      expect(screen.queryByText('$30')).not.toBeInTheDocument();
     });
   });
 });

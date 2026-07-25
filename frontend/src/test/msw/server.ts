@@ -17,7 +17,6 @@ export const server = setupServer();
 export function leagueMetadata(data: {
   seasons?: string[];
   league_name?: string | null;
-  subscription_end_time?: string | null;
   is_owner?: boolean;
 }) {
   return http.get(`${API}/leagues/:id`, () =>
@@ -26,7 +25,6 @@ export function leagueMetadata(data: {
       data: {
         seasons: data.seasons ?? [],
         league_name: data.league_name ?? null,
-        subscription_end_time: data.subscription_end_time ?? null,
         is_owner: data.is_owner ?? false,
       },
     }),

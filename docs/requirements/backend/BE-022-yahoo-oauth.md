@@ -42,8 +42,8 @@ available to it.
 
 **Secrets.** The Yahoo `client_id` and `client_secret` are stored as **SecureString** SSM
 parameters (`/leagueql/{env}/yahoo/client_id`, `/leagueql/{env}/yahoo/client_secret`) and read
-at cold start via [`src/common/secrets.py`](../../../src/common/secrets.py), following the
-Stripe-secret pattern (BE-015) — never in env vars, Terraform state, or CI.
+at cold start via [`src/common/secrets.py`](../../../src/common/secrets.py) as SecureString SSM
+parameters — never in env vars, Terraform state, or CI.
 
 **Redirect URI.** Prod registers `https://api.leagueql.com/auth/yahoo/callback`. Yahoo requires
 HTTPS in production (localhost is allowed for local dev, and `oob` exists for browserless apps),

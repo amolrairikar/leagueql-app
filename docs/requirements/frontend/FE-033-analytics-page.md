@@ -179,7 +179,7 @@ single "Other" segment rather than being dropped. *Non-finite player points* —
       aggregation is unit-tested.
 - [ ] Across all three charts, only regular-season weeks contribute; byes and self-matchup
       placeholders are excluded.
-- [ ] The Analytics page and its charts render for everyone, with no subscription gating.
+- [ ] The Analytics page and its charts render for everyone.
 - [ ] A `MATCHUPS` load failure renders an inline message, and a season with no regular-season
       matchup data (or, for Power Rankings, fewer than two managers) renders an empty-state message —
       neither crashes.

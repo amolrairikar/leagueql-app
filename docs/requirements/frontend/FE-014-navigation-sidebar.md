@@ -2,9 +2,8 @@
 
 ## Description
 The collapsible app sidebar and surrounding layout shared by all in-app pages. Provides
-navigation to every analytics feature, a refresh entry point for the current league, a
-"Manage Subscription" entry point, and the demo-mode banner. The header shows the LeagueQL
-wordmark and theme toggle.
+navigation to every analytics feature, a refresh entry point for the current league, and the
+demo-mode banner. The header shows the LeagueQL wordmark and theme toggle.
 
 ## Scope
 - Layout: `AppLayout` in `src/app/app.tsx`; sidebar `src/features/sidebar/app-sidebar.tsx`;
@@ -12,8 +11,6 @@ wordmark and theme toggle.
 - Nav items: Home, Standings, Matchups, Playoff Bracket, Manager Comparison, Manager
   History, Draft Recap, Draft Grades, Player Records, Matchup Records, and Analytics. The
   **Analytics** tab is a free page ([FE-033](FE-033-analytics-page.md)) and is always shown.
-- Settings items include "Manage Subscription", which opens the subscription dialog
-  ([FE-021](FE-021-subscription-access-control.md)).
 
 ## Edge Cases
 - **Refresh from sidebar:** the refresh form is pre-filled and locked to the league the user
@@ -40,7 +37,6 @@ wordmark and theme toggle.
       page is free and its nav item is always shown.
 - [ ] The sidebar exposes a refresh action pre-filled and locked to the current league, and
       surfaces cooldown/up-to-date/in-progress responses.
-- [ ] The sidebar exposes a "Manage Subscription" item that opens the subscription dialog.
 - [ ] The layout is responsive: the sidebar collapses and toggles on mobile.
 - [ ] The demo banner appears in demo mode.
 - [ ] The header wordmark links home and the theme toggle is present.
@@ -50,7 +46,7 @@ wordmark and theme toggle.
       public landing / privacy / docs pages).
 
 ## Authorization (FE-025)
-Owner-only actions (Refresh, Migrate, Transfer Ownership, Manage Subscription, Delete) are gated on `is_owner` ([FE-025](FE-025-ownership-transfer-owner-gated-actions.md)); non-owners see View Another League and Claim Ownership.
+Owner-only actions (Refresh, Migrate, Transfer Ownership, Delete) are gated on `is_owner` ([FE-025](FE-025-ownership-transfer-owner-gated-actions.md)); non-owners see View Another League and Claim Ownership.
 
 ## Sources
 `src/features/sidebar/app-sidebar.tsx`, `src/features/sidebar/header-account.tsx`,

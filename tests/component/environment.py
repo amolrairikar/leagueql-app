@@ -1,15 +1,15 @@
 """Behave environment for LeagueQL **component** tests.
 
 Component tests exercise whole components (the onboarder->processor chain, the
-FastAPI app, the Stripe webhook, the Sleeper auto-refresh Lambda) with every
-*external* dependency mocked:
+FastAPI app, the Sleeper auto-refresh Lambda) with every *external* dependency
+mocked:
 
 * **AWS** (DynamoDB, S3) is backed by ``moto`` (``mock_aws``) — an in-memory
   AWS, so the pipeline really writes to and reads back from S3/DynamoDB without
   touching a cloud account. This is what makes a true round-trip chain test
   possible.
-* **Platform HTTP** (ESPN/Sleeper) and **Stripe** are patched per scenario in the
-  step definitions (the platform API client is replaced with a fake that returns
+* **Platform HTTP** (ESPN/Sleeper) is patched per scenario in the step
+  definitions (the platform API client is replaced with a fake that returns
   fixture payloads).
 
 This mirrors the module-loading pattern in ``tests/integration/environment.py``
@@ -39,11 +39,6 @@ REGION = "us-east-1"
 # Default authenticated caller for API scenarios; the shared seeding step records
 # this user as the league owner so owner-gated endpoints pass (LQL-01 / BE-016).
 DEFAULT_USER = "owner_user"
-# Stripe secrets are sourced from SecureString SSM params by name (BE-015); the
-# webhook fetches its secret at import and the API resolves its key lazily on the
-# first billing request, so the params must exist (in moto) before load/requests.
-STRIPE_SECRET_KEY_PARAM = "/leagueql/test/stripe/secret_key"
-STRIPE_WEBHOOK_SECRET_PARAM = "/leagueql/test/stripe/webhook_secret"
 
 # Environment the modules read at import time. Set before any handler import.
 _ENV = {
@@ -57,17 +52,6 @@ _ENV = {
     "AWS_SECRET_ACCESS_KEY": "testing",
     "AWS_SECURITY_TOKEN": "testing",
     "AWS_SESSION_TOKEN": "testing",
-    "STRIPE_SECRET_KEY_SSM_PARAM": STRIPE_SECRET_KEY_PARAM,
-    "STRIPE_WEBHOOK_SECRET_SSM_PARAM": STRIPE_WEBHOOK_SECRET_PARAM,
-    "STRIPE_PRICE_ID_MONTHLY": "price_test_monthly",
-    "STRIPE_PRICE_ID_YEARLY": "price_test_yearly",
-    "STRIPE_TRIAL_PERIOD_DAYS": "14",
-    # BE-021: the processor + webhook enqueue a pending-recap marker into this table;
-    # the recap-generator (Fargate task) reads the queue and writes a MATCHUP_RECAP item
-    # per missing week via the Anthropic API (generate_recap is patched per scenario).
-    "RECAP_MODEL_ID": "claude-haiku-4-5",
-    # Effectively disable the rate limiter in tests (no real sleeps between writes).
-    "RECAP_MAX_RPM": "1000000",
 }
 
 
@@ -124,19 +108,6 @@ def _create_table() -> None:
                 "Projection": {"ProjectionType": "ALL"},
             },
         ],
-    )
-
-
-def _create_ssm_params() -> None:
-    # BE-015: the webhook reads its signing secret from SSM at import and the API
-    # resolves its secret key lazily on first billing use; both go through these
-    # SecureString params. moto backs SSM like real AWS.
-    client = boto3.client("ssm", region_name=REGION)
-    client.put_parameter(
-        Name=STRIPE_SECRET_KEY_PARAM, Value="sk_test_dummy", Type="SecureString"
-    )
-    client.put_parameter(
-        Name=STRIPE_WEBHOOK_SECRET_PARAM, Value="whsec_dummy", Type="SecureString"
     )
 
 
@@ -227,29 +198,6 @@ def _load_handlers(context) -> None:
 
     context.api = TestClient(main.app, raise_server_exceptions=False)
 
-    # --- stripe webhook ----------------------------------------------------
-    context.stripe_handler = _load_module(
-        "stripe_webhook.handler", _SRC / "stripe_webhook" / "handler.py"
-    )
-
-    # --- recap generator (BE-021) ------------------------------------------
-    # The generator imports only common.* (incl. common.recap_llm, which builds its
-    # Anthropic client lazily — no SDK/network at import). Its module-level table is
-    # moto-backed, so enqueue → generate (patched per scenario) → MATCHUP_RECAP write
-    # runs end to end.
-    context.recap_generator = _load_module(
-        "recap_generator.handler", _SRC / "recap_generator" / "handler.py"
-    )
-
-    # The processor + webhook now *enqueue* (a real DynamoDB marker) rather than launch
-    # compute. Point both handlers' ``record_pending_recap`` at one shared spy so the
-    # trigger scenarios assert the enqueue without the batch scenarios depending on it
-    # (those seed their own markers).
-    recap_enqueue_spy = MagicMock()
-    context.processor_handler.record_pending_recap = recap_enqueue_spy
-    context.stripe_handler.record_pending_recap = recap_enqueue_spy
-    context.recap_enqueue_spy = recap_enqueue_spy
-
     # --- player metadata refresher (BE-010) --------------------------------
     pm_pkg = types.ModuleType("player_metadata")
     pm_pkg.__path__ = [str(_SRC / "player_metadata")]
@@ -274,7 +222,6 @@ def before_all(context):
     context._moto.start()
     _create_table()
     _create_bucket()
-    _create_ssm_params()
 
     context.region = REGION
     context.table_name = TABLE_NAME
@@ -308,15 +255,11 @@ def before_scenario(context, scenario):
     # Reset the API's Lambda-invoke spy each scenario so payload assertions are
     # scoped to the scenario under test.
     context.main.lambda_client.reset_mock()
-    # Reset the shared recap enqueue spy (processor + webhook) too (BE-021).
-    context.recap_enqueue_spy.reset_mock()
-    # Billing ships feature-flagged OFF (BE-017); default it ON for component
-    # scenarios since the billing features assume it, along with the shared
-    # ``premium_feature`` flag (BE-014). The "billing is disabled" step flips
-    # billing back within a scenario.
+    # Reset feature flags to all-off (the app's fail-safe default) each scenario;
+    # scenarios that need a flag ON opt in via ``feature_flags._override_for_testing``.
     from common import feature_flags
 
-    feature_flags._override_for_testing({"billing": True, "premium_feature": True})
+    feature_flags._override_for_testing({})
     # Per-scenario ``mock.patch`` handles (started in steps) to stop on teardown.
     context._patches = []
     # Every league route now sits behind the Clerk JWT dependency (LQL-01 /

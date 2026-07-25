@@ -23,18 +23,7 @@ locals {
   api_role_arn              = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-api-role"
   player_metadata_role_arn  = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-sleeper-player-metadata-fetcher-role"
   sleeper_refresh_role_arn  = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-sleeper-league-refresh-role"
-  stripe_webhook_role_arn   = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-stripe-webhook-role"
   discord_notifier_role_arn = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-discord-notifier-role"
-
-  # AI weekly matchup recaps (BE-021) run as a scheduled Fargate task that generates
-  # each recap synchronously via the Anthropic API (Claude Haiku 4.5). The task +
-  # execution + EventBridge-invoke roles are created in infrastructure/global; ARNs are
-  # reconstructed here from their names. The shared DynamoDB table doubles as the
-  # pending-recap queue. East-only (one ECS cluster, in us-east-1).
-  recap_generator_task_role_arn      = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-recap-generator-task-role"
-  recap_generator_task_exec_role_arn = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-recap-generator-task-exec-role"
-  recap_generator_events_role_arn    = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-recap-generator-events-role"
-  recap_generator_image              = "${local.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com/leagueql-recap-generator-${var.environment}:${var.recap_generator_image_tag}"
 
   # Sleeper player stats refresher runs as a Fargate task (see BE-011). Roles are
   # created in infrastructure/global; ARNs are reconstructed here from their names.
@@ -42,10 +31,6 @@ locals {
   sleeper_stats_task_exec_role_arn = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-sleeper-stats-task-exec-role"
   sleeper_stats_events_role_arn    = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-sleeper-stats-events-role"
   sleeper_stats_image              = "${local.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com/leagueql-sleeper-player-stats-refresher-${var.environment}:${var.image_tag}"
-
-  # Base URL the user's browser returns to after Stripe Checkout / Billing Portal.
-  # Prod is the live site; dev (Stripe test mode) uses the local dev server.
-  app_base_url = var.environment == "prod" ? "https://leagueql.com" : "http://localhost:5173"
 
   # Browser origins allowed by CORS. Production trusts only the live site; dev
   # additionally trusts the local Vite dev server. Shared by the API Gateway CORS
@@ -110,11 +95,6 @@ module "processor_lambda" {
     S3_BUCKET_NAME      = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
     SNS_TOPIC_ARN       = var.environment == "prod" ? aws_sns_topic.lambda_alerts[0].arn : ""
 
-    # Enqueue a pending-recap marker at end of run (BE-021); the recap generator task
-    # picks it up on its next tick. Idempotent + premium-gated downstream, so this is
-    # a cheap DynamoDB write. The queue lives in the shared table.
-    RECAP_QUEUE_TABLE = "leagueql-table-${var.environment}"
-
     # OpenTelemetry trace-context propagation → Axiom (BE-020). A no-op unless set.
     # The ingest token is fetched at runtime from SSM by *name* (value never lands
     # here / in TF state / in CI); dataset is per-env so dev traffic never pollutes
@@ -131,147 +111,6 @@ module "processor_lambda" {
     component   = "api"
     managed-by  = "terraform"
   }
-}
-
-# ── AI weekly matchup recap generator: Fargate task (BE-021) ──────────────────
-# A scheduled task drains the RECAP_QUEUE partition and generates each missing week's
-# recap synchronously via the Anthropic API (Claude Haiku 4.5), pacing calls under the
-# account's ~50 RPM ceiling. Runs as a Fargate task (not a Lambda) so a large backlog
-# clears in one run without Lambda's 15-minute cap. East-only (shares the ECS cluster).
-resource "aws_cloudwatch_log_group" "recap_generator" {
-  count             = local.region == "east" ? 1 : 0
-  name              = "/ecs/leagueql-recap-generator-${var.environment}"
-  retention_in_days = 7
-
-  tags = {
-    environment = var.environment
-    project     = "leagueql"
-    component   = "api"
-    managed-by  = "terraform"
-  }
-}
-
-resource "aws_ecs_task_definition" "recap_generator" {
-  count                    = local.region == "east" ? 1 : 0
-  family                   = "leagueql-recap-generator-${var.environment}"
-  requires_compatibilities = ["FARGATE"]
-  network_mode             = "awsvpc"
-  cpu                      = 512
-  memory                   = 1024
-  execution_role_arn       = local.recap_generator_task_exec_role_arn
-  task_role_arn            = local.recap_generator_task_role_arn
-
-  container_definitions = jsonencode([
-    {
-      name      = "recap-generator"
-      image     = local.recap_generator_image
-      essential = true
-      environment = [
-        { name = "DYNAMODB_TABLE_NAME", value = "leagueql-table-${var.environment}" },
-        # Claude Haiku 4.5 via the Anthropic API; the key is a SecureString SSM param
-        # fetched at runtime (never in env/TF state/CI).
-        { name = "RECAP_MODEL_ID", value = "claude-haiku-4-5" },
-        { name = "ANTHROPIC_API_KEY_SSM_PARAM", value = "/leagueql/${var.environment}/anthropic/api_key" },
-        # Pace synchronous calls under the account's ~50 RPM ceiling (tier-dependent).
-        { name = "RECAP_MAX_RPM", value = "45" },
-        { name = "FEATURE_FLAGS_SSM_PARAM", value = "/leagueql/${var.environment}/feature-flags" },
-        # OpenTelemetry → Axiom (BE-020). A no-op unless these resolve.
-        { name = "ENVIRONMENT", value = var.environment },
-        { name = "AXIOM_API_TOKEN_SSM_PARAM", value = "/leagueql/${var.environment}/axiom/api_token" },
-        { name = "AXIOM_DATASET", value = "leagueql-${var.environment}" },
-        { name = "AXIOM_TRACES_URL", value = "https://api.axiom.co/v1/traces" },
-      ]
-      logConfiguration = {
-        logDriver = "awslogs"
-        options = {
-          "awslogs-group"         = aws_cloudwatch_log_group.recap_generator[0].name
-          "awslogs-region"        = var.aws_region
-          "awslogs-stream-prefix" = "ecs"
-        }
-      }
-    }
-  ])
-
-  tags = {
-    environment = var.environment
-    project     = "leagueql"
-    component   = "api"
-    managed-by  = "terraform"
-  }
-}
-
-# Cron tick that runs the generator (every 15 minutes) as a one-shot Fargate task.
-resource "aws_cloudwatch_event_rule" "recap_generator_schedule" {
-  count               = local.region == "east" ? 1 : 0
-  name                = "leagueql-recap-generator-${var.environment}-schedule"
-  description         = "Periodic tick that generates queued weekly AI recaps"
-  schedule_expression = "rate(15 minutes)"
-  # Disabled in both DEV and PROD for now to avoid Fargate compute cost from the 15-minute
-  # tick; the rule + target are kept so the task can still be run manually (RunTask /
-  # console). Flip back to ENABLED to resume the automatic schedule.
-  state = "DISABLED"
-
-  tags = {
-    environment = var.environment
-    project     = "leagueql"
-    component   = "api"
-    managed-by  = "terraform"
-  }
-}
-
-resource "aws_cloudwatch_event_target" "recap_generator_schedule" {
-  count    = local.region == "east" ? 1 : 0
-  rule     = aws_cloudwatch_event_rule.recap_generator_schedule[0].name
-  arn      = aws_ecs_cluster.leagueql[0].arn
-  role_arn = local.recap_generator_events_role_arn
-
-  ecs_target {
-    task_definition_arn = aws_ecs_task_definition.recap_generator[0].arn
-    launch_type         = "FARGATE"
-    task_count          = 1
-
-    network_configuration {
-      subnets          = data.aws_subnets.fargate_public[0].ids
-      security_groups  = [data.aws_security_group.fargate_task[0].id]
-      assign_public_ip = true
-    }
-  }
-}
-
-# A one-shot Fargate task emits no per-run "Errors" metric, so failure monitoring is
-# event-based: match ECS Task State Change events for this task definition that stopped
-# with a non-zero container exit code or a start failure. East + prod only.
-resource "aws_cloudwatch_event_rule" "recap_generator_task_failed" {
-  count       = local.region == "east" && var.environment == "prod" ? 1 : 0
-  name        = "leagueql-recap-generator-${var.environment}-task-failed"
-  description = "Recap generator Fargate task failed"
-
-  event_pattern = jsonencode({
-    source      = ["aws.ecs"]
-    detail-type = ["ECS Task State Change"]
-    detail = {
-      clusterArn        = [aws_ecs_cluster.leagueql[0].arn]
-      taskDefinitionArn = [{ prefix = "${aws_ecs_task_definition.recap_generator[0].arn_without_revision}:" }]
-      lastStatus        = ["STOPPED"]
-      "$or" = [
-        { containers = { exitCode = [{ "anything-but" = 0 }] } },
-        { stopCode = ["TaskFailedToStart"] }
-      ]
-    }
-  })
-
-  tags = {
-    environment = var.environment
-    project     = "leagueql"
-    component   = "monitoring"
-    managed-by  = "terraform"
-  }
-}
-
-resource "aws_cloudwatch_event_target" "recap_generator_task_failed_sns" {
-  count = local.region == "east" && var.environment == "prod" ? 1 : 0
-  rule  = aws_cloudwatch_event_rule.recap_generator_task_failed[0].name
-  arn   = aws_sns_topic.lambda_alerts[0].arn
 }
 
 module "api_lambda" {
@@ -300,25 +139,6 @@ module "api_lambda" {
     # API Gateway CORS config via the shared local (prod excludes the dev origin).
     CORS_ALLOW_ORIGINS = join(",", local.cors_allow_origins)
 
-    # Stripe billing (BE-015) — checkout + billing-portal endpoints. The secret
-    # key is fetched at runtime from SSM by *name*; only the non-sensitive name is
-    # an env var (the value never lands here / in TF state / in CI).
-    STRIPE_SECRET_KEY_SSM_PARAM = "/leagueql/${var.environment}/stripe/secret_key"
-    STRIPE_PRICE_ID_MONTHLY     = var.stripe_price_id_monthly
-    STRIPE_PRICE_ID_YEARLY      = var.stripe_price_id_yearly
-    STRIPE_TRIAL_PERIOD_DAYS    = tostring(var.stripe_trial_period_days)
-    # Checkout success, cancel, and the Billing Portal "Return to LeagueQL" button
-    # all land on the in-app dashboard home. Success carries `?checkout=success`,
-    # which drives the activation poll in useSubscription; cancel has no param so it
-    # never polls.
-    STRIPE_CHECKOUT_SUCCESS_URL      = "${local.app_base_url}/home?checkout=success"
-    STRIPE_CHECKOUT_CANCEL_URL       = "${local.app_base_url}/home"
-    STRIPE_BILLING_PORTAL_RETURN_URL = "${local.app_base_url}/home"
-
-    # Abandoned-checkout self-heal window (BE-015 Layer 1). Shorter in dev for
-    # faster manual-testing retries.
-    CHECKOUT_PENDING_TTL_MINUTES = var.environment == "prod" ? "30" : "5"
-
     # OpenTelemetry tracing → Axiom (BE-020). A no-op unless these are set, so it's
     # safe in every environment. The ingest token is fetched at runtime from SSM by
     # *name* (value never lands here / in TF state / in CI); dataset is per-env so
@@ -341,63 +161,6 @@ module "api_lambda" {
     component   = "api"
     managed-by  = "terraform"
   }
-}
-
-module "stripe_webhook_lambda" {
-  source = "../modules/lambda"
-
-  function_name        = "leagueql-stripe-webhook-${var.environment}-${local.region}"
-  function_description = "Lambda handling Stripe billing webhooks for subscription lifecycle"
-  role_arn             = local.stripe_webhook_role_arn
-  handler              = "handler.lambda_handler"
-  memory_size          = 512
-  timeout              = 15
-  log_retention        = 7
-  s3_bucket            = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
-  s3_key               = "lambda-code-artifacts/stripe_webhook-lambda.zip"
-
-  environment_variables = {
-    DYNAMODB_TABLE_NAME = "leagueql-table-${var.environment}"
-    # Stripe credentials fetched at runtime from SSM by *name* (BE-015); the
-    # values never land here / in TF state / in CI.
-    STRIPE_SECRET_KEY_SSM_PARAM     = "/leagueql/${var.environment}/stripe/secret_key"
-    STRIPE_WEBHOOK_SECRET_SSM_PARAM = "/leagueql/${var.environment}/stripe/webhook_secret"
-
-    # Feature flags via SSM Parameter Store (BE-017). The webhook reads the global
-    # `billing` flag to no-op when billing is off; same SSM source as the API.
-    FEATURE_FLAGS_SSM_PARAM = "/leagueql/${var.environment}/feature-flags"
-
-    # On a real subscription activation, enqueue a pending-recap marker so the
-    # recap generator task backfills the newly-premium league's weekly recaps (BE-021).
-    # The queue is the shared table (available in both regions); in the non-east region
-    # this resolves to "" and the webhook's enqueue no-ops (Stripe only calls east).
-    RECAP_QUEUE_TABLE = local.region == "east" ? "leagueql-table-${var.environment}" : ""
-
-    # The webhook is now an OTel-traced Lambda (BE-020): it starts the root span for
-    # the activation path. A no-op unless set.
-    ENVIRONMENT               = var.environment
-    AXIOM_API_TOKEN_SSM_PARAM = "/leagueql/${var.environment}/axiom/api_token"
-    AXIOM_DATASET             = "leagueql-${var.environment}"
-    AXIOM_TRACES_URL          = "https://api.axiom.co/v1/traces"
-  }
-
-  tags = {
-    environment = var.environment
-    project     = "leagueql"
-    component   = "api"
-    managed-by  = "terraform"
-  }
-}
-
-# Allow this region's API Gateway to invoke the Stripe webhook Lambda. The route
-# itself is declared in the OpenAPI spec (POST /stripe/webhook) and targets this
-# function's ARN via the openapi_vars below.
-resource "aws_lambda_permission" "api_gateway_stripe_webhook" {
-  statement_id  = "AllowAPIGatewayInvokeStripeWebhook"
-  action        = "lambda:InvokeFunction"
-  function_name = split(":", module.stripe_webhook_lambda.lambda_arn)[6]
-  principal     = "apigateway.amazonaws.com"
-  source_arn    = "${module.backend_api.execution_arn}/*/*"
 }
 
 module "player_metadata_lambda" {
@@ -536,12 +299,11 @@ module "backend_api" {
   openapi_vars = {
     # Must match api_name above: API Gateway names the HTTP API from the OpenAPI
     # info.title on (re)import, overriding the resource's name argument.
-    api_name                  = "leagueql-api-${var.environment}-${local.region}"
-    aws_region                = var.aws_region
-    lambda_arn                = module.api_lambda.lambda_arn
-    stripe_webhook_lambda_arn = module.stripe_webhook_lambda.lambda_arn
-    clerk_issuer_url          = var.clerk_issuer_url
-    clerk_jwt_audience        = var.clerk_jwt_audience
+    api_name           = "leagueql-api-${var.environment}-${local.region}"
+    aws_region         = var.aws_region
+    lambda_arn         = module.api_lambda.lambda_arn
+    clerk_issuer_url   = var.clerk_issuer_url
+    clerk_jwt_audience = var.clerk_jwt_audience
   }
 
   tags = {
@@ -720,7 +482,7 @@ module "discord_notifier_lambda" {
 
   environment_variables = {
     # Discord webhook URL fetched at runtime from SSM by *name* (the value never
-    # lands here / in TF state / in CI), mirroring the Stripe secret pattern.
+    # lands here / in TF state / in CI).
     DISCORD_WEBHOOK_URL_SSM_PARAM = "/leagueql/${var.environment}/discord/webhook_url"
   }
 
@@ -869,10 +631,6 @@ resource "aws_cloudwatch_metric_alarm" "processor_errors" {
   }
 }
 
-# The recap generator's failure monitoring is the event-based ECS Task State Change
-# rule defined alongside its task definition above (BE-021) — a one-shot Fargate task
-# emits no per-run Lambda "Errors" metric.
-
 resource "aws_cloudwatch_metric_alarm" "sleeper_refresh_errors" {
   count               = local.region == "east" && var.environment == "prod" ? 1 : 0
   alarm_name          = "leagueql-sleeper-refresh-${var.environment}-errors"
@@ -983,7 +741,6 @@ resource "aws_sns_topic_policy" "lambda_alerts_eventbridge" {
           ArnEquals = {
             "aws:SourceArn" = [
               aws_cloudwatch_event_rule.sleeper_stats_task_failed[0].arn,
-              aws_cloudwatch_event_rule.recap_generator_task_failed[0].arn,
             ]
           }
         }
@@ -1009,33 +766,6 @@ resource "aws_cloudwatch_metric_alarm" "api_lambda_errors" {
 
   dimensions = {
     FunctionName = "leagueql-api-${var.environment}-${local.region}"
-  }
-
-  tags = {
-    environment = var.environment
-    project     = "leagueql"
-    component   = "monitoring"
-    managed-by  = "terraform"
-  }
-}
-
-resource "aws_cloudwatch_metric_alarm" "stripe_webhook_errors" {
-  count               = var.environment == "prod" ? 1 : 0
-  alarm_name          = "leagueql-stripe-webhook-${var.environment}-${local.region}-errors"
-  comparison_operator = "GreaterThanOrEqualToThreshold"
-  evaluation_periods  = 1
-  metric_name         = "Errors"
-  namespace           = "AWS/Lambda"
-  period              = 300
-  statistic           = "Sum"
-  threshold           = 1
-  alarm_description   = "Stripe webhook Lambda error detected"
-  alarm_actions       = [aws_sns_topic.lambda_alerts[0].arn]
-  ok_actions          = [aws_sns_topic.lambda_alerts[0].arn]
-  treat_missing_data  = "notBreaching"
-
-  dimensions = {
-    FunctionName = "leagueql-stripe-webhook-${var.environment}-${local.region}"
   }
 
   tags = {

@@ -18,7 +18,7 @@ stored SoS field; playoff games are excluded to match how win % is computed.
 - Season selector: `src/features/season_select/season-select.tsx`.
 - Reads `STANDINGS#{season}` and `MATCHUPS#{season}#…` (and supporting views) via
   [BE-005](../backend/BE-005-query-precomputed-views-api.md).
-- Also hosts the premium **Schedule-Swap Simulator**
+- Also hosts the **Schedule-Swap Simulator**
   ([FE-031](FE-031-schedule-swap-simulator.md)), scoped to the same season selector.
 
 ## Edge Cases

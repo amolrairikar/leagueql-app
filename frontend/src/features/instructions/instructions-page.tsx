@@ -5,7 +5,6 @@ import espnOnboardFormScreenshot from '@/assets/espn-onboard-form-screenshot.png
 import espnVerifyMembershipScreenshot from '@/assets/espn-verify-membership-screenshot.png';
 import { Kbd } from '@/components/ui/kbd';
 import { ESPN_EXTENSION_URL } from '@/lib/espn-extension';
-import { isBillingEnabled } from '@/lib/feature-flags';
 
 const TOC_ITEMS = [
   { id: 'getting-started', label: 'Getting Started', level: 1 },
@@ -20,8 +19,6 @@ const TOC_ITEMS = [
   { id: 'league-ownership', label: 'League Ownership', level: 2 },
   { id: 'joining-an-espn-league', label: 'Joining an ESPN League', level: 3 },
   { id: 'transferring-ownership', label: 'Transferring Ownership', level: 3 },
-  { id: 'subscribing', label: 'Subscribing', level: 2 },
-  { id: 'free-trial', label: 'Free Trial', level: 2 },
   { id: 'navigation', label: 'Navigation', level: 1 },
   { id: 'managing-your-league', label: 'Managing Your League', level: 1 },
   { id: 'refreshing-league-data', label: 'Refreshing League Data', level: 2 },
@@ -29,20 +26,9 @@ const TOC_ITEMS = [
   { id: 'refresh-sleeper', label: 'Sleeper', level: 3 },
   { id: 'migrating-your-league', label: 'Migrating Your League', level: 2 },
   { id: 'switching-leagues', label: 'Switching Leagues', level: 2 },
-  { id: 'managing-billing', label: 'Managing Billing', level: 2 },
   { id: 'deleting-a-league', label: 'Deleting a League', level: 2 },
   { id: 'faq-and-troubleshooting', label: 'FAQ & Troubleshooting', level: 1 },
 ] as const;
-
-// Billing-related content is hidden when billing is feature-flagged off (FE-026):
-// these TOC entries and this FAQ entry, plus the Subscribing / Free Trial /
-// Managing Billing sections and the inline billing mentions in the prose.
-const BILLING_TOC_IDS = new Set<string>([
-  'subscribing',
-  'free-trial',
-  'managing-billing',
-]);
-const BILLING_FAQ_QUESTION = 'Why is there a subscription for the app?';
 
 interface FaqItem {
   q: string;
@@ -92,10 +78,6 @@ const FAQ_ITEMS: FaqItem[] = [
         automatically each week during the season.
       </>
     ),
-  },
-  {
-    q: 'Why is there a subscription for the app?',
-    a: "The subscription helps cover the cost of hosting the app and the time spent developing and maintaining it. It's billed per league, not per person. One person (the league owner) handles billing for the league, but league-mates are free to split that cost among themselves outside of the app. For a 10-person league it works out to about $0.39 per person per year.",
   },
   {
     q: 'Can I connect more than one league?',
@@ -283,13 +265,8 @@ function DocTable({
 
 export default function InstructionsPage() {
   const [activeId, setActiveId] = useState('getting-started');
-  const billingEnabled = isBillingEnabled();
-  const tocItems = billingEnabled
-    ? TOC_ITEMS
-    : TOC_ITEMS.filter((item) => !BILLING_TOC_IDS.has(item.id));
-  const faqItems = billingEnabled
-    ? FAQ_ITEMS
-    : FAQ_ITEMS.filter((item) => item.q !== BILLING_FAQ_QUESTION);
+  const tocItems = TOC_ITEMS;
+  const faqItems = FAQ_ITEMS;
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -533,23 +510,12 @@ export default function InstructionsPage() {
                 <ul className="list-disc pl-6 space-y-2 text-muted-foreground leading-relaxed mb-3">
                   <li>Refresh League</li>
                   <li>Migrate League</li>
-                  {billingEnabled && (
-                    <li>Manage Subscription / Subscribe (billing)</li>
-                  )}
                   <li>Transfer Ownership</li>
                   <li>Delete League</li>
                 </ul>
                 <p className="text-muted-foreground leading-relaxed mb-8">
                   Everyone else (your leaguemates) can view the league dashboard
                   but not these actions.
-                  {billingEnabled && (
-                    <>
-                      {' '}
-                      If a league&apos;s subscription has lapsed, only the owner
-                      is shown the Subscribe button; non-owners are asked to
-                      have the owner subscribe.
-                    </>
-                  )}
                 </p>
 
                 <div className="space-y-8">
@@ -643,53 +609,6 @@ export default function InstructionsPage() {
                   </div>
                 </div>
               </div>
-
-              {billingEnabled && (
-                <>
-                  <div>
-                    <SubHeading id="subscribing">Subscribing</SubHeading>
-                    <p className="text-muted-foreground leading-relaxed mb-4">
-                      LeagueQL is a paid product. Each connected league has its
-                      own subscription, billed securely by Stripe; LeagueQL
-                      never sees or stores your card details. Onboarding and
-                      exploring demo mode are free, but a subscription is
-                      required to view a connected league&apos;s analytics.
-                    </p>
-                    <p className="text-muted-foreground leading-relaxed mb-4">
-                      Subscribing happens right after you onboard a league. A
-                      newly connected league starts without an active
-                      subscription, so once onboarding completes its analytics
-                      pages are replaced with a paywall. Click{' '}
-                      <Kbd>Subscribe</Kbd> there, or{' '}
-                      <Kbd>Manage Subscription</Kbd> in the sidebar, to open
-                      Stripe&apos;s secure checkout page. After payment you are
-                      returned to your league&apos;s home dashboard and access
-                      is restored automatically.
-                    </p>
-                    <Callout>
-                      Have a promotion code? Enter it in the{' '}
-                      <strong className="text-foreground">
-                        Add promotion code
-                      </strong>{' '}
-                      field on the Stripe checkout page to apply a discount.
-                    </Callout>
-                  </div>
-
-                  <div>
-                    <SubHeading id="free-trial">Free Trial</SubHeading>
-                    <p className="text-muted-foreground leading-relaxed">
-                      Each league gets a 14 day free trial the first time it is
-                      subscribed, so you can try LeagueQL with your
-                      league&apos;s data before being charged. The trial is
-                      granted once per league: re-subscribing a league that has
-                      already used its trial, including after deleting and
-                      re-connecting it, starts billing immediately with no
-                      second trial. Trials are independent across different
-                      leagues, so each league you connect gets its own.
-                    </p>
-                  </div>
-                </>
-              )}
             </div>
           </section>
 
@@ -821,31 +740,6 @@ export default function InstructionsPage() {
                   league ID.
                 </p>
               </div>
-
-              {billingEnabled && (
-                <div>
-                  <SubHeading id="managing-billing">
-                    Managing Billing
-                  </SubHeading>
-                  <p className="text-muted-foreground leading-relaxed mb-4">
-                    Click <Kbd>Manage Subscription</Kbd> in the sidebar to open
-                    the billing dialog. From there you can launch the Stripe
-                    Billing Portal to update your payment method or cancel the
-                    subscription. LeagueQL shows a reminder dot on the{' '}
-                    <Kbd>Manage Subscription</Kbd> icon when a league&apos;s
-                    subscription is within 14 days of expiring.
-                  </p>
-                  <Callout variant="warning">
-                    <strong className="text-foreground">
-                      Cancellation is immediate.
-                    </strong>{' '}
-                    Canceling ends the subscription right away and access to
-                    that league&apos;s analytics is revoked at once; you are not
-                    billed again, and there is no remaining paid period after
-                    canceling.
-                  </Callout>
-                </div>
-              )}
 
               <div>
                 <SubHeading id="deleting-a-league">

@@ -78,7 +78,7 @@ export function MembershipGuard({ children }: { children: React.ReactNode }) {
           leagueId={leagueId}
           onJoined={() => {
             // Membership now grants access; drop cached 403 reads so the page and
-            // the subscription/owner hooks re-fetch a 200, then render the page.
+            // the owner hooks re-fetch a 200, then render the page.
             clearApiCache();
             setGate('ok');
           }}

@@ -27,14 +27,8 @@ additive.
 
 Tracing runs in **both dev and prod**, isolated by Axiom dataset (`leagueql-dev` / `leagueql-prod`).
 The Axiom ingest token is sensitive and is fetched at runtime from SSM Parameter Store by parameter
-*name* (same pattern as the Stripe secret key, [BE-015](BE-015-stripe-billing.md)) — the value never
-lands in a Lambda env var, Terraform state, or CI. Tracing is gated on Axiom config and is a **true
-no-op** when unconfigured.
-
-> Other Lambdas outside the onboarding chain adopt this same bootstrap where useful: the **Stripe
-> webhook** starts a **root** span (Stripe delivers over HTTP with no inbound W3C context) that
-> parents the recap-task launch ([BE-015](BE-015-stripe-billing.md)), and the **recap generator**
-> roots its own trace ([BE-021](BE-021-ai-weekly-matchup-recap.md)). Both reuse `common/tracing.py`.
+*name* — the value never lands in a Lambda env var, Terraform state, or CI. Tracing is gated on
+Axiom config and is a **true no-op** when unconfigured.
 
 ## Scope
 - **Shared bootstrap — `src/common/tracing.py`** (vendored into every Lambda zip):

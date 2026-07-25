@@ -1,7 +1,7 @@
-"""Steps for the FastAPI app as a component (BE-005..009, BE-013, BE-014).
+"""Steps for the FastAPI app as a component (BE-005..009, BE-013).
 
 Requests go through the real ``TestClient`` (``context.api``) against moto-backed
-DynamoDB/S3; Stripe and ESPN HTTP are patched where a route reaches out.
+DynamoDB/S3; ESPN HTTP is patched where a route reaches out.
 """
 
 import json
@@ -51,21 +51,6 @@ def step_seed_job(context, status, job_id):
     put_item(context, item)
 
 
-@given(
-    'a durable TRIAL_USED marker exists for league "{league_id}" platform "{platform}"'
-)
-def step_seed_trial(context, league_id, platform):
-    put_item(
-        context,
-        {
-            "PK": f"LEAGUE#{league_id}#PLATFORM#{platform}",
-            "SK": "TRIAL_USED",
-            "platform": platform,
-            "league_id": league_id,
-        },
-    )
-
-
 @given('league "{canonical}" has raw data stored in S3')
 def step_seed_s3_raw(context, canonical):
     context.s3.put_object(
@@ -77,15 +62,6 @@ def step_seed_s3_raw(context, canonical):
         Bucket=context.bucket_name,
         Key=f"raw-api-data/{canonical}/2024.json",
         Body=json.dumps([]),
-    )
-
-
-@given('league "{canonical}" records stripe subscription "{sub_id}"')
-def step_records_sub(context, canonical, sub_id):
-    context.ddb_resource.Table(context.table_name).update_item(
-        Key={"PK": f"LEAGUE#{canonical}", "SK": "METADATA"},
-        UpdateExpression="SET stripe_subscription_id = :s",
-        ExpressionAttributeValues={":s": sub_id},
     )
 
 
@@ -117,25 +93,10 @@ def step_post_espn_members(context, league_id, code):
     )
 
 
-@when(
-    'I DELETE league "{league_id}" platform "{platform}" with Stripe cancel {behavior}'
-)
-def step_delete_with_stripe(context, league_id, platform, behavior):
-    import stripe
-
-    cancel = MagicMock()
-    if behavior == "failing":
-        cancel.side_effect = stripe.error.APIConnectionError("down")
-    patcher = patch.object(context.main.stripe.Subscription, "cancel", cancel)
-    context.cancel_mock = patcher.start()
-    context._patches.append(patcher)
-    context.response = context.api.delete(f"/leagues/{league_id}?platform={platform}")
-
-
 @when('I POST a REFRESH of league "{league_id}" on "{platform}"')
 def step_post_refresh(context, league_id, platform):
-    # requestType is a query param; the gate fires on the REFRESH path of an
-    # already-onboarded league before the owner check (BE-014).
+    # requestType is a query param; the REFRESH path of an already-onboarded
+    # league is owner-gated (LQL-01 / BE-016).
     context.response = context.api.post(
         "/leagues?requestType=REFRESH",
         json={"leagueId": league_id, "platform": platform},
@@ -258,18 +219,6 @@ def step_no_items(context, canonical):
     table = context.ddb_resource.Table(context.table_name)
     resp = table.query(KeyConditionExpression=Key("PK").eq(f"LEAGUE#{canonical}"))
     assert not resp["Items"], f"items remain: {resp['Items']}"
-
-
-@then('a TRIAL_USED marker still exists for league "{league_id}" platform "{platform}"')
-def step_trial_survives(context, league_id, platform):
-    assert get_item(context, f"LEAGUE#{league_id}#PLATFORM#{platform}", "TRIAL_USED"), (
-        "durable TRIAL_USED marker was deleted"
-    )
-
-
-@then("the Stripe subscription was canceled")
-def step_stripe_canceled(context):
-    assert context.cancel_mock.called, "subscription cancel not called"
 
 
 @then('a METADATA item still exists for league "{canonical}"')

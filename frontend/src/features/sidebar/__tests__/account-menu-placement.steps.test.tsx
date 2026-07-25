@@ -29,7 +29,7 @@ function accountButtons() {
 const realInnerWidth = window.innerWidth;
 
 async function renderLayout() {
-  server.use(leagueMetadata({ subscription_end_time: '2999-01-01T00:00:00Z' }));
+  server.use(leagueMetadata({ is_owner: true }));
   await renderRoute(
     <SidebarProvider>
       <SidebarTrigger />

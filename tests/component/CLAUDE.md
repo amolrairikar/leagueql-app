@@ -1,10 +1,9 @@
 # Component Tests (backend)
 
 Component tests exercise whole components — the onboarder→processor chain, the
-FastAPI app, the Stripe webhook, the Sleeper auto-refresh Lambda — with every
-**external** dependency mocked. They sit between `tests/unit/` (fine-grained,
-near-100% coverage) and `tests/integration/` (behave against the **real** dev AWS
-stack).
+FastAPI app, the Sleeper auto-refresh Lambda — with every **external** dependency
+mocked. They sit between `tests/unit/` (fine-grained, near-100% coverage) and
+`tests/integration/` (behave against the **real** dev AWS stack).
 
 ## Running
 
@@ -25,7 +24,7 @@ No AWS credentials are needed — AWS is backed by `moto` (`mock_aws`).
 - Lambda handlers share bare module names (`utils`, `queries`, `handler`); each
   component is loaded with its bare-name imports resolved, then its handler
   reference is stashed on `context` (`context.onboarder_handler`,
-  `context.processor_handler`, `context.refresh_handler`, `context.stripe_handler`,
+  `context.processor_handler`, `context.refresh_handler`,
   `context.api` = FastAPI `TestClient`). Steps always reach handlers through
   `context`, never the last-writer-wins bare names.
 - `context.main.lambda_client` is a `MagicMock` (moto[s3,dynamodb] has no Lambda),
@@ -34,14 +33,12 @@ No AWS credentials are needed — AWS is backed by `moto` (`mock_aws`).
   append started `unittest.mock.patch` handles to it and `after_scenario` stops
   them, then clears the table and bucket for isolation.
 
-## Mocking the platform / Stripe boundary
+## Mocking the platform boundary
 
 - The onboarder→processor chain mocks the platform API by replacing
   `OnboardingService._build_client` with a fake client that returns fixture raw
   data (`tests/component/fixtures/`); the real writer→S3, DynamoDB, processor and
   DuckDB transforms all run.
-- Stripe is mocked by patching `stripe.Webhook.construct_event` and
-  `stripe.Subscription.retrieve/.cancel` per scenario.
 
 ## Conventions
 

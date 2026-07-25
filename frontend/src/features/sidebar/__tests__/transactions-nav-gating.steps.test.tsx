@@ -13,15 +13,9 @@ const feature = loadFeature(
   'src/features/sidebar/__tests__/transactions-nav-gating.feature',
 );
 
-function isoIn(days: number): string {
-  return new Date(Date.now() + days * 86400000).toISOString();
-}
-
 defineFeature(feature, (test) => {
   async function renderSidebarFor(platform: Platform) {
-    server.use(
-      leagueMetadata({ subscription_end_time: isoIn(30), is_owner: true }),
-    );
+    server.use(leagueMetadata({ is_owner: true }));
     await renderRoute(
       <SidebarProvider>
         <AppSidebar />

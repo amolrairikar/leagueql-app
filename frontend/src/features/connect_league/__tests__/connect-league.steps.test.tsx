@@ -27,7 +27,6 @@ function statefulGetLeague() {
       data: {
         seasons: ['2024'],
         league_name: 'L',
-        subscription_end_time: null,
       },
     });
   });
@@ -194,7 +193,6 @@ defineFeature(feature, (test) => {
             data: {
               seasons: ['2024'],
               league_name: 'L',
-              subscription_end_time: null,
               is_owner: false,
             },
           }),
@@ -244,7 +242,6 @@ defineFeature(feature, (test) => {
             data: {
               seasons: ['2024'],
               league_name: 'L',
-              subscription_end_time: null,
               is_owner: false,
             },
           });

@@ -66,7 +66,7 @@ Each row: `season`, `transaction_id`, `type` (`waiver` | `trade` | `free_agent` 
 `scripts/utility_scripts/backfill_sleeper_leagues.py` enumerates every Sleeper league via the
 GSI2 `platform=SLEEPER` index (one entry per canonical league) and asynchronously invokes the
 onboarder Lambda with `requestType=REFRESH`, the existing `canonical_league_id`, and
-`reprocess_all=True`. REFRESH preserves the league's METADATA (owner/members/subscription); a
+`reprocess_all=True`. REFRESH preserves the league's METADATA (owner/members); a
 full ONBOARD would Put-overwrite it. `reprocess_all` makes the processor rebuild every
 season's views from the raw season files already in S3. Dry-run by default; `--execute` to
 invoke. Idempotent.
@@ -88,7 +88,7 @@ invoke. Idempotent.
 
 ## Authorization
 Member-gating ([BE-016](BE-016-league-ownership-authorization.md)) is unchanged — Sleeper
-reads stay open. No subscription/feature-flag paywall; the only gate is `platform=SLEEPER`.
+reads stay open. The only gate is `platform=SLEEPER`.
 
 ## Sources
 `src/processor/handler.py`, `src/processor/queries.py`, `src/api/main.py`,

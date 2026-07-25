@@ -12,16 +12,6 @@ SSM is selected only when ``FEATURE_FLAGS_SSM_PARAM`` is set (the deployed
 Lambdas). Otherwise — local dev and tests — there is **no flag source** and every
 flag defaults to ``False`` (feature off). There is no bundled JSON fallback.
 
-A ``billing`` master flag gates all Stripe billing behavior (BE-014 / BE-015):
-when it is OFF, ``require_active_subscription`` is a no-op, the checkout and
-billing-portal endpoints return 404, and the Stripe webhook no-ops.
-
-On top of it, the ``premium_feature`` flag implements the freemium model: a
-premium feature is paywalled only when **both** ``billing`` and ``premium_feature``
-are ON (see ``is_feature_paywalled``). Every premium feature shares this one flag,
-so they are all gated identically. The frontend gates the schedule-swap simulator
-(FE-031) on it; no backend endpoint enforces it yet.
-
 Evaluation goes through OpenFeature's in-memory provider so the rest of the app
 depends only on the vendor-neutral OpenFeature client. Anything that cannot be
 resolved — SSM unreachable, an unknown flag — fails safe to ``False``
@@ -39,22 +29,10 @@ from openfeature.provider.in_memory_provider import InMemoryFlag, InMemoryProvid
 
 logger = logging.getLogger(__name__)
 
-# Shared premium-feature flag (freemium model; see BE-014 / BE-017). Every premium
-# feature is gated identically on this one flag. The frontend gates the schedule-swap
-# simulator (FE-031) on it; no backend endpoint enforces it yet.
-PREMIUM_FEATURE = "premium_feature"
-
-# Global, non-billing flag gating the in-app informational banner (FE-030) — a
-# generic toggle reused for whatever the current banner promotes (Discord today).
-# Surfaced to the SPA via GET /feature-flags; the backend enforces nothing.
+# Global flag gating the in-app informational banner (FE-030) — a generic toggle
+# reused for whatever the current banner promotes (Discord today). Surfaced to the
+# SPA via GET /feature-flags; the backend enforces nothing.
 BANNER = "banner"
-
-# Kill-switch for AI weekly matchup recap generation (BE-021). Unlike every other
-# flag this one defaults **ON**: recaps run unless the config explicitly carries
-# ``{"recap": {"enabled": false}}``. This lets a single environment (e.g. DEV)
-# suppress the per-generation LLM spend without a prod SSM change, while billing
-# stays on so subscription features remain testable. See ``is_recap_enabled``.
-RECAP = "recap"
 
 # The variant names are cosmetic; what matters is the boolean each maps to.
 _ON = "on"
@@ -157,40 +135,10 @@ def is_enabled(flag_name: str) -> bool:
     return _client.get_boolean_value(flag_name, False)
 
 
-def is_billing_enabled() -> bool:
-    """Return whether Stripe billing (BE-014 / BE-015) is enabled."""
-    return is_enabled("billing")
-
-
-def is_recap_enabled() -> bool:
-    """Return whether AI recap generation is enabled (default: **on**).
-
-    Recaps are a kill-switch, not a normal opt-in flag: they run unless the
-    feature-flag config explicitly carries ``{"recap": {"enabled": false}}``. An
-    absent flag — including local dev and tests with no SSM source — leaves recaps
-    enabled, so passing ``True`` as the OpenFeature default returns ``True`` for an
-    unregistered flag and ``False`` only when the flag is registered OFF. This lets
-    DEV suppress the LLM spend by adding the flag OFF, with no prod change (BE-021).
-    """
-    if _flags_enabled:
-        _refresh_if_stale()
-    return _client.get_boolean_value(RECAP, True)
-
-
-def is_feature_paywalled(flag_name: str) -> bool:
-    """Return whether a premium feature is paywalled (freemium model; BE-014).
-
-    A feature is paywalled only when **both** the ``billing`` master flag and the
-    feature's own ``flag_name`` are ON. With billing off (the default) this is
-    always ``False``, so every feature is free.
-    """
-    return is_billing_enabled() and is_enabled(flag_name)
-
-
 def _override_for_testing(flags: dict[str, bool]) -> None:
     """Replace the active provider with an explicit flag map (tests only).
 
     Lets a test exercise the ON path without standing up SSM:
-    ``_override_for_testing({"billing": True})``.
+    ``_override_for_testing({"banner": True})``.
     """
     _set_provider_from_config({name: {"enabled": on} for name, on in flags.items()})
