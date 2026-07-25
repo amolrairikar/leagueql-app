@@ -26,6 +26,7 @@ from diagrams.aws.management import SystemsManagerParameterStore
 from diagrams.aws.network import APIGateway
 from diagrams.aws.storage import S3
 from diagrams.generic.blank import Blank
+from diagrams.generic.storage import Storage
 from diagrams.onprem.client import Client, User
 from diagrams.programming.framework import React
 from diagrams.saas.cdn import Cloudflare
@@ -67,7 +68,9 @@ with Diagram(
     # ── Edge / Cloudflare tier ────────────────────────────────────────────────
     with Cluster("Cloudflare (edge)"):
         spa = React("React SPA\n(leagueql-app worker)")
-        counts = Cloudflare("get-counts /\nsync-counts workers")
+        get_counts = Cloudflare("get-counts\nworker")
+        sync_counts = Cloudflare("sync-counts\nworker (hourly cron)")
+        counts_kv = Storage("Counts KV")
 
     ext = User("Chrome extension\n(ESPN cookie autofill)")
 
@@ -102,7 +105,10 @@ with Diagram(
     ext >> Edge(label="autofills cookies") >> spa
     spa >> Edge(label="auth") >> clerk
     spa >> Edge(label="REST /leagues, /jobs") >> apigw >> api
-    spa >> Edge(label="/counts") >> counts >> ddb
+    spa >> Edge(label="/counts") >> get_counts >> Edge(label="read") >> counts_kv
+    # sync-counts refreshes the KV cache from DynamoDB on an hourly Cloudflare cron.
+    sync_counts >> SCHED >> counts_kv
+    sync_counts >> Edge(label="read counts") >> ddb
     spa >> TRACE >> axiom  # RUM + OTLP via same-origin worker proxy
 
     # ── API → async chain ─────────────────────────────────────────────────────
@@ -121,8 +127,10 @@ with Diagram(
     # ── Scheduled jobs ────────────────────────────────────────────────────────
     evb >> SCHED >> [sleeper_refresh, player_meta, stats_task]
     sleeper_refresh >> ASYNC >> onboarder
-    player_meta >> DATA >> ddb
-    stats_task >> DATA >> ddb
+    # Player metadata + Sleeper stats land in S3; the processor reads both prefixes
+    # (alongside the raw payloads) when building precomputed views.
+    player_meta >> Edge(label="player metadata\nJSON") >> s3
+    stats_task >> Edge(label="player stats\nJSON") >> s3
 
     # ── Alerting & config ─────────────────────────────────────────────────────
     sns >> discord_fn >> Edge(label="webhook URL from SSM") >> discord
