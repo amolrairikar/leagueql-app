@@ -31,8 +31,6 @@ from fastapi import (
 import main
 from common.feature_flags import (
     BANNER,
-    PREMIUM_FEATURE,
-    is_billing_enabled,
     is_enabled,
 )
 from common.onboarder_invoke import invoke_onboarder
@@ -49,36 +47,26 @@ from main import (
     QueryResponse,
     QueryType,
     RequestType,
-    SubscriptionPlan,
     correlation_id_var,
     logger,
-    stripe_price_id_for_plan,
 )
 from helpers import (
     _is_conditional_check_failure,
     add_league_member,
-    cancel_league_subscription,
-    claim_pending_checkout,
     convert_decimals,
     create_job_status,
-    create_subscription_checkout_session,
     delete_all_league_items,
     get_job_status,
     get_latest_stored_matchup,
     get_league_metadata,
     get_league_seasons,
     get_nfl_state,
-    get_or_create_stripe_customer,
-    get_stripe_customer_id,
     is_job_in_progress,
     lookup_league,
     record_league_access,
     require_league_member,
     require_league_owner,
-    resolve_checkout_cancel_url,
-    resolve_checkout_success_url,
     set_active_job,
-    trial_used_for_league,
     update_league_count,
 )
 
@@ -105,8 +93,6 @@ def get_feature_flags(response: Response) -> APIResponse:
     return APIResponse(
         detail="Feature flags",
         data={
-            "billing": is_billing_enabled(),
-            PREMIUM_FEATURE: is_enabled(PREMIUM_FEATURE),
             BANNER: is_enabled(BANNER),
         },
     )
@@ -118,7 +104,7 @@ def get_authenticated_user(request: Request) -> str:
     The Clerk JWT is validated by the API Gateway authorizer; its verified claims
     are surfaced to the Lambda under the original event, which Mangum exposes at
     ``request.scope["aws.event"]``. Used as a FastAPI dependency for endpoints
-    that must identify the caller (billing, ownership, and ESPN read gating).
+    that must identify the caller (ownership and ESPN read gating).
 
     Raises:
         HTTPException: 401 when no authenticated user (``sub`` claim) is present.
@@ -172,118 +158,8 @@ def get_league(
         data={
             "seasons": seasons,
             "league_name": metadata.get("league_name"),
-            "subscription_end_time": metadata.get("subscription_end_time"),
             "is_owner": metadata.get("owner_user_id") == clerk_user_id,
         },
-    )
-
-
-@router.post("/leagues/{leagueId}/checkout-session", status_code=status.HTTP_200_OK)
-def create_checkout_session(
-    leagueId: Annotated[
-        str, Path(description="The ID of the fantasy league", pattern=r"^\d+$")
-    ],
-    platform: Annotated[Platform, Query(description="The platform the league is on")],
-    plan: Annotated[
-        SubscriptionPlan, Query(description="The subscription plan (monthly or yearly)")
-    ],
-    clerk_user_id: Annotated[str, Depends(get_authenticated_user)],
-    returnPath: Annotated[
-        str | None,
-        Query(
-            description=(
-                "In-app relative path the user started checkout from; used to build "
-                "both the Checkout success and cancel ('back') URLs so completing or "
-                "cancelling returns them here instead of the dashboard home (FE-022)."
-            )
-        ),
-    ] = None,
-) -> APIResponse:
-    """Create a Stripe Checkout Session to subscribe a league (BE-015).
-
-    Resolves/creates the caller's Stripe customer, claims a synchronous
-    ``pending_checkout`` marker (one winner under concurrency), and opens a
-    subscription-mode Checkout Session for the requested ``plan``'s Stripe price
-    whose subscription carries the league's canonical ID. The trial is included
-    only on the league's first subscription. Returns 409 when the league already
-    has a subscription or an unexpired in-flight checkout. Returns 404 when
-    billing is disabled (BE-017).
-    """
-    if not is_billing_enabled():
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
-    canonical_league_id = lookup_league(league_id=leagueId, platform=platform)
-    metadata = get_league_metadata(canonical_league_id=canonical_league_id)
-    require_league_owner(canonical_league_id, clerk_user_id, metadata=metadata)
-    # The league is ineligible for a trial if either the current METADATA marker
-    # or the durable (platform, native_league_id) record says it was already used
-    # — the latter survives a delete/re-onboard cycle (BE-015).
-    trial_used = bool(metadata.get("trial_used")) or trial_used_for_league(
-        leagueId, platform
-    )
-
-    customer_id = get_or_create_stripe_customer(clerk_user_id)
-
-    token = uuid.uuid4().hex
-    if not claim_pending_checkout(canonical_league_id, token, clerk_user_id):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="A subscription or checkout is already active for this league",
-        )
-
-    subscription_data: dict[str, Any] = {
-        "metadata": {
-            "canonical_league_id": canonical_league_id,
-            # Native identity for the durable trial marker written by the webhook.
-            "platform": platform.value,
-            "native_league_id": leagueId,
-        },
-    }
-    if not trial_used:
-        subscription_data["trial_period_days"] = main.STRIPE_TRIAL_PERIOD_DAYS
-
-    session = create_subscription_checkout_session(
-        customer_id=customer_id,
-        clerk_user_id=clerk_user_id,
-        subscription_data=subscription_data,
-        token=token,
-        price_id=stripe_price_id_for_plan(plan),
-        success_url=resolve_checkout_success_url(returnPath),
-        cancel_url=resolve_checkout_cancel_url(returnPath),
-    )
-    logger.info(
-        "Created checkout session for league %s (plan=%s, trial=%s)",
-        canonical_league_id,
-        plan.value,
-        not trial_used,
-    )
-    return APIResponse(detail="Checkout session created", data={"url": session["url"]})
-
-
-@router.post("/billing-portal-session", status_code=status.HTTP_200_OK)
-def create_billing_portal_session(
-    clerk_user_id: Annotated[str, Depends(get_authenticated_user)],
-) -> APIResponse:
-    """Create a Stripe Billing Portal session for the caller (BE-015).
-
-    Lets the user manage their card or cancel (cancellation takes effect
-    immediately). Returns 404 when the caller has no Stripe customer yet, or when
-    billing is disabled (BE-017).
-    """
-    if not is_billing_enabled():
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
-    customer_id = get_stripe_customer_id(clerk_user_id)
-    if not customer_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No billing account found",
-        )
-    main.ensure_stripe_api_key()
-    session = main.stripe.billing_portal.Session.create(
-        customer=customer_id,
-        return_url=main.STRIPE_BILLING_PORTAL_RETURN_URL,
-    )
-    return APIResponse(
-        detail="Billing portal session created", data={"url": session["url"]}
     )
 
 
@@ -647,11 +523,8 @@ def delete_league(
 ) -> APIResponse:
     """Deletes an onboarded league."""
     canonical_league_id = lookup_league(league_id=leagueId, platform=platform)
-    # Cancel the league's Stripe subscription before touching any data, so a failed
-    # cancellation aborts the delete with the league intact (BE-007 / BE-015).
     metadata = get_league_metadata(canonical_league_id=canonical_league_id)
     require_league_owner(canonical_league_id, clerk_user_id, metadata=metadata)
-    cancel_league_subscription(metadata.get("stripe_subscription_id"))
     logger.info(
         "Proceeding with delete for canonical_league_id: %s", canonical_league_id
     )
@@ -699,8 +572,7 @@ def query_league(
 ) -> QueryResponse:
     """Returns a precomputed data view for the specified league.
 
-    ESPN queries are member-gated (LQL-01 / BE-016) in addition to the
-    subscription gate; Sleeper queries stay subscription-gated only.
+    ESPN queries are member-gated (LQL-01 / BE-016); Sleeper queries stay open.
     """
     parts = queryType.split("#", 1)
     base_type_str = parts[0].upper()

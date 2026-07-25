@@ -113,31 +113,6 @@ polls pending lookups and promotes this item to a normal lookup — adding `seas
 </details>
 
 <details>
-<summary><b>TRIAL_USED</b></summary>
-
-Durable marker that a given platform league has already consumed its free trial. Keyed by the **platform-native** identity (`platform` + `league_id`), which survives a delete/re-onboard cycle — unlike the league's `canonical_league_id`, which is regenerated on re-onboarding. Written by the Stripe billing webhook when a *trialing* subscription is recorded; read by checkout to omit the trial on re-subscribe (BE-015). It shares the `LEAGUE_LOOKUP` PK but **deliberately omits `canonical_league_id`** so the BE-007 delete sweep (which finds items by `PK = LEAGUE#{canonical_league_id}` and by a GSI1 query on `canonical_league_id`) never matches it — the marker outlives league deletion.
-
-| Attribute | Type | Required | Description |
-|---|---|---|---|
-| `PK` | String | Yes | `LEAGUE#{league_id}#PLATFORM#{platform}` (the native league ID + platform) |
-| `SK` | String | Yes | `TRIAL_USED` |
-| `platform` | String | Yes | The platform the league belongs to (e.g., "ESPN", "SLEEPER") |
-| `league_id` | String | Yes | The native league ID for the platform |
-| `trial_used_at` | String | No | ISO 8601 (UTC) timestamp when the trial was first granted |
-
-**Example:**
-```json
-{
-  "PK": "LEAGUE#12345678#PLATFORM#ESPN",
-  "SK": "TRIAL_USED",
-  "platform": "ESPN",
-  "league_id": "12345678",
-  "trial_used_at": "2026-06-03T00:00:00Z"
-}
-```
-</details>
-
-<details>
 <summary><b>METADATA</b></summary>
 
 Represents a successfully onboarded league. If onboarding fails before this item is written,
@@ -152,10 +127,6 @@ the league will not appear as onboarded and a retry will re-run the full onboard
 | `last_refresh_at` | String | No | ISO 8601 timestamp of when the most recent refresh completed successfully. Used to enforce the per-league refresh cooldown. |
 | `last_accessed_at` | String | No | ISO 8601 (UTC) timestamp of when a member last opened the league via `GET /leagues/{leagueId}` (BE-018). Written at most once per hour (app-side throttle); absent on older items and on leagues never opened since the field shipped. Used to identify stale leagues for future pruning/archival. |
 | `league_name` | String | No | League name from the most recent season's settings |
-| `subscription_end_time` | String | No | ISO 8601 (UTC) timestamp marking when the league's subscription/trial lapses. Access is granted while `now < subscription_end_time`; an **absent** value is treated as expired (no access). Written **only** by the Stripe billing webhook (BE-015). |
-| `stripe_subscription_id` | String | No | The Stripe subscription backing this league's access. Claimed by the webhook (BE-015) and used to scope cancellation/terminal writes and duplicate-subscription reconciliation. |
-| `pending_checkout` | Map | No | In-flight checkout marker `{ token, expires_at, user_id }` claimed by `POST /leagues/{id}/checkout-session` to block a concurrent second checkout by a *different* user; the initiating `user_id` may re-claim it immediately. Cleared by the webhook on success and self-heals after `expires_at` (BE-015). |
-| `trial_used` | Boolean | No | Set the first time a trial is granted for this league; once present, future subscriptions for the league are created without a trial (BE-015). |
 | `owner_user_id` | String | No | Clerk user ID of the league's owner — the authorization anchor for mutating endpoints (BE-016). Set **once** on first ONBOARD; never overwritten by REFRESH/MIGRATE. Absent for system-initiated onboards. |
 | `members` | String Set | No | Clerk user IDs entitled to **read** an ESPN league (BE-016). Seeded with the owner at onboard; a verified caller is `ADD`ed via `POST /leagues/{id}/verify-membership`. Unused for Sleeper (Sleeper reads are open). |
 | `transfer_token_hash` | String | No | sha256 of an outstanding ownership-transfer token (BE-016). Plaintext is never stored; set by `POST /leagues/{id}/transfer-token` and removed when redeemed. |
@@ -170,51 +141,6 @@ the league will not appear as onboarded and a retry will re-run the full onboard
   "onboarded_at": "2024-09-01T00:00:00Z",
   "owner_user_id": "user_2abc123",
   "members": ["user_2abc123"]
-}
-```
-</details>
-
-<details>
-<summary><b>USER</b></summary>
-
-Maps a Clerk user to their Stripe customer so a single payer can hold multiple
-per-league subscriptions (BE-015). Created lazily on the user's first checkout.
-
-| Attribute | Type | Required | Description |
-|---|---|---|---|
-| `PK` | String | Yes | `USER#{clerk_user_id}` |
-| `SK` | String | Yes | `USER` |
-| `stripe_customer_id` | String | Yes | The Stripe customer ID for this user |
-
-**Example:**
-```json
-{
-  "PK": "USER#user_2abc123",
-  "SK": "USER",
-  "stripe_customer_id": "cus_ABC123"
-}
-```
-</details>
-
-<details>
-<summary><b>WEBHOOK_EVENT</b></summary>
-
-Idempotency marker recording that a Stripe webhook event has been processed, so
-Stripe's at-least-once redelivery is not applied twice (BE-015). Written **after**
-the event is processed successfully; carries a TTL so old markers self-clean.
-
-| Attribute | Type | Required | Description |
-|---|---|---|---|
-| `PK` | String | Yes | `WEBHOOK_EVENT#{stripe_event_id}` |
-| `SK` | String | Yes | `WEBHOOK_EVENT` |
-| `ttl` | Number | Yes | Unix epoch seconds at which DynamoDB TTL reaps the marker (7 days after processing) |
-
-**Example:**
-```json
-{
-  "PK": "WEBHOOK_EVENT#evt_1abc",
-  "SK": "WEBHOOK_EVENT",
-  "ttl": 1893456000
 }
 ```
 </details>
@@ -345,87 +271,6 @@ Represents matchups for a given week in the fantasy league.
       "season": "2025"
     }
   ]
-}
-```
-</details>
-
-<details>
-<summary><b>MATCHUP_RECAP</b></summary>
-
-Caches the AI-written weekly recap column for a single completed week (BE-021). Built from the
-`MATCHUPS` view plus the week-accurate `WEEKLY_STANDINGS` snapshot (falling back to the final
-`STANDINGS` for playoff weeks) by the **recap-generator Fargate task**, which generates each recap
-synchronously via the Anthropic API (Claude Haiku 4.5) and writes the item directly; read back through
-the query API (`MATCHUP_RECAP#{season}#WEEK#{week}`). One item per `(season, week)`; written
-idempotently (`attribute_not_exists(SK)` conditional put) and never regenerated once present.
-
-| Attribute | Type | Required | Description |
-|---|---|---|---|
-| `PK` | String | Yes | `LEAGUE#{league_id}` |
-| `SK` | String | Yes | `MATCHUP_RECAP#{season}#WEEK#{week}` (week zero-padded to two digits, e.g. `MATCHUP_RECAP#2025#WEEK#01`) |
-| `data` | List\<Object\> | Yes | A single-element list holding the cached recap (a list so the query API and `queryLeague<RecapItem>` contract — which always return a list — hold, consistent with every other view) |
-
-**`data[0]` object:**
-
-| Attribute | Type | Description |
-|---|---|---|
-| `headline` | String | A single headline line for the week |
-| `body` | String | The recap prose; paragraphs joined by `\n\n` (no markdown) |
-| `generated_at` | String | ISO 8601 (UTC) timestamp the recap was generated |
-| `model` | String | The Anthropic model ID used (e.g. `claude-haiku-4-5`) |
-
-**Example:**
-```json
-{
-  "PK": "LEAGUE#123456789",
-  "SK": "MATCHUP_RECAP#2025#WEEK#01",
-  "data": [
-    {
-      "headline": "Week 1: Fireworks, Faceplants, and a Last-Second Heartbreak",
-      "body": "The season opened with a bang...\n\nMeanwhile, in the week's ugliest win...",
-      "generated_at": "2025-09-10T13:45:00+00:00",
-      "model": "claude-haiku-4-5"
-    }
-  ]
-}
-```
-</details>
-
-<details>
-<summary><b>RECAP_QUEUE / pending-recap marker</b></summary>
-
-A lightweight pending-work marker recording that a league needs a recap pass (BE-021). Written
-idempotently by the Stripe webhook (on activation) and the processor (at the end of every
-onboard/refresh) via `record_pending_recap`; **one marker per league** (a re-trigger refreshes it, so
-the queue never duplicates). The **recap-generator Fargate task** queries the `RECAP_QUEUE` partition
-each tick, generates each pending league's missing weeks synchronously, and deletes the marker once all
-of that league's weeks are written (leaving it pending if any week failed, for the next run to retry).
-These markers live in their own single partition (`PK=RECAP_QUEUE`), separate from the
-`LEAGUE#{league_id}` items, so the generator reads the whole queue with one query.
-
-| Attribute | Type | Required | Description |
-|---|---|---|---|
-| `PK` | String | Yes | `RECAP_QUEUE` (a single shared partition holding every pending marker) |
-| `SK` | String | Yes | `PENDING#{canonical_league_id}` (one marker per league) |
-| `canonical_league_id` | String | Yes | The league needing recaps |
-| `platform` | String | No | `espn` / `sleeper` (carried through for logging) |
-| `native_league_id` | String | No | Platform-native league id, when known |
-| `status` | String | Yes | `pending` (awaiting a generator run) |
-| `correlation_id` | String | No | Trigger correlation id, for log correlation |
-| `trace_context` | String | No | JSON W3C trace carrier from the trigger (log correlation only; the generator roots its own trace) |
-| `enqueued_at` | String | Yes | ISO 8601 (UTC) timestamp the marker was last written |
-
-**Example:**
-```json
-{
-  "PK": "RECAP_QUEUE",
-  "SK": "PENDING#123456789",
-  "canonical_league_id": "123456789",
-  "platform": "sleeper",
-  "status": "pending",
-  "correlation_id": "abc-123",
-  "trace_context": "{}",
-  "enqueued_at": "2025-09-10T13:40:00+00:00"
 }
 ```
 </details>

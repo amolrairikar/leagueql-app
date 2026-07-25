@@ -10,7 +10,7 @@ limits where injected script may execute and exfiltrate (closes the
 [LQL-04](../../../SECURITY_FINDINGS.md) residual; addresses LQL-07).
 
 The CSP was rolled out in `Content-Security-Policy-Report-Only` first, validated against the
-running app (Clerk incl. Google sign-in, the API, charts, the Stripe redirect) with no
+running app (Clerk incl. Google sign-in, the API, charts) with no
 violations, and is now shipped as the enforcing **`Content-Security-Policy`** header. The
 hardening headers are likewise enforced. To debug a future policy change, the header name can
 be temporarily reverted to `-Report-Only`.
@@ -32,8 +32,6 @@ be temporarily reverted to `-Report-Only`.
   `img.clerk.com`, and `worker-src blob:` (Clerk web workers).
 - **API** — `https://api.leagueql.com` (prod) and `__VITE_DEV_API_URL__` (dev) in
   `connect-src`.
-- **Stripe** — `*.stripe.com` in `frame-src`/`form-action`. Checkout/billing are top-level
-  redirects (not CSP-governed), so these are belt-and-suspenders, validated in Report-Only.
 - **Buy Me A Coffee** — `cdn.buymeacoffee.com` in `img-src`, the origin of the donate button
   image rendered in the About dialog (`features/about/about-dialog.tsx`). The link target
   (`www.buymeacoffee.com`) is a top-level navigation and not CSP-governed.
@@ -45,8 +43,6 @@ be temporarily reverted to `-Report-Only`.
   non-executable data and normally exempt from `script-src`; if Report-Only flags it, add a
   hash or move it out rather than loosening `script-src`.
 - **Clerk workers:** Clerk loads web workers from `blob:` URLs, requiring `worker-src blob:`.
-- **Stripe redirect:** subscription checkout/billing navigate top-level to `*.stripe.com`;
-  CSP does not block top-level navigation, but the origins are allowlisted defensively.
 - **Dev vs. prod:** a single static file lists both Clerk hosts; the dev API origin is the
   only build-time-templated value. An unset `VITE_DEV_API_URL` cleanly drops the dev origin.
 

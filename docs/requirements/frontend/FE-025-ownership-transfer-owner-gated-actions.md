@@ -2,17 +2,15 @@
 
 ## Description
 Surfaces league ownership in the UI ([BE-016](../backend/BE-016-league-ownership-authorization.md)):
-it gates owner-only sidebar actions to the owner, points non-owners at the owner for billing,
-gives non-owners an ESPN membership-verification path, and adds the ownership transfer/claim flow.
+it gates owner-only sidebar actions to the owner, gives non-owners an ESPN
+membership-verification path, and adds the ownership transfer/claim flow.
 
 - **Owner state.** `useIsOwner` (`frontend/src/features/ownership/use-is-owner.ts`) reads the
   current league's `is_owner` from `getLeague()`. Demo / no-league bypass the fetch; a failed
   request resolves to non-owner so owner actions stay hidden.
 - **Owner-gated sidebar.** `app-sidebar.tsx` renders **Refresh**, **Migrate**, **Transfer
-  Ownership**, **Manage Subscription**, and **Delete** only when `is_owner`. Non-owners still see
+  Ownership**, and **Delete** only when `is_owner`. Non-owners still see
   **View Another League** and a **Claim Ownership** entry. (Demo mode keeps its own branch.)
-- **Non-owner paywall.** `subscription-required.tsx` shows the **Subscribe** CTA only to the
-  owner; a non-owner sees "ask the league owner to subscribe" instead of a dead-end button.
 - **ESPN membership verification.** `MembershipGuard`
   (`frontend/src/features/ownership/membership-guard.tsx`) wraps the analytics layout. When
   `getLeague` returns `403` for an ESPN league, it shows a **Verify your ESPN league membership**
@@ -33,11 +31,9 @@ gives non-owners an ESPN membership-verification path, and adds the ownership tr
 - `frontend/src/features/ownership/` — `use-is-owner.ts`, `membership-guard.tsx`,
   `transfer-ownership-dialog.tsx`, `claim-ownership-dialog.tsx`.
 - `frontend/src/features/sidebar/app-sidebar.tsx` — owner-gated actions + transfer/claim entries.
-- `frontend/src/features/subscription/subscription-required.tsx` — non-owner paywall copy.
 - `frontend/src/components/api/types.ts` (`is_owner`), `frontend/src/components/api/leagues.ts`
   (`verifyMembership`, `createTransferToken`, `claimOwnership`).
-- `frontend/src/app/app.tsx` — `MembershipGuard` wraps the analytics layout (outside the
-  `SubscriptionGuard`).
+- `frontend/src/app/app.tsx` — `MembershipGuard` wraps the analytics layout.
 
 ## Edge Cases
 - **Loading owner state:** owner-only actions are hidden until `getLeague` resolves (no flash of
@@ -55,10 +51,8 @@ gives non-owners an ESPN membership-verification path, and adds the ownership tr
   actions.
 
 ## Acceptance Criteria
-- [ ] The sidebar shows Refresh / Migrate / Transfer Ownership / Manage Subscription / Delete only
+- [ ] The sidebar shows Refresh / Migrate / Transfer Ownership / Delete only
       when the caller is the owner; non-owners see View Another League and Claim Ownership.
-- [ ] The expired-subscription paywall shows Subscribe only to the owner; non-owners see the
-      "ask the league owner to subscribe" message.
 - [ ] An ESPN league that returns `403` shows the "Verify your ESPN league membership" prompt;
       a successful verify reveals the dashboard, and a rejected verify shows the inline error.
 - [ ] The owner can mint a transfer token; a recipient can redeem it via the claim dialog.
@@ -66,5 +60,4 @@ gives non-owners an ESPN membership-verification path, and adds the ownership tr
 
 ## Sources
 `src/features/ownership/`, `src/features/sidebar/app-sidebar.tsx`,
-`src/features/subscription/subscription-required.tsx`, `src/components/api/{types,leagues}.ts`,
-`src/app/app.tsx`.
+`src/components/api/{types,leagues}.ts`, `src/app/app.tsx`.

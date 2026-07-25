@@ -6,8 +6,8 @@ import { Fragment, useEffect, useState, type ReactNode } from 'react';
  * changes at runtime (FE-026).
  *
  * The flag helpers (`@/lib/feature-flags`) are synchronous reads of the
- * OpenFeature client, and the call sites (sidebar, subscription guard, docs,
- * landing) take no flag props — so bumping state on a wrapper would not re-render
+ * OpenFeature client, and the call sites (sidebar, docs, landing) take no flag
+ * props — so bumping state on a wrapper would not re-render
  * them (their element identity is unchanged, React bails out). Instead, when a
  * runtime toggle swaps the provider (`initFeatureFlags`' poll → new provider →
  * `PROVIDER_READY` / `PROVIDER_CONFIGURATION_CHANGED`), remount the subtree via a

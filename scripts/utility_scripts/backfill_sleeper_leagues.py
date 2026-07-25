@@ -11,7 +11,7 @@ For each Sleeper league (enumerated via the GSI2 ``platform=SLEEPER`` index, gro
 canonical league id), the script asynchronously invokes the onboarder Lambda with:
 
   * ``requestType=REFRESH`` — reuses the existing ``canonical_league_id`` and preserves the
-    league's METADATA (owner / members / subscription). A full ONBOARD would Put-overwrite
+    league's METADATA (owner / members). A full ONBOARD would Put-overwrite
     METADATA, so REFRESH is used deliberately.
   * ``reprocess_all=True`` — stamps the manifest so the processor rebuilds every season's
     views from the raw season files already in S3, not just the latest season the normal

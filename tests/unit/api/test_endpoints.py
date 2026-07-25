@@ -18,46 +18,22 @@ class TestFeatureFlagsEndpoint:
     """GET /feature-flags is public (no auth) and returns the global flag map."""
 
     def test_returns_resolved_flag_map(self, client):
-        # The autouse enable_billing_flag fixture sets billing + premium_feature
-        # ON for this suite; banner is unset and so defaults OFF.
+        from common import feature_flags
+
+        feature_flags._override_for_testing({"banner": True})
         response = client.get("/feature-flags")
         assert response.status_code == 200
         body = response.json()
         assert body["detail"] == "Feature flags"
-        assert body["data"] == {
-            "billing": True,
-            "premium_feature": True,
-            "banner": False,
-        }
+        assert body["data"] == {"banner": True}
         assert response.headers["Cache-Control"] == "no-store"
-
-    def test_reflects_flag_state(self, client):
-        from common import feature_flags
-
-        feature_flags._override_for_testing(
-            {
-                "billing": True,
-                "premium_feature": False,
-                "banner": True,
-            }
-        )
-        response = client.get("/feature-flags")
-        assert response.json()["data"] == {
-            "billing": True,
-            "premium_feature": False,
-            "banner": True,
-        }
 
     def test_defaults_off_when_unset(self, client):
         from common import feature_flags
 
         feature_flags._override_for_testing({})
         response = client.get("/feature-flags")
-        assert response.json()["data"] == {
-            "billing": False,
-            "premium_feature": False,
-            "banner": False,
-        }
+        assert response.json()["data"] == {"banner": False}
 
 
 class TestParseCorsOrigins:
@@ -114,37 +90,6 @@ class TestGetLeagueEndpoint:
         assert data["league_name"] == "Test League"
         assert "2023" in data["seasons"]
         assert "2024" in data["seasons"]
-
-    def test_subscription_end_time_null_when_absent(
-        self, client, mock_table, league_lookup_item, league_metadata_item
-    ):
-        del league_metadata_item["subscription_end_time"]
-        mock_table.get_item.side_effect = [
-            {"Item": league_lookup_item},
-            {"Item": league_metadata_item},
-        ]
-        mock_table.query.return_value = {
-            "Items": [{"seasons": {"2024"}, "canonical_league_id": "canonical-abc"}]
-        }
-        response = client.get("/leagues/123?platform=SLEEPER")
-        assert response.json()["data"]["subscription_end_time"] is None
-
-    def test_returns_subscription_end_time_when_present(
-        self, client, mock_table, league_lookup_item, league_metadata_item
-    ):
-        league_metadata_item["subscription_end_time"] = "2026-07-01T00:00:00+00:00"
-        mock_table.get_item.side_effect = [
-            {"Item": league_lookup_item},
-            {"Item": league_metadata_item},
-        ]
-        mock_table.query.return_value = {
-            "Items": [{"seasons": {"2024"}, "canonical_league_id": "canonical-abc"}]
-        }
-        response = client.get("/leagues/123?platform=SLEEPER")
-        assert (
-            response.json()["data"]["subscription_end_time"]
-            == "2026-07-01T00:00:00+00:00"
-        )
 
     def test_returns_404_for_unknown_league(self, client, mock_table):
         mock_table.get_item.return_value = {}
@@ -661,99 +606,6 @@ class TestDeleteLeagueEndpoint:
         mock_table.get_item.return_value = {}
         response = client.delete("/leagues/999?platform=SLEEPER")
         assert response.status_code == 404
-
-    def test_cancels_subscription_before_deleting(
-        self, client, mock_table, mock_s3_client, league_lookup_item
-    ):
-        self._setup_delete_mocks(mock_table, league_lookup_item, mock_s3_client)
-        mock_table.get_item.side_effect = [
-            {"Item": league_lookup_item},  # lookup_league
-            {  # get_league_metadata
-                "Item": {
-                    "PK": "LEAGUE#canonical-abc",
-                    "SK": "METADATA",
-                    "stripe_subscription_id": "sub_123",
-                    "owner_user_id": "user_1",
-                }
-            },
-        ]
-        with patch("main.stripe") as mock_stripe:
-            response = client.delete("/leagues/123?platform=SLEEPER")
-        assert response.status_code == 200
-        mock_stripe.Subscription.cancel.assert_called_once()
-        args, _ = mock_stripe.Subscription.cancel.call_args
-        assert args[0] == "sub_123"
-
-    def test_skips_cancel_when_no_subscription(
-        self, client, mock_table, mock_s3_client, league_lookup_item
-    ):
-        self._setup_delete_mocks(mock_table, league_lookup_item, mock_s3_client)
-        mock_table.get_item.side_effect = [
-            {"Item": league_lookup_item},
-            {
-                "Item": {
-                    "PK": "LEAGUE#canonical-abc",
-                    "SK": "METADATA",
-                    "owner_user_id": "user_1",
-                }
-            },
-        ]
-        with patch("main.stripe") as mock_stripe:
-            response = client.delete("/leagues/123?platform=SLEEPER")
-        assert response.status_code == 200
-        mock_stripe.Subscription.cancel.assert_not_called()
-
-    def test_already_canceled_subscription_proceeds(
-        self, client, mock_table, mock_s3_client, league_lookup_item
-    ):
-        import stripe
-
-        self._setup_delete_mocks(mock_table, league_lookup_item, mock_s3_client)
-        mock_table.get_item.side_effect = [
-            {"Item": league_lookup_item},
-            {
-                "Item": {
-                    "PK": "LEAGUE#canonical-abc",
-                    "SK": "METADATA",
-                    "stripe_subscription_id": "sub_123",
-                    "owner_user_id": "user_1",
-                }
-            },
-        ]
-        with patch("main.stripe") as mock_stripe:
-            mock_stripe.Subscription.cancel.side_effect = (
-                stripe.error.InvalidRequestError("No such subscription", None)
-            )
-            response = client.delete("/leagues/123?platform=SLEEPER")
-        # Idempotent: already-canceled is success, and deletion still proceeds.
-        assert response.status_code == 200
-
-    def test_stripe_cancel_failure_aborts_delete_with_500(
-        self, client, mock_table, mock_s3_client, league_lookup_item
-    ):
-        import stripe
-
-        self._setup_delete_mocks(mock_table, league_lookup_item, mock_s3_client)
-        mock_table.get_item.side_effect = [
-            {"Item": league_lookup_item},
-            {
-                "Item": {
-                    "PK": "LEAGUE#canonical-abc",
-                    "SK": "METADATA",
-                    "stripe_subscription_id": "sub_123",
-                    "owner_user_id": "user_1",
-                }
-            },
-        ]
-        with patch("main.stripe") as mock_stripe:
-            mock_stripe.Subscription.cancel.side_effect = (
-                stripe.error.APIConnectionError("network down")
-            )
-            response = client.delete("/leagues/123?platform=SLEEPER")
-        assert response.status_code == 500
-        # Data is left intact for retry: no deletion was attempted.
-        mock_table.batch_writer.assert_not_called()
-        mock_table.query.assert_not_called()
 
     def test_deletes_gsi_lookup_items(
         self, client, mock_table, mock_s3_client, league_lookup_item, mock_time_sleep
@@ -1409,50 +1261,6 @@ class TestEspnMembersEndpoint:
         mock_get.assert_not_called()
 
 
-class TestSubscriptionGate:
-    """No production endpoint is subscription-gated (freemium, BE-014): the
-    generic ``require_active_subscription`` gate exists and is unit-tested in
-    isolation (see ``tests/unit/api/test_utils.py``), but no route calls it yet.
-    These cases assert representative endpoints stay reachable regardless of
-    subscription state."""
-
-    @pytest.fixture
-    def expired_metadata_item(self):
-        # No subscription_end_time. The owner matches the default authed user so
-        # owner-gated endpoints pass (LQL-01 / BE-016).
-        return {
-            "PK": "LEAGUE#canonical-abc",
-            "SK": "METADATA",
-            "league_name": "Test League",
-            "owner_user_id": "user_1",
-        }
-
-    def test_new_onboard_not_blocked(self, client, mock_table, mock_lambda_client):
-        # New-league onboarding has no existing subscription to check.
-        mock_table.get_item.return_value = {}
-        mock_lambda_client.invoke.return_value = {}
-        response = client.post(
-            "/leagues",
-            json={"leagueId": "123", "platform": "SLEEPER", "season": "2024"},
-        )
-        assert response.status_code == 201
-
-    def test_get_league_not_blocked_when_expired(
-        self, client, mock_table, league_lookup_item, expired_metadata_item
-    ):
-        # Status endpoint stays reachable so the frontend can read it.
-        mock_table.get_item.side_effect = [
-            {"Item": league_lookup_item},
-            {"Item": expired_metadata_item},
-        ]
-        mock_table.query.return_value = {
-            "Items": [{"seasons": {"2024"}, "canonical_league_id": "canonical-abc"}]
-        }
-        response = client.get("/leagues/123?platform=SLEEPER")
-        assert response.status_code == 200
-        assert response.json()["data"]["subscription_end_time"] is None
-
-
 def _as_user(user_id):
     """Override the Clerk auth dependency to a specific (non-default) caller."""
     import main
@@ -1516,16 +1324,6 @@ class TestOwnerGate:
         assert response.status_code == 403
         mock_get.assert_not_called()
 
-    def test_checkout_non_owner_returns_403(
-        self, client, mock_table, league_lookup_item
-    ):
-        mock_table.get_item.return_value = {"Item": league_lookup_item}
-        _as_user("intruder")
-        response = client.post(
-            "/leagues/123/checkout-session?platform=SLEEPER&plan=MONTHLY"
-        )
-        assert response.status_code == 403
-
 
 class TestGetLeagueIsOwner:
     """get_league returns is_owner and member-gates ESPN reads (LQL-01 / BE-016)."""
@@ -1587,7 +1385,7 @@ class TestGetLeagueIsOwner:
 
 
 class TestQueryLeagueMemberGate:
-    """query_league member-gates ESPN reads in addition to the subscription gate."""
+    """query_league member-gates ESPN reads (LQL-01 / BE-016)."""
 
     def test_espn_non_member_returns_403(
         self, client, mock_table, league_lookup_item, league_metadata_item

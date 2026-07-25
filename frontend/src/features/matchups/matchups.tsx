@@ -11,13 +11,10 @@ import {
   type WeeklyStandingItem,
 } from '@/features/matchups/api-calls';
 import SeasonSelect from '@/features/season_select/season-select';
-import { SubscriptionGuard } from '@/features/subscription/subscription-guard';
 import WeeklyAwards from '@/features/weekly_awards/weekly-awards';
-import WeeklyRecap from '@/features/weekly_recap/weekly-recap';
 import { avatarColor } from '@/lib/color-constants';
 import { MATCHUP_STATUS_COLORS } from '@/lib/color-constants';
 import { getLeagueCookies } from '@/lib/cookie-handler';
-import { isBillingEnabled } from '@/lib/feature-flags';
 import { type Result, toResult } from '@/lib/result';
 
 interface TeamSide {
@@ -498,29 +495,6 @@ export default function Matchups() {
           season={selectedSeason}
           selectedWeek={selectedWeek}
         />
-
-        {/* AI weekly matchup recap (FE-035) — the one remaining premium feature.
-            The whole section (header + gated content) only exists when billing is
-            on; the header is gated on isBillingEnabled so it never orphans, and the
-            column itself is behind SubscriptionGuard. */}
-        {isBillingEnabled() && (
-          <>
-            <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mt-8 mb-2.5">
-              Weekly matchup recap
-            </p>
-            <SubscriptionGuard
-              featureFlag="premium_feature"
-              featureLabel="Weekly matchup recap"
-            >
-              <WeeklyRecap
-                leagueId={leagueId}
-                platform={platform}
-                season={selectedSeason}
-                selectedWeek={selectedWeek}
-              />
-            </SubscriptionGuard>
-          </>
-        )}
       </div>
     </div>
   );

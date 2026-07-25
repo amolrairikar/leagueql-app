@@ -49,8 +49,5 @@ cross-platform owner IDs so metrics remain continuous.
 ## Authorization (BE-016)
 Migration is **owner-gated** ([BE-016](BE-016-league-ownership-authorization.md)): a non-owner caller gets `403`.
 
-Migration is **not** a premium feature — it is free and never subscription-gated. (A one-time
-platform move does not fit a recurring subscription that could later lapse.)
-
 ## Sources
 `src/api/routes.py`, `docs/api/openapi_spec.yaml`, `docs/db/dynamodb_spec.md` (PLATFORM_MIGRATION).

@@ -9,15 +9,3 @@ Feature: Landing page connect routing (FE-001 / FE-002 / FE-025)
     Then I see the "Join league" dialog
     When I verify my ESPN membership in the dialog
     Then I am routed to the home page
-
-  Scenario: The pricing table shows the plans and premium features
-    Given billing is enabled
-    When I open the landing page
-    Then I see the "Monthly" plan priced "$1.99"
-    And I see the "Yearly" plan priced "$8.99"
-    And I see "Recaps" listed as a premium feature
-
-  Scenario: With billing disabled the pricing table is hidden
-    Given billing is disabled
-    When I open the landing page
-    Then the pricing table is not shown

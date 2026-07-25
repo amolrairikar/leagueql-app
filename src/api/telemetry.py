@@ -14,8 +14,8 @@ Design notes:
   component suite, any unconfigured env) is a true no-op that makes zero network
   calls and instruments nothing.
 - The Axiom ingest token is sensitive: it is fetched at runtime from SSM by parameter
-  *name* via :func:`common.secrets.get_secret_from_env_param` (same pattern as the
-  Stripe secret key, BE-015) — never an env var / TF state / CI value.
+  *name* via :func:`common.secrets.get_secret_from_env_param` — never an env var /
+  TF state / CI value.
 - Spans are force-flushed per request because the Lambda execution environment freezes
   between invocations; otherwise buffered spans would be stranded and lost.
 """

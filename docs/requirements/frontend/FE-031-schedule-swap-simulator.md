@@ -22,8 +22,7 @@ reading its own row at a glance sees whether it was schedule-lucky or schedule-u
 - Component: `src/features/schedule_swap/schedule-swap.tsx`; pure transform in
   `compute-schedule-swap.ts`; data fetch reuses `getSeasonMatchups`
   (`MATCHUPS#{season}#`, [BE-005](../backend/BE-005-query-precomputed-views-api.md)).
-- **Free:** the section and its header always render for everyone; there is no subscription
-  gating.
+- **Free:** the section and its header always render for everyone.
 
 ## Swap algorithm
 - Only **regular-season** matchups count (`playoff_tier_type` is `NONE`/absent); playoff and
@@ -56,7 +55,7 @@ reading its own row at a glance sees whether it was schedule-lucky or schedule-u
 - [ ] Cells are color-scaled relative to the row team's actual wins (more = green, fewer =
       red).
 - [ ] Switching the season selector recomputes the matrix.
-- [ ] The section renders for everyone, with no subscription gating.
+- [ ] The section renders for everyone.
 - [ ] A `MATCHUPS` load failure or fewer-than-two-teams season renders a message, not a crash.
 
 ## Sources

@@ -12,10 +12,7 @@ import type {
   NavLinkItem,
   Slide,
   Feature,
-  PricingPlan,
-  PremiumFeature,
 } from '@/features/landing_page/types';
-import { SUBSCRIPTION_PRICES } from '@/lib/pricing';
 
 export const NAV_LINKS: NavLinkItem[] = [
   { label: 'Changelog', href: '/changelog', icon: FileText, external: false },
@@ -103,33 +100,6 @@ export const FEATURES: Feature[] = [
     icon: '🔀',
     title: 'Platform Migration',
     desc: 'Switched fantasy platforms? Use our league migration wizard to preserve your full all-time history across platforms.',
-  },
-];
-
-// Subscription plans shown in the landing-page pricing table (FE-001). A yearly
-// subscription is $8.99 vs. $23.88 for 12 monthly payments — ~62% cheaper.
-export const PRICING_PLANS: PricingPlan[] = [
-  {
-    name: 'Monthly',
-    price: SUBSCRIPTION_PRICES.MONTHLY,
-    period: '/month',
-    billedAs: 'Billed monthly',
-  },
-  {
-    name: 'Yearly',
-    price: SUBSCRIPTION_PRICES.YEARLY,
-    period: '/year',
-    billedAs: 'Billed annually — save ~62%',
-    highlight: true,
-    badge: 'Best value',
-  },
-];
-
-// Features unlocked by a subscription (freemium model). Everything else is free.
-export const PREMIUM_FEATURES: PremiumFeature[] = [
-  {
-    title: 'Recaps',
-    desc: 'AI-written recap columns that turn your league’s data into narrative: a lighthearted-but-journalistic write-up of each week’s matchups.',
   },
 ];
 

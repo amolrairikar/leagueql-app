@@ -535,23 +535,6 @@ class TestProcessorTracePropagation:
         proc.assert_called_once()
 
 
-class TestInvokeRecapGenerator:
-    """The processor enqueues a pending-recap marker at end of run (BE-021)."""
-
-    def test_enqueues_via_shared_helper(self, processor_handler):
-        token = processor_handler.correlation_id_var.set("corr-1")
-        try:
-            with patch.object(processor_handler, "record_pending_recap") as enqueue:
-                processor_handler._invoke_recap_generator("cid", "SLEEPER")
-        finally:
-            processor_handler.correlation_id_var.reset(token)
-        enqueue.assert_called_once_with(
-            canonical_league_id="cid",
-            platform="SLEEPER",
-            correlation_id="corr-1",
-        )
-
-
 class TestLambdaHandlerImpl:
     def test_replication_event_returns_early(self, processor_handler):
         mock_s3 = MagicMock()
@@ -571,7 +554,6 @@ class TestLambdaHandlerImpl:
         grouped = {"league_name_by_season": {"2024": "My League"}}
         write_meta = MagicMock()
         update_count = MagicMock()
-        recap = MagicMock()
         with patch.multiple(
             processor_handler,
             s3_client=mock_s3,
@@ -582,7 +564,6 @@ class TestLambdaHandlerImpl:
             write_items=MagicMock(),
             write_metadata_items=write_meta,
             update_league_count=update_count,
-            _invoke_recap_generator=recap,
             QUERIES=_FAKE_QUERIES,
         ):
             with patch.object(
@@ -593,8 +574,6 @@ class TestLambdaHandlerImpl:
         # league_name extracted from the most recent season and passed through.
         assert write_meta.call_args[1]["league_name"] == "My League"
         assert write_meta.call_args[1]["refresh"] is False
-        # The recap generator is fired at the end of every run (BE-021).
-        recap.assert_called_once_with("canonical-abc", "ESPN")
 
     def test_sleeper_refresh_reads_previous_manifest_and_player_data(
         self, processor_handler

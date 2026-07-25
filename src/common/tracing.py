@@ -13,7 +13,7 @@ Design notes (mirroring ``src/api/telemetry.py``):
   (unit tests, the Behave suite, any unconfigured env) is a true no-op that makes
   zero network calls and instruments nothing.
 - The Axiom ingest token is fetched at runtime from SSM by parameter *name* via
-  :func:`common.secrets.get_secret_from_env_param` (same pattern as the Stripe key).
+  :func:`common.secrets.get_secret_from_env_param`.
 - Spans are force-flushed per invocation because the Lambda execution environment
   freezes between invocations; otherwise buffered spans would be stranded and lost.
 - Tracing must **never** break a request/handler: every function here swallows its
@@ -91,17 +91,6 @@ def build_provider(service_name: str):
     # botocore/requests give child spans for DynamoDB/S3/Lambda + outbound HTTP.
     BotocoreInstrumentor().instrument()
     RequestsInstrumentor().instrument()
-
-    # The recap generator talks to the Anthropic API over httpx (BE-021); instrument it
-    # when the optional package is present so the LLM call shows up as a child span.
-    # Guarded so every other handler — which doesn't ship the httpx instrumentation —
-    # still builds a provider without it.
-    try:
-        from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
-
-        HTTPXClientInstrumentor().instrument()
-    except Exception:
-        logger.info("httpx OTel instrumentation unavailable; skipping")
 
     _provider = provider
     return provider

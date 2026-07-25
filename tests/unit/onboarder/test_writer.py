@@ -182,44 +182,6 @@ class TestWriteLeagueRecords:
         assert "owner_user_id" not in metadata_item
         assert "members" not in metadata_item
 
-    def test_onboard_never_writes_subscription_end_time(
-        self, onboarder_writer, monkeypatch
-    ):
-        # subscription_end_time is set only server-side by the Stripe billing
-        # webhook (BE-014 / BE-015). Onboarding must never write it — there is no
-        # longer a client-supplied input that could (BE-001).
-        monkeypatch.setenv("DYNAMODB_TABLE_NAME", "test-table")
-        mock_ddb = MagicMock()
-        with patch.object(onboarder_writer, "_dynamodb", mock_ddb):
-            onboarder_writer.write_league_records(
-                league_id="123",
-                platform="SLEEPER",
-                canonical_league_id="canonical-abc",
-                seasons=["2024"],
-                request_type="ONBOARD",
-            )
-        items = mock_ddb.transact_write_items.call_args[1]["TransactItems"]
-        metadata_item = items[0]["Put"]["Item"]
-        assert "subscription_end_time" not in metadata_item
-
-    def test_refresh_does_not_touch_subscription_end_time(
-        self, onboarder_writer, monkeypatch
-    ):
-        monkeypatch.setenv("DYNAMODB_TABLE_NAME", "test-table")
-        mock_ddb = MagicMock()
-        with patch.object(onboarder_writer, "_dynamodb", mock_ddb):
-            onboarder_writer.write_league_records(
-                league_id="123",
-                platform="SLEEPER",
-                canonical_league_id="canonical-abc",
-                seasons=["2024"],
-                request_type="REFRESH",
-                is_new_season_refresh=False,
-            )
-        items = mock_ddb.transact_write_items.call_args[1]["TransactItems"]
-        metadata_update = items[0]["Update"]
-        assert "subscription_end_time" not in metadata_update["UpdateExpression"]
-
     def test_migrate_writes_only_lookup_no_metadata(
         self, onboarder_writer, monkeypatch
     ):

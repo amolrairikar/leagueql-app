@@ -48,7 +48,7 @@ the scatter rather than drawn at zero, so they don't create a false floor of bus
   player name, drafting manager, points scored, and draft position. A legend below names each
   position present.
 - **Free:** the section always renders for everyone (below the draft board, whenever the season has
-  draft data); there is no subscription gating.
+  draft data).
 
 ## Edge Cases
 - **Missing scoring (null `total_points`):** the pick is omitted from the scatter (not drawn at
@@ -75,7 +75,7 @@ the scatter rather than drawn at zero, so they don't create a false floor of bus
 - [ ] A single position dropdown offers **All positions** plus each present position and filters the
       plotted dots; selecting a position with no scored picks does not crash.
 - [ ] Switching the page season selector recomputes the scatter.
-- [ ] The section renders for everyone, with no subscription gating.
+- [ ] The section renders for everyone.
 - [ ] A `DRAFT` load failure renders an inline message, and a season with no scored picks renders an
       empty-state message — neither crashes.
 

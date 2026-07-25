@@ -1,8 +1,5 @@
 export type Platform = 'ESPN' | 'SLEEPER';
 
-/** Subscription billing cadence chosen at checkout (BE-015 / FE-022). */
-export type SubscriptionPlan = 'MONTHLY' | 'YEARLY';
-
 export interface PlayerStat {
   player_id: number;
   full_name: string;
@@ -106,18 +103,7 @@ export interface GetLeagueResponse {
   data: {
     seasons: string[];
     league_name?: string;
-    /** ISO 8601 (UTC) timestamp when the subscription/trial lapses. Absent = expired. */
-    subscription_end_time?: string;
     /** Whether the authenticated caller is the league owner (LQL-01 / BE-016 / FE-025). */
     is_owner?: boolean;
-  };
-}
-
-/** Response from the Stripe checkout / billing-portal endpoints (BE-015 / FE-022 / FE-023). */
-export interface BillingSessionResponse {
-  detail: string;
-  data: {
-    /** Stripe-hosted URL to redirect the user to. */
-    url: string;
   };
 }

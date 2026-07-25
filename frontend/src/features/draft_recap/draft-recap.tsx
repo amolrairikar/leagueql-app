@@ -475,7 +475,7 @@ function DraftRecapContent({
   );
 }
 
-// ── Draft value scatter (premium) ─────────────────────────────────────────────
+// ── Draft value scatter ───────────────────────────────────────────────────────
 
 function ScatterSkeleton() {
   return (

@@ -10,8 +10,8 @@ league.
 - **Owner.** The Clerk user who first onboards a league is its owner
   (`owner_user_id` on the `METADATA` item, set once on first ONBOARD; REFRESH/MIGRATE never
   overwrite it). `require_league_owner` compares the caller to the owner and raises `403`
-  otherwise. Owner-gated endpoints: delete, migrate, refresh, ESPN-members proxy, checkout
-  session, and mint-transfer-token.
+  otherwise. Owner-gated endpoints: delete, migrate, refresh, ESPN-members proxy, and
+  mint-transfer-token.
 - **ESPN read membership.** ESPN league data is confidential (viewing it upstream requires the
   caller's `espn_s2`/`SWID` cookies), so `GET /leagues/{id}` and `GET /leagues/{id}/query` are
   member-gated for ESPN via `require_league_member` (`403` for non-members). Membership is the
@@ -43,8 +43,6 @@ league.
 ## Edge Cases
 - **No owner recorded** (system-initiated onboard, e.g. Sleeper auto-refresh): owner-gated
   endpoints raise `403`; recovery is manual.
-- **Gate ordering:** owner gate runs before the subscription gate on migrate/ESPN-members and
-  before trial logic on checkout; refresh runs the subscription gate first, then the owner gate.
 - **Existence not hidden for Sleeper:** a non-member's `GET` of a Sleeper league still returns
   `200`; for ESPN the member gate also hides metadata (`403` before `league_name`/seasons).
 - **Public ESPN league:** ESPN returns `2xx` even for cookies not in the league, so any
@@ -60,7 +58,7 @@ league.
 ## Acceptance Criteria
 - [ ] First ONBOARD records `owner_user_id` and seeds `members` with the owner; REFRESH and
       MIGRATE leave both untouched.
-- [ ] `delete`, `migrate`, `refresh`, `espn_members`, `checkout`, and `transfer-token` return
+- [ ] `delete`, `migrate`, `refresh`, `espn_members`, and `transfer-token` return
       `403` for a non-owner and succeed for the owner.
 - [ ] `GET /leagues/{id}` returns `is_owner` (true for the owner, false otherwise).
 - [ ] ESPN `GET /leagues/{id}` and `GET /leagues/{id}/query` return `403` for a non-member and
@@ -71,7 +69,7 @@ league.
       expiry; `claim-ownership` swaps the owner on a valid token and yields `404`/`403`/`410`/`409`
       for the no-token/mismatch/expired/already-redeemed cases.
 - [ ] After a handoff, the new owner can mutate the league and the previous owner gets `403`.
-- [ ] `create_billing_portal_session` (per-user) is unchanged; `get_job` is unchanged.
+- [ ] `get_job` is unchanged (unauthenticated job-status polling).
 
 ## Sources
 `src/api/helpers.py` (`require_league_owner`, `require_league_member`, `add_league_member`),

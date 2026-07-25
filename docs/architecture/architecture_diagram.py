@@ -31,7 +31,6 @@ from diagrams.programming.framework import React
 from diagrams.saas.cdn import Cloudflare
 from diagrams.saas.chat import Discord
 from diagrams.saas.identity import Auth0
-from diagrams.saas.payment import Stripe
 
 GRAPH_ATTR = {
     "fontsize": "22",
@@ -60,10 +59,8 @@ with Diagram(
 
     with Cluster("External SaaS"):
         clerk = Auth0("Clerk\n(auth)")
-        stripe = Stripe("Stripe\n(billing)")
         espn = Client("ESPN API")
         sleeper = Client("Sleeper API")
-        anthropic = Client("Anthropic\nClaude Haiku 4.5")
         # Text-only node (no vendor icon) for the OTEL / Axiom observability backend.
         axiom = Blank("OTEL\nAxiom (traces + RUM)")
 
@@ -89,14 +86,12 @@ with Diagram(
             sleeper_refresh = Lambda("Sleeper refresh\n(weekly)")
             player_meta = Lambda("Player metadata\nrefresher")
             stats_task = Fargate("Sleeper stats\nrefresher (Fargate)")
-            recap = Fargate("Recap generator\n(Fargate, /15 min)")
 
-        stripe_wh = Lambda("Stripe webhook\nLambda")
         discord_fn = Lambda("Discord notifier\nLambda")
         sns = SimpleNotificationServiceSns("SNS\n(alerts)")
 
         with Cluster("Data stores"):
-            ddb = Dynamodb("DynamoDB\n(views, job status,\nrecap queue, counts)")
+            ddb = Dynamodb("DynamoDB\n(views, job status,\ncounts)")
             s3 = S3("S3\n(raw API payloads)")
             ssm = SystemsManagerParameterStore("SSM\n(flags + secrets)")
 
@@ -108,7 +103,6 @@ with Diagram(
     spa >> Edge(label="auth") >> clerk
     spa >> Edge(label="REST /leagues, /jobs") >> apigw >> api
     spa >> Edge(label="/counts") >> counts >> ddb
-    spa >> Edge(label="checkout") >> stripe
     spa >> TRACE >> axiom  # RUM + OTLP via same-origin worker proxy
 
     # ── API → async chain ─────────────────────────────────────────────────────
@@ -122,24 +116,18 @@ with Diagram(
         >> Edge(color="darkorange", style="dashed", label="S3 event\n(manifest)")
         >> processor
     )
-    processor >> Edge(label="precomputed views\n+ recap marker") >> ddb
-
-    # ── Billing ───────────────────────────────────────────────────────────────
-    stripe >> Edge(label="webhook") >> apigw >> stripe_wh
-    stripe_wh >> Edge(label="subscription_end_time\n+ recap marker") >> ddb
+    processor >> Edge(label="precomputed views") >> ddb
 
     # ── Scheduled jobs ────────────────────────────────────────────────────────
-    evb >> SCHED >> [sleeper_refresh, player_meta, stats_task, recap]
+    evb >> SCHED >> [sleeper_refresh, player_meta, stats_task]
     sleeper_refresh >> ASYNC >> onboarder
     player_meta >> DATA >> ddb
     stats_task >> DATA >> ddb
-    recap >> Edge(label="reads recap queue") >> ddb
-    recap >> Edge(label="generate recap") >> anthropic
 
     # ── Alerting & config ─────────────────────────────────────────────────────
     sns >> discord_fn >> Edge(label="webhook URL from SSM") >> discord
     [onboarder, processor, api] >> Edge(color="gray", style="dotted") >> sns
-    [api, onboarder, processor, stripe_wh] >> Edge(color="gray", style="dotted") >> ssm
+    [api, onboarder, processor] >> Edge(color="gray", style="dotted") >> ssm
 
     # ── Distributed tracing (one end-to-end trace → Axiom) ────────────────────
-    [api, onboarder, processor, recap] >> TRACE >> axiom
+    [api, onboarder, processor] >> TRACE >> axiom

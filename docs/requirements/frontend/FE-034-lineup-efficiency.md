@@ -26,9 +26,8 @@ eligibility** (FLEX/superflex), so the optimizer respects the league's roster sl
   `position`, and the starter's `fantasy_position` slot) — **no new data fetch** of any kind.
   Component: `src/features/lineup_efficiency/lineup-efficiency-chip.tsx`; pure transform in
   `compute-lineup-efficiency.ts`.
-- **Free:** the chip always renders (regardless of `billing`, subscription, or demo mode); the
-  only reason it shows nothing is a lack of bench data to measure. It carries no subscription
-  gating and does not read the subscription primitives.
+- **Free:** the chip always renders (in demo mode too); the only reason it shows nothing is a
+  lack of bench data to measure.
 
 ## Lineup optimizer algorithm
 - **Slot template:** there is no stored per-league roster configuration anywhere queryable, so
@@ -76,7 +75,7 @@ eligibility** (FLEX/superflex), so the optimizer respects the league's roster sl
       suboptimal slots (started vs optimal player and the point delta) and the points-left footer.
 - [ ] The optimal lineup respects FLEX/superflex slot eligibility and is the true maximum (a
       greedy slot-fill that mis-handles overlapping flex slots would under-count).
-- [ ] The chip renders for everyone, with no subscription gating (including when `billing` is off).
+- [ ] The chip renders for everyone (including in demo mode).
 - [ ] A box score with no bench data (e.g. ESPN before 2018) shows no chip.
 - [ ] A perfect lineup shows 100% and the perfect-lineup dialog state.
 

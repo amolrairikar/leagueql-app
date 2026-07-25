@@ -12,8 +12,8 @@ cannot complete SNS's HTTPS subscription confirmation handshake, so SNS cannot P
 to Discord directly.
 
 The webhook URL is a SecureString SSM parameter fetched at cold start by *name*
-(the value never lands in a Lambda env var / TF state / CI), mirroring the Stripe
-secret pattern in ``common.secrets``. This Lambda deliberately never calls
+(the value never lands in a Lambda env var / TF state / CI), via
+``common.secrets``. This Lambda deliberately never calls
 ``publish_failure`` (that republishes to the same topic → loop); on failure it logs
 and re-raises so the error surfaces in its own CloudWatch metrics.
 """

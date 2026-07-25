@@ -5,7 +5,6 @@ import { LineupEfficiencyChip } from '../lineup-efficiency-chip';
 
 import type { PlayerStat } from '@/components/api/types';
 import type { BoxScoreSide } from '@/components/box-score-card';
-import { setFlagsForTesting } from '@/lib/feature-flags';
 import { renderRoute } from '@/test/render';
 
 const feature = loadFeature(
@@ -112,23 +111,6 @@ defineFeature(feature, (test) => {
         expect(await screen.findByText(new RegExp(name))).toBeInTheDocument();
       },
     );
-  });
-
-  test('The chip renders even with billing disabled', ({
-    given,
-    when,
-    then,
-  }) => {
-    given('the billing flag is off', () => {
-      setFlagsForTesting({ billing: false });
-    });
-    when(
-      'I view the box score chip for a manager who left points on the bench',
-      () => renderChip(MISTAKE_SIDE),
-    );
-    then(/^the chip shows "(.*)"$/, async (text) => {
-      expect(await screen.findByText(text)).toBeInTheDocument();
-    });
   });
 
   test('Without bench data no chip is shown', ({ when, then }) => {

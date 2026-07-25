@@ -32,14 +32,11 @@ criteria. Frontend, backend, and extension features are kept separate.
 | [BE-011](backend/BE-011-sleeper-player-stats-refresher.md) | Sleeper Player Stats Refresher |
 | [BE-012](backend/BE-012-scheduled-sleeper-auto-refresh.md) | Scheduled Sleeper Auto-Refresh |
 | [BE-013](backend/BE-013-app-stats-league-count.md) | App Stats / League Count |
-| [BE-014](backend/BE-014-subscription-access-control.md) | Subscription Access Control |
-| [BE-015](backend/BE-015-stripe-billing.md) | Stripe Billing — Checkout, Webhook & Subscription Lifecycle |
 | [BE-016](backend/BE-016-league-ownership-authorization.md) | League Ownership & Authorization |
 | [BE-017](backend/BE-017-feature-flags.md) | Feature Flags (OpenFeature + SSM Parameter Store) |
 | [BE-018](backend/BE-018-league-access-tracking.md) | League Access Tracking |
 | [BE-019](backend/BE-019-sleeper-transactions.md) | Sleeper Transactions (Waivers, Trades, Free Agents) |
 | [BE-020](backend/BE-020-backend-otel-tracing.md) | Backend OpenTelemetry Tracing → Axiom (API + async chain) |
-| [BE-021](backend/BE-021-ai-weekly-matchup-recap.md) | AI Weekly Matchup Recap |
 | [BE-022](backend/BE-022-yahoo-oauth.md) | Yahoo OAuth Authorization & Token Management |
 
 ## Frontend (`frontend/`)
@@ -64,9 +61,6 @@ criteria. Frontend, backend, and extension features are kept separate.
 | [FE-018](frontend/FE-018-privacy-pages.md) | Privacy Pages |
 | [FE-019](frontend/FE-019-authentication.md) | Authentication & Protected Routes |
 | [FE-020](frontend/FE-020-theme-toggle.md) | Theme (Light/Dark Mode) |
-| [FE-021](frontend/FE-021-subscription-access-control.md) | Subscription Access Control |
-| [FE-022](frontend/FE-022-subscription-checkout.md) | Subscription Checkout (Making Payments) |
-| [FE-023](frontend/FE-023-subscription-management.md) | Subscription Management (Billing Portal) |
 | [FE-024](frontend/FE-024-security-headers.md) | Security Response Headers & Content-Security-Policy |
 | [FE-025](frontend/FE-025-ownership-transfer-owner-gated-actions.md) | Ownership Transfer & Owner-Gated Actions |
 | [FE-026](frontend/FE-026-feature-flags.md) | Feature Flags (OpenFeature + SSM Parameter Store) |
@@ -74,12 +68,11 @@ criteria. Frontend, backend, and extension features are kept separate.
 | [FE-028](frontend/FE-028-changelog-page.md) | Changelog Page |
 | [FE-029](frontend/FE-029-frontend-observability.md) | Frontend Observability (OpenTelemetry + RUM → Axiom) |
 | [FE-030](frontend/FE-030-informational-banner.md) | Informational Banner |
-| [FE-031](frontend/FE-031-schedule-swap-simulator.md) | Schedule-Swap Simulator (Standings premium) |
-| [FE-032](frontend/FE-032-weekly-awards-superlatives.md) | Weekly Awards & Superlatives (Matchups premium) |
-| [FE-033](frontend/FE-033-analytics-page.md) | Analytics Page — Score Distribution, Power Rankings & Positional Scoring (premium) |
-| [FE-034](frontend/FE-034-lineup-efficiency.md) | Lineup Efficiency / Points Left on Bench (Box-score premium) |
-| [FE-035](frontend/FE-035-weekly-matchup-recap.md) | Weekly Matchup Recap (Matchups premium) |
-| [FE-036](frontend/FE-036-draft-value-scatter.md) | Draft Value Scatter (Draft Recap premium) |
+| [FE-031](frontend/FE-031-schedule-swap-simulator.md) | Schedule-Swap Simulator (Standings) |
+| [FE-032](frontend/FE-032-weekly-awards-superlatives.md) | Weekly Awards & Superlatives (Matchups) |
+| [FE-033](frontend/FE-033-analytics-page.md) | Analytics Page — Score Distribution, Power Rankings & Positional Scoring |
+| [FE-034](frontend/FE-034-lineup-efficiency.md) | Lineup Efficiency / Points Left on Bench (Box-score) |
+| [FE-036](frontend/FE-036-draft-value-scatter.md) | Draft Value Scatter (Draft Recap) |
 | [FE-037](frontend/FE-037-connect-yahoo-league.md) | Connect Yahoo League (OAuth Account Linking) |
 
 ## Extension (`extension/`)

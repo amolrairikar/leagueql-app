@@ -1,10 +1,9 @@
 Feature: League metadata and job status APIs (BE-006, BE-008)
-  GET /leagues/{id} returns onboarding status (never subscription-gated); GET
-  /jobs/{id} returns lifecycle status with a missing job reported as FAILED.
+  GET /leagues/{id} returns onboarding status; GET /jobs/{id} returns lifecycle
+  status with a missing job reported as FAILED.
 
-  Scenario: Metadata is returned for an onboarded league regardless of subscription
+  Scenario: Metadata is returned for an onboarded league
     Given a LEAGUE_LOOKUP exists for league "100" platform "SLEEPER" canonical "canon-1"
-    And league "canon-1" has subscription_end_time "2000-01-01T00:00:00+00:00"
     When I GET "/leagues/100?platform=SLEEPER"
     Then the API responds with status 200
     And the response data field "league_name" equals "Test League"

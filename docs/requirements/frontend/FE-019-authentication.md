@@ -4,8 +4,7 @@
 Authentication is handled by Clerk. In-app analytics routes are wrapped in `ProtectedRoute`,
 which requires a signed-in user (unless demo mode is active). Clerk JWTs authorize backend
 API calls (the API Gateway uses a Clerk JWT authorizer). The Clerk provider is themed to
-match the app's light/dark mode. Beyond authentication, the analytics routes are additionally
-gated on an active subscription ([FE-021](FE-021-subscription-access-control.md)).
+match the app's light/dark mode.
 
 ## Scope
 - Provider: `src/app/clerk-with-theme.tsx`; `useUser` gate in `ProtectedRoute`

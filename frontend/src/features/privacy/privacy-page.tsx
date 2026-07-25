@@ -103,31 +103,6 @@ export default function PrivacyPage() {
               </div>
               <div>
                 <h3 className="font-semibold text-foreground mb-2">
-                  Payment & Billing Data (via Stripe):
-                </h3>
-                <ul className="list-disc pl-6 space-y-1">
-                  <li>
-                    When you subscribe, your payment is processed by Stripe,
-                    which acts as the merchant of record. Stripe collects and
-                    processes your payment details (such as card information and
-                    billing address) directly on its own systems.
-                  </li>
-                  <li>
-                    We never receive or store your full card details. We only
-                    store Stripe identifiers (a customer ID and a subscription
-                    ID per league) used to link your account and leagues to your
-                    subscription and to determine your access status.
-                  </li>
-                  <li>
-                    As merchant of record, Stripe handles billing, applicable
-                    taxes, fraud prevention, disputes, and payment support. See
-                    Stripe&apos;s privacy policy for how it processes your
-                    payment information.
-                  </li>
-                </ul>
-              </div>
-              <div>
-                <h3 className="font-semibold text-foreground mb-2">
                   How We Store It:
                 </h3>
                 <ul className="list-disc pl-6 space-y-1">
@@ -166,10 +141,6 @@ export default function PrivacyPage() {
                 <strong>Clerk:</strong> Handles user authentication
               </li>
               <li>
-                <strong>Stripe:</strong> Payment processing and merchant of
-                record for subscriptions
-              </li>
-              <li>
                 <strong>ESPN API:</strong> Source of ESPN fantasy football data
               </li>
               <li>
@@ -193,11 +164,6 @@ export default function PrivacyPage() {
               <li>
                 We do not sell your data. League data is only used to provide
                 the app&apos;s features.
-              </li>
-              <li>
-                Payment information is shared with Stripe solely to process your
-                subscription; we do not share your league data with payment
-                providers.
               </li>
               <li>League data is retained until you request deletion</li>
               <li>You can request removal of your league data at any time</li>

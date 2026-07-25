@@ -1,33 +1,26 @@
 # BE-006: Get League Metadata API
 
 ## Description
-Returns whether a league has been onboarded and, if so, its display name, the list of
-onboarded seasons, and its subscription end time. `GET /leagues/{leagueId}` resolves the
-platform league ID to a canonical league ID, reads the `METADATA` item, and lists seasons.
-Used by the frontend to gate access (onboarded vs. not, subscription active vs. expired) and
-to populate season selectors. This endpoint is **never** subscription-gated — the frontend
-must be able to read `subscription_end_time` even when the subscription has lapsed
-([BE-014](BE-014-subscription-access-control.md)).
+Returns whether a league has been onboarded and, if so, its display name and the list of
+onboarded seasons. `GET /leagues/{leagueId}` resolves the platform league ID to a canonical
+league ID, reads the `METADATA` item, and lists seasons. Used by the frontend to determine
+whether a league is onboarded and to populate season selectors.
 
 ## Scope
 - Endpoint: `GET /leagues/{leagueId}?platform=` (`src/api/routes.py::get_league`).
-- Returns: `{ seasons: string[], league_name, subscription_end_time }`.
+- Returns: `{ seasons: string[], league_name, is_owner }`.
 
 ## Edge Cases
 - **League not onboarded:** lookup miss returns `404` with an onboarding hint.
-- **`subscription_end_time` absent:** returned as null/omitted (older items, or no billing
-  value written yet); the frontend treats absent as expired.
 - **`league_name` absent:** may be null/omitted (older items); frontend must tolerate it.
 - **Seasons ordering:** seasons returned sorted (ascending).
 - **Migrated league:** seasons span all platforms under one canonical league ID.
 - **Caching:** must respond `Cache-Control: no-store` (state can change after onboard/refresh).
 
 ## Acceptance Criteria
-- [ ] `GET /leagues/{leagueId}` for an onboarded league returns `200` with `seasons`,
-      `league_name`, and `subscription_end_time`.
+- [ ] `GET /leagues/{leagueId}` for an onboarded league returns `200` with `seasons` and
+      `league_name`.
 - [ ] An un-onboarded league returns `404`.
-- [ ] `subscription_end_time` is null/omitted when the attribute is absent.
-- [ ] This endpoint is not subscription-gated (always reachable for onboarded leagues).
 - [ ] Response sets `Cache-Control: no-store`.
 - [ ] `seasons` is the unified, sorted list across all platforms for migrated leagues.
 

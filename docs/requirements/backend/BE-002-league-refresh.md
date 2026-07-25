@@ -12,10 +12,6 @@ when the league is already up to date based on current NFL state.
 - Endpoint: `POST /leagues?requestType=REFRESH` (`src/api/routes.py::onboard_league`).
 - Cooldown constant: `REFRESH_COOLDOWN_MINUTES` (`src/api/main.py`).
 - NFL state + latest-matchup checks: `get_nfl_state`, `get_latest_stored_matchup`.
-- **Recap generation:** a refresh runs through the processor, which fires the recap-generator
-  Lambda at end of run ([BE-004](BE-004-data-processing-pipeline.md) /
-  [BE-021](BE-021-ai-weekly-matchup-recap.md)) so a premium league's newly-completed week gets an
-  AI recap; idempotent + premium-gated, so it is a no-op otherwise.
 
 ## Edge Cases
 - **Refresh already in progress:** if `METADATA` shows an active job, return `409`.
@@ -27,8 +23,6 @@ when the league is already up to date based on current NFL state.
   NFL state, return `409` "League is already up to date."
 - **ESPN refresh season:** must use the user-entered `latestSeason` from the request, not
   the previously-onboarded season returned by `getLeague`. (See memory: ESPN refresh season bug.)
-- **AI recaps are not idempotent:** any AI-generated season recaps must be overwritten on
-  refresh, not skipped. (See memory: AI recap idempotency.)
 - **Sleeper league not yet in `LEAGUE_LOOKUP`:** allowed — the onboarder resolves the
   canonical league via the `previous_league_id` chain (does not 404 like ESPN would).
 - **New Sleeper season not yet started:** when a refresh/onboard resolves an existing league
@@ -66,5 +60,4 @@ when the league is already up to date based on current NFL state.
 Refresh is **owner-gated** ([BE-016](BE-016-league-ownership-authorization.md)): a non-owner caller gets `403`.
 
 ## Sources
-`src/api/routes.py`, `src/api/main.py`, `src/onboarder/`, memory: `feedback_espn_refresh_season`,
-`feedback_ai_recap_idempotency`.
+`src/api/routes.py`, `src/api/main.py`, `src/onboarder/`, memory: `feedback_espn_refresh_season`.

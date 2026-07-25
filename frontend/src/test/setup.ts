@@ -103,12 +103,9 @@ if (!window.matchMedia) {
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
 
-// Billing ships feature-flagged OFF (FE-026), but historically the subscription
-// UI always rendered, and most tests assume it. Default the master flag ON —
-// along with the shared `premium_feature` flag so the premium gate (FE-021) is
-// exercisable — for every test; OFF-path tests flip a flag back within the test
-// via setFlagsForTesting.
-beforeEach(() => setFlagsForTesting({ billing: true, premium_feature: true }));
+// Reset every feature flag to OFF before each test (the app's fail-safe default).
+// Tests that need a flag ON opt in within the test via setFlagsForTesting.
+beforeEach(() => setFlagsForTesting({}));
 
 afterEach(async () => {
   server.resetHandlers();

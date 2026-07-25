@@ -7,10 +7,6 @@
  * until {@link initFeatureFlags} resolves (and any time the backend is
  * unreachable) every flag fails safe to `false` (feature off).
  *
- * A `billing` flag currently gates all subscription UI (FE-021/022/023): when it
- * is off, `SubscriptionGuard` is a pass-through and the "Manage Subscription"
- * sidebar entry is hidden.
- *
  * Evaluation goes through OpenFeature's in-memory provider so the rest of the app
  * depends only on the vendor-neutral OpenFeature client. An unknown flag fails
  * safe to `false`.
@@ -71,11 +67,6 @@ const client = OpenFeature.getClient();
 /** Whether `flagName` is on; unknown flags default to `false`. */
 export function isEnabled(flagName: string): boolean {
   return client.getBooleanValue(flagName, false);
-}
-
-/** Whether subscription/billing UI (FE-021/022/023) is enabled. */
-export function isBillingEnabled(): boolean {
-  return isEnabled('billing');
 }
 
 /** Whether the in-app informational banner (FE-030) is enabled. */
@@ -145,7 +136,7 @@ export async function initFeatureFlags(): Promise<void> {
 
 /**
  * Replace the active provider with an explicit flag map (tests only). Lets a test
- * exercise the billing-on path without standing up the backend flags endpoint.
+ * exercise a flag-on path without standing up the backend flags endpoint.
  */
 export function setFlagsForTesting(flags: Record<string, boolean>): void {
   setProviderFromConfig(

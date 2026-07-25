@@ -8,5 +8,4 @@ opentelemetry-instrumentation-fastapi
 opentelemetry-instrumentation-botocore
 opentelemetry-instrumentation-requests
 requests
-stripe
 uvicorn
