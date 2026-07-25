@@ -1,7 +1,6 @@
 import { UserButton } from '@clerk/react';
 import {
   ArrowLeftRight,
-  ChartColumnBig,
   GraduationCap,
   History,
   Home,
@@ -70,7 +69,6 @@ const navItems = [
   { title: 'Draft Grades', url: '/draft_grades', icon: GraduationCap },
   { title: 'Player Records', url: '/player_records', icon: Star },
   { title: 'Matchup Records', url: '/matchup_records', icon: Zap },
-  { title: 'Analytics', url: '/analytics', icon: ChartColumnBig },
 ];
 
 // Transactions (waivers/trades/free agents) only exist for Sleeper leagues — ESPN

@@ -70,7 +70,6 @@ criteria. Frontend, backend, and extension features are kept separate.
 | [FE-030](frontend/FE-030-informational-banner.md) | Informational Banner |
 | [FE-031](frontend/FE-031-schedule-swap-simulator.md) | Schedule-Swap Simulator (Standings) |
 | [FE-032](frontend/FE-032-weekly-awards-superlatives.md) | Weekly Awards & Superlatives (Matchups) |
-| [FE-033](frontend/FE-033-analytics-page.md) | Analytics Page — Score Distribution, Power Rankings & Positional Scoring |
 | [FE-034](frontend/FE-034-lineup-efficiency.md) | Lineup Efficiency / Points Left on Bench (Box-score) |
 | [FE-036](frontend/FE-036-draft-value-scatter.md) | Draft Value Scatter (Draft Recap) |
 | [FE-037](frontend/FE-037-connect-yahoo-league.md) | Connect Yahoo League (OAuth Account Linking) |

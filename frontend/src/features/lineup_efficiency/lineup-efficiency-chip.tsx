@@ -71,7 +71,9 @@ function LineupEfficiencyChipInner({
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Start/Sit Report</DialogTitle>
+            <DialogTitle className="text-lg font-semibold">
+              Start/Sit Report
+            </DialogTitle>
             <DialogDescription>
               {ownerUsername}
               {week ? ` · Week ${week}` : ''}

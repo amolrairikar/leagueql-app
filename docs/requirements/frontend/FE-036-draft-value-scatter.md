@@ -11,8 +11,7 @@ top of the page drives which draft the scatter reads.
 
 Everything is computed **entirely client-side** from the season's `DRAFT` view (the same
 `getDraftData` the draft board already fetches), so there is no backend, no new DynamoDB view, and
-no API change. It mirrors the Analytics charts
-([FE-033](FE-033-analytics-page.md)): a pure transform of an existing precomputed view.
+no API change: a pure transform of an existing precomputed view.
 
 ## Point construction
 Each drafted pick becomes one dot:
