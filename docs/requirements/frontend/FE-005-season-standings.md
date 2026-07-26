@@ -2,9 +2,17 @@
 
 ## Description
 The `/standings` page shows final standings for a selected season, plus season superlative
-awards. Standings include record, win %, points for/against, vs-league record, and a
-strength-of-schedule (SoS) rating. A season selector lets the user switch between onboarded
-seasons.
+awards. Standings include record, win %, points for/against, vs-league record, an
+**expected wins** figure, and a strength-of-schedule (SoS) rating. A season selector lets the
+user switch between onboarded seasons.
+
+The **expected wins** column is each team's average number of wins across every manager's
+schedule in the regular season — the mean of that team's row in the Schedule-Swap Simulator
+([FE-031](FE-031-schedule-swap-simulator.md)), i.e. the average of the win totals it would post
+under each schedule (its own included). It is a schedule-independent estimate of how many games
+a team "should" have won given its own weekly scores. Like SoS it is derived client-side from
+the season's `MATCHUPS` and is best-effort: it shows `—` when matchups are unavailable (or a
+team has no simulated regular-season games).
 
 The **strength-of-schedule** column is each team's average opponent season win % over the
 regular season (higher = a tougher schedule). It is derived client-side from the season's
@@ -31,11 +39,13 @@ stored SoS field; playoff games are excluded to match how win % is computed.
 - **SoS with no opponents:** a team with no regular-season opponents (or whose opponents are
   absent from the standings) shows `—`.
 - **Matchups unavailable:** if the `MATCHUPS` query fails while standings load, the table still
-  renders with the SoS column showing `—` (SoS is best-effort, not fatal).
+  renders with the SoS and expected-wins columns showing `—` (both are best-effort, not fatal).
 
 ## Acceptance Criteria
 - [ ] `/standings` shows the selected season's standings: record, win %, PF, PA, vs-league
-      record, SoS, sorted by standing.
+      record, expected wins, SoS, sorted by standing.
+- [ ] Expected wins shows each team's average wins across every schedule (the mean of its
+      schedule-swap row), or `—` when it cannot be computed.
 - [ ] SoS shows each team's average opponent season win % (regular season only), or `—` when
       it cannot be computed.
 - [ ] Season superlative awards for the selected season are displayed.

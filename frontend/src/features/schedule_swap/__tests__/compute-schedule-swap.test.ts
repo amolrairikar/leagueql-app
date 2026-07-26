@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { computeScheduleSwap, formatRecord } from '../compute-schedule-swap';
+import {
+  computeExpectedWins,
+  computeScheduleSwap,
+  formatRecord,
+} from '../compute-schedule-swap';
 
 import type { MatchupItem } from '@/components/api/types';
 
@@ -111,5 +115,24 @@ describe('computeScheduleSwap', () => {
     expect(formatRecord({ wins: 3, losses: 1, ties: 2, games: 6 })).toBe(
       '3-1-2',
     );
+  });
+});
+
+describe('computeExpectedWins', () => {
+  it('averages each team’s wins across every schedule', () => {
+    const expected = computeExpectedWins(MATCHUPS);
+    // Averaging over all four schedules (own included): T1 wins every game, T4
+    // loses every game, and the two middle teams average one win.
+    expect(expected.T1).toBeCloseTo(2.0);
+    expect(expected.T2).toBeCloseTo(1.0);
+    expect(expected.T3).toBeCloseTo(1.0);
+    expect(expected.T4).toBeCloseTo(0.0);
+  });
+
+  it('omits teams with no regular-season games', () => {
+    const expected = computeExpectedWins([
+      game('1', 'T1', 10, 'T2', 200, 'WINNERS_BRACKET'),
+    ]);
+    expect(expected).toEqual({});
   });
 });
