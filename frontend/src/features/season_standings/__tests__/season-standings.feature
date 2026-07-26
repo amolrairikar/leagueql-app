@@ -8,16 +8,23 @@ Feature: Season standings (FE-005)
     When I open the standings page
     Then I see the manager "Alice"
 
+  Scenario: Expected wins average the schedule-swap simulation
+    Given season standings data is available
+    When I open the standings page
+    Then the expected wins for "Alice" is "1.0"
+    And the expected wins for "Bob" is "0.0"
+
   Scenario: Strength of schedule reflects opponents faced
     Given season standings data is available
     When I open the standings page
     Then the schedule strength for "Alice" is "0.000"
     And the schedule strength for "Bob" is "1.000"
 
-  Scenario: Strength of schedule shows a dash when matchups are missing
+  Scenario: Derived columns show a dash when matchups are missing
     Given season standings data is available but matchups are missing
     When I open the standings page
     Then the schedule strength for "Alice" is "—"
+    And the expected wins for "Alice" is "—"
 
   Scenario: A failed load surfaces an inline error
     Given the standings data fails to load

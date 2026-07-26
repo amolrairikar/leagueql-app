@@ -115,6 +115,30 @@ export function computeScheduleSwap(matchups: MatchupItem[]): ScheduleSwapData {
   return { teams, matrix };
 }
 
+/**
+ * Each team's expected wins (FE-005): the average number of wins it would
+ * record across every manager's schedule in the season — a schedule-independent
+ * estimate of how many games it "should" have won given its own weekly scores.
+ * Derived from the schedule-swap matrix ([FE-031]) by averaging each row team's
+ * win totals over all columns (its own schedule included).
+ *
+ * Returns a `team_id -> expected wins` map covering every team with
+ * regular-season matchups; teams absent from that map (e.g. no matchups) have no
+ * simulated games.
+ */
+export function computeExpectedWins(
+  matchups: MatchupItem[],
+): Record<string, number> {
+  const { teams, matrix } = computeScheduleSwap(matchups);
+  const expectedWinsById: Record<string, number> = {};
+  for (const team of teams) {
+    const winTotals = [...matrix.get(team.teamId)!.values()].map((r) => r.wins);
+    expectedWinsById[team.teamId] =
+      winTotals.reduce((a, b) => a + b, 0) / winTotals.length;
+  }
+  return expectedWinsById;
+}
+
 /** Format a record as `W-L` or `W-L-T` when there are ties. */
 export function formatRecord(r: SwapRecord): string {
   return r.ties > 0
