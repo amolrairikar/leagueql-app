@@ -920,9 +920,15 @@ class TestRegisterSleeperRawData:
         assert result["matchups"][0]["playoff_tier_type"] == "WINNERS_BRACKET"
 
     def test_missing_playoff_week_start_falls_back_to_default(self, processor_handler):
-        # No playoff_week_start available: season >= 2021 falls back to week 15,
-        # so a week-15 game not in any bracket is postseason (LOSERS_BRACKET).
+        # No playoff_week_start available: season >= 2021 falls back to week 15, so a
+        # week-15 game is postseason. The season has a bracket (a different pair), but this
+        # game's pair is not in it, so it falls back to LOSERS_BRACKET (a consolation game).
         raw = [
+            {
+                "season": "2024",
+                "data_type": "playoff_bracket",
+                "data": [{"m": 1, "r": 1, "t1": 3, "t2": 4, "w": 3, "l": 4, "p": 1}],
+            },
             {
                 "season": "2024",
                 "data_type": "matchupsweek15",
@@ -934,6 +940,33 @@ class TestRegisterSleeperRawData:
         ]
         result = processor_handler._register_sleeper_raw_data(raw, {}, {})
         assert result["matchups"][0]["playoff_tier_type"] == "LOSERS_BRACKET"
+
+    def test_playoff_weeks_without_any_bracket_are_regular_season(
+        self, processor_handler
+    ):
+        # A season with no playoff bracket at all (e.g. the Sleeper bracket endpoints
+        # returned null) must not default its playoff-week games to LOSERS_BRACKET — with
+        # no bracket to classify them, they stay regular-season (NONE).
+        raw = [
+            {
+                "season": "2024",
+                "data_type": "matchupsweek15",
+                "data": [
+                    {"matchup_id": 1, "roster_id": 1, "points": 100.0},
+                    {"matchup_id": 1, "roster_id": 2, "points": 90.0},
+                ],
+            },
+            {
+                "season": "2024",
+                "data_type": "matchupsweek16",
+                "data": [
+                    {"matchup_id": 1, "roster_id": 1, "points": 110.0},
+                    {"matchup_id": 1, "roster_id": 2, "points": 95.0},
+                ],
+            },
+        ]
+        result = processor_handler._register_sleeper_raw_data(raw, {}, {})
+        assert {m["playoff_tier_type"] for m in result["matchups"]} == {"NONE"}
 
 
 class TestTraceSleeperChampionshipPath:

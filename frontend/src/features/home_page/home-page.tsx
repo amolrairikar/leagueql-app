@@ -680,6 +680,13 @@ function computeChampions(
     if (!bySeasonMap.has(row.season)) bySeasonMap.set(row.season, []);
     bySeasonMap.get(row.season)!.push(row);
   }
+  // Only the most recent season can legitimately still be in progress (playoffs not yet
+  // decided) → "TBD". Any earlier season is complete, so a missing champion there is a
+  // finished season with no recorded title → "N/A", not a pending one.
+  const latestSeason = seasons.reduce(
+    (latest, season) => (season > latest ? season : latest),
+    seasons[0],
+  );
   return seasons.map((season) => {
     const champion = bySeasonMap.get(season)?.find((s) => s.champion === 'Yes');
     if (champion) {
@@ -691,13 +698,14 @@ function computeChampions(
         pfGame: champion.avg_pf.toFixed(1),
       };
     }
+    const inProgress = season === latestSeason;
     return {
       season,
-      name: 'TBD',
+      name: inProgress ? 'TBD' : 'N/A',
       owner: '—',
       record: '—',
       pfGame: '—',
-      highlight: true,
+      highlight: inProgress,
     };
   });
 }

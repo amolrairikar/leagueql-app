@@ -21,8 +21,11 @@ is counted consistently over time.
   season of data.
 - **Co-owners:** handled via primary/secondary owner IDs without double counting.
 - **Missing logos:** fall back to a generated team avatar / owner-stable color.
-- **No champion yet (season in progress):** unique-champion and championship counts handle
-  the absence of a completed title.
+- **No champion for a season:** the champions grid distinguishes an in-progress season from a
+  completed one. The most recent season with no recorded champion is shown as **"TBD"** (and
+  highlighted as pending); any earlier season with no champion is a completed season with no
+  recorded title and is shown as **"N/A"** (not highlighted). Neither counts toward the
+  unique-champion or championship totals.
 - **Empty seasons (expired cookies):** if the `leagueSeasons` cookie expires while `leagueId`
   persists, `seasons` is `[]` and the stats array is empty. The stats grid must not crash when
   the "Seasons played" item is absent — it renders three cards instead of four.
@@ -37,6 +40,8 @@ is counted consistently over time.
 - [ ] Headline stats show total matchups, total members, and unique champions.
 - [ ] Owner identities are correct across migrated platforms.
 - [ ] The dashboard renders correctly for a one-season league and an in-progress season.
+- [ ] A season with no champion shows "TBD" only for the most recent season; a completed
+      earlier season with no champion shows "N/A".
 - [ ] If the league-data request fails, an inline error is shown in place of the summary sections
       (no global error banner).
 

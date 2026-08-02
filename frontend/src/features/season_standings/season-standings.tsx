@@ -30,6 +30,7 @@ import {
   getSeasonStandings,
 } from '@/features/season_standings/api-calls';
 import { computeStrengthOfSchedule } from '@/features/season_standings/compute-sos';
+import { noChampionAward } from '@/features/season_standings/season-champion-award';
 import { avatarColor } from '@/lib/color-constants';
 import { POSITION_COLORS, UI_COLORS } from '@/lib/color-constants';
 import { getLeagueCookies } from '@/lib/cookie-handler';
@@ -268,7 +269,13 @@ function StandingsBody({
   );
 }
 
-function AwardsGrid({ promise }: { promise: Promise<StandingsResult> }) {
+function AwardsGrid({
+  promise,
+  isLatestSeason,
+}: {
+  promise: Promise<StandingsResult>;
+  isLatestSeason: boolean;
+}) {
   const result = use(promise);
   if (!result.ok || result.data.length === 0) return null;
 
@@ -336,9 +343,11 @@ function AwardsGrid({ promise }: { promise: Promise<StandingsResult> }) {
             </>
           ) : (
             <>
-              <div className="text-[15px] font-medium text-foreground">TBD</div>
+              <div className="text-[15px] font-medium text-foreground">
+                {noChampionAward(isLatestSeason).title}
+              </div>
               <div className="text-[12px] text-muted-foreground">
-                Season in progress
+                {noChampionAward(isLatestSeason).subtitle}
               </div>
             </>
           )}
@@ -479,9 +488,11 @@ function SkeletonBody() {
 export default function SeasonStandings() {
   const { leagueId, platform, seasons } = useMemo(() => getLeagueCookies(), []);
 
-  const defaultSeason =
+  // The most recent season is the only one that can still be in progress (playoffs not
+  // yet decided); any earlier season is complete.
+  const latestSeason =
     [...seasons].sort((a, b) => Number(b) - Number(a))[0] ?? '';
-  const [selectedSeason, setSelectedSeason] = useState(defaultSeason);
+  const [selectedSeason, setSelectedSeason] = useState(latestSeason);
 
   const standingsPromise = useMemo(
     (): Promise<StandingsResult> =>
@@ -540,7 +551,10 @@ export default function SeasonStandings() {
         </p>
 
         <Suspense fallback={<SkeletonAwards />}>
-          <AwardsGrid promise={standingsPromise} />
+          <AwardsGrid
+            promise={standingsPromise}
+            isLatestSeason={selectedSeason === latestSeason}
+          />
         </Suspense>
 
         <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-2.5">

@@ -31,6 +31,10 @@ stored SoS field; playoff games are excluded to match how win % is computed.
 
 ## Edge Cases
 - **Season in progress:** standings reflect games played so far; superlatives may be partial.
+- **Season Champion award with no champion:** the Season Champion card distinguishes an
+  in-progress season from a completed one. If the selected season is the most recent one, a
+  missing champion shows **"TBD" / "Season in progress"**; for any earlier (completed) season
+  with no recorded champion it shows **"N/A" / "No champion"** instead.
 - **Ties:** records show ties (`W-L-T`); win % computed with ties.
 - **Default season:** defaults to the most recent onboarded season.
 - **vs-league record:** reflects beating/losing to all teams each week, distinct from
@@ -52,6 +56,8 @@ stored SoS field; playoff games are excluded to match how win % is computed.
 - [ ] The season selector lists all onboarded seasons and defaults to the latest.
 - [ ] Records and win % correctly account for ties.
 - [ ] In-progress seasons render without error.
+- [ ] The Season Champion card shows "TBD"/"Season in progress" only for the latest season
+      when no champion exists; a completed earlier season with no champion shows "N/A"/"No champion".
 
 ## Sources
 `src/features/season_standings/`, `src/features/season_select/`.

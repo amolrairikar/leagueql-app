@@ -60,6 +60,13 @@ const MATCHUPS = [
   },
 ];
 
+// Two seasons, neither with a recorded champion: 2023 is completed (→ "N/A"), 2024 is the
+// most recent season and therefore treated as in progress (→ "TBD").
+const CHAMPIONLESS_STANDINGS = [
+  { ...STANDINGS[0], season: '2023', champion: 'No' },
+  { ...STANDINGS[0], season: '2024', champion: 'No' },
+];
+
 const league = {
   leagueId: '100',
   platform: 'SLEEPER' as const,
@@ -90,6 +97,41 @@ defineFeature(feature, (test) => {
     });
     and(/^I see the champion manager "(.*)"$/, async (owner) => {
       expect((await screen.findAllByText(owner)).length).toBeGreaterThan(0);
+    });
+  });
+
+  test('A completed season with no champion shows N/A while the current season shows TBD', ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    given(
+      'a connected league with a completed champion-less season and an in-progress season',
+      () => {
+        server.use(
+          leagueMetadata({
+            league_name: 'My League',
+            seasons: ['2023', '2024'],
+          }),
+          leagueQuery({
+            SEASON_STANDINGS: CHAMPIONLESS_STANDINGS,
+            MATCHUPS: MATCHUPS,
+          }),
+        );
+      },
+    );
+    when('I open the home dashboard', async () => {
+      await renderRoute(<HomePage />, {
+        route: '/home',
+        league: { ...league, seasons: ['2023', '2024'] },
+      });
+    });
+    then(/^I see the champion "(.*)"$/, async (text) => {
+      expect((await screen.findAllByText(text)).length).toBeGreaterThan(0);
+    });
+    and(/^I see the champion "(.*)"$/, async (text) => {
+      expect((await screen.findAllByText(text)).length).toBeGreaterThan(0);
     });
   });
 

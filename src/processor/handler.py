@@ -960,6 +960,13 @@ def _register_sleeper_raw_data(
                 )
                 if int(week) < playoff_week_start:
                     playoff_tier_type = "NONE"
+                elif not bracket:
+                    # No playoff bracket recorded for this season (e.g. a Sleeper season
+                    # whose winners/losers bracket endpoints returned null). Without a
+                    # bracket we can't tell which games are playoff games, so leave them
+                    # regular rather than defaulting every playoff-week game to
+                    # LOSERS_BRACKET.
+                    playoff_tier_type = "NONE"
                 else:
                     bracket_entry = bracket.get(pair)
                     playoff_tier_type = (

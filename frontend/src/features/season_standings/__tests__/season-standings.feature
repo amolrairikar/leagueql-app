@@ -26,6 +26,11 @@ Feature: Season standings (FE-005)
     Then the schedule strength for "Alice" is "—"
     And the expected wins for "Alice" is "—"
 
+  Scenario: The current season with no champion shows an in-progress state
+    Given champion-less standings for the latest season
+    When I open the standings page
+    Then I see the season champion "Season in progress"
+
   Scenario: A failed load surfaces an inline error
     Given the standings data fails to load
     When I open the standings page
