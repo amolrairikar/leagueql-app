@@ -45,7 +45,7 @@ defineFeature(feature, (test) => {
       /^the "(.*)" card lists both "(.*)" and "(.*)"$/,
       async (cardLabel, teamA, teamB) => {
         const label = await screen.findByText(cardLabel);
-        const card = label.closest('div.bg-card');
+        const card = label.closest('div.bg-card') as HTMLElement | null;
         expect(card).not.toBeNull();
         expect(within(card!).getByText(teamA)).toBeInTheDocument();
         expect(within(card!).getByText(teamB)).toBeInTheDocument();
