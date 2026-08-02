@@ -39,6 +39,15 @@ only ever reads these precomputed items via [BE-005](BE-005-query-precomputed-vi
 - **VORP undefined for K and D/ST:** `vorp` is null for those positions.
 - **Missing player metadata/stats:** `player_name`, `total_points`, `position` may be null;
   views must still write without erroring.
+- **Empty/absent Sleeper playoff bracket:** a season whose `playoff_bracket`/`losers_bracket`
+  raw data is an empty list (or missing entirely — see the null-bracket edge case in
+  [BE-001](BE-001-league-onboarding.md)) produces no `PLAYOFF_BRACKET#{season}` item; the
+  processor tolerates this without erroring rather than assuming every season has a bracket.
+  Its matchups in the "typical playoff weeks" (week `>= playoff_week_start`) are classified as
+  `playoff_tier_type = NONE` (regular season) rather than defaulting to `LOSERS_BRACKET`: with
+  no bracket there is no way to identify which games are playoff games. The `LOSERS_BRACKET`
+  fallback for a game not found in the bracket applies only when the season *has* a bracket
+  (an uncaptured consolation game).
 - **Co-owned teams:** `secondary_owner_id` populated when present, else null.
 - **Migrated leagues:** owner IDs must be resolved across platforms via the
   `PLATFORM_MIGRATION` mapping so all-time aggregates stay continuous.
@@ -60,7 +69,8 @@ only ever reads these precomputed items via [BE-005](BE-005-query-precomputed-vi
 ## Acceptance Criteria
 - [ ] For each onboarded season, the processor writes `TEAMS`, `MATCHUPS#{season}#WEEK#{week}`,
       `STANDINGS#{season}`, `WEEKLY_STANDINGS#{season}`, `PLAYOFF_BRACKET#{season}`, and
-      `DRAFT#{season}` items matching the schema in `docs/db/dynamodb_spec.md`.
+      `DRAFT#{season}` items matching the schema in `docs/db/dynamodb_spec.md`. A season with an
+      empty/absent Sleeper bracket writes no `PLAYOFF_BRACKET#{season}` item and does not error.
 - [ ] ESPN and Sleeper inputs produce views with identical schemas (platform differences
       normalized).
 - [ ] Draft analytics (`drafted_position_rank`, `actual_position_rank`, `draft_rank_delta`,

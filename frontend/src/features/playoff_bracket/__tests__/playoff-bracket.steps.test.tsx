@@ -46,4 +46,29 @@ defineFeature(feature, (test) => {
       expect((await screen.findAllByText(text)).length).toBeGreaterThan(0);
     });
   });
+
+  test('A season with no bracket shows an empty state', ({
+    given,
+    when,
+    then,
+  }) => {
+    given('the selected season has no playoff bracket', () => {
+      server.use(
+        leagueQuery({
+          PLAYOFF_BRACKET: [],
+          MATCHUPS: [],
+          WEEKLY_STANDINGS: [],
+        }),
+      );
+    });
+    when('I open the playoff bracket page', async () => {
+      await renderRoute(<PlayoffBracket />, {
+        route: '/playoff_bracket',
+        league: LEAGUE,
+      });
+    });
+    then(/^I see "(.*)"$/, async (text) => {
+      expect((await screen.findAllByText(text)).length).toBeGreaterThan(0);
+    });
+  });
 });

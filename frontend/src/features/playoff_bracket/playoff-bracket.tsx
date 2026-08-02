@@ -236,6 +236,8 @@ function ByeCard({ team }: { team: Team }) {
 
 const PLAYOFF_FALLBACK = 'Failed to load playoff bracket data.';
 const NO_LEAGUE_MESSAGE = 'No league selected. Please connect a league first.';
+const PLAYOFF_EMPTY_MESSAGE =
+  'No playoff bracket for this season yet. It will appear once the playoffs begin.';
 
 interface BracketData {
   matches: BracketMatch[];
@@ -424,6 +426,14 @@ function BracketContent({
 
   const { matches, matchups, recordMap, championshipWeek, maxRound } =
     result.data;
+
+  if (matches.length === 0) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-muted-foreground">{PLAYOFF_EMPTY_MESSAGE}</p>
+      </div>
+    );
+  }
 
   const championship = matches.find((m) => m.position === 1);
   const semifinals = matches.filter(

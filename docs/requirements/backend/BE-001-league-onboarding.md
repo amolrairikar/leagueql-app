@@ -41,6 +41,14 @@ and an incremented `LEAGUE_COUNT`.
   attaches the season once it starts. Persisting the new ID is essential: Sleeper only links
   seasons backwards via `previous_league_id`, so a discarded new ID could never be
   re-discovered.
+- **Null Sleeper playoff bracket (no playoffs yet):** Sleeper's `winners_bracket` /
+  `losers_bracket` endpoints legitimately return a JSON `null` body for a season that has not
+  reached the playoffs. This is a valid state — the rest of the season (users, rosters,
+  matchups, drafts) is intact — and must **not** fail onboarding. The Sleeper client normalizes
+  a null bracket body to an empty list on the fetch success path (`SleeperClient._fetch`), so
+  that season simply produces no `PLAYOFF_BRACKET#{season}` view. A **genuine** bracket fetch
+  failure (timeout/connection error/4xx → exception) still yields `data: None` and still fails
+  onboarding via `validate_api_results`; only a successful null response is tolerated.
 - **Private ESPN league:** requires `s2` + `swid` cookies; these are passed once for
   onboarding and must never be logged or persisted.
 - **ESPN requires `season`:** the most recent active season is mandatory for ESPN; absent
@@ -99,6 +107,9 @@ and an incremented `LEAGUE_COUNT`.
 - [ ] A Sleeper season with `status` of `pre_draft` or `drafting` is excluded from the
       onboarded season list and produces no S3 payload, no processed views, and no dropdown
       entry; a Sleeper onboard whose only season is not-yet-started fails with `NOT_STARTED`.
+- [ ] A Sleeper season whose `winners_bracket`/`losers_bracket` returns a null body onboards
+      successfully (that season yields no `PLAYOFF_BRACKET#{season}` item), while a genuine
+      bracket fetch failure still fails onboarding.
 - [ ] Raw platform API payloads are written to S3 under `raw-api-data/{canonical_league_id}/`.
 - [ ] On any failure a `JOB_STATUS` item is written with `status=FAILED` and a
       `failure_code` / `failure_reason` that the frontend can surface.

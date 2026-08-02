@@ -10,6 +10,12 @@ Feature: Home dashboard (FE-004)
     And I see the headline stat "Total matchups"
     And I see the champion manager "Alice"
 
+  Scenario: A completed season with no champion shows N/A while the current season shows TBD
+    Given a connected league with a completed champion-less season and an in-progress season
+    When I open the home dashboard
+    Then I see the champion "N/A"
+    And I see the champion "TBD"
+
   Scenario: A failed data load shows a single inline error
     Given a connected league whose data fails to load
     When I open the home dashboard

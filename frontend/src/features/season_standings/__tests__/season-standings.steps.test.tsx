@@ -17,6 +17,10 @@ const league = {
   seasons: ['2024'],
 };
 
+// Standings with no recorded champion (every row champion = 'No'), used to exercise the
+// Season Champion award's "in progress" vs "completed" states.
+const CHAMPIONLESS_STANDINGS = STANDINGS.map((s) => ({ ...s, champion: 'No' }));
+
 /** The cells of the standings row for `name` (SoS is last, Exp. Wins second-to-last). */
 async function standingsCellsFor(name: string): Promise<HTMLElement[]> {
   // The name also appears in the awards cards, so pick the occurrence that sits
@@ -139,6 +143,28 @@ defineFeature(feature, (test) => {
     );
     and(/^the expected wins for "(.*)" is "(.*)"$/, async (name, value) => {
       expect(await expectedWinsCellFor(name)).toHaveTextContent(value);
+    });
+  });
+
+  test('The current season with no champion shows an in-progress state', ({
+    given,
+    when,
+    then,
+  }) => {
+    given('champion-less standings for the latest season', () => {
+      server.use(
+        leagueQuery({
+          SEASON_STANDINGS: CHAMPIONLESS_STANDINGS,
+          MATCHUPS,
+          WEEKLY_STANDINGS: [],
+        }),
+      );
+    });
+    when('I open the standings page', async () => {
+      await renderRoute(<SeasonStandings />, { route: '/standings', league });
+    });
+    then(/^I see the season champion "(.*)"$/, async (text) => {
+      expect(await screen.findByText(text)).toBeInTheDocument();
     });
   });
 

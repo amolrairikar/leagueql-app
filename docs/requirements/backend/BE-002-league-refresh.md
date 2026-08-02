@@ -37,6 +37,11 @@ when the league is already up to date based on current NFL state.
   [BE-001](BE-001-league-onboarding.md).) A poll of an **already-pending** league ID (the
   canonical is passed in, so the chain walk is skipped) that is still not started leaves the
   pending record untouched.
+- **Null Sleeper playoff bracket mid-season:** a refresh during the regular season (before
+  playoffs) re-fetches the Sleeper `winners_bracket`/`losers_bracket` and gets a null body;
+  this is tolerated exactly as in onboarding (see [BE-001](BE-001-league-onboarding.md)) — the
+  refresh succeeds with no `PLAYOFF_BRACKET#{season}` view, and a later refresh once playoffs
+  begin fills it in (views are overwritten in place).
 - **Refresh of a non-existent ESPN league:** returns `404`.
 - **NFL state fetch fails:** refresh should still be allowed to proceed (degrade safely).
 

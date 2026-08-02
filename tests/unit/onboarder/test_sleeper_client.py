@@ -499,6 +499,51 @@ class TestSleeperClientFetch:
             )
         assert result["data"] is None
 
+    @pytest.mark.parametrize("data_type", ["playoff_bracket", "losers_bracket"])
+    async def test_fetch_normalizes_null_bracket_to_empty_list(
+        self, onboarder_sleeper_client, data_type
+    ):
+        import asyncio
+        from unittest.mock import AsyncMock
+
+        # Sleeper returns a null body for a season with no playoffs yet; this
+        # must be normalized to [] rather than left as None (which would be
+        # treated as a fetch failure by validate_api_results).
+        client = self._client(onboarder_sleeper_client)
+        with patch.object(
+            onboarder_sleeper_client,
+            "fetch_with_retry",
+            AsyncMock(return_value=None),
+        ):
+            result = await client._fetch(
+                session=MagicMock(),
+                semaphore=asyncio.Semaphore(1),
+                url_data=("2024", data_type, "http://x"),
+            )
+        assert result == {"season": "2024", "data_type": data_type, "data": []}
+
+    @pytest.mark.parametrize("data_type", ["playoff_bracket", "losers_bracket"])
+    async def test_fetch_returns_none_when_bracket_fetch_errors(
+        self, onboarder_sleeper_client, data_type
+    ):
+        import asyncio
+        from unittest.mock import AsyncMock
+
+        # A genuine bracket fetch failure must still yield None so that
+        # validate_api_results raises rather than silently dropping the bracket.
+        client = self._client(onboarder_sleeper_client)
+        with patch.object(
+            onboarder_sleeper_client,
+            "fetch_with_retry",
+            AsyncMock(side_effect=RuntimeError("boom")),
+        ):
+            result = await client._fetch(
+                session=MagicMock(),
+                semaphore=asyncio.Semaphore(1),
+                url_data=("2024", data_type, "http://x"),
+            )
+        assert result["data"] is None
+
 
 class TestSleeperClientFetchAll:
     def _client(self, mod):
