@@ -18,7 +18,10 @@ etc.). Scores are joined from the matchups views; seeding lines are derived from
 - **Unplayed matches:** `winner`/`loser` null until played; render as TBD.
 - **Seeding refs:** `team_*_from` (e.g. `{"w":1}`/`{"l":2}`) parsed to draw advancement lines.
 - **Score matching:** bracket matches joined to matchups handling either team order.
-- **No bracket / season in progress:** render a clear empty/partial state.
+- **No bracket / season in progress:** when the `PLAYOFF_BRACKET#{season}` query succeeds but
+  returns no matches (e.g. a Sleeper season with no playoffs yet — see
+  [BE-001](../backend/BE-001-league-onboarding.md)), render a clear empty-state message rather
+  than the blank round-column scaffold.
 - **End-of-regular-season seeds:** derived from the last `WEEKLY_STANDINGS` snapshot week.
 - **Missing logos:** fall back to a team-ID–derived color/avatar.
 
@@ -29,6 +32,8 @@ etc.). Scores are joined from the matchups views; seeding lines are derived from
 - [ ] The championship week is derived from real matchup data, not hard-coded.
 - [ ] Unplayed/in-progress matches render as TBD without error.
 - [ ] Scores are correctly matched regardless of team order in the source data.
+- [ ] When the selected season has no bracket data, a clear empty-state message renders
+      instead of the blank round columns.
 
 ## Sources
 `src/features/playoff_bracket/`.

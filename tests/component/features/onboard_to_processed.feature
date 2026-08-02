@@ -50,6 +50,19 @@ Feature: Onboard-to-processed pipeline (BE-001, BE-004)
     And a pending LEAGUE_LOOKUP exists for league "200" pending season "2026" canonical "canon-prior"
     And exactly one un-overwritten METADATA exists for canonical "canon-prior"
 
+  Scenario: A Sleeper league with no playoffs yet onboards without a bracket (BE-001, BE-004)
+    # Sleeper returns a null winners_bracket/losers_bracket before a season reaches the
+    # playoffs. That is a valid state and must not fail onboarding — the season simply
+    # produces no PLAYOFF_BRACKET item while every other view is still built.
+    Given Sleeper player metadata and stats are cached in S3
+    When the onboarder runs an ONBOARD for "SLEEPER" league "300" with fixture "sleeper/raw_data_2024_null_bracket.json"
+    Then the onboarder returns status 200
+    And a METADATA item exists for the onboarded league
+    When the processor processes the onboarded league
+    Then a JOB_STATUS "COMPLETED" exists for the job
+    And the league has at least one "STANDINGS#2024" item
+    And the league has exactly 0 "PLAYOFF_BRACKET#2024" item(s)
+
   Scenario: An upstream auth failure records a FAILED job and writes no METADATA
     When the onboarder fails to reach the platform
     Then the onboarder returns status 502

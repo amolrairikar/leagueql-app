@@ -431,6 +431,27 @@ class TestRegisterSleeperRawDataBranches:
         result = processor_handler._register_sleeper_raw_data(raw, {}, {})
         assert result["matchups"] == []
 
+    @pytest.mark.parametrize("bracket_data", [[], None])
+    def test_empty_or_null_bracket_yields_no_bracket_rows(
+        self, processor_handler, bracket_data
+    ):
+        # A season with no playoffs yet carries an empty (normalized) or null
+        # bracket payload; this must produce zero bracket rows, not a crash.
+        raw = [
+            {
+                "season": "2024",
+                "data_type": "playoff_bracket",
+                "data": bracket_data,
+            },
+            {
+                "season": "2024",
+                "data_type": "losers_bracket",
+                "data": bracket_data,
+            },
+        ]
+        result = processor_handler._register_sleeper_raw_data(raw, {}, {})
+        assert result["brackets"] == []
+
 
 class TestRegisterRawDataRegistersViews:
     def test_espn_registers_dataframes(self, processor_handler):
@@ -467,6 +488,28 @@ class TestRegisterRawDataRegistersViews:
         assert result is grouped
         registered = {row[0] for row in con.execute("SHOW TABLES").fetchall()}
         assert "users" in registered
+
+    def test_empty_brackets_registered_as_typed_view(self, processor_handler):
+        # A season with no playoffs yields an empty brackets list; it must still be
+        # registered as a typed (numeric) view so downstream queries bind and return
+        # no rows rather than crashing on a 0-column frame.
+        con = duckdb.connect()
+        grouped = {
+            "brackets": [],
+            "league_name_by_season": {},
+        }
+        with patch.object(
+            processor_handler, "_register_sleeper_raw_data", return_value=grouped
+        ):
+            processor_handler.register_raw_data(
+                [], con, platform="SLEEPER", player_metadata={}, player_stats={}
+            )
+        registered = {row[0] for row in con.execute("SHOW TABLES").fetchall()}
+        assert "brackets" in registered
+        # Seeding arithmetic requires position to bind as numeric, not VARCHAR.
+        assert (
+            con.execute("SELECT SUM(position + 1) FROM brackets").fetchone()[0] is None
+        )
 
 
 class TestWriteItems:

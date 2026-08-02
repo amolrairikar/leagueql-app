@@ -846,7 +846,9 @@ def _register_sleeper_raw_data(
     winners_entries_by_season: dict[str, list[dict]] = defaultdict(list)
     for item in raw_data:
         if item["data_type"] in ("playoff_bracket", "losers_bracket"):
-            for entry in item["data"]:
+            # A season with no playoffs yet carries an empty (or absent) bracket;
+            # `or []` guards against a null payload so it yields no rows, not a crash.
+            for entry in item["data"] or []:
                 t1, t2 = entry.get("t1"), entry.get("t2")
                 if t1 is None or t2 is None:
                     continue
@@ -1051,6 +1053,28 @@ def _register_sleeper_raw_data(
     }
 
 
+# Column dtypes used to register an empty view when a grouped data_type has no rows.
+# Only views that (a) can legitimately be empty for a valid league and (b) are still
+# referenced by downstream DuckDB queries need an entry here — currently just `brackets`
+# (a season with no playoffs yet). Numeric columns must be declared numeric so the
+# seeding arithmetic in the TEAMS/PLAYOFF_BRACKET transforms binds against the empty view.
+_EMPTY_VIEW_DTYPES: dict[str, dict[str, str]] = {
+    "brackets": {
+        "match_id": "float64",
+        "round": "float64",
+        "team_1": "float64",
+        "team_2": "float64",
+        "winner": "float64",
+        "loser": "float64",
+        "position": "float64",
+        "bracket_type": "object",
+        "team_1_from": "object",
+        "team_2_from": "object",
+        "season": "object",
+    },
+}
+
+
 def register_raw_data(
     raw_data: list[dict],
     con: duckdb.DuckDBPyConnection,
@@ -1088,7 +1112,20 @@ def register_raw_data(
     for data_type, rows in grouped.items():
         if data_type == "league_name_by_season":
             continue
-        df = pd.DataFrame(rows)
+        if not rows and data_type in _EMPTY_VIEW_DTYPES:
+            # DuckDB cannot register a 0-column frame, and downstream queries reference
+            # the `brackets` view by name (the TEAMS/PLAYOFF_BRACKET transforms) even when
+            # a season legitimately has no playoff bracket. Register a typed, empty frame so
+            # those queries bind (numeric columns must stay numeric for the seeding math)
+            # and simply produce no rows -> no PLAYOFF_BRACKET item for that season.
+            df = pd.DataFrame(
+                {
+                    col: pd.Series(dtype=dt)
+                    for col, dt in _EMPTY_VIEW_DTYPES[data_type].items()
+                }
+            )
+        else:
+            df = pd.DataFrame(rows)
         con.register(data_type, df)
 
     return grouped
