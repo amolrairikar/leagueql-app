@@ -191,6 +191,13 @@ def step_query_rows(context, count):
     assert len(data) == count, f"expected {count} rows, got {len(data)}: {data}"
 
 
+@then('no query response row has "{field}" equal to "{value}"')
+def step_no_row_field_equals(context, field, value):
+    data = context.response.json()["data"]
+    offenders = [row for row in data if str(row.get(field)) == value]
+    assert not offenders, f"rows with {field}={value}: {offenders}"
+
+
 @then('the response data field "{field}" equals "{value}"')
 def step_data_field(context, field, value):
     actual = context.response.json()["data"].get(field)

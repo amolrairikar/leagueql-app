@@ -62,6 +62,11 @@ Feature: Onboard-to-processed pipeline (BE-001, BE-004)
     Then a JOB_STATUS "COMPLETED" exists for the job
     And the league has at least one "STANDINGS#2024" item
     And the league has exactly 0 "PLAYOFF_BRACKET#2024" item(s)
+    # Week 17 is a playoff week (playoff_week_start=17), but with no bracket its games must
+    # not be mislabelled as losers-bracket games — they stay regular season.
+    When I GET "/leagues/300/query?platform=SLEEPER&queryType=MATCHUPS#2024#WEEK#17"
+    Then the API responds with status 200
+    And no query response row has "playoff_round" equal to "Losers Bracket"
 
   Scenario: An upstream auth failure records a FAILED job and writes no METADATA
     When the onboarder fails to reach the platform
