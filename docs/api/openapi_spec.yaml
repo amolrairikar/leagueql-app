@@ -16,17 +16,18 @@ info:
 
 paths:
 
-  /:
+  /health:
     get:
       summary: Health check
       description: >
-        Health check to validate the API is running and responding to requests.
+        Public, unauthenticated liveness check (BE-023) — no Clerk authorizer, so external
+        uptime monitors (the Route 53 health check on api.leagueql.com/health) can probe it and
+        get 200 rather than 401. Returns 200 whenever the API is running and responding to
+        requests; it does not touch any downstream dependency.
       operationId: healthCheck
       responses:
         "200":
           description: Healthy!
-      security:
-        - ClerkJWT: []
       x-amazon-apigateway-integration:
         type: aws_proxy
         httpMethod: POST

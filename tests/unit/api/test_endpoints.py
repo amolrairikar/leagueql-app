@@ -7,9 +7,9 @@ import botocore.exceptions
 import pytest
 
 
-class TestRootEndpoint:
+class TestHealthEndpoint:
     def test_health_check(self, client):
-        response = client.get("/")
+        response = client.get("/health")
         assert response.status_code == 200
         assert response.json()["detail"] == "Healthy!"
 

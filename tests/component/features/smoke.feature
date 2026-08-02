@@ -3,8 +3,8 @@ Feature: Component harness smoke test
   sleeper_refresh, API) and that AWS calls hit the in-memory moto stack rather
   than a real account.
 
-  Scenario: The API root health check responds
-    When I GET "/"
+  Scenario: The API health check responds
+    When I GET "/health"
     Then the API responds with status 200
     And the API response detail is "Healthy!"
 
