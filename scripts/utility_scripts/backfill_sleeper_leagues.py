@@ -39,6 +39,14 @@ Usage
     # Re-onboard every Sleeper league in prod
     pipenv run python scripts/utility_scripts/backfill_sleeper_leagues.py \
         --environment prod --execute
+
+    # Target a single league (dry-run on dev). --league-id may be any league ID in a
+    # renewed league's previous_league_id chain; it resolves to the canonical league.
+    pipenv run python scripts/utility_scripts/backfill_sleeper_leagues.py --league-id 123456789
+
+    # Re-onboard just that league in prod
+    pipenv run python scripts/utility_scripts/backfill_sleeper_leagues.py \
+        --environment prod --league-id 123456789 --execute
 """
 
 import argparse
@@ -126,6 +134,65 @@ def get_sleeper_leagues(ddb_client, table_name: str) -> list[dict]:
     return result
 
 
+def resolve_single_league(
+    ddb_client,
+    table_name: str,
+    *,
+    league_id: str | None = None,
+    canonical_league_id: str | None = None,
+) -> list[dict]:
+    """
+    Resolve a single Sleeper league to the shape ``get_sleeper_leagues`` returns.
+
+    Given a ``league_id`` (any ID in a renewed league's chain) or a
+    ``canonical_league_id`` directly, returns a one-element list of
+    ``{"league_id", "canonical_league_id"}`` — where ``league_id`` is the most-recent
+    season's ID (the chain head), the correct ID to pass to a REFRESH — so it drops
+    straight into the same invoke loop the full backfill uses.
+
+    Args:
+        ddb_client: A low-level boto3 DynamoDB client.
+        table_name: The DynamoDB table name.
+        league_id: The Sleeper league ID to target. Ignored when
+            ``canonical_league_id`` is provided.
+        canonical_league_id: The canonical league ID to target directly, skipping the
+            LEAGUE_LOOKUP resolution.
+
+    Returns:
+        A one-element list on success, or an empty list (with an error logged) when the
+        league can't be resolved or isn't among the onboarded Sleeper leagues.
+    """
+    if canonical_league_id is None:
+        # Resolve canonical from the LEAGUE_LOOKUP item, matching the key contract in
+        # src/api/helpers.py::lookup_league.
+        pk = f"LEAGUE#{league_id}#PLATFORM#SLEEPER"
+        response = ddb_client.get_item(
+            TableName=table_name,
+            Key={"PK": {"S": pk}, "SK": {"S": "LEAGUE_LOOKUP"}},
+        )
+        item = response.get("Item")
+        resolved = item.get("canonical_league_id", {}).get("S") if item else None
+        if not resolved:
+            logger.error(
+                "No LEAGUE_LOOKUP / canonical_league_id found for Sleeper league %s",
+                league_id,
+            )
+            return []
+        canonical_league_id = resolved
+
+    # Reuse the full enumeration so the chain-head league_id selection is identical to
+    # the fleet-wide backfill, then filter down to the requested canonical.
+    for league in get_sleeper_leagues(ddb_client, table_name):
+        if league["canonical_league_id"] == canonical_league_id:
+            return [league]
+
+    logger.error(
+        "Canonical league %s not found among onboarded Sleeper leagues",
+        canonical_league_id,
+    )
+    return []
+
+
 def parse_args(argv=None):
     p = argparse.ArgumentParser(
         description=(
@@ -150,6 +217,23 @@ def parse_args(argv=None):
         "--onboarder-lambda",
         default=None,
         help="Override the onboarder Lambda name (default: derived from --environment).",
+    )
+    p.add_argument(
+        "--league-id",
+        default=None,
+        help=(
+            "Target a single Sleeper league instead of all of them. May be any league "
+            "ID in a renewed league's previous_league_id chain; it resolves to the "
+            "canonical league (and its most-recent-season ID)."
+        ),
+    )
+    p.add_argument(
+        "--canonical-league-id",
+        default=None,
+        help=(
+            "Target a single league by canonical ID directly, skipping the league-ID "
+            "lookup. Takes precedence over --league-id."
+        ),
     )
     p.add_argument("--region", default=None, help="AWS region (optional).")
     p.add_argument(
@@ -183,13 +267,36 @@ def main(argv=None):
     ddb_client = session.client("dynamodb")
     lambda_client = session.client("lambda")
 
-    logger.info(
-        "Enumerating Sleeper leagues: env=%s table=%s onboarder=%s",
-        args.environment,
-        table_name,
-        onboarder_lambda,
-    )
-    leagues = get_sleeper_leagues(ddb_client, table_name)
+    single_league = bool(args.league_id or args.canonical_league_id)
+    if single_league:
+        if args.league_id and args.canonical_league_id:
+            logger.info(
+                "Both --league-id and --canonical-league-id given; using canonical %s",
+                args.canonical_league_id,
+            )
+        logger.info(
+            "Resolving single Sleeper league: env=%s table=%s onboarder=%s league_id=%s "
+            "canonical_league_id=%s",
+            args.environment,
+            table_name,
+            onboarder_lambda,
+            args.league_id,
+            args.canonical_league_id,
+        )
+        leagues = resolve_single_league(
+            ddb_client,
+            table_name,
+            league_id=args.league_id,
+            canonical_league_id=args.canonical_league_id,
+        )
+    else:
+        logger.info(
+            "Enumerating Sleeper leagues: env=%s table=%s onboarder=%s",
+            args.environment,
+            table_name,
+            onboarder_lambda,
+        )
+        leagues = get_sleeper_leagues(ddb_client, table_name)
     logger.info("Found %d Sleeper league(s) to re-onboard", len(leagues))
     for league in leagues:
         logger.info(
