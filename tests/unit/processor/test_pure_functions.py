@@ -1,5 +1,6 @@
 """Tests for pure functions in processor/handler.py."""
 
+import json
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
@@ -872,6 +873,106 @@ class TestRegisterSleeperRawData:
         assert tiers[frozenset([1, 2])] == "WINNERS_BRACKET"  # championship game
         assert tiers[frozenset([4, 3])] == "WINNERS_CONSOLATION_LADDER"  # 3rd place
 
+    def test_winners_tier_with_partial_from_links(self, processor_handler):
+        # 6-team bracket (teams 2 and 3 have round-1 byes) where Sleeper populates
+        # t1_from/t2_from only on the final round. The early-round winners games
+        # (m1, m2) must still be classified WINNERS_BRACKET — not consolation —
+        # once the missing feeder links are reconstructed. m5 (5th) and m7 (3rd)
+        # are the only consolation games.
+        raw = [
+            {
+                "season": "2024",
+                "data_type": "playoff_bracket",
+                "data": [
+                    {"m": 1, "r": 1, "t1": 11, "t2": 7, "w": 11, "l": 7},
+                    {"m": 2, "r": 1, "t1": 1, "t2": 5, "w": 5, "l": 1},
+                    {"m": 3, "r": 2, "t1": 2, "t2": 11, "w": 11, "l": 2},
+                    {"m": 4, "r": 2, "t1": 3, "t2": 5, "w": 3, "l": 5},
+                    {"m": 5, "r": 2, "t1": 7, "t2": 1, "w": 7, "l": 1, "p": 5},
+                    {
+                        "m": 6,
+                        "r": 3,
+                        "t1": 11,
+                        "t2": 3,
+                        "w": 11,
+                        "l": 3,
+                        "p": 1,
+                        "t1_from": {"w": 3},
+                        "t2_from": {"w": 4},
+                    },
+                    {
+                        "m": 7,
+                        "r": 3,
+                        "t1": 2,
+                        "t2": 5,
+                        "w": 5,
+                        "l": 2,
+                        "p": 3,
+                        "t1_from": {"l": 3},
+                        "t2_from": {"l": 4},
+                    },
+                ],
+            },
+            {
+                "season": "2024",
+                "data_type": "matchupsweek15",
+                "data": [
+                    {"matchup_id": 1, "roster_id": 11, "points": 100.0},
+                    {"matchup_id": 1, "roster_id": 7, "points": 90.0},
+                    {"matchup_id": 2, "roster_id": 5, "points": 100.0},
+                    {"matchup_id": 2, "roster_id": 1, "points": 90.0},
+                ],
+            },
+            {
+                "season": "2024",
+                "data_type": "matchupsweek16",
+                "data": [
+                    {"matchup_id": 1, "roster_id": 11, "points": 100.0},
+                    {"matchup_id": 1, "roster_id": 2, "points": 90.0},
+                    {"matchup_id": 2, "roster_id": 3, "points": 100.0},
+                    {"matchup_id": 2, "roster_id": 5, "points": 90.0},
+                    {"matchup_id": 3, "roster_id": 7, "points": 100.0},
+                    {"matchup_id": 3, "roster_id": 1, "points": 90.0},
+                ],
+            },
+            {
+                "season": "2024",
+                "data_type": "matchupsweek17",
+                "data": [
+                    {"matchup_id": 1, "roster_id": 11, "points": 100.0},
+                    {"matchup_id": 1, "roster_id": 3, "points": 90.0},
+                    {"matchup_id": 2, "roster_id": 5, "points": 100.0},
+                    {"matchup_id": 2, "roster_id": 2, "points": 90.0},
+                ],
+            },
+        ]
+        result = processor_handler._register_sleeper_raw_data(raw, {}, {})
+        tiers = {
+            frozenset([m["team_a_roster_id"], m["team_b_roster_id"]]): m[
+                "playoff_tier_type"
+            ]
+            for m in result["matchups"]
+        }
+        # Round-1 winners games (previously mislabelled consolation) and the
+        # semifinals/championship are all WINNERS_BRACKET.
+        assert tiers[frozenset([11, 7])] == "WINNERS_BRACKET"
+        assert tiers[frozenset([1, 5])] == "WINNERS_BRACKET"
+        assert tiers[frozenset([2, 11])] == "WINNERS_BRACKET"
+        assert tiers[frozenset([3, 5])] == "WINNERS_BRACKET"
+        assert tiers[frozenset([11, 3])] == "WINNERS_BRACKET"
+        # The genuine consolation games.
+        assert tiers[frozenset([7, 1])] == "WINNERS_CONSOLATION_LADDER"  # 5th place
+        assert tiers[frozenset([2, 5])] == "WINNERS_CONSOLATION_LADDER"  # 3rd place
+
+        # The emitted bracket rows carry the reconstructed feeder links: each
+        # semifinal's played team points back to its round-1 game, while the bye
+        # team keeps a null link so the frontend renders its bye card.
+        brackets = {b["match_id"]: b for b in result["brackets"]}
+        assert brackets[3]["team_1_from"] is None  # team 2 had a bye
+        assert json.loads(brackets[3]["team_2_from"]) == {"w": 1}  # team 11 from m1
+        assert brackets[4]["team_1_from"] is None  # team 3 had a bye
+        assert json.loads(brackets[4]["team_2_from"]) == {"w": 2}  # team 5 from m2
+
     def test_playoff_week_start_keeps_week_15_regular_season(self, processor_handler):
         # League with a 15-week regular season (playoffs start week 16): the
         # week-15 game must be regular season, not defaulted to LOSERS_BRACKET.
@@ -999,6 +1100,73 @@ class TestTraceSleeperChampionshipPath:
     def test_returns_none_without_championship_game(self, processor_handler):
         entries = [{"m": 1, "r": 1, "t1": 1, "t2": 2, "p": None}]
         assert processor_handler._trace_sleeper_championship_path(entries) is None
+
+
+class TestBackfillSleeperFromLinks:
+    def test_reconstructs_absent_winner_link(self, processor_handler):
+        # A round-2 game with no from-links: the played team points back to the
+        # round-1 game it won; the bye team gets no link at all.
+        entries = [
+            {"m": 1, "r": 1, "t1": 11, "t2": 7, "w": 11, "l": 7},
+            {"m": 3, "r": 2, "t1": 2, "t2": 11, "w": 11, "l": 2},
+        ]
+        processor_handler._backfill_sleeper_from_links(entries)
+        semi = entries[1]
+        assert semi["t2_from"] == {"w": 1}  # team 11 came from winning m1
+        assert "t1_from" not in semi  # team 2 had a bye
+
+    def test_reconstructs_loser_fed_link(self, processor_handler):
+        # A consolation game fed by two round-1 losers points back with {"l": ...}.
+        entries = [
+            {"m": 1, "r": 1, "t1": 11, "t2": 7, "w": 11, "l": 7},
+            {"m": 2, "r": 1, "t1": 1, "t2": 5, "w": 5, "l": 1},
+            {"m": 5, "r": 2, "t1": 7, "t2": 1, "w": 7, "l": 1, "p": 5},
+        ]
+        processor_handler._backfill_sleeper_from_links(entries)
+        consolation = entries[2]
+        assert consolation["t1_from"] == {"l": 1}  # team 7 lost m1
+        assert consolation["t2_from"] == {"l": 2}  # team 1 lost m2
+
+    def test_preserves_existing_links(self, processor_handler):
+        # Links Sleeper already provided are never overwritten.
+        entries = [
+            {"m": 3, "r": 2, "t1": 2, "t2": 11, "w": 11, "l": 2},
+            {"m": 4, "r": 2, "t1": 3, "t2": 5, "w": 3, "l": 5},
+            {
+                "m": 6,
+                "r": 3,
+                "t1": 11,
+                "t2": 3,
+                "w": 11,
+                "l": 3,
+                "p": 1,
+                "t1_from": {"w": 3},
+                "t2_from": {"w": 4},
+            },
+        ]
+        processor_handler._backfill_sleeper_from_links(entries)
+        final = entries[2]
+        assert final["t1_from"] == {"w": 3}
+        assert final["t2_from"] == {"w": 4}
+
+    def test_round_one_untouched(self, processor_handler):
+        entries = [{"m": 1, "r": 1, "t1": 11, "t2": 7, "w": 11, "l": 7}]
+        processor_handler._backfill_sleeper_from_links(entries)
+        assert "t1_from" not in entries[0]
+        assert "t2_from" not in entries[0]
+
+    def test_skips_entries_missing_ids_or_ties(self, processor_handler):
+        # An entry without m/r contributes no result, and a TIE winner/loser is not
+        # recorded, so a later round finds no feeder link to reconstruct.
+        entries = [
+            {"m": None, "r": None, "t1": 11, "t2": 7, "w": 11, "l": 7},
+            {"m": 2, "r": 1, "t1": 1, "t2": 5, "w": "TIE", "l": "TIE"},
+            {"m": 3, "r": 2, "t1": 1, "t2": 11, "w": 1, "l": 11},
+        ]
+        processor_handler._backfill_sleeper_from_links(entries)
+        semi = entries[2]
+        assert "t1_from" not in semi  # team 1 tied m2, no result recorded
+        assert "t2_from" not in semi  # team 11's round-1 game had no match id
 
 
 class TestWriteMetadataItems:

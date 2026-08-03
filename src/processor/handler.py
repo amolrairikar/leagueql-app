@@ -822,6 +822,50 @@ def _trace_sleeper_championship_path(entries: list[dict]) -> set | None:
     return path
 
 
+def _backfill_sleeper_from_links(entries: list[dict]) -> None:
+    """
+    Reconstruct missing ``t1_from``/``t2_from`` feeder links on Sleeper winners-bracket entries.
+
+    Some Sleeper leagues only populate ``t1_from``/``t2_from`` on the final round,
+    leaving earlier rounds with concrete roster IDs and no feeder links. Both the
+    championship-path trace and the frontend's bracket visual rely on a complete
+    chain of links, so this fills the gaps by matching each team to the prior-round
+    game it came from — mirroring how :func:`_build_espn_brackets` derives ESPN
+    feeder links from round + winner/loser membership.
+
+    A team on a bye has no prior-round game, so its side is left without a link —
+    exactly what the frontend uses to render a bye card and what the trace treats as
+    a path terminus. Links Sleeper already provided are preserved (never
+    overwritten), keeping any loser-fed consolation links intact.
+
+    Args:
+        entries: Winners-bracket entry dicts for a single season, each with m, r,
+            t1, t2, w, l (and optionally t1_from/t2_from). Mutated in place.
+    """
+    # (team_id, round) -> {"w"|"l": match_id}: how that team exited that round.
+    team_round_result: dict[tuple, dict] = {}
+    for entry in entries:
+        match_id, round_num = entry.get("m"), entry.get("r")
+        if match_id is None or round_num is None:
+            continue
+        winner, loser = entry.get("w"), entry.get("l")
+        if winner is not None and winner != "TIE":
+            team_round_result[(winner, round_num)] = {"w": match_id}
+        if loser is not None and loser != "TIE":
+            team_round_result[(loser, round_num)] = {"l": match_id}
+
+    for entry in entries:
+        round_num = entry.get("r")
+        if round_num is None or round_num <= 1:
+            continue
+        for team_key, from_key in (("t1", "t1_from"), ("t2", "t2_from")):
+            if from_key in entry:
+                continue  # preserve links Sleeper already provided
+            prev = team_round_result.get((entry.get(team_key), round_num - 1))
+            if prev is not None:
+                entry[from_key] = prev
+
+
 def _register_sleeper_raw_data(
     raw_data: list[dict],
     player_metadata: dict,
@@ -856,36 +900,57 @@ def _register_sleeper_raw_data(
                     bracket_by_season[item["season"]][frozenset([t1, t2])] = {
                         "tier": "LOSERS_BRACKET",
                     }
+                    all_brackets.append(
+                        {
+                            "match_id": entry.get("m"),
+                            "round": entry.get("r"),
+                            "team_1": t1,
+                            "team_2": t2,
+                            "winner": entry.get("w"),
+                            "loser": entry.get("l"),
+                            "position": entry.get("p"),
+                            "bracket_type": "LOSERS_BRACKET",
+                            "team_1_from": json.dumps(entry["t1_from"])
+                            if "t1_from" in entry
+                            else None,
+                            "team_2_from": json.dumps(entry["t2_from"])
+                            if "t2_from" in entry
+                            else None,
+                            "season": item["season"],
+                        }
+                    )
                 else:
+                    # Winners-bracket rows are emitted after the from-link backfill
+                    # below so both the rows and the championship-path trace see a
+                    # complete feeder chain, even when Sleeper omits early-round links.
                     winners_entries_by_season[item["season"]].append(entry)
-                all_brackets.append(
-                    {
-                        "match_id": entry.get("m"),
-                        "round": entry.get("r"),
-                        "team_1": t1,
-                        "team_2": t2,
-                        "winner": entry.get("w"),
-                        "loser": entry.get("l"),
-                        "position": entry.get("p"),
-                        "bracket_type": "LOSERS_BRACKET"
-                        if item["data_type"] == "losers_bracket"
-                        else "WINNERS_BRACKET",
-                        "team_1_from": json.dumps(entry["t1_from"])
-                        if "t1_from" in entry
-                        else None,
-                        "team_2_from": json.dumps(entry["t2_from"])
-                        if "t2_from" in entry
-                        else None,
-                        "season": item["season"],
-                    }
-                )
 
     # Classify winners-bracket games: those on the championship path are
     # WINNERS_BRACKET; the rest (3rd place, 5th place, etc.) are
     # WINNERS_CONSOLATION_LADDER, mirroring ESPN's consolation tier.
     for season, entries in winners_entries_by_season.items():
+        _backfill_sleeper_from_links(entries)
         championship_ids = _trace_sleeper_championship_path(entries)
         for entry in entries:
+            all_brackets.append(
+                {
+                    "match_id": entry.get("m"),
+                    "round": entry.get("r"),
+                    "team_1": entry["t1"],
+                    "team_2": entry["t2"],
+                    "winner": entry.get("w"),
+                    "loser": entry.get("l"),
+                    "position": entry.get("p"),
+                    "bracket_type": "WINNERS_BRACKET",
+                    "team_1_from": json.dumps(entry["t1_from"])
+                    if "t1_from" in entry
+                    else None,
+                    "team_2_from": json.dumps(entry["t2_from"])
+                    if "t2_from" in entry
+                    else None,
+                    "season": season,
+                }
+            )
             if championship_ids is None:
                 # Championship game not yet known; fall back to position heuristic.
                 position = entry.get("p")

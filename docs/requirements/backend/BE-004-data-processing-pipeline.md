@@ -48,6 +48,15 @@ only ever reads these precomputed items via [BE-005](BE-005-query-precomputed-vi
   no bracket there is no way to identify which games are playoff games. The `LOSERS_BRACKET`
   fallback for a game not found in the bracket applies only when the season *has* a bracket
   (an uncaptured consolation game).
+- **Partial Sleeper winners-bracket `from` links:** some Sleeper leagues populate `t1_from`/
+  `t2_from` only on the final round, leaving earlier rounds with concrete roster IDs and no
+  feeder links. The processor reconstructs the missing links from round + winner/loser
+  membership (matching each team to the prior-round game it came from), so the championship
+  path — and therefore the `WINNERS_BRACKET` vs. `WINNERS_CONSOLATION_LADDER` tiering — is
+  identified correctly instead of stopping one round short and mislabelling early-round games
+  as consolation. Links Sleeper already provided are preserved; a bye team (no prior-round
+  game) keeps a null `from` so [FE-008](../frontend/FE-008-playoff-bracket.md) still renders
+  its bye card.
 - **Co-owned teams:** `secondary_owner_id` populated when present, else null.
 - **Migrated leagues:** owner IDs must be resolved across platforms via the
   `PLATFORM_MIGRATION` mapping so all-time aggregates stay continuous.

@@ -172,6 +172,103 @@ export const PLAYOFF_BRACKET = [
   },
 ];
 
+// A 6-team bracket (teams Bob and Cara earned round-1 byes) whose semifinal
+// feeder links (team_2_from) were reconstructed server-side even though the
+// source omitted them on early rounds. The wildcard column must render both
+// round-1 matchups (Kim/Gil and Alice/Eve), not just the two bye cards.
+export const PLAYOFF_BRACKET_SIX_TEAM = [
+  {
+    match_id: 1,
+    round: 1,
+    team_1_id: '11',
+    team_1_display_name: 'Kim',
+    team_1_team_name: 'Team Kim',
+    team_1_team_logo: null,
+    team_2_id: '7',
+    team_2_display_name: 'Gil',
+    team_2_team_name: 'Team Gil',
+    team_2_team_logo: null,
+    winner: '11',
+    loser: '7',
+    position: null,
+    team_1_from: null,
+    team_2_from: null,
+    season: '2024',
+  },
+  {
+    match_id: 2,
+    round: 1,
+    team_1_id: '1',
+    team_1_display_name: 'Alice',
+    team_1_team_name: 'Team Alice',
+    team_1_team_logo: null,
+    team_2_id: '5',
+    team_2_display_name: 'Eve',
+    team_2_team_name: 'Team Eve',
+    team_2_team_logo: null,
+    winner: '5',
+    loser: '1',
+    position: null,
+    team_1_from: null,
+    team_2_from: null,
+    season: '2024',
+  },
+  {
+    match_id: 3,
+    round: 2,
+    team_1_id: '2',
+    team_1_display_name: 'Bob',
+    team_1_team_name: 'Team Bob',
+    team_1_team_logo: null,
+    team_2_id: '11',
+    team_2_display_name: 'Kim',
+    team_2_team_name: 'Team Kim',
+    team_2_team_logo: null,
+    winner: '11',
+    loser: '2',
+    position: null,
+    team_1_from: null, // Bob had a bye
+    team_2_from: '{"w": 1}', // Kim came from winning m1
+    season: '2024',
+  },
+  {
+    match_id: 4,
+    round: 2,
+    team_1_id: '3',
+    team_1_display_name: 'Cara',
+    team_1_team_name: 'Team Cara',
+    team_1_team_logo: null,
+    team_2_id: '5',
+    team_2_display_name: 'Eve',
+    team_2_team_name: 'Team Eve',
+    team_2_team_logo: null,
+    winner: '3',
+    loser: '5',
+    position: null,
+    team_1_from: null, // Cara had a bye
+    team_2_from: '{"w": 2}', // Eve came from winning m2
+    season: '2024',
+  },
+  {
+    match_id: 6,
+    round: 3,
+    team_1_id: '11',
+    team_1_display_name: 'Kim',
+    team_1_team_name: 'Team Kim',
+    team_1_team_logo: null,
+    team_2_id: '3',
+    team_2_display_name: 'Cara',
+    team_2_team_name: 'Team Cara',
+    team_2_team_logo: null,
+    winner: '11',
+    loser: '3',
+    position: 1,
+    team_1_from: '{"w": 3}',
+    team_2_from: '{"w": 4}',
+    season: '2024',
+  },
+];
+
 export const DRAFT = [
   {
     actual_position_rank: 1,

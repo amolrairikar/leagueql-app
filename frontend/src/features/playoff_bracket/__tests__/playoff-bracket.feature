@@ -16,3 +16,9 @@ Feature: Playoff bracket (FE-008)
     Given the selected season has no playoff bracket
     When I open the playoff bracket page
     Then I see "No playoff bracket for this season yet. It will appear once the playoffs begin."
+
+  Scenario: A bracket with byes renders the wildcard round matchups
+    Given a six-team bracket with byes is available
+    When I open the playoff bracket page
+    Then I see the manager "Gil"
+    And I see the manager "Alice"
