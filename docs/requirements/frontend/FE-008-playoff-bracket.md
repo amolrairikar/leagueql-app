@@ -16,7 +16,11 @@ etc.). Scores are joined from the matchups views; seeding lines are derived from
 - **Variable championship week:** championship week derived from actual matchup data
   (handles week 17 vs. 18, etc.).
 - **Unplayed matches:** `winner`/`loser` null until played; render as TBD.
-- **Seeding refs:** `team_*_from` (e.g. `{"w":1}`/`{"l":2}`) parsed to draw advancement lines.
+- **Seeding refs:** `team_*_from` (e.g. `{"w":1}`/`{"l":2}`) parsed to draw advancement lines
+  and to pair each bye team with the wildcard match feeding its semifinal. This relies on a
+  complete `from`-link chain back to round 1; when a source (e.g. Sleeper) omits early-round
+  links, they are reconstructed server-side so the wildcard round renders its matchups rather
+  than only the bye cards — see [BE-004](../backend/BE-004-data-processing-pipeline.md).
 - **Score matching:** bracket matches joined to matchups handling either team order.
 - **No bracket / season in progress:** when the `PLAYOFF_BRACKET#{season}` query succeeds but
   returns no matches (e.g. a Sleeper season with no playoffs yet — see
