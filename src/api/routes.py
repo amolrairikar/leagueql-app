@@ -73,9 +73,9 @@ from helpers import (
 router = APIRouter()
 
 
-@router.get("/", status_code=status.HTTP_200_OK)
-def root() -> APIResponse:
-    """Makes health check to API root URL."""
+@router.get("/health", status_code=status.HTTP_200_OK)
+def health() -> APIResponse:
+    """Public, unauthenticated liveness check for external uptime probes (BE-023)."""
     return APIResponse(detail="Healthy!")
 
 
