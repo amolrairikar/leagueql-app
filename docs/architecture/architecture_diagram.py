@@ -23,7 +23,7 @@ from diagrams.aws.integration import (
     SimpleQueueServiceSqs,
 )
 from diagrams.aws.management import SystemsManagerParameterStore
-from diagrams.aws.network import APIGateway, Route53
+from diagrams.aws.network import APIGateway
 from diagrams.aws.storage import S3
 from diagrams.generic.blank import Blank
 from diagrams.generic.storage import Storage
@@ -92,7 +92,6 @@ with Diagram(
 
         discord_fn = Lambda("Discord notifier\nLambda")
         sns = SimpleNotificationServiceSns("SNS\n(alerts)")
-        health_check = Route53("Route 53 health check\n(api.leagueql.com/health)")
 
         with Cluster("Data stores"):
             ddb = Dynamodb("DynamoDB\n(views, job status,\ncounts)")
@@ -136,10 +135,6 @@ with Diagram(
     # ── Alerting & config ─────────────────────────────────────────────────────
     sns >> discord_fn >> Edge(label="webhook URL from SSM") >> discord
     [onboarder, processor, api] >> Edge(color="gray", style="dotted") >> sns
-    # Route 53 probes /health every 30s; a CloudWatch alarm on the health-check
-    # status fans out to the same SNS alert topic after 3 consecutive failures.
-    health_check >> Edge(label="probe /health\n(every 30s)") >> apigw
-    health_check >> Edge(color="gray", style="dotted", label="unhealthy alarm") >> sns
     [api, onboarder, processor] >> Edge(color="gray", style="dotted") >> ssm
 
     # ── Distributed tracing (one end-to-end trace → Axiom) ────────────────────

@@ -38,7 +38,7 @@ criteria. Frontend, backend, and extension features are kept separate.
 | [BE-019](backend/BE-019-sleeper-transactions.md) | Sleeper Transactions (Waivers, Trades, Free Agents) |
 | [BE-020](backend/BE-020-backend-otel-tracing.md) | Backend OpenTelemetry Tracing → Axiom (API + async chain) |
 | [BE-022](backend/BE-022-yahoo-oauth.md) | Yahoo OAuth Authorization & Token Management |
-| [BE-023](backend/BE-023-api-health-check-alerting.md) | API Health Check & Uptime Alerting (Route 53 → Discord) |
+| [BE-023](backend/BE-023-api-health-check-alerting.md) | API Health Check & Uptime Alerting (public `/health` for external monitor) |
 
 ## Frontend (`frontend/`)
 | ID | Feature |
