@@ -14,8 +14,8 @@ from sleeper_client import resolve_sleeper_canonical_league_id
 from utils import correlation_id_var, logger, publish_failure
 from writer import write_pending_league_lookup
 
-# Continue the trace started upstream (API or Sleeper refresh) → Axiom (BE-020).
-# A no-op unless Axiom is configured, so tests / unconfigured envs are unaffected.
+# Continue the trace started upstream (API or Sleeper refresh) → Better Stack (BE-020).
+# A no-op unless tracing is configured, so tests / unconfigured envs are unaffected.
 init_tracing("leagueql-onboarder")
 
 

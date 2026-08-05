@@ -62,8 +62,8 @@ with Diagram(
         clerk = Auth0("Clerk\n(auth)")
         espn = Client("ESPN API")
         sleeper = Client("Sleeper API")
-        # Text-only node (no vendor icon) for the OTEL / Axiom observability backend.
-        axiom = Blank("OTEL\nAxiom (traces + RUM)")
+        # Text-only node (no vendor icon) for the OTEL / Better Stack observability backend.
+        betterstack = Blank("OTEL\nBetter Stack (traces + RUM)")
 
     # ── Edge / Cloudflare tier ────────────────────────────────────────────────
     with Cluster("Cloudflare (edge)"):
@@ -109,7 +109,7 @@ with Diagram(
     # sync-counts refreshes the KV cache from DynamoDB on an hourly Cloudflare cron.
     sync_counts >> SCHED >> counts_kv
     sync_counts >> Edge(label="read counts") >> ddb
-    spa >> TRACE >> axiom  # RUM + OTLP via same-origin worker proxy
+    spa >> TRACE >> betterstack  # RUM + OTLP via same-origin worker proxy
 
     # ── API → async chain ─────────────────────────────────────────────────────
     api >> ASYNC >> onboarder
@@ -137,5 +137,5 @@ with Diagram(
     [onboarder, processor, api] >> Edge(color="gray", style="dotted") >> sns
     [api, onboarder, processor] >> Edge(color="gray", style="dotted") >> ssm
 
-    # ── Distributed tracing (one end-to-end trace → Axiom) ────────────────────
-    [api, onboarder, processor] >> TRACE >> axiom
+    # ── Distributed tracing (one end-to-end trace → Better Stack) ─────────────
+    [api, onboarder, processor] >> TRACE >> betterstack

@@ -8,12 +8,12 @@ onboarding chain (onboarder, processor, sleeper_refresh) uses :func:`init_tracin
 
 Design notes (mirroring ``src/api/telemetry.py``):
 - No ``opentelemetry`` import happens at module load. The SDK / instrumentation are
-  imported **lazily** and only after the Axiom token + dataset gate passes, so
-  importing this module never requires the OTel packages and the disabled path
-  (unit tests, the Behave suite, any unconfigured env) is a true no-op that makes
-  zero network calls and instruments nothing.
-- The Axiom ingest token is fetched at runtime from SSM by parameter *name* via
-  :func:`common.secrets.get_secret_from_env_param`.
+  imported **lazily** and only after the endpoint + token gate passes, so importing
+  this module never requires the OTel packages and the disabled path (unit tests,
+  the Behave suite, any unconfigured env) is a true no-op that makes zero network
+  calls and instruments nothing.
+- The OTLP ingest (source) token is fetched at runtime from SSM by parameter *name*
+  via :func:`common.secrets.get_secret_from_env_param`.
 - Spans are force-flushed per invocation because the Lambda execution environment
   freezes between invocations; otherwise buffered spans would be stranded and lost.
 - Tracing must **never** break a request/handler: every function here swallows its
@@ -26,9 +26,10 @@ from contextlib import contextmanager
 from common.logging_utils import logger
 from common.secrets import get_secret_from_env_param
 
-# Non-sensitive config (plain env vars, set per-env by Terraform).
-_AXIOM_TRACES_URL = os.environ.get("AXIOM_TRACES_URL", "https://api.axiom.co/v1/traces")
-_AXIOM_DATASET = os.environ.get("AXIOM_DATASET", "")
+# Non-sensitive config (plain env vars, set per-env by Terraform). The endpoint is
+# the Better Stack source's OTLP traces URL (``https://<ingesting-host>/v1/traces``);
+# there is no default because the ingesting host is account/source-specific.
+_OTLP_ENDPOINT = os.environ.get("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "")
 _DEPLOYMENT_ENV = os.environ.get("ENVIRONMENT", "unknown")
 
 # The installed provider, or None when tracing is disabled. Set by build_provider;
@@ -41,25 +42,26 @@ _initialized = False
 
 
 def is_enabled() -> bool:
-    """Return True when Axiom tracing is configured for this environment.
+    """Return True when OTLP tracing is configured for this environment.
 
-    Requires both a dataset (``AXIOM_DATASET``) and an SSM parameter name for the
-    token (``AXIOM_API_TOKEN_SSM_PARAM``) that resolves to a non-empty value.
-    Unconfigured contexts (tests, local) return False and tracing stays off.
+    Requires both an exporter endpoint (``OTEL_EXPORTER_OTLP_TRACES_ENDPOINT``) and
+    an SSM parameter name for the source token (``OTEL_EXPORTER_TOKEN_SSM_PARAM``)
+    that resolves to a non-empty value. Unconfigured contexts (tests, local) return
+    False and tracing stays off.
     """
-    if not _AXIOM_DATASET:
+    if not _OTLP_ENDPOINT:
         return False
-    return bool(get_secret_from_env_param("AXIOM_API_TOKEN_SSM_PARAM"))
+    return bool(get_secret_from_env_param("OTEL_EXPORTER_TOKEN_SSM_PARAM"))
 
 
 def build_provider(service_name: str):
-    """Build + register a ``TracerProvider`` exporting to Axiom and instrument
+    """Build + register a ``TracerProvider`` exporting via OTLP and instrument
     ``botocore`` / ``requests`` (OTel imported lazily).
 
     Shared by the API (``src/api/telemetry.py``) and the async-chain Lambdas so the
-    exporter / Axiom config has a single source of truth. The caller is responsible
-    for the ``is_enabled()`` gate and idempotency. Returns the provider (also stored
-    in the module so :func:`force_flush` / :func:`traced_handler` can reach it).
+    exporter config has a single source of truth. The caller is responsible for the
+    ``is_enabled()`` gate and idempotency. Returns the provider (also stored in the
+    module so :func:`force_flush` / :func:`traced_handler` can reach it).
     """
     global _provider
     from opentelemetry import trace
@@ -70,7 +72,7 @@ def build_provider(service_name: str):
     from opentelemetry.sdk.trace import TracerProvider
     from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
-    token = get_secret_from_env_param("AXIOM_API_TOKEN_SSM_PARAM")
+    token = get_secret_from_env_param("OTEL_EXPORTER_TOKEN_SSM_PARAM")
     resource = Resource.create(
         {
             "service.name": service_name,
@@ -79,10 +81,9 @@ def build_provider(service_name: str):
     )
     provider = TracerProvider(resource=resource)
     exporter = OTLPSpanExporter(
-        endpoint=_AXIOM_TRACES_URL,
+        endpoint=_OTLP_ENDPOINT,
         headers={
             "Authorization": f"Bearer {token}",
-            "X-Axiom-Dataset": _AXIOM_DATASET,
         },
     )
     provider.add_span_processor(BatchSpanProcessor(exporter))
@@ -112,7 +113,7 @@ def init_tracing(service_name: str) -> bool:
 
     try:
         if not is_enabled():
-            logger.info("OTel tracing disabled: no Axiom token/dataset configured")
+            logger.info("OTel tracing disabled: no OTLP endpoint/token configured")
             return False
         build_provider(service_name)
     except Exception:
@@ -125,9 +126,7 @@ def init_tracing(service_name: str) -> bool:
         return False
 
     _initialized = True
-    logger.info(
-        "OTel tracing enabled for %s → Axiom dataset %s", service_name, _AXIOM_DATASET
-    )
+    logger.info("OTel tracing enabled for %s → %s", service_name, _OTLP_ENDPOINT)
     return True
 
 

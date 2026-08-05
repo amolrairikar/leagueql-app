@@ -47,7 +47,7 @@ they always agree.
   flag-name constant. A test-only `_override_for_testing({...})` swaps the active flag map.
 - Source of truth: an AWS SSM Parameter Store parameter (per environment, per region) named
   `/leagueql/<env>/feature-flags`, serving the same `{ "banner": { "enabled": false }, ... }` JSON
-  shape the module parses. Like the Axiom/Discord SSM values, it is **created and edited
+  shape the module parses. Like the Better Stack/Discord SSM values, it is **created and edited
   out-of-band** in the SSM console and is **never managed in Terraform** (no `aws_ssm_parameter`
   resource), so a toggle never needs a `terraform apply` / causes drift; only the `ssm:GetParameter`
   read grant lives in TF (`infrastructure/global/{dev,prod}`). The parameter is a plain `String`

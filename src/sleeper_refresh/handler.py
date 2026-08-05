@@ -4,9 +4,9 @@ import uuid
 from common.tracing import init_tracing, traced_handler
 from utils import logger, get_nfl_state, get_sleeper_leagues, invoke_onboarder_lambda
 
-# Originate a trace per refreshed league → Axiom (BE-020); the onboarder/processor
-# continue it. A no-op unless Axiom is configured, so tests / unconfigured envs are
-# unaffected.
+# Originate a trace per refreshed league → Better Stack (BE-020); the onboarder/
+# processor continue it. A no-op unless tracing is configured, so tests /
+# unconfigured envs are unaffected.
 init_tracing("leagueql-sleeper-refresh")
 
 

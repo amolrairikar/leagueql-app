@@ -40,20 +40,20 @@ def _real_provider():
 
 
 class TestIsEnabled:
-    def test_disabled_without_dataset(self):
-        with patch.object(tracing, "_AXIOM_DATASET", ""):
+    def test_disabled_without_endpoint(self):
+        with patch.object(tracing, "_OTLP_ENDPOINT", ""):
             assert tracing.is_enabled() is False
 
     def test_disabled_without_token(self):
         with (
-            patch.object(tracing, "_AXIOM_DATASET", "leagueql-dev"),
+            patch.object(tracing, "_OTLP_ENDPOINT", "https://in.example.com/v1/traces"),
             patch.object(tracing, "get_secret_from_env_param", return_value=""),
         ):
             assert tracing.is_enabled() is False
 
-    def test_enabled_with_token_and_dataset(self):
+    def test_enabled_with_endpoint_and_token(self):
         with (
-            patch.object(tracing, "_AXIOM_DATASET", "leagueql-dev"),
+            patch.object(tracing, "_OTLP_ENDPOINT", "https://in.example.com/v1/traces"),
             patch.object(tracing, "get_secret_from_env_param", return_value="tok"),
         ):
             assert tracing.is_enabled() is True
@@ -109,7 +109,7 @@ def _patched_otel():
     """Patch the OTel pieces ``build_provider`` imports lazily; yield the mocks."""
     with (
         patch.object(tracing, "get_secret_from_env_param", return_value="tok"),
-        patch.object(tracing, "_AXIOM_DATASET", "leagueql-dev"),
+        patch.object(tracing, "_OTLP_ENDPOINT", "https://in.example.com/v1/traces"),
         patch(
             "opentelemetry.exporter.otlp.proto.http.trace_exporter.OTLPSpanExporter"
         ) as exporter,
@@ -137,11 +137,11 @@ class TestBuildProvider:
     def test_builds_exporter_and_instruments(self):
         with _patched_otel() as mocks:
             provider = tracing.build_provider("leagueql-onboarder")
-            # Exporter built with the Axiom endpoint + auth/dataset headers.
+            # Exporter built with the OTLP endpoint + bearer-token auth header.
             _, kwargs = mocks["exporter"].call_args
-            assert kwargs["endpoint"] == tracing._AXIOM_TRACES_URL
+            assert kwargs["endpoint"] == tracing._OTLP_ENDPOINT
             assert kwargs["headers"]["Authorization"] == "Bearer tok"
-            assert kwargs["headers"]["X-Axiom-Dataset"] == "leagueql-dev"
+            assert "X-Axiom-Dataset" not in kwargs["headers"]
             # Provider registered globally; boto + requests instrumented; stored.
             mocks["set_provider"].assert_called_once()
             mocks["boto_instr"].return_value.instrument.assert_called_once()
@@ -168,7 +168,7 @@ class TestForceFlush:
 
     def test_swallows_flush_error(self):
         provider = MagicMock()
-        provider.force_flush.side_effect = RuntimeError("axiom down")
+        provider.force_flush.side_effect = RuntimeError("exporter down")
         tracing._provider = provider
         with patch.object(tracing, "logger") as mock_logger:
             tracing.force_flush()  # must not raise

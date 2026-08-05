@@ -37,6 +37,12 @@ locals {
   # config and the API Lambda (FastAPI middleware) so the two never diverge — in
   # particular so production never trusts the local dev origin.
   cors_allow_origins = var.environment == "dev" ? ["http://localhost:5173", "https://leagueql.com"] : ["https://leagueql.com"]
+
+  # Better Stack OTLP traces endpoint (BE-020). The ingesting host is non-sensitive
+  # (auth is the Bearer source token, fetched from SSM at runtime), so it's committed
+  # here rather than passed as a secret. Tracing runs in prod only (single free-tier
+  # source); dev gets "" so common/tracing.py::is_enabled() short-circuits to a no-op.
+  betterstack_otlp_traces_endpoint = var.environment == "prod" ? "https://s2655032.eu-central-1a.betterstackdata.com/v1/traces" : ""
 }
 
 module "onboarder_lambda" {
@@ -58,14 +64,13 @@ module "onboarder_lambda" {
     S3_BUCKET_NAME      = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
     SNS_TOPIC_ARN       = var.environment == "prod" ? aws_sns_topic.lambda_alerts[0].arn : ""
 
-    # OpenTelemetry trace-context propagation → Axiom (BE-020). A no-op unless set.
-    # The ingest token is fetched at runtime from SSM by *name* (value never lands
-    # here / in TF state / in CI); dataset is per-env so dev traffic never pollutes
-    # prod. ENVIRONMENT tags spans' deployment.environment.
-    ENVIRONMENT               = var.environment
-    AXIOM_API_TOKEN_SSM_PARAM = "/leagueql/${var.environment}/axiom/api_token"
-    AXIOM_DATASET             = "leagueql-${var.environment}"
-    AXIOM_TRACES_URL          = "https://api.axiom.co/v1/traces"
+    # OpenTelemetry trace-context propagation → Better Stack (BE-020). A no-op unless
+    # set. The OTLP source token is fetched at runtime from SSM by *name* (value never
+    # lands here / in TF state / in CI); the endpoint points at a per-env Better Stack
+    # source so dev traffic never pollutes prod. ENVIRONMENT tags deployment.environment.
+    ENVIRONMENT                        = var.environment
+    OTEL_EXPORTER_TOKEN_SSM_PARAM      = "/leagueql/${var.environment}/betterstack/source_token"
+    OTEL_EXPORTER_OTLP_TRACES_ENDPOINT = local.betterstack_otlp_traces_endpoint
   }
 
   tags = {
@@ -95,14 +100,13 @@ module "processor_lambda" {
     S3_BUCKET_NAME      = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
     SNS_TOPIC_ARN       = var.environment == "prod" ? aws_sns_topic.lambda_alerts[0].arn : ""
 
-    # OpenTelemetry trace-context propagation → Axiom (BE-020). A no-op unless set.
-    # The ingest token is fetched at runtime from SSM by *name* (value never lands
-    # here / in TF state / in CI); dataset is per-env so dev traffic never pollutes
-    # prod. ENVIRONMENT tags spans' deployment.environment.
-    ENVIRONMENT               = var.environment
-    AXIOM_API_TOKEN_SSM_PARAM = "/leagueql/${var.environment}/axiom/api_token"
-    AXIOM_DATASET             = "leagueql-${var.environment}"
-    AXIOM_TRACES_URL          = "https://api.axiom.co/v1/traces"
+    # OpenTelemetry trace-context propagation → Better Stack (BE-020). A no-op unless
+    # set. The OTLP source token is fetched at runtime from SSM by *name* (value never
+    # lands here / in TF state / in CI); the endpoint points at a per-env Better Stack
+    # source so dev traffic never pollutes prod. ENVIRONMENT tags deployment.environment.
+    ENVIRONMENT                        = var.environment
+    OTEL_EXPORTER_TOKEN_SSM_PARAM      = "/leagueql/${var.environment}/betterstack/source_token"
+    OTEL_EXPORTER_OTLP_TRACES_ENDPOINT = local.betterstack_otlp_traces_endpoint
   }
 
   tags = {
@@ -139,14 +143,14 @@ module "api_lambda" {
     # API Gateway CORS config via the shared local (prod excludes the dev origin).
     CORS_ALLOW_ORIGINS = join(",", local.cors_allow_origins)
 
-    # OpenTelemetry tracing → Axiom (BE-020). A no-op unless these are set, so it's
-    # safe in every environment. The ingest token is fetched at runtime from SSM by
-    # *name* (value never lands here / in TF state / in CI); dataset is per-env so
-    # dev/test traffic never pollutes prod. ENVIRONMENT tags spans' deployment.environment.
-    ENVIRONMENT               = var.environment
-    AXIOM_API_TOKEN_SSM_PARAM = "/leagueql/${var.environment}/axiom/api_token"
-    AXIOM_DATASET             = "leagueql-${var.environment}"
-    AXIOM_TRACES_URL          = "https://api.axiom.co/v1/traces"
+    # OpenTelemetry tracing → Better Stack (BE-020). A no-op unless these are set, so
+    # it's safe in every environment. The OTLP source token is fetched at runtime from
+    # SSM by *name* (value never lands here / in TF state / in CI); the endpoint points
+    # at a per-env Better Stack source so dev/test traffic never pollutes prod.
+    # ENVIRONMENT tags spans' deployment.environment.
+    ENVIRONMENT                        = var.environment
+    OTEL_EXPORTER_TOKEN_SSM_PARAM      = "/leagueql/${var.environment}/betterstack/source_token"
+    OTEL_EXPORTER_OTLP_TRACES_ENDPOINT = local.betterstack_otlp_traces_endpoint
 
     # Feature flags via SSM Parameter Store (BE-017). Flags are resolved at runtime
     # from this parameter by *name* via ssm:GetParameter (IAM-role access, no secret);
@@ -236,14 +240,13 @@ module "sleeper_refresh_lambda" {
     DYNAMODB_TABLE_NAME   = "leagueql-table-${var.environment}"
     ONBOARDER_LAMBDA_NAME = "leagueql-onboarder-${var.environment}"
 
-    # OpenTelemetry trace-context propagation → Axiom (BE-020). A no-op unless set.
-    # The ingest token is fetched at runtime from SSM by *name* (value never lands
-    # here / in TF state / in CI); dataset is per-env so dev traffic never pollutes
-    # prod. ENVIRONMENT tags spans' deployment.environment.
-    ENVIRONMENT               = var.environment
-    AXIOM_API_TOKEN_SSM_PARAM = "/leagueql/${var.environment}/axiom/api_token"
-    AXIOM_DATASET             = "leagueql-${var.environment}"
-    AXIOM_TRACES_URL          = "https://api.axiom.co/v1/traces"
+    # OpenTelemetry trace-context propagation → Better Stack (BE-020). A no-op unless
+    # set. The OTLP source token is fetched at runtime from SSM by *name* (value never
+    # lands here / in TF state / in CI); the endpoint points at a per-env Better Stack
+    # source so dev traffic never pollutes prod. ENVIRONMENT tags deployment.environment.
+    ENVIRONMENT                        = var.environment
+    OTEL_EXPORTER_TOKEN_SSM_PARAM      = "/leagueql/${var.environment}/betterstack/source_token"
+    OTEL_EXPORTER_OTLP_TRACES_ENDPOINT = local.betterstack_otlp_traces_endpoint
   }
 
   tags = {

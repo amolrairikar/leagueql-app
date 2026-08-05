@@ -36,7 +36,7 @@ criteria. Frontend, backend, and extension features are kept separate.
 | [BE-017](backend/BE-017-feature-flags.md) | Feature Flags (OpenFeature + SSM Parameter Store) |
 | [BE-018](backend/BE-018-league-access-tracking.md) | League Access Tracking |
 | [BE-019](backend/BE-019-sleeper-transactions.md) | Sleeper Transactions (Waivers, Trades, Free Agents) |
-| [BE-020](backend/BE-020-backend-otel-tracing.md) | Backend OpenTelemetry Tracing → Axiom (API + async chain) |
+| [BE-020](backend/BE-020-backend-otel-tracing.md) | Backend OpenTelemetry Tracing → Better Stack (API + async chain) |
 | [BE-022](backend/BE-022-yahoo-oauth.md) | Yahoo OAuth Authorization & Token Management |
 | [BE-023](backend/BE-023-api-health-check-alerting.md) | API Health Check & Uptime Alerting (public `/health` for external monitor) |
 
@@ -67,7 +67,7 @@ criteria. Frontend, backend, and extension features are kept separate.
 | [FE-026](frontend/FE-026-feature-flags.md) | Feature Flags (OpenFeature + SSM Parameter Store) |
 | [FE-027](frontend/FE-027-transactions.md) | Transactions |
 | [FE-028](frontend/FE-028-changelog-page.md) | Changelog Page |
-| [FE-029](frontend/FE-029-frontend-observability.md) | Frontend Observability (OpenTelemetry + RUM → Axiom) |
+| [FE-029](frontend/FE-029-frontend-observability.md) | Frontend Observability (OpenTelemetry + RUM → Better Stack) |
 | [FE-030](frontend/FE-030-informational-banner.md) | Informational Banner |
 | [FE-031](frontend/FE-031-schedule-swap-simulator.md) | Schedule-Swap Simulator (Standings) |
 | [FE-032](frontend/FE-032-weekly-awards-superlatives.md) | Weekly Awards & Superlatives (Matchups) |

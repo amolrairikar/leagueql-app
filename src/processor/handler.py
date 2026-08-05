@@ -18,9 +18,9 @@ from common.tracing import init_tracing, traced_handler
 from utils import correlation_id_var, logger, publish_failure
 from queries import QUERIES
 
-# Continue the trace the onboarder propagated via the manifest's S3 metadata → Axiom
-# (BE-020). A no-op unless Axiom is configured, so tests / unconfigured envs are
-# unaffected.
+# Continue the trace the onboarder propagated via the manifest's S3 metadata → Better
+# Stack (BE-020). A no-op unless tracing is configured, so tests / unconfigured envs
+# are unaffected.
 init_tracing("leagueql-processor")
 
 _retry_config = botocore.config.Config(retries={"mode": "standard"})
