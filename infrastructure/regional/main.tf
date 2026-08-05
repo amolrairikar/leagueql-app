@@ -803,55 +803,6 @@ resource "aws_cloudwatch_metric_alarm" "api_gw_5xx" {
   }
 }
 
-# Proactive API uptime probe (BE-023). Route 53 health checks report their
-# CloudWatch metrics only to us-east-1, and the alert SNS topic lives in the east
-# region, so both the health check and its alarm are gated to prod + east.
-resource "aws_route53_health_check" "api_health" {
-  count             = var.environment == "prod" && local.region == "east" ? 1 : 0
-  fqdn              = "api.leagueql.com"
-  port              = 443
-  type              = "HTTPS"
-  resource_path     = "/health"
-  request_interval  = 30
-  failure_threshold = 3
-
-  tags = {
-    Name        = "leagueql-api-health-${var.environment}"
-    environment = var.environment
-    project     = "leagueql"
-    component   = "monitoring"
-    managed-by  = "terraform"
-  }
-}
-
-resource "aws_cloudwatch_metric_alarm" "api_health_unhealthy" {
-  count               = var.environment == "prod" && local.region == "east" ? 1 : 0
-  alarm_name          = "leagueql-api-health-${var.environment}-unhealthy"
-  comparison_operator = "LessThanThreshold"
-  evaluation_periods  = 1
-  metric_name         = "HealthCheckStatus"
-  namespace           = "AWS/Route53"
-  period              = 60
-  statistic           = "Minimum"
-  threshold           = 1
-  alarm_description   = "api.leagueql.com/health failed the Route 53 health check (>=3 consecutive failures)"
-  alarm_actions       = [aws_sns_topic.lambda_alerts[0].arn]
-  ok_actions          = [aws_sns_topic.lambda_alerts[0].arn]
-  # Alert if the Route 53 metric stops reporting entirely, rather than masking an outage.
-  treat_missing_data = "breaching"
-
-  dimensions = {
-    HealthCheckId = aws_route53_health_check.api_health[0].id
-  }
-
-  tags = {
-    environment = var.environment
-    project     = "leagueql"
-    component   = "monitoring"
-    managed-by  = "terraform"
-  }
-}
-
 resource "aws_cloudwatch_metric_alarm" "dynamodb_write_spike" {
   count               = local.region == "east" && var.environment == "prod" ? 1 : 0
   alarm_name          = "leagueql-dynamodb-${var.environment}-write-spike"
