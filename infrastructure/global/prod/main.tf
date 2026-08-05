@@ -189,16 +189,16 @@ module "onboarding-lambda-role" {
         ]
       },
       {
-        # BE-020: the chain Lambdas continue the OTel trace and export to Axiom; the
-        # ingest token is a SecureString SSM parameter (set out-of-band, never in TF state).
-        Sid    = "ReadAxiomSsmParameter"
+        # BE-020: the chain Lambdas continue the OTel trace and export to Better Stack;
+        # the OTLP source token is a SecureString SSM parameter (out-of-band, never in TF state).
+        Sid    = "ReadOtelTokenSsmParameter"
         Effect = "Allow"
         Action = [
           "ssm:GetParameter"
         ]
         Resource = [
-          "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/axiom/api_token",
-          "arn:aws:ssm:us-west-2:${var.account_id}:parameter/leagueql/${var.environment}/axiom/api_token"
+          "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/betterstack/source_token",
+          "arn:aws:ssm:us-west-2:${var.account_id}:parameter/leagueql/${var.environment}/betterstack/source_token"
         ]
       },
       {
@@ -319,16 +319,16 @@ module "processing-lambda-role" {
         ]
       },
       {
-        # BE-020: the chain Lambdas continue the OTel trace and export to Axiom; the
-        # ingest token is a SecureString SSM parameter (set out-of-band, never in TF state).
-        Sid    = "ReadAxiomSsmParameter"
+        # BE-020: the chain Lambdas continue the OTel trace and export to Better Stack;
+        # the OTLP source token is a SecureString SSM parameter (out-of-band, never in TF state).
+        Sid    = "ReadOtelTokenSsmParameter"
         Effect = "Allow"
         Action = [
           "ssm:GetParameter"
         ]
         Resource = [
-          "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/axiom/api_token",
-          "arn:aws:ssm:us-west-2:${var.account_id}:parameter/leagueql/${var.environment}/axiom/api_token"
+          "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/betterstack/source_token",
+          "arn:aws:ssm:us-west-2:${var.account_id}:parameter/leagueql/${var.environment}/betterstack/source_token"
         ]
       },
       {
@@ -472,7 +472,7 @@ module "player-metadata-lambda-role" {
 # Feature-flag source of truth (BE-017 / FE-026) is an SSM Parameter Store parameter
 # named `/leagueql/${var.environment}/feature-flags` in each region (each regional
 # API Lambda reads its own region's copy), holding the flag JSON. Like the
-# Axiom/Discord SSM values, it is created and edited **out-of-band** in the SSM
+# Better Stack/Discord SSM values, it is created and edited **out-of-band** in the SSM
 # console (a standard-tier `String` — the flags are non-secret booleans) and is never
 # managed in TF, so a toggle never needs a `terraform apply`. The Lambda code reads
 # all flags off when the parameter is missing, so a fresh environment is safe until the
@@ -580,16 +580,16 @@ module "api-lambda-role" {
         ]
       },
       {
-        # BE-020: the API Lambda exports OpenTelemetry traces to Axiom; the ingest
-        # token is a SecureString SSM parameter (set out-of-band, never in TF state).
-        Sid    = "ReadAxiomSsmParameter"
+        # BE-020: the API Lambda exports OpenTelemetry traces to Better Stack; the OTLP
+        # source token is a SecureString SSM parameter (set out-of-band, never in TF state).
+        Sid    = "ReadOtelTokenSsmParameter"
         Effect = "Allow"
         Action = [
           "ssm:GetParameter"
         ]
         Resource = [
-          "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/axiom/api_token",
-          "arn:aws:ssm:us-west-2:${var.account_id}:parameter/leagueql/${var.environment}/axiom/api_token"
+          "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/betterstack/source_token",
+          "arn:aws:ssm:us-west-2:${var.account_id}:parameter/leagueql/${var.environment}/betterstack/source_token"
         ]
       },
       {
@@ -999,16 +999,16 @@ module "sleeper-refresh-lambda-role" {
         ]
       },
       {
-        # BE-020: the chain Lambdas continue the OTel trace and export to Axiom; the
-        # ingest token is a SecureString SSM parameter (set out-of-band, never in TF state).
-        Sid    = "ReadAxiomSsmParameter"
+        # BE-020: the chain Lambdas continue the OTel trace and export to Better Stack;
+        # the OTLP source token is a SecureString SSM parameter (out-of-band, never in TF state).
+        Sid    = "ReadOtelTokenSsmParameter"
         Effect = "Allow"
         Action = [
           "ssm:GetParameter"
         ]
         Resource = [
-          "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/axiom/api_token",
-          "arn:aws:ssm:us-west-2:${var.account_id}:parameter/leagueql/${var.environment}/axiom/api_token"
+          "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/betterstack/source_token",
+          "arn:aws:ssm:us-west-2:${var.account_id}:parameter/leagueql/${var.environment}/betterstack/source_token"
         ]
       },
       {

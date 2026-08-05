@@ -24,7 +24,7 @@ pipenv run python docs/architecture/architecture_diagram.py
 - **Scheduled jobs** (EventBridge) — Sleeper refresh, player-metadata refresher, and the
   Sleeper stats Fargate task.
 - **Ops** — SNS alerts fan out to the Discord notifier Lambda; API, onboarder, and processor
-  export one end-to-end OpenTelemetry trace to Axiom.
+  export one end-to-end OpenTelemetry trace to Better Stack.
 
 Keep this in sync with [`../requirements/`](../requirements/README.md) when the architecture
 changes.

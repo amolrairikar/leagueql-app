@@ -12,10 +12,14 @@ itself is up and reachable. This replaces the former authed root `GET /` health 
 authorizer made it un-probeable by an external monitor, which would get `401`, not `200`). The
 root path `/` no longer exists.
 
-**Uptime probing & alerting is handled by an external monitoring service** (e.g. UptimeRobot /
-Better Stack) that periodically requests `https://api.leagueql.com/health` and alerts on repeated
-failures. The service's own alerting (which can post to the same Discord ops channel via its
-incoming webhook) is the notification path — there is no AWS-side probe or alarm.
+**Uptime probing & alerting is handled by an external monitoring service — Better Stack** (the same
+vendor used for tracing, [BE-020](BE-020-backend-otel-tracing.md) / [FE-029](../frontend/FE-029-frontend-observability.md)).
+Two console-configured HTTP monitors probe the site and the API on a 1–5 min interval:
+`https://leagueql.com` (the frontend) and `https://api.leagueql.com/health` (the API liveness
+endpoint, optionally keyword-matching `Healthy!` on the body). Better Stack's own incident alerting
+posts to the same Discord ops channel via its incoming-webhook integration — there is no AWS-side
+probe or alarm, and **no application code or Terraform is involved** (monitors live entirely in the
+Better Stack console).
 
 > **History:** BE-023 originally shipped an AWS **Route 53 health check** on
 > `https://api.leagueql.com/health` plus a CloudWatch `HealthCheckStatus` alarm that fanned out

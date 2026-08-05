@@ -1,7 +1,7 @@
 """Runtime secret retrieval from AWS SSM Parameter Store.
 
 Vendored into every function's deployment zip. Sensitive credentials (e.g. the
-Axiom ingest token) are stored as **SecureString** SSM parameters and fetched at
+Better Stack OTLP source token) are stored as **SecureString** SSM parameters and fetched at
 cold start by parameter *name* — the name is passed via a non-sensitive env var,
 so the secret value never appears in Lambda environment variables, the Terraform
 state, or CI.
@@ -20,7 +20,7 @@ def get_ssm_parameter(name: str) -> str:
     """Return the decrypted value of a SecureString SSM parameter.
 
     Args:
-        name: The full SSM parameter name (e.g. ``/leagueql/prod/axiom/api_token``).
+        name: The full SSM parameter name (e.g. ``/leagueql/prod/betterstack/source_token``).
 
     Returns:
         The decrypted parameter value.

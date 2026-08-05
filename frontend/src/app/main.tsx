@@ -9,7 +9,7 @@ import { ThemeProvider } from '@/components/theme-provider';
 import { initFeatureFlags } from '@/lib/feature-flags';
 import { initTelemetry } from '@/lib/telemetry';
 
-// OpenTelemetry tracing + Web Vitals → Axiom (FE-029). No-op unless VITE_TRACES_URL
+// OpenTelemetry tracing + Web Vitals → Better Stack (FE-029). No-op unless VITE_TRACES_URL
 // is configured (and never under Vitest), so dev/test bootstraps are unaffected.
 initTelemetry();
 

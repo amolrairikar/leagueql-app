@@ -199,8 +199,8 @@ from routes import delete_league, router  # noqa: E402, F401
 
 app.include_router(router)
 
-# OpenTelemetry distributed tracing → Axiom (BE-020). A no-op unless the Axiom
-# token (SSM) + dataset are configured, so tests / local / unconfigured envs are
+# OpenTelemetry distributed tracing → Better Stack (BE-020). A no-op unless the OTLP
+# endpoint + token (SSM) are configured, so tests / local / unconfigured envs are
 # unaffected. Must run before Mangum wraps the app so request-flush middleware and
 # FastAPI instrumentation are in place.
 from telemetry import init_tracing  # noqa: E402

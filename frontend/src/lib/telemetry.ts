@@ -1,8 +1,8 @@
 /**
- * Frontend observability — OpenTelemetry tracing + Web Vitals → Axiom (FE-029).
+ * Frontend observability — OpenTelemetry tracing + Web Vitals → Better Stack (FE-029).
  *
  * Spans are exported (OTLP/HTTP) to a **same-origin** `/ingest/traces` proxy
- * (`VITE_TRACES_URL`) which injects the Axiom token + dataset server-side, so no
+ * (`VITE_TRACES_URL`) which injects the Better Stack source token server-side, so no
  * secret is ever shipped to the browser and the existing CSP (`connect-src 'self'`)
  * already covers it.
  *
@@ -50,7 +50,7 @@ function tracesUrl(): string | undefined {
   if (explicit && explicit.length > 0) return explicit;
   // Production builds default to the same-origin Cloudflare proxy, so telemetry is
   // on in prod with no build-time env var required (the proxy acks 204 until the
-  // Worker's AXIOM_API_TOKEN secret is set, so it's safe before that's configured).
+  // Worker's OTEL_EXPORTER_TOKEN secret is set, so it's safe before that's configured).
   if (import.meta.env.PROD) return '/ingest/traces';
   return undefined;
 }

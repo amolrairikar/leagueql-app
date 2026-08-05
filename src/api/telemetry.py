@@ -1,21 +1,21 @@
-"""OpenTelemetry distributed tracing for the API Lambda → Axiom (BE-020).
+"""OpenTelemetry distributed tracing for the API Lambda → Better Stack (BE-020).
 
-The provider/exporter, Axiom gating, and ``botocore``/``requests`` instrumentation
-live in the shared :mod:`common.tracing` (also used by the async onboarding chain,
-BE-020). This module adds the **FastAPI-specific** pieces on top: auto-instrumenting
-the app and force-flushing spans per request. The trace started here is continued
-through the async chain via W3C context propagation (see BE-020).
+The provider/exporter, endpoint/token gating, and ``botocore``/``requests``
+instrumentation live in the shared :mod:`common.tracing` (also used by the async
+onboarding chain, BE-020). This module adds the **FastAPI-specific** pieces on top:
+auto-instrumenting the app and force-flushing spans per request. The trace started
+here is continued through the async chain via W3C context propagation (see BE-020).
 
 Design notes:
 - No ``opentelemetry`` import happens at module load. The SDK / instrumentation are
   imported **lazily inside** :func:`_install_tracing` (and :mod:`common.tracing`),
-  and only after the Axiom token + dataset gate passes. So importing this module
-  never requires the OTel packages, and the disabled path (unit tests, the Behave
+  and only after the endpoint + token gate passes. So importing this module never
+  requires the OTel packages, and the disabled path (unit tests, the Behave
   component suite, any unconfigured env) is a true no-op that makes zero network
   calls and instruments nothing.
-- The Axiom ingest token is sensitive: it is fetched at runtime from SSM by parameter
-  *name* via :func:`common.secrets.get_secret_from_env_param` — never an env var /
-  TF state / CI value.
+- The OTLP ingest (source) token is sensitive: it is fetched at runtime from SSM by
+  parameter *name* via :func:`common.secrets.get_secret_from_env_param` — never an
+  env var / TF state / CI value.
 - Spans are force-flushed per request because the Lambda execution environment freezes
   between invocations; otherwise buffered spans would be stranded and lost.
 """
@@ -29,7 +29,7 @@ _initialized = False
 
 
 def init_tracing(app) -> bool:
-    """Install OTel tracing on the FastAPI ``app`` and export spans to Axiom.
+    """Install OTel tracing on the FastAPI ``app`` and export spans to Better Stack.
 
     A no-op (returns ``False``) when tracing is not configured or already initialized.
     Returns ``True`` when instrumentation was installed.
@@ -46,7 +46,7 @@ def init_tracing(app) -> bool:
 
     try:
         if not is_enabled():
-            logger.info("OTel tracing disabled: no Axiom token/dataset configured")
+            logger.info("OTel tracing disabled: no OTLP endpoint/token configured")
             return False
         _install_tracing(app)
     except Exception:
@@ -60,7 +60,7 @@ def init_tracing(app) -> bool:
         return False
 
     _initialized = True
-    logger.info("OTel tracing enabled → Axiom dataset %s", tracing._AXIOM_DATASET)
+    logger.info("OTel tracing enabled → %s", tracing._OTLP_ENDPOINT)
     return True
 
 

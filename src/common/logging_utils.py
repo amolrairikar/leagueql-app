@@ -25,7 +25,7 @@ correlation_id_var: ContextVar[str] = ContextVar("correlation_id", default="")
 def _active_trace_ids() -> dict[str, str]:
     """Return ``{"trace_id", "span_id"}`` for the active span, or ``{}``.
 
-    Lets a CloudWatch log line be pivoted to its Axiom trace and back. Empty when
+    Lets a CloudWatch log line be pivoted to its Better Stack trace and back. Empty when
     OTel is unavailable or no valid span is active (e.g. untraced invocations).
     """
     if _otel_trace is None:
