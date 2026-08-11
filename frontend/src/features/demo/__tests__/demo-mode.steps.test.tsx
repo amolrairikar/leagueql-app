@@ -2,8 +2,10 @@ import { screen } from '@testing-library/react';
 import { defineFeature, loadFeature } from 'jest-cucumber';
 
 import HomePage from '../../home_page/home-page';
+import LeagueQLLanding from '../../landing_page/landing-page';
 import Transactions from '../../transactions/transactions';
 
+import { isDemoMode } from '@/lib/cookie-handler';
 import {
   DEMO_LEAGUE_ID,
   DEMO_PLATFORM,
@@ -65,6 +67,26 @@ defineFeature(feature, (test) => {
       // button / summary column).
       const cards = await screen.findAllByText('Trade');
       expect(cards.length).toBeGreaterThan(0);
+    });
+  });
+
+  test('Returning to the landing page exits demo mode', ({
+    given,
+    when,
+    then,
+  }) => {
+    // The landing page is never part of the demo experience, so mounting it clears
+    // the demo_mode cookie regardless of how the user got there (header link, back
+    // button, direct visit) — not just via the sidebar "Exit Demo" button.
+    given('demo mode is active', () => {
+      setDemoMode();
+      expect(isDemoMode()).toBe(true);
+    });
+    when('I open the landing page', async () => {
+      await renderRoute(<LeagueQLLanding />, { route: '/' });
+    });
+    then('demo mode is no longer active', () => {
+      expect(isDemoMode()).toBe(false);
     });
   });
 });

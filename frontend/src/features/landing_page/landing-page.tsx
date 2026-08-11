@@ -23,7 +23,12 @@ import { pollForCompletion } from '@/features/connect_league/poll';
 import { FEATURES } from '@/features/landing_page/constants';
 import type { Feature } from '@/features/landing_page/types';
 import { ApiError } from '@/lib/api-client';
-import { setDemoMode, setLeagueCookies } from '@/lib/cookie-handler';
+import {
+  clearAllLeagueCookies,
+  isDemoMode,
+  setDemoMode,
+  setLeagueCookies,
+} from '@/lib/cookie-handler';
 import { DEMO_SEASONS } from '@/lib/demo-constants';
 
 const LOADING_PHASES = [
@@ -92,6 +97,16 @@ export default function LeagueQLLanding() {
   const loadingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
     null,
   );
+
+  // Reaching the landing page is a demo-mode exit path. The landing page is never
+  // part of the demo experience, so any of the ways a user can arrive here — the
+  // "LeagueQL" header link, the browser back button, or a direct visit — should
+  // clear lingering demo state. Otherwise the 24h `demo_mode` cookie survives and
+  // a subsequently connected live league is served demo fixtures / bypasses auth
+  // (FE-015). Only the dedicated "Exit Demo" button previously did this cleanup.
+  useEffect(() => {
+    if (isDemoMode()) clearAllLeagueCookies();
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
