@@ -21,7 +21,11 @@ reminds the user they're viewing sample data.
 - **No real API calls:** queries resolve from demo fixtures, not live endpoints.
 - **Connect/refresh in demo mode:** onboarding/refresh/migrate actions are disabled or
   redirected (no real backend mutation).
-- **Exiting demo mode:** returning to the real app clears demo state.
+- **Exiting demo mode:** returning to the real app clears demo state. This is not
+  limited to the sidebar "Exit Demo" button — reaching the landing page by any path
+  (the "LeagueQL" header link, the browser back button, or a direct visit) also
+  clears demo state, so the 24h `demo_mode` cookie can't leak into a subsequently
+  connected live league (serving demo fixtures / bypassing auth).
 - **Banner visibility:** the demo banner shows on every in-app page while demo mode is active.
 
 ## Acceptance Criteria
@@ -31,6 +35,8 @@ reminds the user they're viewing sample data.
 - [ ] Live API calls are not made for demo data.
 - [ ] The Sleeper-only Transactions page renders sample transactions in demo mode
       (the demo dataset includes a `TRANSACTIONS#2025` bucket).
+- [ ] Returning to the landing page while demo mode is active clears demo state, so
+      a league connected afterward is treated as live (no demo cookie, no fixtures).
 
 ## Sources
 `src/lib/cookie-handler.ts`, `src/lib/demo-api.ts`, `src/lib/demo-constants.ts`, `src/app/app.tsx`.
