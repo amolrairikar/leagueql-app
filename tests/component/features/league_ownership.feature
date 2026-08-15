@@ -53,6 +53,8 @@ Feature: League ownership and ESPN read authorization (LQL-01 / BE-016)
     Given the request is authenticated as "owner_user"
     When I POST a transfer token for league "100" on "ESPN"
     Then the API responds with status 200
+    # The secret token response falls back to the default-deny cache policy (BE-024).
+    And the response has Cache-Control "no-store"
     Given the request is authenticated as "new_owner"
     When I claim ownership of league "100" on "ESPN" with the minted token
     Then the API responds with status 200

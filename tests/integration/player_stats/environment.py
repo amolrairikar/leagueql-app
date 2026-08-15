@@ -55,6 +55,6 @@ def after_scenario(context, scenario):
     if test_key:
         try:
             context.s3_client.delete_object(Bucket=context.s3_bucket, Key=test_key)
-        except Exception:
+        except Exception:  # noqa: S110 — best-effort teardown cleanup, intentionally swallowed
             # Best-effort cleanup — never fail the suite on teardown.
             pass

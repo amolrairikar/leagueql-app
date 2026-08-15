@@ -14,6 +14,48 @@ class TestHealthEndpoint:
         assert response.json()["detail"] == "Healthy!"
 
 
+class TestSecurityHeaders:
+    """Every response carries the hardening headers and a default-deny cache (BE-024)."""
+
+    EXPECTED = {
+        "x-content-type-options": "nosniff",
+        "content-security-policy": (
+            "default-src 'none'; frame-ancestors 'none'; base-uri 'none'"
+        ),
+        "strict-transport-security": "max-age=63072000; includeSubDomains",
+        "x-frame-options": "DENY",
+    }
+
+    def test_security_headers_present_on_every_response(self, client):
+        response = client.get("/health")
+        assert response.status_code == 200
+        for header, value in self.EXPECTED.items():
+            assert response.headers.get(header) == value, dict(response.headers)
+
+    def test_security_headers_present_on_error_response(self, client, mock_table):
+        # 404 error responses are stamped too (the middleware wraps the whole app).
+        mock_table.get_item.return_value = {}
+        response = client.get("/leagues/999?platform=SLEEPER")
+        assert response.status_code == 404
+        for header, value in self.EXPECTED.items():
+            assert response.headers.get(header) == value, dict(response.headers)
+
+    def test_cache_control_defaults_to_no_store(self, client):
+        # A route that sets no Cache-Control of its own falls back to no-store.
+        response = client.get("/health")
+        assert response.headers["cache-control"] == "no-store"
+
+    def test_default_does_not_override_route_cache_control(
+        self, client, mock_table, league_lookup_item
+    ):
+        # The query route's private, max-age=300 opt-in must survive the default.
+        mock_table.get_item.return_value = {"Item": league_lookup_item}
+        mock_table.query.return_value = {"Items": [{"data": [{"a": 1}]}]}
+        response = client.get("/leagues/123/query?platform=SLEEPER&queryType=MATCHUPS")
+        assert response.status_code == 200
+        assert response.headers["cache-control"] == "private, max-age=300"
+
+
 class TestFeatureFlagsEndpoint:
     """GET /feature-flags is public (no auth) and returns the global flag map."""
 

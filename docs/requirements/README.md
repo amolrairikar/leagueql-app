@@ -39,6 +39,7 @@ criteria. Frontend, backend, and extension features are kept separate.
 | [BE-020](backend/BE-020-backend-otel-tracing.md) | Backend OpenTelemetry Tracing → Better Stack (API + async chain) |
 | [BE-022](backend/BE-022-yahoo-oauth.md) | Yahoo OAuth Authorization & Token Management |
 | [BE-023](backend/BE-023-api-health-check-alerting.md) | API Health Check & Uptime Alerting (public `/health` for external monitor) |
+| [BE-024](backend/BE-024-api-security-headers.md) | API Security Response Headers & Cache-Control Policy |
 
 ## Frontend (`frontend/`)
 | ID | Feature |
