@@ -1,0 +1,11 @@
+# Gitleaks configuration for LeagueQL.
+# Extends the bundled default ruleset and adds narrow allowlists for known
+# false positives. Keep allowlists as specific as possible — prefer a regex on
+# the matched value over muting an entire file, so real secrets stay in scope.
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "boto3 SSM `WithDecryption=True` keyword arg trips generic-api-key in secrets unit tests"
+regexes = ['''WithDecryption=True''']

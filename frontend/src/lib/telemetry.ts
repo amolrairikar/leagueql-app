@@ -128,6 +128,7 @@ export function initTelemetry(): void {
       new FetchInstrumentation({
         // Inject W3C `traceparent` only on API calls so the API Lambda span
         // (BE-020) continues this trace; never leak it to third parties.
+        // eslint-disable-next-line security/detect-non-literal-regexp -- input is a build-time constant and escaped via escapeRegExp.
         propagateTraceHeaderCorsUrls: [new RegExp(escapeRegExp(API_BASE_URL))],
       }),
     ],

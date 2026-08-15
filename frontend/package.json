@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "lint": "eslint .",
+    "lint": "eslint . --max-warnings 0",
     "format:check": "prettier --check .",
     "format:fix": "prettier --write .",
     "preview": "vite preview",
@@ -70,6 +70,7 @@
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.2",
+    "eslint-plugin-security": "4.0.1",
     "eslint-plugin-tsdoc": "^0.5.2",
     "globals": "^17.4.0",
     "jest-cucumber": "4.5.0",
