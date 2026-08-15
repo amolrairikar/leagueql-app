@@ -146,6 +146,44 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type", "traceparent", "tracestate"],
 )
 
+# --- Security response headers (BE-024) --------------------------------------
+# Stamped on every response by the middleware below. This is a JSON API (no HTML
+# rendering) reached cross-origin via fetch from the SPA, so these are
+# defense-in-depth for the edge case where a browser is tricked into treating an
+# API response as a document:
+#   - nosniff  stops a JSON body being MIME-sniffed into executable HTML/JS.
+#   - CSP      locks everything to 'none' so an accidental/error HTML body is
+#              inert and the response can't be framed (frame-ancestors 'none').
+#   - HSTS     pins HTTPS so the bearer (Clerk JWT) never rides a plaintext
+#              request an active MITM could downgrade/strip.
+#   - X-Frame-Options  legacy clickjacking cover for browsers that ignore
+#                      CSP frame-ancestors.
+SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",
+    "Strict-Transport-Security": "max-age=63072000; includeSubDomains",
+    "X-Frame-Options": "DENY",
+}
+
+
+@app.middleware("http")
+async def _security_headers(request, call_next):
+    """Stamp security headers on every response and default caching to deny (BE-024).
+
+    Uses ``setdefault`` so route-level intent always wins: ``GET
+    /leagues/{id}/query`` keeps its ``private, max-age=300`` opt-in, while every
+    other response — including secret-bearing ones like ``POST
+    /leagues/{id}/transfer-token`` — falls back to ``no-store``. This default-deny
+    is the outcome of the Cache-Control audit: authenticated/private responses are
+    never cacheable unless a route deliberately opts in.
+    """
+    response = await call_next(request)
+    for header, value in SECURITY_HEADERS.items():
+        response.headers.setdefault(header, value)
+    response.headers.setdefault("Cache-Control", "no-store")
+    return response
+
+
 REFRESH_COOLDOWN_MINUTES = 30
 
 SLEEPER_STATE_URL = "https://api.sleeper.app/v1/state/nfl"

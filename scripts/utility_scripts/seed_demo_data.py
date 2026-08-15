@@ -1182,7 +1182,7 @@ def build_season_items(
 
     # Separate auction-format draft dataset (DRAFT_AUCTION#<season>), demo only.
     # Seeded per season so the bids are deterministic across runs.
-    auction_rng = random.Random(SEED + int(season))
+    auction_rng = random.Random(SEED + int(season))  # noqa: S311 — demo data, not crypto
     auction_data = build_auction_draft_rows(draft_data, auction_rng)
     items.append({"PK": pk, "SK": f"DRAFT_AUCTION#{season}", "data": auction_data})
 
@@ -1398,7 +1398,7 @@ def build_all_items() -> list[dict]:
 
     # ESPN seasons 2022–2024
     for season_idx, season in enumerate(SEASONS):
-        rng = random.Random(SEED + season_idx)
+        rng = random.Random(SEED + season_idx)  # noqa: S311 — demo data, not crypto
         owners = get_owners(season)
         logger.info("Season %s: drafting and simulating...", season)
 
@@ -1418,7 +1418,7 @@ def build_all_items() -> list[dict]:
 
     # Sleeper season 2025
     sleeper_owners = get_sleeper_owners()
-    rng_2025 = random.Random(SEED + len(SEASONS))
+    rng_2025 = random.Random(SEED + len(SEASONS))  # noqa: S311 — demo data, not crypto
     logger.info("Season 2025 (Sleeper): drafting and simulating...")
     draft_picks_2025, rosters_2025 = build_draft(
         sleeper_owners, rng_2025, prev_standings
@@ -1437,7 +1437,7 @@ def build_all_items() -> list[dict]:
 
     # Transactions are Sleeper-only (ESPN exposes none), so they exist only for
     # the 2025 Sleeper season. Seeded separately so bids/timestamps are stable.
-    txn_rng = random.Random(SEED + 100)
+    txn_rng = random.Random(SEED + 100)  # noqa: S311 — demo data, not crypto
     txn_data = build_transactions(
         "2025", sleeper_owners, rosters_2025, draft_picks_2025, txn_rng
     )

@@ -66,7 +66,9 @@ def run_build() -> None:
 
     logger.info("Building extension (npm run build)…")
     try:
-        subprocess.run([npm, "run", "build"], cwd=EXTENSION_DIR, check=True)
+        # S603: not untrusted input — `npm` is resolved via shutil.which above and
+        # the args are hardcoded ("run", "build"). Dev-only build script.
+        subprocess.run([npm, "run", "build"], cwd=EXTENSION_DIR, check=True)  # noqa: S603
     except subprocess.CalledProcessError as exc:
         logger.error("Build failed with exit code %d.", exc.returncode)
         sys.exit(exc.returncode)

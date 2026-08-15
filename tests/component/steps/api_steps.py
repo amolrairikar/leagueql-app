@@ -221,6 +221,21 @@ def step_cache_control(context, value):
     )
 
 
+@then("the response carries the standard security headers")
+def step_security_headers(context):
+    expected = {
+        "x-content-type-options": "nosniff",
+        "content-security-policy": (
+            "default-src 'none'; frame-ancestors 'none'; base-uri 'none'"
+        ),
+        "strict-transport-security": "max-age=63072000; includeSubDomains",
+        "x-frame-options": "DENY",
+    }
+    headers = context.response.headers
+    for header, value in expected.items():
+        assert headers.get(header) == value, dict(headers)
+
+
 @then('no DynamoDB items remain for league "{canonical}"')
 def step_no_items(context, canonical):
     table = context.ddb_resource.Table(context.table_name)
