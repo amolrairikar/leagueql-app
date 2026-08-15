@@ -24,7 +24,7 @@ export default function Footer({ className }: { className?: string }) {
       <AboutDialog open={aboutOpen} onOpenChange={setAboutOpen} />
       <footer
         className={cn(
-          'relative z-10 border-t border-border px-8 py-8 flex items-center justify-center',
+          'relative z-10 border-t border-border bg-background/80 backdrop-blur-md px-8 h-15 flex items-center justify-center',
           className,
         )}
       >
