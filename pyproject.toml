@@ -1,3 +1,9 @@
 [tool.pytest.ini_options]
 pythonpath = [".", "src", "src/api", "src/processor", "src/onboarder"]
 asyncio_mode = "auto"
+
+[tool.ruff.lint]
+extend-select = ["S"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]   # allow assert in tests

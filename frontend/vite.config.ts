@@ -26,6 +26,8 @@ function headersDevApiOrigin(): Plugin {
     },
     closeBundle() {
       const headersPath = path.resolve(outDir, '_headers');
+      /* eslint-disable security/detect-non-literal-fs-filename --
+         Build-time only; path is derived from the fixed build outDir. */
       if (!fs.existsSync(headersPath)) return;
       const contents = fs.readFileSync(headersPath, 'utf8');
       const replacement = devApiUrl ? ` ${devApiUrl} ` : ' ';
@@ -33,6 +35,7 @@ function headersDevApiOrigin(): Plugin {
         headersPath,
         contents.replace(/ ?__VITE_DEV_API_URL__ ?/g, replacement),
       );
+      /* eslint-enable security/detect-non-literal-fs-filename */
     },
   };
 }

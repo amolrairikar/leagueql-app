@@ -15,6 +15,10 @@ repos:
       - id: check-toml
       - id: check-yaml
       - id: detect-aws-credentials
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
   - repo: https://github.com/compilerla/conventional-pre-commit
     rev: v4.2.0
     hooks:
@@ -47,10 +51,17 @@ repos:
         entry: bash -c "cd infrastructure/modules && terraform validate"
         language: system
         types: [terraform]
+      - id: npm-lint
+        name: Run npm lint
+        description: Runs ESLint (security + React rules, --max-warnings 0) before committing.
+        entry: cd frontend && npm run lint
+        language: system
+        files: \.(js|jsx|ts|tsx)$
+        pass_filenames: false
       - id: npm-build
         name: Run npm build
         description: Runs npm run build to ensure the project compiles before committing.
         entry: cd frontend && npm run build
         language: system
-        files: \.(js|jsx|ts|tsx)$ 
+        files: \.(js|jsx|ts|tsx)$
         pass_filenames: false

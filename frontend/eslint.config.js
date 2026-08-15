@@ -8,6 +8,7 @@ import importPlugin from 'eslint-plugin-import-x';
 import checkFile from 'eslint-plugin-check-file';
 import tsdoc from 'eslint-plugin-tsdoc';
 import noSecrets from 'eslint-plugin-no-secrets';
+import security from 'eslint-plugin-security';
 import react from 'eslint-plugin-react';
 import eslintPluginPrettierRecommended from 'eslint-plugin-prettier/recommended';
 
@@ -25,6 +26,7 @@ export default defineConfig([
   ...tseslint.configs.stylisticTypeChecked,
   react.configs.flat.recommended,
   react.configs.flat['jsx-runtime'],
+  security.configs.recommended,
 
   {
     files: ['**/*.{ts,tsx}'],
@@ -76,6 +78,11 @@ export default defineConfig([
       ],
       'tsdoc/syntax': 'warn',
       'no-secrets/no-secrets': 'error',
+      // Flag dangerouslySetInnerHTML (XSS); not enabled by react recommended.
+      'react/no-danger': 'error',
+      // Too noisy in a typed codebase: flags every dynamic bracket access,
+      // whose key types are already statically constrained by TypeScript.
+      'security/detect-object-injection': 'off',
     },
   },
 
@@ -89,6 +96,8 @@ export default defineConfig([
       '@typescript-eslint/no-unsafe-return': 'off',
       '@typescript-eslint/no-unsafe-argument': 'off',
       '@typescript-eslint/no-explicit-any': 'off',
+      // Test files build regexes from trusted fixture data.
+      'security/detect-non-literal-regexp': 'off',
     },
   },
 
