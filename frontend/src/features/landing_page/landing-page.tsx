@@ -245,7 +245,7 @@ export default function LeagueQLLanding() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground font-sans overflow-x-hidden">
+    <div className="min-h-screen flex flex-col bg-background text-foreground font-sans overflow-x-hidden">
       <div
         className="fixed inset-0 pointer-events-none z-0"
         style={{
@@ -406,7 +406,7 @@ export default function LeagueQLLanding() {
         </div>
       </section>
 
-      <Footer />
+      <Footer className="mt-auto" />
 
       <style>{`
         @keyframes fadeUp {
