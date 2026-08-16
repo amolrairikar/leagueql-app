@@ -66,8 +66,10 @@ the form (so the user isn't re-prompted), as a safety net for direct navigation.
   already-entered cookies. ESPN-rejected cookies surface the failure inline.
 - **Validation:** league ID must be numeric; ESPN requires a latest season, which must be a
   4-digit year (`^\d{4}$`) — a missing value shows "Latest season is required" and a
-  non-4-digit value shows "Latest season must be a 4-digit year". The input is numeric
-  (`inputMode="numeric"`) and capped at 4 characters.
+  non-4-digit value shows "Latest season must be a 4-digit number (e.g. 2026)". The input is
+  numeric (`inputMode="numeric"`) and is **not** length-capped: typing more (or fewer) than 4
+  digits is allowed but surfaces the inline error live as the user types (validated on change),
+  rather than silently blocking further input.
 - **Demo mode:** connecting is disabled/redirected in demo mode.
 
 ## Acceptance Criteria
@@ -79,8 +81,9 @@ the form (so the user isn't re-prompted), as a safety net for direct navigation.
       backend-provided failure message.
 - [ ] Polling persists long enough to capture completion of slow (~120s) jobs.
 - [ ] Pre-filled platform/league ID fields are locked.
-- [ ] The ESPN latest season field rejects a non-4-digit value with an inline validation error
-      and only accepts a 4-digit year.
+- [ ] The ESPN latest season field lets the user type any number of digits, and surfaces an
+      inline validation error ("...must be a 4-digit number (e.g. 2026)") live as they type
+      when the value is not exactly a 4-digit year.
 - [ ] On success the user is routed into the app (home), with cached API reads cleared so the
       dashboard reflects the freshly onboarded/refreshed data.
 - [ ] A non-owner opening an already-onboarded league is routed to the dashboard without an

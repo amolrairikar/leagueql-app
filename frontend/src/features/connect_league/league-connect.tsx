@@ -86,9 +86,7 @@ function CopyOperationId({ operationId }: { operationId: string }) {
               )}
             </Button>
           </TooltipTrigger>
-          <TooltipContent>
-            {copied ? 'Copied!' : 'Copy operation ID'}
-          </TooltipContent>
+          <TooltipContent>{copied ? 'Copied!' : 'Copy ID'}</TooltipContent>
         </Tooltip>
       </TooltipProvider>
     </span>
@@ -124,6 +122,7 @@ export default function LeagueConnect() {
     register,
     handleSubmit,
     setValue,
+    trigger,
     formState: { errors, isSubmitting },
   } = useForm<LeagueConnectFormValues>({
     resolver: zodResolver(leagueConnectSchema),
@@ -384,9 +383,14 @@ export default function LeagueConnect() {
                       id="latest-season"
                       type="text"
                       inputMode="numeric"
-                      maxLength={4}
                       placeholder="Enter the latest season your league was active"
-                      {...register('latestSeason')}
+                      {...register('latestSeason', {
+                        // Validate live so typing more (or fewer) than 4 digits
+                        // surfaces the inline error instead of being silently blocked.
+                        onChange: () => {
+                          void trigger('latestSeason');
+                        },
+                      })}
                     />
                     {espnErrors.latestSeason && (
                       <p className="text-sm text-destructive">
@@ -537,24 +541,23 @@ export default function LeagueConnect() {
                   {failureReason
                     ? `${failureReason} `
                     : lastRequestType === 'REFRESH'
-                      ? 'League refresh failed. Please try again, or contact '
-                      : 'League onboarding failed. Please try again, or contact '}
-                  {!failureReason && (
-                    <a
-                      href="mailto:support@leagueql.com"
-                      className="underline underline-offset-4"
-                    >
-                      support
-                    </a>
-                  )}
+                      ? 'League refresh failed. Please try again. '
+                      : 'League onboarding failed. Please try again. '}
+                  If the error persists, contact{' '}
+                  <a
+                    href="mailto:support@leagueql.com"
+                    className="underline underline-offset-4"
+                  >
+                    support
+                  </a>
                   {operationId ? (
                     <>
                       {' '}
-                      and provide the below operation ID if the error persists:{' '}
+                      and provide the below ID:{' '}
                       <CopyOperationId operationId={operationId} />
                     </>
                   ) : (
-                    ' if the error persists.'
+                    '.'
                   )}
                 </AlertDescription>
               </Alert>
