@@ -8,6 +8,7 @@
 | Billing mode | On-demand (pay-per-request) |
 | Primary key | `PK` (String) + `SK` (String) |
 | GSIs | `GSI1` - Get all league IDs for a canonical league ID; `GSI2` - Look up a league by platform and league ID |
+| TTL | Enabled on the `ttl` attribute (Unix epoch seconds). Only JOB_STATUS items set it, so old onboard/refresh/migrate jobs are reaped ~24h after their last write; items without a `ttl` attribute never expire |
 
 ---
 
@@ -35,8 +36,9 @@
 
 ## Items
 
-All items (with the exception of LEAGUE_COUNT) share the same partition key format
-`LEAGUE#{leagueId}#`. The sort key determines the item type.
+Most items share the same partition key format `LEAGUE#{leagueId}`, with the sort key
+determining the item type. The exceptions are LEAGUE_COUNT (`APP#STATS`) and JOB_STATUS
+(`JOB#{correlation_id}`), which are keyed independently of any single league.
 
 <details>
 <summary><b>LEAGUE_COUNT</b></summary>
@@ -131,6 +133,10 @@ the league will not appear as onboarded and a retry will re-run the full onboard
 | `members` | String Set | No | Clerk user IDs entitled to **read** an ESPN league (BE-016). Seeded with the owner at onboard; a verified caller is `ADD`ed via `POST /leagues/{id}/verify-membership`. Unused for Sleeper (Sleeper reads are open). |
 | `transfer_token_hash` | String | No | sha256 of an outstanding ownership-transfer token (BE-016). Plaintext is never stored; set by `POST /leagues/{id}/transfer-token` and removed when redeemed. |
 | `transfer_token_expires_at` | String | No | ISO 8601 (UTC) expiry of the outstanding transfer token (BE-016). |
+| `active_job_id` | String | No | Concurrency-guard pointer to the league's most recently started in-flight job. Holds the `correlation_id` of the current onboard/refresh/migrate; the API dereferences it to the `JOB#{correlation_id}` / `JOB_STATUS` item and rejects a duplicate request only while that job is `IN_PROGRESS`. Written best-effort on job start; stale pointers self-heal because the JOB_STATUS item carries a 24h TTL. |
+| `active_platform` | String | No | Current platform the league is served from after an ESPN → Sleeper migration. Set to the destination platform when a migration is initiated; before any migration `platform` is authoritative. Enum: `ESPN`, `SLEEPER`. |
+| `migrated_from` | String | No | Source platform recorded when a league is migrated to a new platform (e.g. `ESPN` when migrating ESPN → Sleeper). Enum: `ESPN`, `SLEEPER`. |
+| `migrated_at` | String | No | ISO 8601 (UTC) timestamp of when a platform migration was initiated (set together with `active_platform` and `migrated_from`). |
 
 **Example:**
 ```json
@@ -657,6 +663,51 @@ Stores the manager identity mapping created when a league migrates from one plat
       "displayName": "formeruser456"
     }
   ]
+}
+```
+</details>
+
+<details>
+<summary><b>JOB_STATUS</b></summary>
+
+Tracks the lifecycle of a single onboard/refresh/migrate job so the frontend can poll it
+(`GET /jobs/{jobId}`) and surface a real failure reason. Keyed by `correlation_id` — the only
+identifier known end-to-end at job-creation time, even before a league lookup record exists
+(e.g. a brand-new onboard). The API creates the item as `IN_PROGRESS` when it triggers a job;
+the onboarder / processor later upsert it to `COMPLETED` / `FAILED`. All writes are best-effort
+(a failed write is logged and swallowed, never crashing the Lambda), and every write refreshes
+the 24h TTL so old jobs self-clean. The METADATA `active_job_id` field points at the current
+job's item.
+
+| Attribute | Type | Required | Description |
+|---|---|---|---|
+| `PK` | String | Yes | `JOB#{correlation_id}` |
+| `SK` | String | Yes | `JOB_STATUS` |
+| `status` | String | Yes | Job lifecycle state. Enum: `IN_PROGRESS`, `COMPLETED`, `FAILED` |
+| `request_type` | String | Yes | The triggering request. Enum: `ONBOARD`, `REFRESH`, `MIGRATE`. Set by the creator; preserved on terminal writes that omit it |
+| `created_at` | String | Yes | ISO 8601 (UTC) timestamp of when the job was created (`if_not_exists`, so preserved across upserts) |
+| `updated_at` | String | Yes | ISO 8601 (UTC) timestamp of the most recent write |
+| `ttl` | Number | Yes | Unix epoch seconds after which DynamoDB TTL reaps the item (24h from the last write) |
+| `failure_code` | String | No | Machine-readable failure classification, only set on `FAILED`. Enum: `INVALID_INPUT`, `ESPN_AUTH`, `NOT_FOUND`, `NOT_STARTED`, `UPSTREAM`, `PROCESSING`, `INTERNAL` |
+| `failure_reason` | String | No | User-facing failure message derived from `failure_code`. Never contains raw exception detail, credentials, or stack traces |
+| `league_id` | String | No | Platform league ID, recorded for observability when known |
+| `platform` | String | No | Platform the job targets (observability). Enum: `ESPN`, `SLEEPER` |
+| `canonical_league_id` | String | No | Canonical league ID, recorded for observability when known |
+
+**Example:**
+```json
+{
+  "PK": "JOB#8f2c1a90-2b7e-4d3a-9c1e-0a1b2c3d4e5f",
+  "SK": "JOB_STATUS",
+  "status": "FAILED",
+  "request_type": "ONBOARD",
+  "created_at": "2024-09-01T00:00:00Z",
+  "updated_at": "2024-09-01T00:00:12Z",
+  "ttl": 1725238812,
+  "failure_code": "NOT_FOUND",
+  "failure_reason": "We couldn't find that league on ESPN. Please confirm the league ID is correct.",
+  "league_id": "123456789",
+  "platform": "ESPN"
 }
 ```
 </details>
