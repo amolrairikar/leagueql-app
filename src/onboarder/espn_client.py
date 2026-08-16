@@ -292,6 +292,7 @@ class ESPNClient:
         async with semaphore:
             try:
                 data = await fetch_with_retry(session=session, url=url, headers=headers)
+                logger.info("Successfully fetched url: %s", url)
                 if isinstance(data, list):
                     data = data[0]
                 return {"season": season, "data_type": data_type, "data": data}
