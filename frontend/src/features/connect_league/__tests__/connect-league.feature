@@ -11,7 +11,12 @@ Feature: Connect league onboarding flow (FE-002)
   Scenario: Submitting an ESPN league with a non-4-digit latest season shows a validation error
     Given the connect ESPN league form is open
     When I submit the ESPN form with latest season "24"
-    Then I see a validation error "Latest season must be a 4-digit year"
+    Then I see a validation error "Latest season must be a 4-digit number (e.g. 2026)"
+
+  Scenario: Typing more than 4 digits in the latest season field shows a live validation error
+    Given the connect ESPN league form is open
+    When I type latest season "20266" into the ESPN form
+    Then I see a validation error "Latest season must be a 4-digit number (e.g. 2026)"
 
   Scenario: A successful onboard polls to completion and routes home
     Given onboarding will complete successfully

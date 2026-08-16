@@ -178,6 +178,28 @@ defineFeature(feature, (test) => {
     });
   });
 
+  test('Typing more than 4 digits in the latest season field shows a live validation error', ({
+    given,
+    when,
+    then,
+  }) => {
+    given('the connect ESPN league form is open', async () => {
+      window.history.pushState({}, '', '/connect_league?platform=espn');
+      await renderRoute(<LeagueConnect />, { route: '/connect_league' });
+    });
+    when(/^I type latest season "(.*)" into the ESPN form$/, async (season) => {
+      const input = screen.getByPlaceholderText(
+        'Enter the latest season your league was active',
+      );
+      await userEvent.type(input, season);
+      // The field is no longer length-capped, so the full value is accepted.
+      expect(input).toHaveValue(season);
+    });
+    then(/^I see a validation error "(.*)"$/, async (message) => {
+      expect(await screen.findByText(message)).toBeInTheDocument();
+    });
+  });
+
   test('A successful onboard polls to completion and routes home', ({
     given,
     when,

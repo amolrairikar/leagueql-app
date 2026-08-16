@@ -206,14 +206,15 @@ export default function LeagueQLLanding() {
           } else {
             setError(
               <>
-                League onboarding failed. Please try again or{' '}
+                League onboarding failed. Please try again. If the error
+                persists, contact{' '}
                 <a
                   href="mailto:support@leagueql.com"
                   className="underline underline-offset-4"
                 >
-                  contact support
-                </a>{' '}
-                if the error persists.
+                  support
+                </a>
+                .
               </>,
             );
           }
@@ -228,14 +229,15 @@ export default function LeagueQLLanding() {
         // form) rather than the rarely-actionable backend detail.
         setError(
           <>
-            Something went wrong connecting your league. Please try again or{' '}
+            Something went wrong connecting your league. Please try again. If
+            the error persists, contact{' '}
             <a
               href="mailto:support@leagueql.com"
               className="underline underline-offset-4"
             >
-              contact support
-            </a>{' '}
-            if the error persists.
+              support
+            </a>
+            .
           </>,
         );
       }

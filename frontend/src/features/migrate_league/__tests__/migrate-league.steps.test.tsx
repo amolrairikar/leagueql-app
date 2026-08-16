@@ -121,7 +121,7 @@ defineFeature(feature, (test) => {
     });
   });
 
-  test('A non-4-digit ESPN latest season shows a validation error', ({
+  test('A non-4-digit ESPN latest season shows a live validation error', ({
     given,
     when,
     then,
@@ -134,8 +134,8 @@ defineFeature(feature, (test) => {
     });
 
     when(
-      /^I advance the wizard for ESPN league "(.*)" with latest season "(.*)"$/,
-      async (id, season) => {
+      /^I type latest season "(.*)" for ESPN league "(.*)"$/,
+      async (season, id) => {
         const user = userEvent.setup();
         await renderRoute(
           <Routes>
@@ -149,21 +149,16 @@ defineFeature(feature, (test) => {
         await user.click(
           await screen.findByRole('button', { name: /^continue$/i }),
         );
-        // Step 2: fill ESPN destination with an invalid (non-4-digit) season
+        // Step 2: fill ESPN destination with an invalid (non-4-digit) season.
+        // The field is no longer length-capped, so the full value is accepted
+        // and the error surfaces live as the user types.
         await user.type(
           screen.getByPlaceholderText('Enter your ESPN league ID'),
           id,
         );
-        await user.type(screen.getByPlaceholderText('e.g. 2025'), season);
-        await user.type(
-          screen.getByPlaceholderText('Enter your SWID'),
-          '{{SWID}}',
-        );
-        await user.type(
-          screen.getByPlaceholderText('Enter your ESPN S2'),
-          's2',
-        );
-        await user.click(screen.getByRole('button', { name: /^next$/i }));
+        const seasonInput = screen.getByPlaceholderText('e.g. 2025');
+        await user.type(seasonInput, season);
+        expect(seasonInput).toHaveValue(season);
       },
     );
 

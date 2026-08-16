@@ -208,6 +208,7 @@ function Step2({
   >(availablePlatforms[0]);
   const [newPlatformLeagueId, setNewPlatformLeagueId] = useState('');
   const [season, setSeason] = useState('');
+  const [seasonError, setSeasonError] = useState<string | null>(null);
   const [swid, setSwid] = useState('');
   const [s2, setS2] = useState('');
   const [loading, setLoading] = useState(false);
@@ -256,7 +257,7 @@ function Step2({
         return;
       }
       if (!/^\d{4}$/.test(season.trim())) {
-        setError('Latest season must be a 4-digit year');
+        setError('Latest season must be a 4-digit number (e.g. 2026)');
         return;
       }
       if (!swid.trim()) {
@@ -362,12 +363,24 @@ function Step2({
               name="migrate-espn-season"
               type="text"
               inputMode="numeric"
-              maxLength={4}
               autoComplete="on"
               placeholder="e.g. 2025"
               value={season}
-              onChange={(e) => setSeason(e.target.value)}
+              onChange={(e) => {
+                const value = e.target.value;
+                setSeason(value);
+                // Validate live so typing more (or fewer) than 4 digits surfaces
+                // the inline error instead of being silently blocked.
+                setSeasonError(
+                  value && !/^\d{4}$/.test(value)
+                    ? 'Latest season must be a 4-digit number (e.g. 2026)'
+                    : null,
+                );
+              }}
             />
+            {seasonError && (
+              <p className="text-sm text-destructive">{seasonError}</p>
+            )}
           </div>
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-1.5">
@@ -786,20 +799,17 @@ function Step5({
     <Alert variant="destructive">
       <AlertTitle>Migration failed</AlertTitle>
       <AlertDescription>
-        {failureReason ? (
-          `${failureReason}`
-        ) : (
-          <>
-            The migration did not complete successfully. Please try again or{' '}
-            <a
-              href="mailto:support@leagueql.com"
-              className="font-medium underline underline-offset-4"
-            >
-              contact support
-            </a>
-          </>
-        )}
-        {operationId ? ` (operation ID ${operationId})` : ''}.
+        {failureReason
+          ? `${failureReason} `
+          : 'The migration did not complete successfully. Please try again. '}
+        If the error persists, contact{' '}
+        <a
+          href="mailto:support@leagueql.com"
+          className="font-medium underline underline-offset-4"
+        >
+          support
+        </a>
+        {operationId ? ` and provide this ID: ${operationId}` : ''}.
       </AlertDescription>
     </Alert>
   );
