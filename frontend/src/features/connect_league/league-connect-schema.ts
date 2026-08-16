@@ -6,7 +6,10 @@ export const leagueConnectSchema = z.discriminatedUnion('platform', [
   z.object({
     platform: z.literal('espn'),
     leagueId: z.string().min(1, 'League ID is required'),
-    latestSeason: z.string().min(1, 'Latest season is required'),
+    latestSeason: z
+      .string()
+      .min(1, 'Latest season is required')
+      .regex(/^\d{4}$/, 'Latest season must be a 4-digit year'),
     swid: z.string().min(1, 'SWID is required'),
     espnS2: z.string().min(1, 'ESPN_S2 is required'),
   }),

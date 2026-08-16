@@ -146,6 +146,38 @@ defineFeature(feature, (test) => {
     });
   });
 
+  test('Submitting an ESPN league with a non-4-digit latest season shows a validation error', ({
+    given,
+    when,
+    then,
+  }) => {
+    given('the connect ESPN league form is open', async () => {
+      window.history.pushState({}, '', '/connect_league?platform=espn');
+      await renderRoute(<LeagueConnect />, { route: '/connect_league' });
+    });
+    when(
+      /^I submit the ESPN form with latest season "(.*)"$/,
+      async (season) => {
+        await userEvent.type(
+          screen.getByPlaceholderText('Enter your league ID'),
+          '100',
+        );
+        await userEvent.type(
+          screen.getByPlaceholderText(
+            'Enter the latest season your league was active',
+          ),
+          season,
+        );
+        await userEvent.click(
+          screen.getByRole('button', { name: /^connect$/i }),
+        );
+      },
+    );
+    then(/^I see a validation error "(.*)"$/, async (message) => {
+      expect(await screen.findByText(message)).toBeInTheDocument();
+    });
+  });
+
   test('A successful onboard polls to completion and routes home', ({
     given,
     when,

@@ -383,6 +383,8 @@ export default function LeagueConnect() {
                     <Input
                       id="latest-season"
                       type="text"
+                      inputMode="numeric"
+                      maxLength={4}
                       placeholder="Enter the latest season your league was active"
                       {...register('latestSeason')}
                     />
