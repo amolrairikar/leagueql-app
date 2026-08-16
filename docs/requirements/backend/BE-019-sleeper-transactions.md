@@ -57,7 +57,10 @@ Each row: `season`, `transaction_id`, `type` (`waiver` | `trade` | `free_agent` 
 - **Multi-roster transactions:** all rosters in `roster_ids` are resolved to team labels;
   unresolvable rosters fall back to `Roster {id}`.
 - **Zero transactions:** a league/season with no completed transactions writes no
-  `TRANSACTIONS#{season}` item; the query 404s (the frontend treats this as empty).
+  `TRANSACTIONS#{season}` item; the query 404s (the frontend treats this as empty). When a
+  league's onboarded seasons carry no completed transactions at all, the `transactions` group
+  is empty and is registered as a typed 0-row view (see `_EMPTY_VIEW_DTYPES`) so the run does
+  not crash on a 0-column DataFrame — it simply produces no rows and no items.
 - **Offseason backfill:** a deep-offseason refresh may fetch no current-season data, but the
   historical season files already in S3 are still rebuilt under `reprocess_all`.
 - **ESPN:** never produces a `TRANSACTIONS` view.

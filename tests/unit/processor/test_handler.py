@@ -511,6 +511,31 @@ class TestRegisterRawDataRegistersViews:
             con.execute("SELECT SUM(position + 1) FROM brackets").fetchone()[0] is None
         )
 
+    def test_empty_transactions_registered_as_typed_view(self, processor_handler):
+        # A Sleeper league whose onboarded seasons carry no completed transactions yields
+        # an empty transactions list; it must still register as a typed view so the
+        # TRANSACTIONS passthrough binds and returns no rows rather than crashing on a
+        # 0-column frame ("Need a DataFrame with at least one column").
+        con = duckdb.connect()
+        grouped = {
+            "transactions": [],
+            "league_name_by_season": {},
+        }
+        with patch.object(
+            processor_handler, "_register_sleeper_raw_data", return_value=grouped
+        ):
+            processor_handler.register_raw_data(
+                [], con, platform="SLEEPER", player_metadata={}, player_stats={}
+            )
+        registered = {row[0] for row in con.execute("SHOW TABLES").fetchall()}
+        assert "transactions" in registered
+        # The TRANSACTIONS transform orders by season/created; both columns must exist and
+        # the empty view must yield no rows.
+        rows = con.execute(
+            "SELECT * FROM transactions ORDER BY season DESC, created DESC"
+        ).fetchall()
+        assert rows == []
+
 
 class TestWriteItems:
     def test_batch_writes_each_item(self, processor_handler):
