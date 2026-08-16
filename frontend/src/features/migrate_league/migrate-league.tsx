@@ -255,6 +255,10 @@ function Step2({
         setError('Season is required for ESPN');
         return;
       }
+      if (!/^\d{4}$/.test(season.trim())) {
+        setError('Latest season must be a 4-digit year');
+        return;
+      }
       if (!swid.trim()) {
         setError('SWID is required for ESPN');
         return;
@@ -357,6 +361,8 @@ function Step2({
               id="espn-season"
               name="migrate-espn-season"
               type="text"
+              inputMode="numeric"
+              maxLength={4}
               autoComplete="on"
               placeholder="e.g. 2025"
               value={season}

@@ -18,7 +18,9 @@ submits to `POST /leagues/{leagueId}/migrate` and polls until the job completes.
 - **Manager left the league:** mapping must allow marking a manager as not returning
   (`__not_returning__`).
 - **ESPN destination:** requires season + `s2`/`swid`; fetch destination members via the
-  ESPN members proxy.
+  ESPN members proxy. The latest season must be a 4-digit year (`^\d{4}$`) — a missing value
+  shows "Season is required for ESPN" and a non-4-digit value shows "Latest season must be a
+  4-digit year"; the input is numeric (`inputMode="numeric"`) and capped at 4 characters.
 - **Destination already onboarded:** backend returns `409`; surface a clear message.
 - **Operation already in progress:** backend returns `409`; surface and block re-submit.
 - **Unmapped managers:** validation must require every source manager be mapped (or
@@ -34,6 +36,8 @@ submits to `POST /leagues/{leagueId}/migrate` and polls until the job completes.
 - [ ] The flow confirms the source league, collects destination platform + league ID, and
       builds a manager mapping.
 - [ ] ESPN destination members are fetched via the proxy and shown for mapping.
+- [ ] The ESPN latest season field rejects a non-4-digit value with an inline error and only
+      accepts a 4-digit year.
 - [ ] Every source manager must be mapped or marked not returning before submission.
 - [ ] Submitting calls migrate and polls job status to completion, surfacing `409`/failure
       messages.

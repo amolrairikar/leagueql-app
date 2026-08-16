@@ -64,7 +64,10 @@ the form (so the user isn't re-prompted), as a safety net for direct navigation.
   the landing form it opens the Join League dialog (cookie autofill or manual entry →
   `verify-membership` → open the dashboard); on the connect page it verifies inline with the
   already-entered cookies. ESPN-rejected cookies surface the failure inline.
-- **Validation:** league ID must be numeric; ESPN requires a season.
+- **Validation:** league ID must be numeric; ESPN requires a latest season, which must be a
+  4-digit year (`^\d{4}$`) — a missing value shows "Latest season is required" and a
+  non-4-digit value shows "Latest season must be a 4-digit year". The input is numeric
+  (`inputMode="numeric"`) and capped at 4 characters.
 - **Demo mode:** connecting is disabled/redirected in demo mode.
 
 ## Acceptance Criteria
@@ -76,6 +79,8 @@ the form (so the user isn't re-prompted), as a safety net for direct navigation.
       backend-provided failure message.
 - [ ] Polling persists long enough to capture completion of slow (~120s) jobs.
 - [ ] Pre-filled platform/league ID fields are locked.
+- [ ] The ESPN latest season field rejects a non-4-digit value with an inline validation error
+      and only accepts a 4-digit year.
 - [ ] On success the user is routed into the app (home), with cached API reads cleared so the
       dashboard reflects the freshly onboarded/refreshed data.
 - [ ] A non-owner opening an already-onboarded league is routed to the dashboard without an

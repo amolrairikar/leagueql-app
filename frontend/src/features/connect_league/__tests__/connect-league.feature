@@ -8,6 +8,11 @@ Feature: Connect league onboarding flow (FE-002)
     When I submit the form without a league ID
     Then I see a validation error "League ID is required"
 
+  Scenario: Submitting an ESPN league with a non-4-digit latest season shows a validation error
+    Given the connect ESPN league form is open
+    When I submit the ESPN form with latest season "24"
+    Then I see a validation error "Latest season must be a 4-digit year"
+
   Scenario: A successful onboard polls to completion and routes home
     Given onboarding will complete successfully
     When I onboard Sleeper league "100"
