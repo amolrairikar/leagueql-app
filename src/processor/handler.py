@@ -1127,9 +1127,11 @@ def _register_sleeper_raw_data(
 
 # Column dtypes used to register an empty view when a grouped data_type has no rows.
 # Only views that (a) can legitimately be empty for a valid league and (b) are still
-# referenced by downstream DuckDB queries need an entry here — currently just `brackets`
-# (a season with no playoffs yet). Numeric columns must be declared numeric so the
-# seeding arithmetic in the TEAMS/PLAYOFF_BRACKET transforms binds against the empty view.
+# referenced by downstream DuckDB queries need an entry here. Without an entry, an empty
+# grouped list becomes a 0-column DataFrame that DuckDB refuses to register ("Need a
+# DataFrame with at least one column"), crashing the whole run. Numeric columns must be
+# declared numeric where downstream arithmetic binds against the empty view (e.g. the
+# seeding math in the TEAMS/PLAYOFF_BRACKET transforms reads `brackets.position`).
 _EMPTY_VIEW_DTYPES: dict[str, dict[str, str]] = {
     "brackets": {
         "match_id": "float64",
@@ -1143,6 +1145,24 @@ _EMPTY_VIEW_DTYPES: dict[str, dict[str, str]] = {
         "team_1_from": "object",
         "team_2_from": "object",
         "season": "object",
+    },
+    # A Sleeper league whose onboarded seasons carry no completed transactions yields an
+    # empty `transactions` list. The TRANSACTIONS transform is a `SELECT * FROM transactions`
+    # passthrough (no arithmetic), so object columns suffice; it simply produces no rows and
+    # writes no TRANSACTIONS#{season} item (BE-019). Columns mirror the transaction row shape
+    # built by compile_sleeper_transactions.
+    "transactions": {
+        "season": "object",
+        "transaction_id": "object",
+        "type": "object",
+        "week": "object",
+        "created": "object",
+        "roster_ids": "object",
+        "teams": "object",
+        "adds": "object",
+        "drops": "object",
+        "draft_picks": "object",
+        "waiver_bid": "object",
     },
 }
 
