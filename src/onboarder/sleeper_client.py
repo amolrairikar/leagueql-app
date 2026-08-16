@@ -378,6 +378,7 @@ class SleeperClient:
         async with semaphore:
             try:
                 data = await fetch_with_retry(session=session, url=url)
+                logger.info("Successfully fetched url: %s", url)
                 # Sleeper legitimately returns a null body for winners_bracket /
                 # losers_bracket before a season reaches the playoffs. Normalize that
                 # to an empty list so it is not mistaken for a fetch failure by
