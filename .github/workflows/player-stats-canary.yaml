@@ -2,7 +2,8 @@ name: leagueql-player-stats-canary
 
 # Live Sleeper player-stats end-to-end canary (BE-011). Kept in its own workflow —
 # separate from the commit-triggered build pipeline — so the live Sleeper stats
-# endpoint is hit at most once a day on a cron, with no chance of a scheduled run
+# endpoint is hit at most once a day on a cron (Sundays and Mondays only), with
+# no chance of a scheduled run
 # triggering the build pipeline's deploy jobs. Runs the deployed refresher Fargate
 # task (ECS RunTask) with SEASON + MAX_PLAYERS + OUTPUT_KEY env overrides so the full
 # S3-read → live-fetch → S3-write path is validated against a small (~100-player)
@@ -13,9 +14,9 @@ name: leagueql-player-stats-canary
 
 on:
   schedule:
-    # 06:15 UTC daily — staggered after the player-metadata canary so the two
-    # live Sleeper canaries do not run at the exact same minute.
-    - cron: "15 6 * * *"
+    # 06:15 UTC on Sundays and Mondays — staggered after the player-metadata
+    # canary so the two live Sleeper canaries do not run at the exact same minute.
+    - cron: "15 6 * * 0,1"
   workflow_dispatch: {}
 
 permissions:

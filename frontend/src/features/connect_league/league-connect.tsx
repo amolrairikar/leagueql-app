@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Check, Copy, HelpCircle } from 'lucide-react';
+import { HelpCircle } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import {
   type FieldErrors,
@@ -54,45 +54,6 @@ const MAX_ONBOARD_ATTEMPTS = 3;
 const ONBOARD_RETRY_DELAY_MS = 2000;
 const POLL_INITIAL_DELAY_MS = 5000;
 
-function CopyOperationId({ operationId }: { operationId: string }) {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = () => {
-    void navigator.clipboard.writeText(operationId).then(() => {
-      setCopied(true);
-      setTimeout(() => {
-        setCopied(false);
-      }, 2000);
-    });
-  };
-
-  return (
-    <span className="mt-1 flex items-center gap-1.5">
-      <span className="font-mono text-xs">{operationId}</span>
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-5 w-5 shrink-0"
-              onClick={handleCopy}
-            >
-              {copied ? (
-                <Check className="h-3 w-3" />
-              ) : (
-                <Copy className="h-3 w-3" />
-              )}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>{copied ? 'Copied!' : 'Copy ID'}</TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-    </span>
-  );
-}
-
 export default function LeagueConnect() {
   const navigate = useNavigate();
   const [pollStatus, setPollStatus] = useState<'idle' | 'success' | 'failed'>(
@@ -101,7 +62,6 @@ export default function LeagueConnect() {
   const [lastRequestType, setLastRequestType] = useState<
     'ONBOARD' | 'REFRESH' | null
   >(null);
-  const [operationId, setOperationId] = useState<string | null>(null);
   const [failureReason, setFailureReason] = useState<string | null>(null);
   const [loadingMessage, setLoadingMessage] = useState('');
   const loadingStartRef = useRef<number | null>(null);
@@ -189,7 +149,6 @@ export default function LeagueConnect() {
   const onSubmit = async (data: LeagueConnectFormValues) => {
     setPollStatus('idle');
     setLastRequestType(null);
-    setOperationId(null);
     setFailureReason(null);
     const apiPlatform = API_PLATFORM[data.platform];
 
@@ -290,7 +249,6 @@ export default function LeagueConnect() {
       ? await pollForCompletion(capturedOperationId)
       : { status: 'failed' as const };
     if (result.status === 'failed') {
-      setOperationId(capturedOperationId);
       setFailureReason(result.failureReason ?? null);
     }
     setPollStatus(result.status);
@@ -550,15 +508,7 @@ export default function LeagueConnect() {
                   >
                     support
                   </a>
-                  {operationId ? (
-                    <>
-                      {' '}
-                      and provide the below ID:{' '}
-                      <CopyOperationId operationId={operationId} />
-                    </>
-                  ) : (
-                    '.'
-                  )}
+                  .
                 </AlertDescription>
               </Alert>
             )}
