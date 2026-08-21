@@ -2,16 +2,18 @@ name: leagueql-player-metadata-canary
 
 # Live Sleeper player-metadata contract canary (BE-010). Kept in its own workflow
 # — separate from the commit-triggered build pipeline — so the once-per-day
-# Sleeper players endpoint is hit at most once a day on a cron, with no chance of
-# a scheduled run triggering the build pipeline's deploy jobs. Validates that
+# Sleeper players endpoint is hit at most once a day on a cron (Sundays and
+# Mondays only), with no chance of a scheduled run triggering the build
+# pipeline's deploy jobs. Validates that
 # Sleeper's live response still parses and still carries first_name/last_name/
 # position. The per-commit logic + S3-wiring coverage lives in tests/unit and
 # tests/component; this job is the only path that touches the live endpoint.
 
 on:
   schedule:
-    # 06:00 UTC daily — at most one live fetch per day, decoupled from commits.
-    - cron: "0 6 * * *"
+    # 06:00 UTC on Sundays and Mondays — at most one live fetch per day,
+    # decoupled from commits.
+    - cron: "0 6 * * 0,1"
   workflow_dispatch: {}
 
 permissions:
