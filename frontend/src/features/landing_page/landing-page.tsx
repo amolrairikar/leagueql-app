@@ -1,4 +1,5 @@
 import { SignIn, useUser } from '@clerk/react';
+import { ArrowRight, ChevronRight } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -20,8 +21,13 @@ import {
 import { onboardLeague } from '@/features/connect_league/api-calls';
 import { JoinLeagueDialog } from '@/features/connect_league/join-league-dialog';
 import { pollForCompletion } from '@/features/connect_league/poll';
-import { FEATURES } from '@/features/landing_page/constants';
-import type { Feature } from '@/features/landing_page/types';
+import {
+  FEATURES,
+  HOW_STEPS,
+  PLATFORMS,
+} from '@/features/landing_page/constants';
+import { ProductShowcase } from '@/features/landing_page/product-showcase';
+import type { Feature, HowStep } from '@/features/landing_page/types';
 import { ApiError } from '@/lib/api-client';
 import {
   clearAllLeagueCookies,
@@ -64,18 +70,46 @@ function computeLoadingState(elapsedSeconds: number): {
   };
 }
 
-interface FeatureCardProps {
-  icon: string;
-  title: string;
-  desc: string;
+function FeatureCard({ icon: Icon, title, desc }: Feature) {
+  return (
+    <div className="group relative overflow-hidden rounded-2xl border border-border bg-card p-6 shadow-xs transition-all duration-200 hover:-translate-y-1 hover:border-primary/35 hover:shadow-lg">
+      <div className="mb-4 grid size-11 place-items-center rounded-xl bg-primary/10 text-primary">
+        <Icon className="size-5.5" />
+      </div>
+      <h3 className="font-heading text-foreground mb-2 text-base font-semibold">
+        {title}
+      </h3>
+      <p className="text-sm text-muted-foreground leading-relaxed">{desc}</p>
+    </div>
+  );
 }
 
-function FeatureCard({ icon, title, desc }: FeatureCardProps) {
+function Step({ step, isLast }: { step: HowStep; isLast: boolean }) {
+  const { icon: Icon } = step;
   return (
-    <div className="bg-card p-7 hover:bg-accent/50 transition-colors duration-200">
-      <div className="text-xl mb-3">{icon}</div>
-      <h3 className="font-heading text-foreground text-base mb-2">{title}</h3>
-      <p className="text-sm text-muted-foreground leading-relaxed">{desc}</p>
+    <div className="relative z-10 rounded-2xl border border-border bg-card p-7">
+      <div className="mb-4.5 flex items-center gap-3">
+        <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+          <Icon className="size-5.5" />
+        </div>
+        <span className="font-mono text-xs font-semibold tracking-wider text-primary">
+          {step.step}
+        </span>
+      </div>
+      <h3 className="font-heading mb-2 text-base font-semibold text-foreground">
+        {step.title}
+      </h3>
+      <p className="text-sm text-muted-foreground leading-relaxed">
+        {step.desc}
+      </p>
+      {!isLast && (
+        <div
+          aria-hidden
+          className="absolute top-1/2 -right-[41px] z-20 hidden size-[30px] -translate-y-1/2 place-items-center rounded-full border border-border bg-card text-primary shadow-sm md:grid"
+        >
+          <ChevronRight className="size-4" />
+        </div>
+      )}
     </div>
   );
 }
@@ -248,6 +282,7 @@ export default function LeagueQLLanding() {
 
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground font-sans overflow-x-hidden">
+      {/* Decorative fixed grid + primary glow */}
       <div
         className="fixed inset-0 pointer-events-none z-0"
         style={{
@@ -255,12 +290,24 @@ export default function LeagueQLLanding() {
             linear-gradient(var(--border) 1px, transparent 1px),
             linear-gradient(90deg, var(--border) 1px, transparent 1px)
           `,
-          backgroundSize: '48px 48px',
-          opacity: 0.2,
+          backgroundSize: '52px 52px',
+          maskImage:
+            'radial-gradient(ellipse 90% 55% at 50% 0%, #000 30%, transparent 78%)',
+          WebkitMaskImage:
+            'radial-gradient(ellipse 90% 55% at 50% 0%, #000 30%, transparent 78%)',
+          opacity: 0.5,
+        }}
+      />
+      <div
+        className="fixed left-1/2 top-[-14%] -z-0 h-[640px] w-[820px] -translate-x-1/2 pointer-events-none blur-2xl"
+        style={{
+          background:
+            'radial-gradient(50% 50% at 50% 50%, color-mix(in oklab, var(--chart-3) 30%, transparent) 0%, transparent 70%)',
         }}
       />
 
-      <section className="relative z-10 flex flex-col items-center text-center px-6 pt-24 pb-20">
+      {/* HERO */}
+      <section className="relative z-10 flex flex-col items-center text-center px-6 pt-24 pb-16">
         {leagueCount !== null && (
           <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-1.5 text-sm text-muted-foreground animate-[fadeUp_0.6s_0.1s_both]">
             <span className="flex items-center -space-x-1">
@@ -268,14 +315,17 @@ export default function LeagueQLLanding() {
               <span className="block size-2.5 shrink-0 rounded-full bg-green-500" />
               <span className="block size-2.5 shrink-0 rounded-full bg-blue-500" />
             </span>
-            Join {leagueCount} other leagues tracking their league&apos;s
-            history
+            Join{' '}
+            <span className="font-mono font-medium text-foreground">
+              {leagueCount}
+            </span>{' '}
+            leagues tracking their history
           </div>
         )}
 
         <h1
           className="
-            text-[clamp(2.6rem,6vw,4.5rem)] leading-[1.1] tracking-tight
+            text-[clamp(2.6rem,6vw,4.5rem)] leading-[1.05] tracking-tight
             text-foreground max-w-175 font-heading
             animate-[fadeUp_0.6s_0.25s_both]
           "
@@ -300,7 +350,7 @@ export default function LeagueQLLanding() {
             className="text-[0.82rem] px-6 cursor-pointer"
             onClick={handleConnectLeague}
           >
-            Connect Your League
+            Connect Your League <ArrowRight />
           </Button>
 
           <Button
@@ -393,18 +443,121 @@ export default function LeagueQLLanding() {
         leagueId={joinLeagueId ?? ''}
       />
 
-      <section className="relative z-10 px-6 pb-16">
-        <div
-          className="
-          max-w-215 mx-auto
-          grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3
-          border border-border rounded-xl overflow-hidden
-          divide-x divide-y divide-border
-          "
-        >
-          {FEATURES.map((f: Feature) => (
+      {/* PRODUCT SHOWCASE */}
+      <section className="relative z-10 px-6 pt-16 pb-8">
+        <div className="mx-auto mb-11 flex max-w-160 flex-col items-center gap-3 text-center">
+          <span className="text-xs font-medium uppercase tracking-[0.16em] text-primary">
+            See it in action
+          </span>
+          <h2 className="font-heading text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
+            Every angle of your league, one click away
+          </h2>
+          <p className="max-w-lg text-muted-foreground">
+            Explore your league's complete history through rich, interactive
+            views.
+          </p>
+        </div>
+        <ProductShowcase />
+      </section>
+
+      {/* WORKS WITH */}
+      <section className="relative z-10 px-6 py-8">
+        <div className="mx-auto flex max-w-160 flex-wrap items-center justify-center gap-x-7 gap-y-4 border-y border-border py-5">
+          <span className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
+            Works with
+          </span>
+          {PLATFORMS.map((p) => (
+            <span
+              key={p.name}
+              className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-1.5 text-sm font-semibold"
+            >
+              <img src={p.logo} alt="" className="h-5 w-auto" />
+              {p.name}
+            </span>
+          ))}
+        </div>
+      </section>
+
+      {/* FEATURES */}
+      <section className="relative z-10 px-6 pt-20 pb-8">
+        <div className="mx-auto mb-11 flex max-w-160 flex-col items-center gap-3 text-center">
+          <span className="text-xs font-medium uppercase tracking-[0.16em] text-primary">
+            Everything, tracked
+          </span>
+          <h2 className="font-heading text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
+            A record book that writes itself
+          </h2>
+          <p className="max-w-lg text-muted-foreground">
+            Connect once and every stat, streak, and rivalry stays up to date,
+            season after season.
+          </p>
+        </div>
+        <div className="mx-auto grid max-w-5xl grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {FEATURES.map((f) => (
             <FeatureCard key={f.title} {...f} />
           ))}
+        </div>
+      </section>
+
+      {/* HOW IT WORKS */}
+      <section className="relative z-10 px-6 pt-20 pb-8">
+        <div className="mx-auto mb-11 flex max-w-160 flex-col items-center gap-3 text-center">
+          <span className="text-xs font-medium uppercase tracking-[0.16em] text-primary">
+            How it works
+          </span>
+          <h2 className="font-heading text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
+            From league ID to full history in under a minute
+          </h2>
+        </div>
+        <div className="relative mx-auto grid max-w-5xl grid-cols-1 gap-[52px] md:grid-cols-3">
+          <div
+            aria-hidden
+            className="absolute left-[10%] right-[10%] top-1/2 hidden h-0.5 -translate-y-px bg-gradient-to-r from-transparent via-border to-transparent md:block"
+          />
+          {HOW_STEPS.map((step, i) => (
+            <Step
+              key={step.step}
+              step={step}
+              isLast={i === HOW_STEPS.length - 1}
+            />
+          ))}
+        </div>
+      </section>
+
+      {/* FINAL CTA */}
+      <section className="relative z-10 px-6 pt-20 pb-16">
+        <div className="relative mx-auto max-w-4xl overflow-hidden rounded-3xl border border-primary/30 bg-primary/[0.08] px-8 py-14 text-center">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute left-1/2 top-[-60%] h-[500px] w-[600px] -translate-x-1/2"
+            style={{
+              background:
+                'radial-gradient(50% 50% at 50% 50%, color-mix(in oklab, var(--chart-3) 24%, transparent), transparent 70%)',
+            }}
+          />
+          <h2 className="font-heading relative text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
+            Your league history should be preserved
+          </h2>
+          <p className="relative mx-auto mt-4 mb-7 max-w-md text-muted-foreground">
+            Connect in seconds and see your entire history come to life.
+          </p>
+          <div className="relative flex flex-wrap justify-center gap-3">
+            <Button
+              size="lg"
+              className="text-[0.82rem] px-6 cursor-pointer"
+              onClick={handleConnectLeague}
+            >
+              Connect Your League <ArrowRight />
+            </Button>
+            <Button
+              variant="outline"
+              size="lg"
+              className="text-[0.82rem] px-6 cursor-pointer"
+              onClick={handleViewDemo}
+            >
+              View Demo
+            </Button>
+          </div>
         </div>
       </section>
 
@@ -414,6 +567,13 @@ export default function LeagueQLLanding() {
         @keyframes fadeUp {
           from { opacity: 0; transform: translateY(18px); }
           to   { opacity: 1; transform: translateY(0);    }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .animate-\\[fadeUp_0\\.6s_0\\.1s_both\\],
+          .animate-\\[fadeUp_0\\.6s_0\\.25s_both\\],
+          .animate-\\[fadeUp_0\\.6s_0\\.4s_both\\],
+          .animate-\\[fadeUp_0\\.6s_0\\.55s_both\\],
+          .animate-\\[fadeUp_0\\.4s_both\\] { animation: none; }
         }
       `}</style>
     </div>

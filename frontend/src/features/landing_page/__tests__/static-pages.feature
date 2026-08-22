@@ -5,6 +5,15 @@ Feature: Public pages render (FE-001, FE-016, FE-018, FE-028)
     When I open the landing page
     Then I see "Connect Your League"
 
+  Scenario: The landing page showcases the product and feature highlights
+    When I open the landing page
+    Then I see "See it in action"
+    And I see "Complete History"
+
+  Scenario: The landing page still renders when the league count endpoint fails
+    When I open the landing page with the counts endpoint unavailable
+    Then I see "Connect Your League"
+
   Scenario: The docs page renders
     When I open the docs page
     Then I see "Refresh League"
