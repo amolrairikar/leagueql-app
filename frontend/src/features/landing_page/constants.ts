@@ -16,10 +16,9 @@ import draftRecapScreenshot from '@/assets/draft-recap-screenshot.png';
 import espnLogo from '@/assets/espn-logo.svg';
 import managerComparisonScreenshot from '@/assets/manager-comparison-screenshot.png';
 import managerHistoryScreenshot from '@/assets/manager-history-screenshot.png';
-import matchupRecordsScreenshot from '@/assets/matchup-records-screenshot.png';
+import matchupBoxscoreScreenshot from '@/assets/matchup-boxscore-screenshot.png';
 import matchupsScreenshot from '@/assets/matchups-screenshot.png';
 import playerRecordsScreenshot from '@/assets/player-records-screenshot.png';
-import playoffBracketScreenshot from '@/assets/playoff-bracket-screenshot.png';
 import sleeperLogo from '@/assets/sleeper-logo.svg';
 import standingsScreenshot from '@/assets/standings-screenshot.png';
 import type {
@@ -54,16 +53,22 @@ export const SLIDES: Slide[] = [
     image: matchupsScreenshot,
   },
   {
-    title: 'Playoff Bracket',
-    url: 'leagueql.app/playoff_bracket',
-    caption: 'Visual playoff bracket',
-    image: playoffBracketScreenshot,
+    title: 'Matchup Box Scores',
+    url: 'leagueql.app/matchups',
+    caption: 'Full matchup box scores',
+    image: matchupBoxscoreScreenshot,
   },
   {
     title: 'Manager Comparison',
     url: 'leagueql.app/manager_comparison',
     caption: 'Compare any two managers across all seasons',
     image: managerComparisonScreenshot,
+  },
+  {
+    title: 'Manager History',
+    url: 'leagueql.app/manager_history',
+    caption: "Track an individual manager's performance",
+    image: managerHistoryScreenshot,
   },
   {
     title: 'Player Records',
@@ -78,21 +83,6 @@ export const SLIDES: Slide[] = [
     image: draftRecapScreenshot,
   },
 ];
-
-// Retained for potential reuse; not currently rendered on the landing page.
-export const MANAGER_HISTORY_SLIDE: Slide = {
-  title: 'Manager History',
-  url: 'leagueql.app/manager_history',
-  caption: 'Individual manager performance over time',
-  image: managerHistoryScreenshot,
-};
-
-export const MATCHUP_RECORDS_SLIDE: Slide = {
-  title: 'Matchup Records',
-  url: 'leagueql.app/matchup_records',
-  caption: 'All-time matchup records between managers',
-  image: matchupRecordsScreenshot,
-};
 
 export const FEATURES: Feature[] = [
   {

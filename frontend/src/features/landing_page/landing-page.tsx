@@ -453,8 +453,8 @@ export default function LeagueQLLanding() {
             Every angle of your league, one click away
           </h2>
           <p className="max-w-lg text-muted-foreground">
-            Explore your league's complete history through rich, interactive
-            views.
+            Explore your league&apos;s complete history through rich,
+            interactive views.
           </p>
         </div>
         <ProductShowcase />
