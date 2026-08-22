@@ -1,18 +1,32 @@
 # FE-001: Landing Page
 
 ## Description
-The public marketing/home page at `/`. Introduces LeagueQL, showcases the feature set,
-displays the live count of onboarded leagues as social proof, and routes visitors to sign in /
-connect a league or enter demo mode. LeagueQL is entirely free.
-Rendered with the marketing `Header` (not the app sidebar layout).
+The public marketing/home page at `/`. Introduces LeagueQL, showcases the product with real
+screenshots, highlights the feature set, explains how onboarding works, displays the live count
+of onboarded leagues as social proof, and routes visitors to sign in / connect a league or enter
+demo mode. LeagueQL is entirely free. Rendered with the marketing `Header` (not the app sidebar
+layout).
+
+The page reads top-to-bottom as: **hero** (social-proof count pill, headline, subhead, primary
+"Connect Your League" + "View Demo" CTAs, and the revealed inline connect form) → **product
+showcase** ("See it in action" — a swipeable scroll-snap carousel of product screenshots with
+dot indicators, auto-advancing at every breakpoint)
+→ **"Works with" strip** (ESPN + Sleeper logos) → **feature highlights** (lucide-icon cards) →
+**"How it works"** (3 numbered steps) → **final CTA band** → marketing `Footer`. A fixed grid +
+primary-glow backdrop and `fadeUp` hero entrance animations are decorative and honor
+`prefers-reduced-motion`.
 
 ## Scope
 - Route: `/` (`src/app/app.tsx`).
-- Component: `src/features/landing_page/landing-page.tsx`; copy/links in `constants.ts`.
+- Component: `src/features/landing_page/landing-page.tsx`; copy/links/data in `constants.ts`.
+  Subcomponent: `product-showcase.tsx` (swipeable screenshot carousel).
 - Counts fetch: `https://api.leagueql.com/counts` ([BE-013](../backend/BE-013-app-stats-league-count.md)).
-- Feature highlights: Standings, Matchups, Playoff Bracket, Manager Comparison, Manager
-  History, Draft Grades, Player Records, Matchup Records, Complete History, Rivalry Tracker,
-  Championship Timeline, Team Trends, League Records, Platform Migration.
+- Product showcase: driven by `SLIDES` in `constants.ts` (Standings, Matchups, Playoff Bracket,
+  Manager Comparison, Player Records, Draft Recap) using the screenshots in `src/assets/`.
+- Feature highlights (`FEATURES`, lucide icons): Complete History, Rivalry Tracker, Championship
+  Timeline, Team Trends, League Records, Platform Migration.
+- "Works with" logos (`PLATFORMS`): ESPN + Sleeper marks from
+  `src/assets/espn-logo.svg` and `src/assets/sleeper-logo.svg`.
 - Nav links: Changelog (in-app `/changelog`, [FE-028](FE-028-changelog-page.md)), Docs (`/docs`).
 
 ## Edge Cases
@@ -28,9 +42,13 @@ Rendered with the marketing `Header` (not the app sidebar layout).
 - **Mobile layout:** feature grid and hero must remain legible on small screens.
 
 ## Acceptance Criteria
-- [ ] `/` renders the hero, feature highlights, and footer with the marketing header.
+- [ ] `/` renders the hero, product showcase, "Works with" strip, feature highlights, "How it
+      works" steps, final CTA band, and footer with the marketing header.
+- [ ] The product showcase renders product screenshots in a swipeable scroll-snap carousel with
+      dot indicators, auto-advancing (pausing on pointer interaction; disabled under
+      `prefers-reduced-motion`).
 - [ ] The live onboarded-league count is shown when the counts endpoint responds, and the
-      page still renders if it fails.
+      page still renders (count pill hidden) if it fails.
 - [ ] CTAs route to sign in / connect league (or into the app for signed-in users) and to
       demo mode.
 - [ ] The Docs nav link resolves to `/docs`; the Changelog nav link resolves to the in-app
@@ -38,5 +56,5 @@ Rendered with the marketing `Header` (not the app sidebar layout).
 - [ ] Layout is responsive on mobile and desktop.
 
 ## Sources
-`src/features/landing_page/landing-page.tsx`, `pricing-table.tsx`, `constants.ts`,
-`src/app/app.tsx`.
+`src/features/landing_page/landing-page.tsx`, `product-showcase.tsx`, `constants.ts`,
+`types.ts`, `src/app/app.tsx`.

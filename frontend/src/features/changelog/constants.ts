@@ -17,7 +17,19 @@ export interface ChangelogRelease {
 // Newest release first.
 export const CHANGELOG: ChangelogRelease[] = [
   {
-    version: '1.2.0',
+    version: '1.4.0',
+    date: 'August 22, 2026',
+    sections: [
+      {
+        title: 'Changed',
+        items: [
+          'Redesigned landing page with a refreshed product showcase and clearer messaging.',
+        ],
+      },
+    ],
+  },
+  {
+    version: '1.3.0',
     date: 'July 20, 2026',
     sections: [
       {
@@ -32,7 +44,7 @@ export const CHANGELOG: ChangelogRelease[] = [
     ],
   },
   {
-    version: '1.1.1',
+    version: '1.2.0',
     date: 'June 14, 2026',
     sections: [
       {

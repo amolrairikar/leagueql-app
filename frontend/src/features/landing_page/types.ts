@@ -15,7 +15,19 @@ export interface Slide {
 }
 
 export interface Feature {
-  icon: string;
+  icon: React.FC<LucideProps>;
   title: string;
   desc: string;
+}
+
+export interface HowStep {
+  step: string;
+  icon: React.FC<LucideProps>;
+  title: string;
+  desc: string;
+}
+
+export interface Platform {
+  name: string;
+  logo: string;
 }

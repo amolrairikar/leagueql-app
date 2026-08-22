@@ -33,6 +33,49 @@ defineFeature(feature, (test) => {
     });
   });
 
+  test('The landing page showcases the product and feature highlights', ({
+    when,
+    then,
+    and,
+  }) => {
+    when('I open the landing page', async () => {
+      server.use(
+        http.get('https://api.leagueql.com/counts', () =>
+          HttpResponse.json({ leagueCount: 3 }),
+        ),
+      );
+      await renderRoute(<LeagueQLLanding />, { route: '/' });
+    });
+    then(/^I see "(.*)"$/, async (text) => {
+      expect((await screen.findAllByText(text)).length).toBeGreaterThan(0);
+    });
+    and(/^I see "(.*)"$/, async (text) => {
+      expect((await screen.findAllByText(text)).length).toBeGreaterThan(0);
+    });
+  });
+
+  test('The landing page still renders when the league count endpoint fails', ({
+    when,
+    then,
+  }) => {
+    when(
+      'I open the landing page with the counts endpoint unavailable',
+      async () => {
+        // FE-001: the league-count figure must degrade gracefully (the pill hides)
+        // without blocking the rest of the page from rendering.
+        server.use(
+          http.get('https://api.leagueql.com/counts', () =>
+            HttpResponse.error(),
+          ),
+        );
+        await renderRoute(<LeagueQLLanding />, { route: '/' });
+      },
+    );
+    then(/^I see "(.*)"$/, async (text) => {
+      expect((await screen.findAllByText(text)).length).toBeGreaterThan(0);
+    });
+  });
+
   test('The docs page renders', ({ when, then }) => {
     when('I open the docs page', async () => {
       await renderRoute(<InstructionsPage />, { route: '/docs' });
