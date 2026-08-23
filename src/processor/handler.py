@@ -1164,6 +1164,22 @@ _EMPTY_VIEW_DTYPES: dict[str, dict[str, str]] = {
         "draft_picks": "object",
         "waiver_bid": "object",
     },
+    # A Sleeper league onboarded before its first games are played (e.g. a new season
+    # created in the preseason) has no accumulated player stats in S3 yet, so
+    # compile_sleeper_player_scoring_totals returns no rows. The DRAFT (SLEEPER)
+    # transform still references `player_scoring_totals` — LEFT JOINing draft_picks
+    # against it and doing arithmetic on `total_points` (VORP, RANK ... ORDER BY
+    # total_points) — so register a typed, empty frame: `total_points` must stay
+    # numeric for that math, the rest are string columns. DRAFT then binds and simply
+    # yields draft rows with no scoring for that season. Columns mirror the row shape
+    # built by compile_sleeper_player_scoring_totals.
+    "player_scoring_totals": {
+        "player_id": "object",
+        "player_name": "object",
+        "position": "object",
+        "total_points": "float64",
+        "season": "object",
+    },
 }
 
 
@@ -1217,8 +1233,29 @@ def register_raw_data(
                 }
             )
         else:
+            if not rows:
+                # An empty grouped list becomes a 0-column DataFrame that DuckDB refuses
+                # to register ("Need a DataFrame with at least one column"), which crashes
+                # the whole run. Log the offending view up front so the failure is
+                # attributable without reconstructing it from the raw payload; the fix is
+                # to add the view to _EMPTY_VIEW_DTYPES if it can legitimately be empty.
+                logger.error(
+                    "No rows for view '%s'; registering it as a 0-column DataFrame will "
+                    "fail. Add it to _EMPTY_VIEW_DTYPES if this view can legitimately be "
+                    "empty for a valid league.",
+                    data_type,
+                )
             df = pd.DataFrame(rows)
-        con.register(data_type, df)
+        try:
+            con.register(data_type, df)
+        except duckdb.InvalidInputException:
+            logger.error(
+                "Failed to register view '%s' with DuckDB (%d columns, %d rows).",
+                data_type,
+                len(df.columns),
+                len(df),
+            )
+            raise
 
     return grouped
 

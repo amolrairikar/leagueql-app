@@ -536,6 +536,58 @@ class TestRegisterRawDataRegistersViews:
         ).fetchall()
         assert rows == []
 
+    def test_empty_player_scoring_totals_registered_as_typed_view(
+        self, processor_handler
+    ):
+        # A Sleeper league onboarded before its first games (e.g. a new season created in
+        # the preseason) has no accumulated player stats yet, so player_scoring_totals is
+        # empty. It must still register as a typed view — with total_points numeric — so
+        # the DRAFT (SLEEPER) transform binds and returns no rows rather than crashing on a
+        # 0-column frame ("Need a DataFrame with at least one column").
+        con = duckdb.connect()
+        grouped = {
+            "player_scoring_totals": [],
+            "league_name_by_season": {},
+        }
+        with patch.object(
+            processor_handler, "_register_sleeper_raw_data", return_value=grouped
+        ):
+            processor_handler.register_raw_data(
+                [], con, platform="SLEEPER", player_metadata={}, player_stats={}
+            )
+        registered = {row[0] for row in con.execute("SHOW TABLES").fetchall()}
+        assert "player_scoring_totals" in registered
+        # VORP/rank arithmetic requires total_points to bind as numeric, not VARCHAR.
+        assert (
+            con.execute(
+                "SELECT SUM(total_points + 1) FROM player_scoring_totals"
+            ).fetchone()[0]
+            is None
+        )
+        assert con.execute("SELECT * FROM player_scoring_totals").fetchall() == []
+
+    def test_unguarded_empty_view_logs_and_raises(self, processor_handler):
+        # A view that is empty but NOT in _EMPTY_VIEW_DTYPES becomes a 0-column frame that
+        # DuckDB rejects. The offending view must be logged by name before the failure so
+        # it is attributable from the logs, and the error must still propagate.
+        con = duckdb.connect()
+        grouped = {
+            "rosters": [],
+            "league_name_by_season": {},
+        }
+        with (
+            patch.object(
+                processor_handler, "_register_sleeper_raw_data", return_value=grouped
+            ),
+            patch.object(processor_handler, "logger") as mock_logger,
+            pytest.raises(duckdb.InvalidInputException),
+        ):
+            processor_handler.register_raw_data(
+                [], con, platform="SLEEPER", player_metadata={}, player_stats={}
+            )
+        logged_views = [call.args[1] for call in mock_logger.error.call_args_list]
+        assert "rosters" in logged_views
+
 
 class TestWriteItems:
     def test_batch_writes_each_item(self, processor_handler):

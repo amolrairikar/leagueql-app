@@ -48,6 +48,20 @@ only ever reads these precomputed items via [BE-005](BE-005-query-precomputed-vi
   no bracket there is no way to identify which games are playoff games. The `LOSERS_BRACKET`
   fallback for a game not found in the bracket applies only when the season *has* a bracket
   (an uncaptured consolation game).
+- **Empty grouped views (0-column DataFrame guard):** each grouped `data_type` is registered
+  as a DuckDB view before the transforms run; an empty grouped list would otherwise become a
+  0-column DataFrame that DuckDB refuses to register ("Need a DataFrame with at least one
+  column"), crashing the whole run. Views that can legitimately be empty for a valid league
+  **and** are still referenced by a downstream query are registered as typed, 0-row frames
+  instead (numeric columns kept numeric where downstream arithmetic binds against them):
+  `brackets` (no playoffs yet), `transactions` (a Sleeper season with no completed
+  transactions — see [BE-019](BE-019-sleeper-transactions.md)), and `player_scoring_totals`
+  (a Sleeper league onboarded before its first games — e.g. a new season created in the
+  preseason — has no accumulated player stats in S3 yet, so `total_points` totals are empty).
+  The `DRAFT` (SLEEPER) transform still binds against the empty `player_scoring_totals` view
+  and simply yields draft rows with no scoring/VORP for that season rather than erroring.
+  Any other view that is empty is logged by name before the failing registration so the
+  offending view is attributable from the logs.
 - **Partial Sleeper winners-bracket `from` links:** some Sleeper leagues populate `t1_from`/
   `t2_from` only on the final round, leaving earlier rounds with concrete roster IDs and no
   feeder links. The processor reconstructs the missing links from round + winner/loser
