@@ -463,7 +463,7 @@ export default function LeagueQLLanding() {
       {/* WORKS WITH */}
       <section className="relative z-10 px-6 py-8">
         <div className="mx-auto flex max-w-160 flex-wrap items-center justify-center gap-x-7 gap-y-4 border-y border-border py-5">
-          <span className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
+          <span className="w-full text-center text-xs uppercase tracking-[0.14em] text-muted-foreground sm:w-auto">
             Works with
           </span>
           {PLATFORMS.map((p) => (
