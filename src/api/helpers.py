@@ -447,7 +447,7 @@ def require_league_owner(
     canonical_league_id: str, clerk_user_id: str, metadata: dict | None = None
 ) -> None:
     """
-    Gate a mutating action to the league's owner (LQL-01 / BE-016).
+    Gate a mutating action to the league's owner (backend/league-authorization).
 
     The owner is the Clerk user who first onboarded the league
     (``owner_user_id`` on METADATA). Any other caller — or a league with no
@@ -480,7 +480,7 @@ def require_league_member(
     metadata: dict | None = None,
 ) -> None:
     """
-    Gate reads of an ESPN league to its members (LQL-01 / BE-016).
+    Gate reads of an ESPN league to its members (backend/league-authorization).
 
     ESPN league data is confidential (viewing it upstream requires the caller's
     ``espn_s2``/``SWID`` cookies), so only members may read it. Membership is the
@@ -512,7 +512,7 @@ def require_league_member(
 
 def record_league_access(canonical_league_id: str, metadata: dict) -> None:
     """
-    Record that a league was just opened, for stale-league detection (BE-018).
+    Record that a league was just opened, for stale-league detection (backend/league-access-tracking).
 
     Writes a ``last_accessed_at`` ISO-8601 (UTC) timestamp on the league's METADATA
     item, throttled to at most once per hour: ``get_league`` already loaded
@@ -553,7 +553,7 @@ def record_league_access(canonical_league_id: str, metadata: dict) -> None:
 
 def add_league_member(canonical_league_id: str, clerk_user_id: str) -> None:
     """
-    Add a verified caller to a league's ``members`` set (LQL-01 / BE-016).
+    Add a verified caller to a league's ``members`` set (backend/league-authorization).
 
     Idempotent: ``ADD`` to a DynamoDB string set is a no-op when the value is
     already present. Used by the ESPN membership-verification flow once the

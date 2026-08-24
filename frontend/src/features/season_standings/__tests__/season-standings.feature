@@ -1,4 +1,4 @@
-Feature: Season standings (FE-005)
+Feature: Season standings (frontend/season-standings)
   The standings page shows the selected season's standings (including a
   strength-of-schedule column derived from the season's matchups) and surfaces
   an inline error if the data fails to load.

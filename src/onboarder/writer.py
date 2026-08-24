@@ -35,7 +35,7 @@ def upload_results_to_s3(
         platform: The platform (e.g., ESPN, SLEEPER) that the league is on.
         reprocess_all: When True, stamps ``reprocess_all=true`` on the manifest metadata
             so the processor rebuilds every season's views instead of only the latest
-            (BE-019 backfill). Default False.
+            (backend/sleeper-transactions backfill). Default False.
     """
     try:
         seasons_data: dict[str, list[dict[str, Any]]] = {}
@@ -87,7 +87,7 @@ def upload_results_to_s3(
             metadata["reprocess_all"] = "true"
         # Carry W3C trace context (traceparent/tracestate) in the object metadata so
         # the processor — triggered by this manifest's S3 event — continues the trace
-        # (BE-020). A no-op when tracing is disabled. S3 lowercases metadata keys and
+        # (backend/otel-tracing). A no-op when tracing is disabled. S3 lowercases metadata keys and
         # the W3C header names are already lowercase, so the propagator round-trips.
         inject_context(metadata)
 
@@ -114,7 +114,7 @@ def write_pending_league_lookup(
     Register a renewed Sleeper season's league ID before its season has started.
 
     A renewed Sleeper league gets a brand-new league ID each season, but that season
-    carries no usable data until it flips to ``in_season`` (BE-001 / BE-002). We still
+    carries no usable data until it flips to ``in_season`` (backend/league-onboarding / backend/league-refresh). We still
     persist the new ID -> canonical mapping the moment the user hands it to us, because
     Sleeper only links seasons *backwards* (via ``previous_league_id``): without this
     record the scheduled auto-refresh could never discover the new season, and the
@@ -123,7 +123,7 @@ def write_pending_league_lookup(
     The item is written **without** a ``seasons`` set — an empty DynamoDB string set is
     invalid, and the not-yet-started season must not surface in any dropdown until it has
     data. A ``pending_season`` marker records which season we are waiting on; the
-    scheduled Sleeper auto-refresh (BE-012) polls pending lookups each run and the refresh
+    scheduled Sleeper auto-refresh (backend/scheduled-sleeper-auto-refresh) polls pending lookups each run and the refresh
     promotes this item (adds ``seasons``, drops the marker) once the season starts.
 
     Args:
@@ -183,7 +183,7 @@ def write_league_records(
         request_type: The type of onboarding request (e.g., "ONBOARD" or "REFRESH")
         is_new_season_refresh: If True, league_id is a new season's ID not yet in LEAGUE_LOOKUP;
             a new LEAGUE_LOOKUP item is created via Put instead of updating an existing one.
-        owner_user_id: Clerk user ID of the onboarding owner (LQL-01 / BE-016). On first
+        owner_user_id: Clerk user ID of the onboarding owner (backend/league-authorization). On first
             ONBOARD it is recorded on METADATA and seeds the ``members`` set; REFRESH/MIGRATE
             never touch it, so the original owner and any verified members are preserved.
     """
@@ -234,7 +234,7 @@ def write_league_records(
                         },
                         # REMOVE pending_season promotes a pending (not-yet-started)
                         # renewal lookup to a real season once it starts; a no-op on the
-                        # common refresh where the marker was never set (BE-001 / BE-012).
+                        # common refresh where the marker was never set (backend/league-onboarding / backend/scheduled-sleeper-auto-refresh).
                         "UpdateExpression": "ADD seasons :s SET platform = :p, league_id = :l REMOVE pending_season",
                         "ExpressionAttributeValues": {
                             ":s": {"SS": seasons},
@@ -255,7 +255,7 @@ def write_league_records(
                 "onboarded_at": {"S": now_iso},
             }
             # Record the onboarding owner as the authorization anchor and seed the
-            # read-membership set with them (LQL-01 / BE-016). Skipped for
+            # read-membership set with them (backend/league-authorization). Skipped for
             # system-initiated onboards (no owner), keeping ``members`` absent.
             if owner_user_id:
                 metadata_item["owner_user_id"] = {"S": owner_user_id}

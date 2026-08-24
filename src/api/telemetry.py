@@ -1,10 +1,10 @@
-"""OpenTelemetry distributed tracing for the API Lambda → Better Stack (BE-020).
+"""OpenTelemetry distributed tracing for the API Lambda → Better Stack (backend/otel-tracing).
 
 The provider/exporter, endpoint/token gating, and ``botocore``/``requests``
 instrumentation live in the shared :mod:`common.tracing` (also used by the async
-onboarding chain, BE-020). This module adds the **FastAPI-specific** pieces on top:
+onboarding chain, backend/otel-tracing). This module adds the **FastAPI-specific** pieces on top:
 auto-instrumenting the app and force-flushing spans per request. The trace started
-here is continued through the async chain via W3C context propagation (see BE-020).
+here is continued through the async chain via W3C context propagation (see backend/otel-tracing).
 
 Design notes:
 - No ``opentelemetry`` import happens at module load. The SDK / instrumentation are
@@ -69,7 +69,7 @@ def _install_tracing(app) -> None:
 
     The provider/exporter and botocore/requests instrumentation come from
     :func:`common.tracing.build_provider`; here we auto-instrument the FastAPI app
-    (so an incoming ``traceparent`` from the browser, FE-029, continues that trace)
+    (so an incoming ``traceparent`` from the browser, frontend/observability, continues that trace)
     and add a middleware that force-flushes spans before each response returns.
     """
     from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor

@@ -1,4 +1,4 @@
-Feature: Owner-gated sidebar actions (LQL-01 / FE-025)
+Feature: Owner-gated sidebar actions (backend/league-authorization / frontend/ownership-transfer)
   The sidebar shows owner-only actions only to the league owner; non-owners see
   the dashboard and a way to claim ownership.
 

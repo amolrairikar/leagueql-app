@@ -3,7 +3,7 @@ import type { MatchupItem, Platform } from '@/components/api/types';
 
 export type { MatchupItem } from '@/components/api/types';
 
-/** Regular-season + playoff matchups for one season (weekly awards, FE-032). */
+/** Regular-season + playoff matchups for one season (weekly awards, frontend/weekly-awards). */
 export function getSeasonMatchups(
   leagueId: string,
   platform: Platform,

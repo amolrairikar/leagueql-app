@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-# Launch the Sleeper player stats refresher Fargate task (BE-011) on demand.
+# Launch the Sleeper player stats refresher Fargate task (backend/sleeper-player-stats-refresher) on demand.
 # The task otherwise runs on a weekly CloudWatch Events schedule.
 #
 # Usage: ./run_sleeper_stats_fargate_task.sh [env] [region] [season]

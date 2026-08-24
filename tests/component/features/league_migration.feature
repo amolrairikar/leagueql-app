@@ -1,4 +1,4 @@
-Feature: League migration API (BE-003)
+Feature: League migration API (backend/league-migration)
   POST /leagues/{id}/migrate records the destination lookup + manager mapping and
   triggers the onboarder, preserving all-time history under one canonical league.
 

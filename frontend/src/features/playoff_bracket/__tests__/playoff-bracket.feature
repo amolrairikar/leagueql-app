@@ -1,4 +1,4 @@
-Feature: Playoff bracket (FE-008)
+Feature: Playoff bracket (frontend/playoff-bracket)
   The winners'-bracket tree renders for the selected season, with an inline error
   when the bracket data fails to load.
 

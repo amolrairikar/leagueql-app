@@ -1,4 +1,4 @@
-Feature: Public pages render (FE-001, FE-016, FE-018, FE-028)
+Feature: Public pages render (frontend/landing-page, frontend/instructions-docs, frontend/privacy-pages, frontend/changelog)
   The public marketing and policy pages render without a connected league.
 
   Scenario: The landing page renders its primary call to action

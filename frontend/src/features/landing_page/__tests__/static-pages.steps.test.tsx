@@ -20,7 +20,7 @@ defineFeature(feature, (test) => {
   }) => {
     when('I open the landing page', async () => {
       // The landing page fetches a live league count from a hardcoded URL; stub
-      // it so the social-proof line resolves (FE-001 degrades gracefully if not).
+      // it so the social-proof line resolves (frontend/landing-page degrades gracefully if not).
       server.use(
         http.get('https://api.leagueql.com/counts', () =>
           HttpResponse.json({ leagueCount: 3 }),
@@ -61,7 +61,7 @@ defineFeature(feature, (test) => {
     when(
       'I open the landing page with the counts endpoint unavailable',
       async () => {
-        // FE-001: the league-count figure must degrade gracefully (the pill hides)
+        // frontend/landing-page: the league-count figure must degrade gracefully (the pill hides)
         // without blocking the rest of the page from rendering.
         server.use(
           http.get('https://api.leagueql.com/counts', () =>

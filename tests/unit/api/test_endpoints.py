@@ -15,7 +15,7 @@ class TestHealthEndpoint:
 
 
 class TestSecurityHeaders:
-    """Every response carries the hardening headers and a default-deny cache (BE-024)."""
+    """Every response carries the hardening headers and a default-deny cache (backend/security-headers)."""
 
     EXPECTED = {
         "x-content-type-options": "nosniff",
@@ -161,7 +161,7 @@ class TestGetLeagueEndpoint:
 
 
 class TestLeagueAccessTracking:
-    """`get_league` records `last_accessed_at` for stale-league detection (BE-018).
+    """`get_league` records `last_accessed_at` for stale-league detection (backend/league-access-tracking).
 
     The write is throttled in-memory against the already-fetched METADATA and is
     best-effort — a failed write must never affect the read.
@@ -1312,7 +1312,7 @@ def _as_user(user_id):
 
 
 class TestOwnerGate:
-    """Mutating endpoints are owner-gated (LQL-01 / BE-016): a non-owner gets 403."""
+    """Mutating endpoints are owner-gated (backend/league-authorization): a non-owner gets 403."""
 
     def test_delete_non_owner_returns_403(self, client, mock_table, league_lookup_item):
         mock_table.get_item.return_value = {"Item": league_lookup_item}
@@ -1368,7 +1368,7 @@ class TestOwnerGate:
 
 
 class TestGetLeagueIsOwner:
-    """get_league returns is_owner and member-gates ESPN reads (LQL-01 / BE-016)."""
+    """get_league returns is_owner and member-gates ESPN reads (backend/league-authorization)."""
 
     def _seasons_query(self, mock_table):
         mock_table.query.return_value = {
@@ -1427,7 +1427,7 @@ class TestGetLeagueIsOwner:
 
 
 class TestQueryLeagueMemberGate:
-    """query_league member-gates ESPN reads (LQL-01 / BE-016)."""
+    """query_league member-gates ESPN reads (backend/league-authorization)."""
 
     def test_espn_non_member_returns_403(
         self, client, mock_table, league_lookup_item, league_metadata_item

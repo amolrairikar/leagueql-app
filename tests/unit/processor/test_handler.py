@@ -632,7 +632,7 @@ _FAKE_QUERIES = {
 
 
 class TestProcessorTracePropagation:
-    """The processor continues the onboarder's trace from the manifest metadata (BE-020)."""
+    """The processor continues the onboarder's trace from the manifest metadata (backend/otel-tracing)."""
 
     def test_continues_trace_from_manifest_metadata(self, processor_handler):
         mock_s3 = MagicMock()

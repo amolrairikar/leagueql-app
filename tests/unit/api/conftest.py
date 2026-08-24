@@ -105,14 +105,14 @@ def mock_sns_client():
 
 # Default Clerk user the auth dependency resolves to in unit tests. The shared
 # league fixtures record this user as the league owner so owner-gated endpoints
-# (LQL-01 / BE-016) succeed by default; tests for the 403 path override the auth
+# (backend/league-authorization) succeed by default; tests for the 403 path override the auth
 # dependency to a different user.
 DEFAULT_TEST_USER = "user_1"
 
 
 @pytest.fixture(autouse=True)
 def override_authenticated_user():
-    """Make endpoints see a fixed authenticated caller (LQL-01 / BE-016).
+    """Make endpoints see a fixed authenticated caller (backend/league-authorization).
 
     Every league route now sits behind the Clerk JWT dependency; without an
     override the TestClient (which carries no JWT) would get 401. Tests that

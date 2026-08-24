@@ -1,8 +1,8 @@
 const ALLOWED_ORIGINS = ["https://leagueql.com", "http://localhost:5173"];
 
-// `traceparent`/`tracestate` must be allowed because the browser OTel SDK (FE-029)
+// `traceparent`/`tracestate` must be allowed because the browser OTel SDK (frontend/observability)
 // injects W3C trace context on every API-origin call, which turns the landing-page
-// fetch (BE-013) into a CORS-preflighted request.
+// fetch (backend/app-stats-league-count) into a CORS-preflighted request.
 const ALLOWED_HEADERS = "Content-Type, traceparent, tracestate";
 
 function corsOrigin(request) {

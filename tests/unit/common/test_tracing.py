@@ -1,4 +1,4 @@
-"""Tests for src/common/tracing.py — shared OTel bootstrap + W3C propagation (BE-020).
+"""Tests for src/common/tracing.py — shared OTel bootstrap + W3C propagation (backend/otel-tracing).
 
 The disabled path is the default in tests and must be a true no-op (no provider, no
 network, no instrumentation). The enabled wiring patches the lazily-imported OTel
@@ -141,7 +141,9 @@ class TestBuildProvider:
             _, kwargs = mocks["exporter"].call_args
             assert kwargs["endpoint"] == tracing._OTLP_ENDPOINT
             assert kwargs["headers"]["Authorization"] == "Bearer tok"
-            assert "X-Axiom-Dataset" not in kwargs["headers"]
+            # Better Stack authenticates with the Bearer source token alone — no
+            # dataset/source header is sent alongside it.
+            assert list(kwargs["headers"].keys()) == ["Authorization"]
             # Provider registered globally; boto + requests instrumented; stored.
             mocks["set_provider"].assert_called_once()
             mocks["boto_instr"].return_value.instrument.assert_called_once()

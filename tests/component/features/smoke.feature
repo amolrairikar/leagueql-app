@@ -13,13 +13,13 @@ Feature: Component harness smoke test
     When I GET "/leagues/111?platform=SLEEPER"
     Then the API responds with status 200
 
-  Scenario: Every response carries the security headers (BE-024)
+  Scenario: Every response carries the security headers (backend/security-headers)
     When I GET "/health"
     Then the API responds with status 200
     And the response carries the standard security headers
     And the response has Cache-Control "no-store"
 
-  Scenario: Error responses are stamped with the security headers too (BE-024)
+  Scenario: Error responses are stamped with the security headers too (backend/security-headers)
     When I GET "/leagues/999?platform=SLEEPER"
     Then the API responds with status 404
     And the response carries the standard security headers

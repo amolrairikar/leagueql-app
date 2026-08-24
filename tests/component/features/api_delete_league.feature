@@ -1,4 +1,4 @@
-Feature: Delete league API (BE-007)
+Feature: Delete league API (backend/delete-league)
   DELETE /leagues/{id} sweeps all canonical-keyed items + S3 objects and
   decrements LEAGUE_COUNT.
 

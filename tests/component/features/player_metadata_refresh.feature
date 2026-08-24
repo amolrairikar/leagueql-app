@@ -1,4 +1,4 @@
-Feature: Player metadata refresh writes to S3 (BE-010)
+Feature: Player metadata refresh writes to S3 (backend/player-metadata-refresher)
   The player-metadata Lambda conditionally fetches the Sleeper NFL players list
   and round-trips it through S3, where the processing pipeline later reads it.
   The external Sleeper HTTP boundary (NFL state + players endpoint) is mocked

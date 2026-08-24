@@ -1,4 +1,4 @@
-Feature: Matchups and box scores (FE-006)
+Feature: Matchups and box scores (frontend/matchups)
   The matchups page lists a season/week's matchups and surfaces an inline error
   when the data fails to load.
 

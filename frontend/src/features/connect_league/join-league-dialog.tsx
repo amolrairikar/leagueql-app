@@ -26,7 +26,7 @@ import {
 
 /**
  * "Join League" flow for an already-onboarded **private ESPN league** the caller
- * isn't a member of yet (LQL-01 / BE-016 / FE-002 / FE-025). It is distinct from
+ * isn't a member of yet (backend/league-authorization / frontend/connect-league / frontend/ownership-transfer). It is distinct from
  * the onboard/refresh form: it only verifies membership (no onboard/refresh
  * request). The caller supplies their ESPN cookies (extension autofill or manual
  * entry); on success they're added to the league's members, the league cookies

@@ -2,7 +2,7 @@ Feature: Account menu placement (sign out reachable on mobile)
 
   The Clerk account / sign-out menu must live outside the modal mobile sidebar
   sheet. Inside the sheet, its portaled dropdown taps fall through to the sidebar
-  links beneath and "Sign out" is never clicked (FE-014 / FE-019).
+  links beneath and "Sign out" is never clicked (frontend/navigation-sidebar / frontend/authentication).
 
   Scenario: On mobile the account menu is in the header, not the sidebar sheet
     Given I am signed in on a mobile viewport

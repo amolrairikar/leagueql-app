@@ -1,0 +1,38 @@
+schema: spec-driven
+
+# Project context (optional)
+# This is shown to AI when creating artifacts.
+context: |
+  LeagueQL — fantasy-football league analytics.
+  Backend: FastAPI + Python on AWS API Gateway + Lambda; DynamoDB (single-table),
+    raw payloads in S3, DuckDB for transforms. Source under src/. Async chain:
+    API -> onboarder Lambda -> processor (precomputed views).
+  Frontend: React + TypeScript (Vite), Cloudflare Pages. Source under
+    frontend/src/, organized by feature in frontend/src/features/.
+  Extension: Chrome extension under extension/ (auto-fills ESPN cookies).
+  Infra: Terraform under infrastructure/.
+  Capabilities are domain-organized: specs/backend, specs/frontend, specs/extension.
+  Tests: backend unit (pytest, tests/unit), backend component (behave, tests/component),
+    frontend component (vitest + jest-cucumber, frontend/src/features/**/__tests__).
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always include a "Non-goals" section
+#     tasks:
+#       - Break tasks into chunks of max 2 hours
+
+# Per-operation guidance (optional)
+# Add advisory guidance for how apply and archive work should be conducted.
+# This is separate from artifact rules above.
+# Example:
+#   operations:
+#     apply:
+#       guidance:
+#         - Keep test summaries concise
+#     archive:
+#       guidance:
+#         - Summarize the archive outcome before finishing

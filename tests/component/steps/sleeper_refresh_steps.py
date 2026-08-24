@@ -1,4 +1,4 @@
-"""Steps for the scheduled Sleeper auto-refresh Lambda (BE-012)."""
+"""Steps for the scheduled Sleeper auto-refresh Lambda (backend/scheduled-sleeper-auto-refresh)."""
 
 import json
 from unittest.mock import MagicMock, patch

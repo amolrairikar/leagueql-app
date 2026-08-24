@@ -96,11 +96,11 @@ renewed season before it starts (`pre_draft`/`drafting`), the new ID is register
 `pending_season` marker, but **no `seasons`** (an empty DynamoDB string set is invalid, and the
 season must not surface in any dropdown until it has data). This is essential because Sleeper
 only links seasons *backwards*, so a discarded new ID could never be re-discovered. The
-scheduled auto-refresh ([BE-012](../requirements/backend/BE-012-scheduled-sleeper-auto-refresh.md))
+scheduled auto-refresh ([backend/scheduled-sleeper-auto-refresh](../requirements/backend/backend/scheduled-sleeper-auto-refresh-scheduled-sleeper-auto-refresh.md))
 polls pending lookups and promotes this item to a normal lookup — adding `seasons` and removing
 `pending_season` — the first run after the season flips to `in_season`
-([BE-001](../requirements/backend/BE-001-league-onboarding.md) /
-[BE-002](../requirements/backend/BE-002-league-refresh.md)).
+([backend/league-onboarding](../requirements/backend/backend/league-onboarding-league-onboarding.md) /
+[backend/league-refresh](../requirements/backend/backend/league-refresh-league-refresh.md)).
 
 ```json
 {
@@ -127,12 +127,12 @@ the league will not appear as onboarded and a retry will re-run the full onboard
 | `platform` | String | Yes | Platform the league belongs to. Enum: `ESPN`, `SLEEPER` |
 | `onboarded_at` | String | Yes | ISO 8601 timestamp of when the league was onboarded |
 | `last_refresh_at` | String | No | ISO 8601 timestamp of when the most recent refresh completed successfully. Used to enforce the per-league refresh cooldown. |
-| `last_accessed_at` | String | No | ISO 8601 (UTC) timestamp of when a member last opened the league via `GET /leagues/{leagueId}` (BE-018). Written at most once per hour (app-side throttle); absent on older items and on leagues never opened since the field shipped. Used to identify stale leagues for future pruning/archival. |
+| `last_accessed_at` | String | No | ISO 8601 (UTC) timestamp of when a member last opened the league via `GET /leagues/{leagueId}` (backend/league-access-tracking). Written at most once per hour (app-side throttle); absent on older items and on leagues never opened since the field shipped. Used to identify stale leagues for future pruning/archival. |
 | `league_name` | String | No | League name from the most recent season's settings |
-| `owner_user_id` | String | No | Clerk user ID of the league's owner — the authorization anchor for mutating endpoints (BE-016). Set **once** on first ONBOARD; never overwritten by REFRESH/MIGRATE. Absent for system-initiated onboards. |
-| `members` | String Set | No | Clerk user IDs entitled to **read** an ESPN league (BE-016). Seeded with the owner at onboard; a verified caller is `ADD`ed via `POST /leagues/{id}/verify-membership`. Unused for Sleeper (Sleeper reads are open). |
-| `transfer_token_hash` | String | No | sha256 of an outstanding ownership-transfer token (BE-016). Plaintext is never stored; set by `POST /leagues/{id}/transfer-token` and removed when redeemed. |
-| `transfer_token_expires_at` | String | No | ISO 8601 (UTC) expiry of the outstanding transfer token (BE-016). |
+| `owner_user_id` | String | No | Clerk user ID of the league's owner — the authorization anchor for mutating endpoints (backend/league-authorization). Set **once** on first ONBOARD; never overwritten by REFRESH/MIGRATE. Absent for system-initiated onboards. |
+| `members` | String Set | No | Clerk user IDs entitled to **read** an ESPN league (backend/league-authorization). Seeded with the owner at onboard; a verified caller is `ADD`ed via `POST /leagues/{id}/verify-membership`. Unused for Sleeper (Sleeper reads are open). |
+| `transfer_token_hash` | String | No | sha256 of an outstanding ownership-transfer token (backend/league-authorization). Plaintext is never stored; set by `POST /leagues/{id}/transfer-token` and removed when redeemed. |
+| `transfer_token_expires_at` | String | No | ISO 8601 (UTC) expiry of the outstanding transfer token (backend/league-authorization). |
 | `active_job_id` | String | No | Concurrency-guard pointer to the league's most recently started in-flight job. Holds the `correlation_id` of the current onboard/refresh/migrate; the API dereferences it to the `JOB#{correlation_id}` / `JOB_STATUS` item and rejects a duplicate request only while that job is `IN_PROGRESS`. Written best-effort on job start; stale pointers self-heal because the JOB_STATUS item carries a 24h TTL. |
 | `active_platform` | String | No | Current platform the league is served from after an ESPN → Sleeper migration. Set to the destination platform when a migration is initiated; before any migration `platform` is authoritative. Enum: `ESPN`, `SLEEPER`. |
 | `migrated_from` | String | No | Source platform recorded when a league is migrated to a new platform (e.g. `ESPN` when migrating ESPN → Sleeper). Enum: `ESPN`, `SLEEPER`. |
@@ -573,7 +573,7 @@ Represents all draft picks across all seasons in the fantasy league. One item pe
 <details>
 <summary><b>TRANSACTIONS</b></summary>
 
-Sleeper-only ([BE-019](../requirements/backend/BE-019-sleeper-transactions.md)). Represents completed league transactions (waivers, trades, free-agent moves, commissioner moves) for a season. One item per season; each transaction is an element in the `data` list. ESPN leagues have no equivalent data and no `TRANSACTIONS` item is written.
+Sleeper-only ([backend/sleeper-transactions](../requirements/backend/backend/sleeper-transactions-sleeper-transactions.md)). Represents completed league transactions (waivers, trades, free-agent moves, commissioner moves) for a season. One item per season; each transaction is an element in the `data` list. ESPN leagues have no equivalent data and no `TRANSACTIONS` item is written.
 
 | Attribute | Type | Required | Description |
 |---|---|---|---|

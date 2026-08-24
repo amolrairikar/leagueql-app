@@ -20,7 +20,7 @@ paths:
     get:
       summary: Health check
       description: >
-        Public, unauthenticated liveness check (BE-023) — no Clerk authorizer, so external
+        Public, unauthenticated liveness check (backend/health-check-alerting) — no Clerk authorizer, so external
         uptime monitors (the Route 53 health check on api.leagueql.com/health) can probe it and
         get 200 rather than 401. Returns 200 whenever the API is running and responding to
         requests; it does not touch any downstream dependency.
@@ -38,7 +38,7 @@ paths:
     get:
       summary: Global feature flags
       description: >
-        Returns the resolved global feature-flag map (BE-017 / FE-026) the SPA
+        Returns the resolved global feature-flag map (backend/feature-flags / frontend/feature-flags) the SPA
         uses to build its OpenFeature provider. Resolved from AWS SSM Parameter
         Store at runtime. Unauthenticated — no Clerk authorizer — so it loads before
         sign-in; the payload is only non-sensitive global booleans.
@@ -392,7 +392,7 @@ paths:
     post:
       summary: Verify ESPN league membership
       description: >
-        Verifies the caller's ESPN league membership (BE-016). The caller's ESPN
+        Verifies the caller's ESPN league membership (backend/league-authorization). The caller's ESPN
         cookies (filled by the Chrome extension) are proxied against the league;
         on success the caller is added to the league's members and may read the
         league. ESPN leagues only — Sleeper returns 400. ESPN-rejected cookies
@@ -448,7 +448,7 @@ paths:
     post:
       summary: Mint an ownership-transfer token
       description: >
-        Owner-only (BE-016). Generates a one-time ownership-transfer token,
+        Owner-only (backend/league-authorization). Generates a one-time ownership-transfer token,
         returning the plaintext token once; only its sha256 hash and a short
         expiry are stored. Minting a new token invalidates any prior one.
       operationId: createTransferToken
@@ -507,7 +507,7 @@ paths:
     post:
       summary: Claim league ownership with a transfer token
       description: >
-        Redeems a one-time transfer token to become the league owner (BE-016).
+        Redeems a one-time transfer token to become the league owner (backend/league-authorization).
         Single-use and race-safe. Returns 404 (no outstanding token), 403 (token
         mismatch), 410 (expired), or 409 (token already redeemed).
       operationId: claimOwnership
@@ -597,7 +597,7 @@ components:
         is_owner:
           type: boolean
           description: >
-            Whether the authenticated caller is the league owner (BE-016). Used by
+            Whether the authenticated caller is the league owner (backend/league-authorization). Used by
             the frontend to gate owner-only actions.
           example: true
 
@@ -918,7 +918,7 @@ components:
 
     ForbiddenError:
       description: >
-        The caller is not authorized for this league (BE-016) — not the owner for
+        The caller is not authorized for this league (backend/league-authorization) — not the owner for
         a mutating action, or not a member of a confidential ESPN league.
       content:
         application/json:
@@ -929,7 +929,7 @@ components:
             message: "Not the league owner"
 
     GoneError:
-      description: The ownership-transfer token has expired (BE-016)
+      description: The ownership-transfer token has expired (backend/league-authorization)
       content:
         application/json:
           schema:

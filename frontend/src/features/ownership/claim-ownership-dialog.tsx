@@ -19,7 +19,7 @@ import { getLeagueCookies } from '@/lib/cookie-handler';
 import { ErrorAlert } from '@/lib/error-alert';
 
 /**
- * Recipient-side ownership claim (LQL-01 / FE-025). Redeems a transfer token the
+ * Recipient-side ownership claim (backend/league-authorization / frontend/ownership-transfer). Redeems a transfer token the
  * current owner generated; on success the caller becomes the owner.
  */
 export function ClaimOwnershipDialog({

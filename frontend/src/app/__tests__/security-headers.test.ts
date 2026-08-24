@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import headers from '../../../public/_headers?raw';
 
 // The single CSP directive line (Report-Only until validated against the running app, then
-// renamed to the enforcing `Content-Security-Policy`). FE-024.
+// renamed to the enforcing `Content-Security-Policy`). frontend/security-headers.
 const cspLine =
   headers
     .split('\n')
@@ -14,7 +14,7 @@ const cspLine =
       (l) => !l.startsWith('#') && l.startsWith('Content-Security-Policy'),
     ) ?? '';
 
-describe('public/_headers (FE-024 security headers)', () => {
+describe('public/_headers (frontend/security-headers security headers)', () => {
   it('enforces the hardening response headers', () => {
     expect(headers).toContain('X-Content-Type-Options: nosniff');
     expect(headers).toContain(

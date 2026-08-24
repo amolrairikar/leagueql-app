@@ -3,7 +3,7 @@ import { Fragment, useEffect, useState, type ReactNode } from 'react';
 
 /**
  * Re-render the synchronous `isEnabled()` call sites when the flag provider
- * changes at runtime (FE-026).
+ * changes at runtime (frontend/feature-flags).
  *
  * The flag helpers (`@/lib/feature-flags`) are synchronous reads of the
  * OpenFeature client, and the call sites (sidebar, docs, landing) take no flag

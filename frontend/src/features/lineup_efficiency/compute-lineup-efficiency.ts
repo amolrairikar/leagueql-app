@@ -1,5 +1,5 @@
 /**
- * Lineup-efficiency computation (FE-034) — pure, no I/O.
+ * Lineup-efficiency computation (frontend/lineup-efficiency) — pure, no I/O.
  *
  * Computes each manager-week's **optimal legal starting lineup** from the
  * combined `starters + bench` pool in a box score and compares it to what they

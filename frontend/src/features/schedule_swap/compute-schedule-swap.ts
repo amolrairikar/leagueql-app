@@ -37,7 +37,7 @@ function winPct(r: SwapRecord): number {
 }
 
 /**
- * Build the schedule-swap matrix from a season's matchups (FE-031).
+ * Build the schedule-swap matrix from a season's matchups (frontend/schedule-swap-simulator).
  *
  * Holds every team's own weekly scores fixed and replays them against every
  * other manager's schedule. For the row team `R` under column manager `C`, each
@@ -116,10 +116,10 @@ export function computeScheduleSwap(matchups: MatchupItem[]): ScheduleSwapData {
 }
 
 /**
- * Each team's expected wins (FE-005): the average number of wins it would
+ * Each team's expected wins (frontend/season-standings): the average number of wins it would
  * record across every manager's schedule in the season — a schedule-independent
  * estimate of how many games it "should" have won given its own weekly scores.
- * Derived from the schedule-swap matrix ([FE-031]) by averaging each row team's
+ * Derived from the schedule-swap matrix ([frontend/schedule-swap-simulator]) by averaging each row team's
  * win totals over all columns (its own schedule included).
  *
  * Returns a `team_id -> expected wins` map covering every team with

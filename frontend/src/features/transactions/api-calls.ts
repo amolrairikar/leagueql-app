@@ -16,7 +16,7 @@ export interface GetTransactionsResponse {
 /**
  * Fetch a season's transactions (waivers, trades, free agents) for a league.
  *
- * Sleeper-only (BE-019 / FE-027). A season with no completed transactions has no
+ * Sleeper-only (backend/sleeper-transactions / frontend/transactions). A season with no completed transactions has no
  * TRANSACTIONS item and 404s; that is a legitimate empty result, so a 404 resolves to an
  * empty list. Any other failure propagates so the page can show an inline error.
  */

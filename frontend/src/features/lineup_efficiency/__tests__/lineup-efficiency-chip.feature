@@ -1,4 +1,4 @@
-Feature: Lineup efficiency chip (FE-034)
+Feature: Lineup efficiency chip (frontend/lineup-efficiency)
   A free chip under each team's name in the box score shows the manager's
   lineup-efficiency %, and opens a slot-by-slot start/sit report.
 

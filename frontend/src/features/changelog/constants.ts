@@ -1,4 +1,4 @@
-// In-app changelog content (FE-028). This is the single source of truth for the
+// In-app changelog content (frontend/changelog). This is the single source of truth for the
 // LeagueQL changelog; add a new release here (newest first) when one ships.
 
 export interface ChangelogSection {

@@ -155,7 +155,7 @@ function DraftGradesContent({
   );
 
   // Best/worst grading needs a draft_rank_delta; picks with null analytics
-  // (e.g. D/ST, kickers, unscored players) are excluded per FE-013.
+  // (e.g. D/ST, kickers, unscored players) are excluded per frontend/draft-grades.
   const scorablePicks = picks.filter(
     (p) =>
       p.position !== 'K' && p.position !== 'D/ST' && p.draft_rank_delta != null,

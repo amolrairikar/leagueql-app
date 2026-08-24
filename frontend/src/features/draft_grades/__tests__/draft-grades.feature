@@ -1,4 +1,4 @@
-Feature: Draft grades (FE-013)
+Feature: Draft grades (frontend/draft-grades)
   Each manager's draft is graded for the selected season, with an inline error when
   the draft data fails to load.
 

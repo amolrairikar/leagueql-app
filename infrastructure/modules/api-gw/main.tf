@@ -12,8 +12,8 @@ resource "aws_apigatewayv2_api" "this" {
   cors_configuration {
     allow_origins = var.cors_allow_origins
     allow_methods = ["GET", "POST", "DELETE", "OPTIONS"]
-    # traceparent/tracestate let the browser OTel SDK (FE-029) send W3C trace
-    # context cross-origin so the API span continues the browser's trace (BE-020).
+    # traceparent/tracestate let the browser OTel SDK (frontend/observability) send W3C trace
+    # context cross-origin so the API span continues the browser's trace (backend/otel-tracing).
     allow_headers = ["Content-Type", "Authorization", "traceparent", "tracestate"]
     max_age       = 3600
   }

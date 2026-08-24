@@ -1,4 +1,4 @@
-"""Shared OpenTelemetry tracing bootstrap + W3C context propagation (BE-020).
+"""Shared OpenTelemetry tracing bootstrap + W3C context propagation (backend/otel-tracing).
 
 Vendored into every function's deployment zip via
 ``scripts/deployment_scripts/build_lambda_zip.sh``. Framework-agnostic: the API

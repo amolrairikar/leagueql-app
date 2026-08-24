@@ -137,7 +137,7 @@ export default function LeagueQLLanding() {
   // "LeagueQL" header link, the browser back button, or a direct visit — should
   // clear lingering demo state. Otherwise the 24h `demo_mode` cookie survives and
   // a subsequently connected live league is served demo fixtures / bypasses auth
-  // (FE-015). Only the dedicated "Exit Demo" button previously did this cleanup.
+  // (frontend/demo-mode). Only the dedicated "Exit Demo" button previously did this cleanup.
   useEffect(() => {
     if (isDemoMode()) clearAllLeagueCookies();
   }, []);
@@ -216,7 +216,7 @@ export default function LeagueQLLanding() {
       } else if (platform === 'ESPN' && status === 403) {
         // Already onboarded but the caller isn't a member of this private ESPN
         // league yet — open the Join League dialog to verify membership rather
-        // than the (confusing) onboard form (LQL-01 / BE-016 / FE-025).
+        // than the (confusing) onboard form (backend/league-authorization / frontend/ownership-transfer).
         setJoinLeagueId(leagueId.trim());
       } else if (platform === 'SLEEPER' && status === 404) {
         try {

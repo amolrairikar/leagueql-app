@@ -7,7 +7,7 @@ import requests
 
 
 class TestTraceContextPropagation:
-    """The handler continues the upstream trace carried in the event (BE-020)."""
+    """The handler continues the upstream trace carried in the event (backend/otel-tracing)."""
 
     def test_handler_continues_trace_from_event_carrier(self, onboarder_handler):
         event = {"trace_context": {"traceparent": "00-abc-def-01"}}
@@ -381,7 +381,7 @@ class TestLambdaHandlerRunErrors:
         assert result["statusCode"] == 500
 
     def test_reprocess_all_forwarded_to_service(self, onboarder_handler):
-        # BE-019: the backfill flag on the invoke payload reaches OnboardingService.
+        # backend/sleeper-transactions: the backfill flag on the invoke payload reaches OnboardingService.
         event = {
             "requestType": "REFRESH",
             "canonicalLeagueId": "canonical-abc",

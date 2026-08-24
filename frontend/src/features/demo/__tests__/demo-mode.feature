@@ -1,4 +1,4 @@
-Feature: Demo mode (FE-015)
+Feature: Demo mode (frontend/demo-mode)
   In demo mode the app renders analytics from local fixtures and makes no live
   backend calls.
 

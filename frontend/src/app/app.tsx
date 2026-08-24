@@ -48,7 +48,7 @@ import Transactions from '@/features/transactions/transactions';
 import { isDemoMode } from '@/lib/cookie-handler';
 import { recordRouteChange } from '@/lib/telemetry';
 
-/** Emits a lightweight route-change span on navigation (FE-029); renders nothing. */
+/** Emits a lightweight route-change span on navigation (frontend/observability); renders nothing. */
 function RouteChangeTracker() {
   const location = useLocation();
   useEffect(() => {

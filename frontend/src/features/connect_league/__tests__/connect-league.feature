@@ -1,4 +1,4 @@
-Feature: Connect league onboarding flow (FE-002)
+Feature: Connect league onboarding flow (frontend/connect-league)
   The onboarding form validates input, triggers onboarding, polls the job to
   completion, and routes into the app — surfacing the backend failure reason when
   the job fails.

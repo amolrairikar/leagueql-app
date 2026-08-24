@@ -36,7 +36,7 @@ def step_invoke_refresh(context):
             "leagueId": context.test_league_id,
             "platform": "ESPN",
             # ESPN refreshes must use the user-entered latest season, not the
-            # previously-onboarded season (see BE-002 / ESPN refresh season bug).
+            # previously-onboarded season (see backend/league-refresh / ESPN refresh season bug).
             "season": context.espn_season,
             "s2": context.espn_s2,
             "swid": context.espn_swid,

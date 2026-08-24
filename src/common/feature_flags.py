@@ -6,7 +6,7 @@ one per environment) and is read at runtime through the boto3 ``ssm``
 ``GetParameter`` API — so toggling a flag is an edit to the parameter value in the
 SSM console, with **no redeploy**. Standard-tier parameters are free for both
 storage and ``GetParameter`` calls. See
-``docs/requirements/backend/BE-017-feature-flags.md``.
+``openspec/specs/backend/feature-flags/spec.md``.
 
 SSM is selected only when ``FEATURE_FLAGS_SSM_PARAM`` is set (the deployed
 Lambdas). Otherwise — local dev and tests — there is **no flag source** and every
@@ -29,7 +29,7 @@ from openfeature.provider.in_memory_provider import InMemoryFlag, InMemoryProvid
 
 logger = logging.getLogger(__name__)
 
-# Global flag gating the in-app informational banner (FE-030) — a generic toggle
+# Global flag gating the in-app informational banner (frontend/informational-banner) — a generic toggle
 # reused for whatever the current banner promotes (Discord today). Surfaced to the
 # SPA via GET /feature-flags; the backend enforces nothing.
 BANNER = "banner"
@@ -38,7 +38,7 @@ BANNER = "banner"
 _ON = "on"
 _OFF = "off"
 
-# SSM wiring (BE-017). When the parameter name is present the flag JSON is sourced
+# SSM wiring (backend/feature-flags). When the parameter name is present the flag JSON is sourced
 # from AWS SSM Parameter Store; otherwise (local / tests) every flag defaults off.
 _FEATURE_FLAGS_SSM_PARAM = os.environ.get("FEATURE_FLAGS_SSM_PARAM")
 # How long a fetched configuration is reused before the next poll (seconds). A

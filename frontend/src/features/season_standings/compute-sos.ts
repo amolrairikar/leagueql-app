@@ -6,7 +6,7 @@ function isRegularSeason(m: MatchupItem): boolean {
 }
 
 /**
- * Strength of schedule per team (FE-005): the average season win% of every
+ * Strength of schedule per team (frontend/season-standings): the average season win% of every
  * opponent a team faced in the regular season — higher means a tougher
  * schedule. Computed client-side from the standings (for each team's win%) and
  * the season's matchups (for who faced whom); playoff games are excluded to

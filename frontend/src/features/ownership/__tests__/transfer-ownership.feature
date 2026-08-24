@@ -1,4 +1,4 @@
-Feature: Transfer ownership dialog (FE-025)
+Feature: Transfer ownership dialog (frontend/ownership-transfer)
   The owner mints a one-time transfer token and copies it to share with the new
   owner, with visual confirmation that the copy succeeded.
 

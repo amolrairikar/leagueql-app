@@ -1,4 +1,4 @@
-Feature: Migrate league flow (FE-003)
+Feature: Migrate league flow (frontend/migrate-league)
   The migration wizard collects the destination platform + league, maps managers,
   submits the migration, and polls the job to completion before routing home.
 

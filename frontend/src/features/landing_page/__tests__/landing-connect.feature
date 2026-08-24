@@ -1,4 +1,4 @@
-Feature: Landing page connect routing (FE-001 / FE-002 / FE-025)
+Feature: Landing page connect routing (frontend/landing-page / frontend/connect-league / frontend/ownership-transfer)
   Connecting from the landing page routes ESPN leagues that need onboarding to the
   connect form, and opens the Join League dialog for leagues the caller isn't a
   member of yet.

@@ -1,4 +1,4 @@
-Feature: League metadata and job status APIs (BE-006, BE-008)
+Feature: League metadata and job status APIs (backend/league-metadata, backend/job-status-tracking)
   GET /leagues/{id} returns onboarding status; GET /jobs/{id} returns lifecycle
   status with a missing job reported as FAILED.
 
@@ -13,13 +13,13 @@ Feature: League metadata and job status APIs (BE-006, BE-008)
     When I GET "/leagues/404?platform=SLEEPER"
     Then the API responds with status 404
 
-  Scenario: Opening a league records its last-accessed time (BE-018)
+  Scenario: Opening a league records its last-accessed time (backend/league-access-tracking)
     Given a LEAGUE_LOOKUP exists for league "100" platform "SLEEPER" canonical "canon-1"
     When I GET "/leagues/100?platform=SLEEPER"
     Then the API responds with status 200
     And league "canon-1" has a last_accessed_at timestamp
 
-  Scenario: A recently accessed league is not re-written within the throttle window (BE-018)
+  Scenario: A recently accessed league is not re-written within the throttle window (backend/league-access-tracking)
     Given a LEAGUE_LOOKUP exists for league "100" platform "SLEEPER" canonical "canon-1"
     And league "canon-1" was last accessed 5 minutes ago
     When I GET "/leagues/100?platform=SLEEPER"

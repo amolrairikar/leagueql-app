@@ -1,4 +1,4 @@
-Feature: Authentication and protected routes (FE-019)
+Feature: Authentication and protected routes (frontend/authentication)
   Protected analytics routes require a signed-in user, except in demo mode where
   the guard is bypassed.
 

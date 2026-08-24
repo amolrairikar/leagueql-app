@@ -486,7 +486,7 @@ function ScatterSkeleton() {
 }
 
 // Reads the season's draft picks, filters them by the selected position, and
-// plots draft position vs. season points (FE-036). Suspends on `promise`, so
+// plots draft position vs. season points (frontend/draft-value-scatter). Suspends on `promise`, so
 // hooks run before the result branches.
 function DraftScatterInner({ promise }: { promise: Promise<DraftResult> }) {
   const result = use(promise);
@@ -545,7 +545,7 @@ function DraftScatterInner({ promise }: { promise: Promise<DraftResult> }) {
 }
 
 /**
- * Scatterplot of draft position vs. season points for a season (FE-036), with a
+ * Scatterplot of draft position vs. season points for a season (frontend/draft-value-scatter), with a
  * position dropdown filter. Fetches its own `DRAFT` data (the same `getDraftData`
  * the board uses).
  */
@@ -625,7 +625,7 @@ export default function DraftRecap() {
           />
         </Suspense>
 
-        {/* Draft-value scatter (FE-036) — a free section shown below the board. */}
+        {/* Draft-value scatter (frontend/draft-value-scatter) — a free section shown below the board. */}
         {seasons.length > 0 && (
           <div className="mt-8">
             <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-2.5">

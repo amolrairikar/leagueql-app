@@ -33,7 +33,7 @@ def test_invoke_onboarder_builds_payload_and_invokes():
         "correlation_id": "corr-1",
         "ownerUserId": "user_1",
         "reprocessAll": False,
-        # Tracing is disabled in unit tests, so the W3C carrier is empty (BE-020):
+        # Tracing is disabled in unit tests, so the W3C carrier is empty (backend/otel-tracing):
         # the contract is otherwise unchanged.
         "trace_context": {},
     }
@@ -69,7 +69,7 @@ def test_invoke_onboarder_defaults_owner_to_none():
 
 
 def test_invoke_onboarder_includes_trace_context_when_active(monkeypatch):
-    """When tracing is active, the W3C carrier rides the invoke payload (BE-020)."""
+    """When tracing is active, the W3C carrier rides the invoke payload (backend/otel-tracing)."""
     import common.onboarder_invoke as oi
 
     monkeypatch.setattr(

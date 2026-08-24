@@ -26,5 +26,5 @@ pipenv run python docs/architecture/architecture_diagram.py
 - **Ops** — SNS alerts fan out to the Discord notifier Lambda; API, onboarder, and processor
   export one end-to-end OpenTelemetry trace to Better Stack.
 
-Keep this in sync with [`../requirements/`](../requirements/README.md) when the architecture
+Keep this in sync with [`../../openspec/specs/`](../../openspec/specs/) when the architecture
 changes.

@@ -1,4 +1,4 @@
-"""Steps for league ownership + ESPN read authorization (LQL-01 / BE-016).
+"""Steps for league ownership + ESPN read authorization (backend/league-authorization).
 
 Requests go through the real ``TestClient`` (``context.api``); the Clerk auth
 dependency is overridden per step, ESPN HTTP is patched where verify-membership

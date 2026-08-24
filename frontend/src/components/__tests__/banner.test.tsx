@@ -6,7 +6,7 @@ import { Banner } from '../banner';
 
 import { setFlagsForTesting } from '@/lib/feature-flags';
 
-// FE-030: the banner is gated behind the `banner` flag and remembers a dismissal
+// frontend/informational-banner: the banner is gated behind the `banner` flag and remembers a dismissal
 // in localStorage. The global setup defaults every flag off, so each test opts
 // the flag in explicitly. jsdom's localStorage is not wired in this test env
 // (the render helper never exercises it), so back the component with a fresh

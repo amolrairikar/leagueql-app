@@ -5,7 +5,7 @@ import { setAuthTokenProvider } from '@/lib/api-client';
 import { setTelemetryUser } from '@/lib/telemetry';
 
 /**
- * Bridges Clerk's session-token getter into the API client (FE-019 / LQL-05).
+ * Bridges Clerk's session-token getter into the API client (frontend/authentication).
  *
  * Registers `useAuth().getToken` as the API client's auth token provider so each
  * request carries a fresh, short-lived Clerk JWT. This keeps the client from
@@ -20,7 +20,7 @@ export function AuthTokenBridge() {
     setAuthTokenProvider(() => getToken());
     return () => setAuthTokenProvider(null);
   }, [getToken]);
-  // Attribute telemetry spans to the signed-in user (FE-029); cleared on sign-out.
+  // Attribute telemetry spans to the signed-in user (frontend/observability); cleared on sign-out.
   useEffect(() => {
     setTelemetryUser(user?.id ?? null);
   }, [user?.id]);

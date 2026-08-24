@@ -1,4 +1,4 @@
-Feature: Draft recap (FE-012)
+Feature: Draft recap (frontend/draft-recap)
   The draft board renders the selected season's picks and surfaces an inline error
   when the draft data fails to load.
 

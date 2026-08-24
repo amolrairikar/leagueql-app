@@ -1,4 +1,4 @@
-Feature: Transactions (FE-027)
+Feature: Transactions (frontend/transactions)
   The transactions page lists a season's completed Sleeper transactions. Trades show
   only what each team received (the other side's drop is redundant); waivers and free
   agents show both the add and the drop. Empty and error states are surfaced inline.

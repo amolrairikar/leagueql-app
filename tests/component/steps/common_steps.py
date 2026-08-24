@@ -44,7 +44,7 @@ def step_seed_lookup(context, league_id, platform, canonical):
     )
     # METADATA is read by most league endpoints; seed a permissive one. The default
     # authenticated caller is recorded as owner + member so owner-gated mutations
-    # and ESPN read gating pass by default (LQL-01 / BE-016).
+    # and ESPN read gating pass by default (backend/league-authorization).
     owner = getattr(context, "default_user", "owner_user")
     if not get_item(context, f"LEAGUE#{canonical}", "METADATA"):
         put_item(

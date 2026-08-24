@@ -1,4 +1,4 @@
-Feature: Query precomputed views API (BE-005)
+Feature: Query precomputed views API (backend/query-precomputed-views)
   GET /leagues/{id}/query serves precomputed views, with collection queries
   concatenated and suffixed queries returning a single item.
 

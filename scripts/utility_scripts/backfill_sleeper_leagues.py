@@ -3,7 +3,7 @@ backfill_sleeper_leagues.py
 
 Re-onboards every onboarded Sleeper league so the processor rebuilds **all** of its
 precomputed views for **all** historical seasons. Use this after a processing change that
-adds or alters a view for already-onboarded leagues (e.g. the BE-019 TRANSACTIONS view).
+adds or alters a view for already-onboarded leagues (e.g. the backend/sleeper-transactions TRANSACTIONS view).
 
 How it works
 ------------

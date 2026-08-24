@@ -12,7 +12,7 @@ import { getLeagueCookies, isDemoMode } from '@/lib/cookie-handler';
 type GateState = 'loading' | 'ok' | 'denied';
 
 /**
- * Member-gates ESPN league views (LQL-01 / BE-016 / FE-025). ESPN league data is
+ * Member-gates ESPN league views (backend/league-authorization / frontend/ownership-transfer). ESPN league data is
  * confidential, so a non-member's `GET /leagues/{id}` returns 403; this guard
  * detects that and prompts the caller to join via the shared `JoinLeagueDialog`
  * instead of rendering the page. Sleeper reads stay open, so the guard resolves to

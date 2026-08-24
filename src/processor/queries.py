@@ -603,7 +603,7 @@ QUERIES = {
         """,
     },
     "TRANSACTIONS": {
-        # Sleeper only — ESPN exposes no transaction data (BE-019). Player/roster
+        # Sleeper only — ESPN exposes no transaction data (backend/sleeper-transactions). Player/roster
         # resolution already happened in Python (compile_sleeper_transactions), so this
         # is a passthrough; rows are ordered newest-first within each season.
         "SLEEPER": """

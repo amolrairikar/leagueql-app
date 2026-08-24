@@ -299,7 +299,7 @@ export const DRAFT = [
     vorp: 50,
   },
   // A drafted defense with no end-of-season scoring row — scoring-derived fields
-  // are null (mirrors Sleeper D/ST picks). Guards FE-012/FE-013 null handling.
+  // are null (mirrors Sleeper D/ST picks). Guards frontend/draft-recap/frontend/draft-grades null handling.
   {
     actual_position_rank: null,
     auto_draft_type_id: 0,
@@ -333,7 +333,7 @@ export const DRAFT = [
 // A two-team, two-round snake draft where Bob's round-2 pick (overall pick 3,
 // Bob's slot) was traded to Alice — so Alice makes two picks in round 2 and Bob
 // makes none. The board must place the traded pick in Bob's slot column (not
-// Alice's) and badge it as traded to Alice. Guards FE-012 traded-pick handling.
+// Alice's) and badge it as traded to Alice. Guards frontend/draft-recap traded-pick handling.
 export const DRAFT_TRADED = [
   {
     actual_position_rank: 1,

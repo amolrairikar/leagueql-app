@@ -1,4 +1,4 @@
-Feature: Scheduled Sleeper auto-refresh (BE-012)
+Feature: Scheduled Sleeper auto-refresh (backend/scheduled-sleeper-auto-refresh)
   During the NFL season the Lambda invokes the onboarder in REFRESH mode for every
   onboarded Sleeper league; ESPN leagues are excluded and offseason/week-1 are skipped.
 

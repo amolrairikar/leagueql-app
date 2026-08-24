@@ -170,7 +170,7 @@ export default function LeagueConnect() {
         data.platform === 'espn'
       ) {
         // The ESPN league is already onboarded but the caller isn't a member yet
-        // (ESPN reads are member-gated — LQL-01 / BE-016). Verify their cookies
+        // (ESPN reads are member-gated — backend/league-authorization). Verify their cookies
         // grant access (which adds them to the league's members), then open it —
         // no onboard/refresh needed (and refresh is owner-only anyway).
         try {
@@ -200,7 +200,7 @@ export default function LeagueConnect() {
     }
 
     // The league already exists and the caller can read it but is not the owner
-    // (a league-mate re-opening it). Refresh is owner-only (BE-016), so just open
+    // (a league-mate re-opening it). Refresh is owner-only (backend/league-authorization), so just open
     // the dashboard rather than attempting an onboard/refresh that would 403.
     if (requestType === 'REFRESH' && !existingIsOwner) {
       setLeagueCookies(data.leagueId, apiPlatform, existingSeasons);
