@@ -137,7 +137,7 @@ class TestLambdaHandlerSleeperRefresh:
         assert invoked_correlation_id in logged_correlation_ids
 
     def test_each_league_gets_a_root_span(self, sleeper_refresh_handler):
-        """Every refreshed league starts its own root trace (BE-020); the cron has
+        """Every refreshed league starts its own root trace (backend/otel-tracing); the cron has
         no inbound context to continue."""
         with (
             patch.object(

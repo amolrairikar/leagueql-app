@@ -75,13 +75,13 @@ router = APIRouter()
 
 @router.get("/health", status_code=status.HTTP_200_OK)
 def health() -> APIResponse:
-    """Public, unauthenticated liveness check for external uptime probes (BE-023)."""
+    """Public, unauthenticated liveness check for external uptime probes (backend/health-check-alerting)."""
     return APIResponse(detail="Healthy!")
 
 
 @router.get("/feature-flags", status_code=status.HTTP_200_OK)
 def get_feature_flags(response: Response) -> APIResponse:
-    """Return the resolved global feature-flag map for the SPA (BE-017 / FE-026).
+    """Return the resolved global feature-flag map for the SPA (backend/feature-flags / frontend/feature-flags).
 
     Unauthenticated (no Clerk dependency) so it loads before sign-in. The payload
     is only the non-sensitive global booleans the frontend already shipped — the
@@ -135,7 +135,7 @@ def get_league(
 ) -> APIResponse:
     """Gets league by league ID and platform.
 
-    Sleeper reads stay open; ESPN reads are member-gated (LQL-01 / BE-016) — a
+    Sleeper reads stay open; ESPN reads are member-gated (backend/league-authorization) — a
     non-member is rejected with 403 before any league metadata is returned. The
     response includes ``is_owner`` so the frontend can gate owner-only actions.
     """
@@ -346,7 +346,7 @@ def get_espn_members(
     attacker-controlled characters (``?``, ``&``, ``/``, ``..``) out of the request
     path/query — preventing parameter injection / path traversal against the ESPN host.
 
-    Owner-gated (LQL-01 / BE-016): this is the owner's onboarding/migration
+    Owner-gated (backend/league-authorization): this is the owner's onboarding/migration
     manager-mapping tool. Non-owner league-mates join via ``verify-membership``.
     """
     canonical_league_id = lookup_league(league_id=leagueId, platform=platform)
@@ -572,7 +572,7 @@ def query_league(
 ) -> QueryResponse:
     """Returns a precomputed data view for the specified league.
 
-    ESPN queries are member-gated (LQL-01 / BE-016); Sleeper queries stay open.
+    ESPN queries are member-gated (backend/league-authorization); Sleeper queries stay open.
     """
     parts = queryType.split("#", 1)
     base_type_str = parts[0].upper()
@@ -653,7 +653,7 @@ def create_transfer_token(
     platform: Annotated[Platform, Query(description="The platform the league is on")],
     clerk_user_id: Annotated[str, Depends(get_authenticated_user)],
 ) -> APIResponse:
-    """Mint a one-time ownership-transfer token (owner-gated, LQL-01 / BE-016).
+    """Mint a one-time ownership-transfer token (owner-gated, backend/league-authorization).
 
     Only the plaintext token is returned (to the owner, once); only its sha256
     hash and a short expiry are stored on METADATA. Minting a new token
@@ -700,7 +700,7 @@ def claim_ownership(
     payload: ClaimOwnershipPayload,
     clerk_user_id: Annotated[str, Depends(get_authenticated_user)],
 ) -> APIResponse:
-    """Redeem a transfer token to become the league owner (LQL-01 / BE-016).
+    """Redeem a transfer token to become the league owner (backend/league-authorization).
 
     Single-use and race-safe: the owner swap is a conditional ``update_item`` that
     only succeeds while the stored hash still matches, so a concurrent second
@@ -778,7 +778,7 @@ def verify_membership(
     payload: EspnMembersPayload,
     clerk_user_id: Annotated[str, Depends(get_authenticated_user)],
 ) -> APIResponse:
-    """Verify ESPN league membership via the caller's cookies (LQL-01 / BE-016).
+    """Verify ESPN league membership via the caller's cookies (backend/league-authorization).
 
     The Chrome extension fills the caller's ``espn_s2``/``SWID``; the backend
     proxies an authenticated read of this exact ESPN league with those cookies.

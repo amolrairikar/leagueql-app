@@ -1,4 +1,4 @@
-"""Unit tests for common.feature_flags (BE-017 OpenFeature flag layer)."""
+"""Unit tests for common.feature_flags (backend/feature-flags OpenFeature flag layer)."""
 
 import importlib
 import json

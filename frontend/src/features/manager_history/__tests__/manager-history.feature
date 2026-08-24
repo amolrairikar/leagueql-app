@@ -1,4 +1,4 @@
-Feature: Manager history (FE-009)
+Feature: Manager history (frontend/manager-history)
   The manager history page shows each manager's per-season records and rivalries,
   with an inline error when the data fails to load.
 

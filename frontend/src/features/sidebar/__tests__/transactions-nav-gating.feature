@@ -1,4 +1,4 @@
-Feature: Transactions nav gating (FE-027 / BE-019)
+Feature: Transactions nav gating (frontend/transactions / backend/sleeper-transactions)
   The Transactions nav item is shown only for Sleeper leagues, since ESPN
   leagues have no transaction data.
 

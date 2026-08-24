@@ -3,7 +3,7 @@
   "name": "leagueql-app",
   "compatibility_date": "2025-09-27",
   // Worker entry: serves static assets via the ASSETS binding and adds the
-  // same-origin /ingest/traces → Better Stack proxy (FE-029). Static asset requests
+  // same-origin /ingest/traces → Better Stack proxy (frontend/observability). Static asset requests
   // are served directly; only non-asset routes (e.g. /ingest/traces) invoke the Worker.
   "main": "workers/leagueql-app/index.js",
   "observability": {
@@ -17,7 +17,7 @@
   "compatibility_flags": [
     "nodejs_compat"
   ],
-  // Runtime vars for the /ingest/traces → Better Stack proxy (FE-029). The OTLP
+  // Runtime vars for the /ingest/traces → Better Stack proxy (frontend/observability). The OTLP
   // traces URL is not sensitive, so it lives here; the source token is a Worker
   // *secret* (OTEL_EXPORTER_TOKEN), set out-of-band via `wrangler secret put` / the
   // dashboard and never committed. Both must be set for the proxy to forward (else 204).

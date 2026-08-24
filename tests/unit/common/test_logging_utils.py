@@ -48,7 +48,7 @@ class TestJsonFormatter:
 
 
 class TestTraceContext:
-    """trace_id/span_id cross-linking (BE-020). Guarded so non-OTel Lambdas skip it."""
+    """trace_id/span_id cross-linking (backend/otel-tracing). Guarded so non-OTel Lambdas skip it."""
 
     def test_no_trace_keys_when_no_active_span(self):
         # OTel is installed in tests, but no span is active → keys are omitted.

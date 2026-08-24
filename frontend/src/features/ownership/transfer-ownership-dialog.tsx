@@ -18,7 +18,7 @@ import { getLeagueCookies } from '@/lib/cookie-handler';
 import { ErrorAlert } from '@/lib/error-alert';
 
 /**
- * Owner-side ownership transfer (LQL-01 / FE-025). Mints a one-time token the
+ * Owner-side ownership transfer (backend/league-authorization / frontend/ownership-transfer). Mints a one-time token the
  * owner hands to the recipient, who redeems it via the claim flow. The plaintext
  * token is shown once; only its hash is stored server-side.
  */

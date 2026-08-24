@@ -1,4 +1,4 @@
-"""Steps for the player metadata refresher Lambda (BE-010).
+"""Steps for the player metadata refresher Lambda (backend/player-metadata-refresher).
 
 The Sleeper HTTP boundary is mocked per scenario (NFL state via
 ``fetch_nfl_state``, the players endpoint via the module-level ``http_session``);

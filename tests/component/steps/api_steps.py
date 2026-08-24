@@ -1,4 +1,4 @@
-"""Steps for the FastAPI app as a component (BE-005..009, BE-013).
+"""Steps for the FastAPI app as a component (backend/query-precomputed-views..009, backend/app-stats-league-count).
 
 Requests go through the real ``TestClient`` (``context.api``) against moto-backed
 DynamoDB/S3; ESPN HTTP is patched where a route reaches out.
@@ -96,7 +96,7 @@ def step_post_espn_members(context, league_id, code):
 @when('I POST a REFRESH of league "{league_id}" on "{platform}"')
 def step_post_refresh(context, league_id, platform):
     # requestType is a query param; the REFRESH path of an already-onboarded
-    # league is owner-gated (LQL-01 / BE-016).
+    # league is owner-gated (backend/league-authorization).
     context.response = context.api.post(
         "/leagues?requestType=REFRESH",
         json={"leagueId": league_id, "platform": platform},
@@ -251,7 +251,7 @@ def step_metadata_survives(context, canonical):
 @given('league "{canonical}" was last accessed {minutes:d} minutes ago')
 def step_seed_last_accessed(context, canonical, minutes):
     # Seed a recent last_accessed_at and stash it so a later assertion can confirm
-    # the throttle held (no overwrite within the window). BE-018.
+    # the throttle held (no overwrite within the window). backend/league-access-tracking.
     seeded = (datetime.now(timezone.utc) - timedelta(minutes=minutes)).isoformat()
     context.ddb_resource.Table(context.table_name).update_item(
         Key={"PK": f"LEAGUE#{canonical}", "SK": "METADATA"},

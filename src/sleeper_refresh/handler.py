@@ -4,7 +4,7 @@ import uuid
 from common.tracing import init_tracing, traced_handler
 from utils import logger, get_nfl_state, get_sleeper_leagues, invoke_onboarder_lambda
 
-# Originate a trace per refreshed league → Better Stack (BE-020); the onboarder/
+# Originate a trace per refreshed league → Better Stack (backend/otel-tracing); the onboarder/
 # processor continue it. A no-op unless tracing is configured, so tests /
 # unconfigured envs are unaffected.
 init_tracing("leagueql-sleeper-refresh")

@@ -4,7 +4,7 @@ Vendored into every function's deployment zip. Centralizes the async invoke
 payload contract (``body`` / ``requestType`` / ``canonicalLeagueId`` /
 ``correlation_id`` / ``trace_context``) shared by the API and the Sleeper refresh
 job. ``trace_context`` carries W3C trace context so the onboarder continues the
-caller's OpenTelemetry trace (BE-020); it is empty when tracing is disabled.
+caller's OpenTelemetry trace (backend/otel-tracing); it is empty when tracing is disabled.
 """
 
 import json
@@ -34,11 +34,11 @@ def invoke_onboarder(
         canonical_league_id: The canonical league ID, or None for first-time onboarding.
         correlation_id: Correlation ID propagated for request tracing.
         owner_user_id: Clerk user ID of the onboarding owner, recorded on the
-            league's METADATA on first ONBOARD (LQL-01 / BE-016). ``None`` for the
+            league's METADATA on first ONBOARD (backend/league-authorization). ``None`` for the
             Sleeper auto-refresh job and other system-initiated invocations.
         reprocess_all: When True, flag the run as a backfill so the processor rebuilds
             every season's views (not just the latest). Used by the Sleeper backfill
-            script (BE-019); default False leaves normal onboards/refreshes unchanged.
+            script (backend/sleeper-transactions); default False leaves normal onboards/refreshes unchanged.
 
     Returns:
         The boto3 ``invoke`` response.
@@ -50,7 +50,7 @@ def invoke_onboarder(
         "correlation_id": correlation_id,
         "ownerUserId": owner_user_id,
         "reprocessAll": reprocess_all,
-        # W3C trace context so the onboarder continues the caller's trace (BE-020).
+        # W3C trace context so the onboarder continues the caller's trace (backend/otel-tracing).
         # Empty ``{}`` when tracing is disabled (tests / unconfigured), so the
         # contract is unchanged in those contexts.
         "trace_context": inject_context({}),

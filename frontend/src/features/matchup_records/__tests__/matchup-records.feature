@@ -1,4 +1,4 @@
-Feature: Matchup records (FE-011)
+Feature: Matchup records (frontend/matchup-records)
   All-time team/matchup superlatives render from the league's matchups, with an
   inline error when the data fails to load.
 

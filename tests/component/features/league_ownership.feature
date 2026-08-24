@@ -1,4 +1,4 @@
-Feature: League ownership and ESPN read authorization (LQL-01 / BE-016)
+Feature: League ownership and ESPN read authorization (backend/league-authorization)
   Mutations are owner-gated; ESPN league data is confidential, so reads are
   member-gated with a cookie-verified join. Sleeper reads stay open.
 
@@ -53,7 +53,7 @@ Feature: League ownership and ESPN read authorization (LQL-01 / BE-016)
     Given the request is authenticated as "owner_user"
     When I POST a transfer token for league "100" on "ESPN"
     Then the API responds with status 200
-    # The secret token response falls back to the default-deny cache policy (BE-024).
+    # The secret token response falls back to the default-deny cache policy (backend/security-headers).
     And the response has Cache-Control "no-store"
     Given the request is authenticated as "new_owner"
     When I claim ownership of league "100" on "ESPN" with the minted token

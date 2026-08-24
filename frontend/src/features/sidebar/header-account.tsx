@@ -10,7 +10,7 @@ import { isDemoMode } from '@/lib/cookie-handler';
  * everything outside its own content. Clerk's `UserButton` dropdown portals to
  * `document.body` (outside the sheet), so taps on its items — including "Sign
  * out" — fall through to the sidebar links beneath it and the sign-out button is
- * never actually clicked (FE-014 / FE-019). Rendering the account menu in the
+ * never actually clicked (frontend/navigation-sidebar / frontend/authentication). Rendering the account menu in the
  * always-present header (outside the sheet) keeps sign-out working on mobile.
  *
  * On desktop the sidebar is not a modal sheet, so the avatar stays in the

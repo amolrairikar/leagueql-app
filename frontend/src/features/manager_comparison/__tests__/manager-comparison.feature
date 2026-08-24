@@ -1,4 +1,4 @@
-Feature: Manager comparison (FE-007)
+Feature: Manager comparison (frontend/manager-comparison)
   Two managers are compared head-to-head; with fewer than two managers the page
   shows a clear zero-state.
 

@@ -1,4 +1,4 @@
-Feature: League refresh reprocesses in place (BE-002, BE-013)
+Feature: League refresh reprocesses in place (backend/league-refresh, backend/app-stats-league-count)
   A refresh re-runs the onboarder + processor for an already-onboarded league,
   overwriting precomputed views in place without duplicating them and without
   changing the global LEAGUE_COUNT.

@@ -1,4 +1,4 @@
-Feature: Onboard-to-processed pipeline (BE-001, BE-004)
+Feature: Onboard-to-processed pipeline (backend/league-onboarding, backend/data-processing-pipeline)
   Drives the onboarder and processor as one component with the platform API
   mocked. The onboarder writes raw data to (moto) S3 and league records to
   DynamoDB; a synthesized S3 event then runs the processor, whose DuckDB
@@ -21,12 +21,12 @@ Feature: Onboard-to-processed pipeline (BE-001, BE-004)
     And the league has at least one "TRANSACTIONS#2024" item
     And the standings show "Team Alice" as champion
     And the LEAGUE_COUNT is 1
-    # BE-019: only the two completed transactions are stored (the failed waiver is dropped).
+    # backend/sleeper-transactions: only the two completed transactions are stored (the failed waiver is dropped).
     When I GET "/leagues/100/query?platform=SLEEPER&queryType=TRANSACTIONS#2024"
     Then the API responds with status 200
     And the query response has 2 row(s)
 
-  Scenario: Onboarding a renewed Sleeper season reuses the existing league without a duplicate METADATA (BE-001)
+  Scenario: Onboarding a renewed Sleeper season reuses the existing league without a duplicate METADATA (backend/league-onboarding)
     # A Sleeper league renews under a new league ID linked by previous_league_id. Onboarding
     # it must fold into the existing canonical league, registering the new ID's LEAGUE_LOOKUP
     # and preserving the original METADATA — never creating a second, separate league.
@@ -38,7 +38,7 @@ Feature: Onboard-to-processed pipeline (BE-001, BE-004)
     And a LEAGUE_LOOKUP exists for onboarded league "200" platform "SLEEPER"
     And exactly one un-overwritten METADATA exists for canonical "canon-prior"
 
-  Scenario: Onboarding an offseason Sleeper renewal registers a pending lookup (BE-001, BE-012)
+  Scenario: Onboarding an offseason Sleeper renewal registers a pending lookup (backend/league-onboarding, backend/scheduled-sleeper-auto-refresh)
     # The renewed season hasn't started (pre_draft), so there's nothing to process yet, but
     # the new league ID must still be persisted (pointing at the existing canonical, marked
     # pending) so the scheduled auto-refresh can attach the season once it begins.
@@ -50,7 +50,7 @@ Feature: Onboard-to-processed pipeline (BE-001, BE-004)
     And a pending LEAGUE_LOOKUP exists for league "200" pending season "2026" canonical "canon-prior"
     And exactly one un-overwritten METADATA exists for canonical "canon-prior"
 
-  Scenario: A Sleeper league with no playoffs yet onboards without a bracket (BE-001, BE-004)
+  Scenario: A Sleeper league with no playoffs yet onboards without a bracket (backend/league-onboarding, backend/data-processing-pipeline)
     # Sleeper returns a null winners_bracket/losers_bracket before a season reaches the
     # playoffs. That is a valid state and must not fail onboarding — the season simply
     # produces no PLAYOFF_BRACKET item while every other view is still built.
@@ -68,7 +68,7 @@ Feature: Onboard-to-processed pipeline (BE-001, BE-004)
     Then the API responds with status 200
     And no query response row has "playoff_round" equal to "Losers Bracket"
 
-  Scenario: A preseason Sleeper league with no player stats yet builds DRAFT without erroring (BE-004)
+  Scenario: A preseason Sleeper league with no player stats yet builds DRAFT without erroring (backend/data-processing-pipeline)
     # A new Sleeper season created before its first games have been played has player
     # metadata but no accumulated stats, so player_scoring_totals computes to no rows. The
     # empty-view guard must register it as a typed 0-row view so the DRAFT (SLEEPER)

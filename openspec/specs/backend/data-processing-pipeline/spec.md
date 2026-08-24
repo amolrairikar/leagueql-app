@@ -1,0 +1,83 @@
+# data-processing-pipeline Specification
+
+## Purpose
+Transform raw platform API payloads stored in S3 into precomputed, query-ready views written to DynamoDB. The processor Lambda runs per-platform DuckDB SQL transforms and writes each view under the league's canonical partition key with an entity-specific sort key. This pipeline backs every read feature; the frontend only ever reads these precomputed items.
+
+## Requirements
+
+### Requirement: Write precomputed views per season
+For each onboarded season the processor SHALL write `TEAMS`, `MATCHUPS#{season}#WEEK#{week}`, `STANDINGS#{season}`, `WEEKLY_STANDINGS#{season}`, `PLAYOFF_BRACKET#{season}`, and `DRAFT#{season}` items matching the DynamoDB schema.
+
+#### Scenario: Full season processed
+- **WHEN** the processor runs for an onboarded season
+- **THEN** it writes the `TEAMS`, `MATCHUPS`, `STANDINGS`, `WEEKLY_STANDINGS`, `PLAYOFF_BRACKET`, and `DRAFT` view items for that season
+
+#### Scenario: Idempotent refresh
+- **WHEN** the processor re-runs on refresh
+- **THEN** existing view items are overwritten in place (idempotent per `(canonical_league_id, SK)`) rather than duplicated
+
+### Requirement: Normalize platform differences
+The processor SHALL select per-platform transforms so ESPN and Sleeper inputs produce views with identical schemas.
+
+#### Scenario: Cross-platform schema parity
+- **WHEN** ESPN and Sleeper leagues are processed
+- **THEN** their resulting views share identical schemas with platform-specific fields (position ID mappings, keeper fields) normalized
+
+#### Scenario: Starter slot labels
+- **WHEN** starters are computed
+- **THEN** each starter's `fantasy_position` reflects the actual lineup slot filled — Sleeper positionally from `roster_positions`, ESPN from `lineupSlotId` via `ESPN_FANTASY_POSITION_ID_MAPPING` (Superflex/`OP`, `TQB`, flex variants, IDP, `P`, `HC`) — with only slots outside that set falling back to `FLEX`
+
+#### Scenario: Migrated-league owner continuity
+- **WHEN** a migrated league is processed
+- **THEN** owner IDs are resolved across platforms via the `PLATFORM_MIGRATION` mapping so all-time aggregates stay continuous
+
+### Requirement: Compute draft analytics
+The processor SHALL compute `drafted_position_rank`, `actual_position_rank`, `draft_rank_delta`, and `vorp` for draft picks, with `vorp` null for K and D/ST.
+
+#### Scenario: Draft analytics computed
+- **WHEN** a `DRAFT#{season}` view is written
+- **THEN** each pick carries the computed rank/VORP analytics, with `vorp` null for K and D/ST, and auction fields (`bid_amount`, `nominating_team_id`) populated for auction drafts (null for snake)
+
+### Requirement: Tolerate empty and absent inputs
+The processor SHALL write views without erroring when player metadata/stats or a Sleeper bracket are absent, guarding 0-column DuckDB registrations for views that can legitimately be empty.
+
+#### Scenario: Missing player metadata
+- **WHEN** `player_name`, `total_points`, or `position` is missing for some players
+- **THEN** the affected views are still written with null fields rather than erroring
+
+#### Scenario: Empty bracket season
+- **WHEN** a season's Sleeper `playoff_bracket`/`losers_bracket` raw data is empty or absent
+- **THEN** no `PLAYOFF_BRACKET#{season}` item is written, its typical-playoff-week matchups are classified `playoff_tier_type = NONE`, and the run does not error
+
+#### Scenario: Empty grouped view guard
+- **WHEN** a legitimately-empty view still referenced downstream is registered (`brackets`, `transactions`, `player_scoring_totals`)
+- **THEN** it is registered as a typed 0-row frame (numeric columns kept numeric) so DuckDB does not crash, and the `DRAFT` (SLEEPER) transform binds against an empty `player_scoring_totals` to yield draft rows with no scoring/VORP for that season
+
+#### Scenario: Other empty view attribution
+- **WHEN** any other view is unexpectedly empty at registration
+- **THEN** it is logged by name before the failing registration so it is attributable from the logs
+
+### Requirement: Reconstruct partial Sleeper bracket links
+The processor SHALL reconstruct missing Sleeper `t1_from`/`t2_from` feeder links from round and winner/loser membership so bracket tiering is identified correctly.
+
+#### Scenario: Feeder links only on the final round
+- **WHEN** a Sleeper winners bracket populates `from` links only on the final round
+- **THEN** the processor reconstructs the missing links from prior-round membership so `WINNERS_BRACKET` vs `WINNERS_CONSOLATION_LADDER` tiering is correct, preserving links Sleeper already provided and keeping a bye team's `from` null
+
+### Requirement: Select seasons to process
+The processor SHALL recompute only the latest season on a normal refresh, and every season in the manifest when `reprocess_all=true`.
+
+#### Scenario: Normal refresh
+- **WHEN** a normal refresh runs
+- **THEN** only the latest season is recomputed (`resolve_seasons_to_process`)
+
+#### Scenario: Reprocess all
+- **WHEN** the manifest carries `reprocess_all=true`
+- **THEN** the processor recomputes every season in the manifest from the raw season files already in S3
+
+### Requirement: Fail cleanly on processing errors
+A processing failure SHALL write a `FAILED` job status and SHALL NOT leave partially-valid `METADATA` marked as completed.
+
+#### Scenario: Processing failure
+- **WHEN** processing fails
+- **THEN** a `FAILED` job status is written and `METADATA` is not marked completed with partial data

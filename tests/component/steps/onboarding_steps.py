@@ -1,4 +1,4 @@
-"""Steps driving the onboarder -> processor component chain (BE-001, BE-004).
+"""Steps driving the onboarder -> processor component chain (backend/league-onboarding, backend/data-processing-pipeline).
 
 The external platform API is mocked by replacing ``OnboardingService._build_client``
 with a fake client that returns fixture raw data; everything downstream — the

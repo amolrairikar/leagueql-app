@@ -26,7 +26,7 @@ class OnboardingService:
             the league has not been onboarded before. If provided, will be used to write raw refreshed data to the same
             S3 location as the original data and update the same DynamoDB metadata item as the original.
         reprocess_all: When True, tags the manifest so the processor rebuilds every
-            season's views (used by the BE-019 backfill); default False.
+            season's views (used by the backend/sleeper-transactions backfill); default False.
 
     Methods:
         __init__(league_id, platform, request_type, latest_season, espn_s2_cookie, swid_cookie, canonical_league_id): Constructor.

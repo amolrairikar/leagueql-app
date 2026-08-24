@@ -2,36 +2,39 @@
 
 Guidance for working in the LeagueQL repository.
 
-## Requirements docs come first
+## Specs come first (OpenSpec)
 
-LeagueQL maintains **live feature requirements documents** under
-[`docs/requirements/`](docs/requirements/README.md). They are the source of truth for what
-each feature does and are organized into backend (`BE-xxx`), frontend (`FE-xxx`), and
-extension (`EXT-xxx`) features — frontend and backend features are kept in separate files.
+LeagueQL manages requirements with **[OpenSpec](https://github.com/Fission-AI/OpenSpec)**.
+The source of truth for what each feature does lives under
+[`openspec/specs/`](openspec/specs/), organized by domain into capability specs at
+`openspec/specs/{backend,frontend,extension}/<capability>/spec.md`. Each spec has a
+`## Purpose` and a `## Requirements` section of `### Requirement:` statements (each a single
+`SHALL`), every one backed by at least one `#### Scenario:` written in WHEN/THEN form. Run the
+CLI with `npx @fission-ai/openspec@latest <command>` (no install needed).
 
 **Before writing or changing any code, you MUST:**
 
-1. **Find the relevant feature doc(s)** in `docs/requirements/` (start from the
-   [index](docs/requirements/README.md)).
-2. **Review** the description, edge cases, and acceptance criteria so the change fits the
-   intended behavior.
-3. **Update the doc first** when the change adds, removes, or alters behavior — edit the
-   description, edge cases, and/or acceptance criteria to reflect the new intended behavior
-   **before** implementing it. The doc and the code must land in the same change.
-4. **Create a new doc** for any genuinely new feature: add `<ID>-<kebab-title>.md` in the
-   appropriate subdirectory and link it in `docs/requirements/README.md`. Use the next free
-   ID in that prefix; don't renumber existing docs or reuse a freed ID for ordinary work.
-   Renumbering (including reusing a freed ID) is reserved for a **deliberate, one-shot
-   consolidation** that renames the docs and rewrites every reference in the same change.
+1. **Read the relevant capability spec(s)** under `openspec/specs/`. Browse them with
+   `openspec list --specs` and `openspec show <capability>`.
+2. **Review** the requirements and scenarios so the change fits the intended behavior.
+3. **For any change to externally observable behavior, create an OpenSpec change first**
+   (before implementing) and follow the propose → apply → archive workflow:
+   - Propose with `/opsx:propose` (or `openspec new change "<kebab-name>"`). A change bundles
+     `proposal.md`, delta specs under `changes/<name>/specs/<capability>/spec.md` using
+     `## ADDED / MODIFIED / REMOVED Requirements`, `design.md`, and `tasks.md`.
+   - Implement with `/opsx:apply`; the code and the change land together.
+   - When the work is complete, `/opsx:archive` merges the delta into `openspec/specs/` and
+     files the change under `openspec/changes/archive/`.
+   - Validate with `openspec validate --all` (or `--specs`) — every requirement needs a `SHALL`
+     statement and ≥1 scenario, and no reference may dangle.
+4. **Add a brand-new capability** via the same change workflow: the delta's `## ADDED
+   Requirements` (plus a `## Purpose`) seeds a new `openspec/specs/<domain>/<capability>/spec.md`
+   at archive time. Name capabilities in kebab-case under the right domain
+   (`backend`/`frontend`/`extension`).
 
-If a code change reveals that a doc is wrong or out of date, fix the doc as part of that
-change. Requirements docs should never silently drift from the code.
-
-### Each feature doc contains
-- Feature ID + title
-- Description (and scope)
-- Edge cases
-- Acceptance criteria
+Small, non-behavioral edits (typos, wording) may be made directly in a `spec.md`. If a code
+change reveals a spec is wrong or out of date, fix the spec as part of that change — specs must
+never silently drift from the code.
 
 ## Code quality (linting & formatting)
 

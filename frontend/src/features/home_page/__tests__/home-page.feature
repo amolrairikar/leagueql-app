@@ -1,4 +1,4 @@
-Feature: Home dashboard (FE-004)
+Feature: Home dashboard (frontend/home-dashboard)
   The dashboard derives every section from one league-data request, surfaces a
   single inline error on failure, and renders empty states for a league with no
   games yet.

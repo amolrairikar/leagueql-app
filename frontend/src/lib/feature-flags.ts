@@ -1,5 +1,5 @@
 /**
- * Feature-flag evaluation backed by OpenFeature (FE-026).
+ * Feature-flag evaluation backed by OpenFeature (frontend/feature-flags).
  *
  * Flag state lives in **AWS SSM Parameter Store** (global, per environment) and is
  * resolved at runtime from the backend's public `GET /feature-flags` endpoint — so a
@@ -38,7 +38,7 @@ function toFlagConfiguration(config: Record<string, FlagSpec>) {
  * detect whether the resolved flags actually changed. A refresh that returns the
  * same values — e.g. the `visibilitychange` refresh on every tab focus — must NOT
  * swap the provider, because swapping emits `PROVIDER_READY` /
- * `PROVIDER_CONFIGURATION_CHANGED`, which remounts the whole app (FE-026).
+ * `PROVIDER_CONFIGURATION_CHANGED`, which remounts the whole app (frontend/feature-flags).
  */
 function serializeFlags(config: Record<string, FlagSpec>): string {
   return JSON.stringify(
@@ -69,7 +69,7 @@ export function isEnabled(flagName: string): boolean {
   return client.getBooleanValue(flagName, false);
 }
 
-/** Whether the in-app informational banner (FE-030) is enabled. */
+/** Whether the in-app informational banner (frontend/informational-banner) is enabled. */
 export function isBannerEnabled(): boolean {
   return isEnabled('banner');
 }
@@ -103,7 +103,7 @@ export async function refreshFlags(): Promise<void> {
     );
     // Only swap the provider when the values actually changed. An unchanged
     // refresh (the common case for the visibilitychange/poll refresh) must be a
-    // no-op so it does not emit a provider event and remount the app (FE-026).
+    // no-op so it does not emit a provider event and remount the app (frontend/feature-flags).
     if (serializeFlags(config) === lastAppliedFlags) return;
     setProviderFromConfig(config);
   } catch {

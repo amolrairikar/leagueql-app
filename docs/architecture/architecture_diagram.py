@@ -11,7 +11,7 @@ Usage (from repo root)::
     brew install graphviz              # system dependency for rendering
     pipenv run python docs/architecture/architecture_diagram.py
 
-Keep this in sync with docs/requirements/ when the architecture changes.
+Keep this in sync with openspec/specs/ when the architecture changes.
 """
 
 from diagrams import Cluster, Diagram, Edge

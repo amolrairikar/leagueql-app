@@ -162,7 +162,7 @@ class TestOnboardingServiceRun:
         onboarder_onboarding_service,
         monkeypatch,
     ):
-        # LQL-01 / BE-016: the owner threaded from the API reaches the writer.
+        # backend/league-authorization: the owner threaded from the API reaches the writer.
         monkeypatch.setenv("S3_BUCKET_NAME", "test-bucket")
         mock_resp = MagicMock()
         mock_resp.raise_for_status = MagicMock()
@@ -196,7 +196,7 @@ class TestOnboardingServiceRun:
         onboarder_onboarding_service,
         monkeypatch,
     ):
-        # BE-019: the backfill flag threads through to the S3 manifest writer.
+        # backend/sleeper-transactions: the backfill flag threads through to the S3 manifest writer.
         monkeypatch.setenv("S3_BUCKET_NAME", "test-bucket")
         mock_resp = MagicMock()
         mock_resp.raise_for_status = MagicMock()

@@ -1,11 +1,11 @@
 /**
- * Cloudflare Worker entry for the LeagueQL frontend (FE-029).
+ * Cloudflare Worker entry for the LeagueQL frontend (frontend/observability).
  *
  * Serves the static SPA via the `ASSETS` binding and adds a same-origin
  * `POST /ingest/traces` proxy that injects the Better Stack OTLP source token
  * server-side and forwards OTLP trace data to Better Stack. This keeps the token
  * out of the browser bundle entirely; the browser exporter only ever talks to its
- * own origin (so the CSP `connect-src 'self'` already covers it — FE-024).
+ * own origin (so the CSP `connect-src 'self'` already covers it — frontend/security-headers).
  *
  * Per-deploy Cloudflare config (set separately on the dev and prod deploys):
  *   - OTEL_EXPORTER_TOKEN (secret) — Better Stack source token (`wrangler secret put ...`)

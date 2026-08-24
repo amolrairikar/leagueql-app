@@ -8,7 +8,7 @@ import svgr from 'vite-plugin-svgr';
 import { defineConfig } from 'vitest/config';
 
 /**
- * Substitute the `__VITE_DEV_API_URL__` token in the emitted `dist/_headers` (FE-024) with
+ * Substitute the `__VITE_DEV_API_URL__` token in the emitted `dist/_headers` (frontend/security-headers) with
  * the build-time `VITE_DEV_API_URL` so the dev/preview API Gateway origin is not hardcoded
  * in the CSP `connect-src`. When the var is unset (e.g. production builds) the token — and
  * its surrounding whitespace — is removed, leaving only the production origins.

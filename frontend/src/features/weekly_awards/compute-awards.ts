@@ -1,6 +1,6 @@
 import type { MatchupItem } from '@/components/api/types';
 
-/** The per-week award types, in display order (FE-032). */
+/** The per-week award types, in display order (frontend/weekly-awards). */
 export type AwardKey =
   | 'highest'
   | 'lowest'
@@ -238,7 +238,7 @@ function computeWeekAwards(
 }
 
 /**
- * Build the weekly awards + running tally from a season's matchups (FE-032).
+ * Build the weekly awards + running tally from a season's matchups (frontend/weekly-awards).
  *
  * Awards are computed per week for every navigable week (regular season and
  * playoffs). The active week's award cards come from `selectedWeek` (defaulting

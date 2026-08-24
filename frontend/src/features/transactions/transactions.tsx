@@ -249,7 +249,7 @@ interface OwnerVisual {
 
 /**
  * Maps each roster_id to the avatar logo and color *index* used on the Season Standings page
- * (FE-005), so the summary table shows the same avatar/color per owner. Standings keys on
+ * (frontend/season-standings), so the summary table shows the same avatar/color per owner. Standings keys on
  * team_id, which is the roster_id for Sleeper (the only platform with transactions), and its
  * color is positional — `avatarColor(index)` over the API's returned order — so the index is
  * captured here rather than the resolved color.
@@ -438,7 +438,7 @@ export default function Transactions() {
     [leagueId, platform, selectedSeason],
   );
 
-  // Standings supplies the avatar/color the summary table reuses (FE-005); a missing or failed
+  // Standings supplies the avatar/color the summary table reuses (frontend/season-standings); a missing or failed
   // load is tolerated — the summary falls back to index-based colors and initials.
   const standingsPromise = useMemo(
     (): Promise<StandingsResult> =>

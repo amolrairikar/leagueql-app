@@ -1,4 +1,4 @@
-Feature: Weekly awards & superlatives (FE-032)
+Feature: Weekly awards & superlatives (frontend/weekly-awards)
   The matchups page hosts a free weekly-awards section: per-week award cards (highest
   and lowest score, biggest blowout, narrowest win, best loss, worst win) plus a week-to-date
   tally of how many each manager has collected.

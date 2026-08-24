@@ -8,7 +8,7 @@
  * The real Clerk provider needs a live publishable key + network, so tests mock
  * it (wired in `src/test/setup.ts` via `vi.mock`). `setClerkState` lets a test
  * flip between signed-in / signed-out / still-loading to exercise the
- * `ProtectedRoute` and auth flows (FE-019).
+ * `ProtectedRoute` and auth flows (frontend/authentication).
  */
 import type { ReactNode } from 'react';
 

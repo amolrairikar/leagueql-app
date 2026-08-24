@@ -144,7 +144,7 @@ class TestWriteLeagueRecords:
     def test_onboard_writes_owner_and_seeds_members(
         self, onboarder_writer, monkeypatch
     ):
-        # LQL-01 / BE-016: the onboarding owner is recorded and seeds members.
+        # backend/league-authorization: the onboarding owner is recorded and seeds members.
         monkeypatch.setenv("DYNAMODB_TABLE_NAME", "test-table")
         mock_ddb = MagicMock()
         with patch.object(onboarder_writer, "_dynamodb", mock_ddb):
@@ -220,7 +220,7 @@ class TestWriteLeagueRecords:
         assert "Update" in items[0]
         assert items[0]["Update"]["Key"]["SK"] == {"S": "LEAGUE_LOOKUP"}
         # Promoting a pending renewal to a real season drops the pending marker; a no-op
-        # on an ordinary refresh where it was never set (BE-012).
+        # on an ordinary refresh where it was never set (backend/scheduled-sleeper-auto-refresh).
         assert "REMOVE pending_season" in items[0]["Update"]["UpdateExpression"]
 
     def test_refresh_new_season_uses_put(self, onboarder_writer, monkeypatch):

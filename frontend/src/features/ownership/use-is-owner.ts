@@ -7,7 +7,7 @@ import { getLeagueCookies, isDemoMode } from '@/lib/cookie-handler';
 export interface OwnershipState {
   /** True while `getLeague` is in flight (never true for the bypass cases). */
   loading: boolean;
-  /** Whether the authenticated caller owns the current league (LQL-01 / FE-025). */
+  /** Whether the authenticated caller owns the current league (backend/league-authorization / frontend/ownership-transfer). */
   isOwner: boolean;
 }
 

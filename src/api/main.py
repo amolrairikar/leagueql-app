@@ -140,13 +140,13 @@ app.add_middleware(
     allow_origins=ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST", "DELETE"],
-    # ``traceparent``/``tracestate`` allow the browser OTel SDK (FE-029) to send W3C
+    # ``traceparent``/``tracestate`` allow the browser OTel SDK (frontend/observability) to send W3C
     # trace context cross-origin so the API span continues the browser's trace
-    # (BE-020); kept in lockstep with the API Gateway CORS config.
+    # (backend/otel-tracing); kept in lockstep with the API Gateway CORS config.
     allow_headers=["Authorization", "Content-Type", "traceparent", "tracestate"],
 )
 
-# --- Security response headers (BE-024) --------------------------------------
+# --- Security response headers (backend/security-headers) --------------------------------------
 # Stamped on every response by the middleware below. This is a JSON API (no HTML
 # rendering) reached cross-origin via fetch from the SPA, so these are
 # defense-in-depth for the edge case where a browser is tricked into treating an
@@ -168,7 +168,7 @@ SECURITY_HEADERS = {
 
 @app.middleware("http")
 async def _security_headers(request, call_next):
-    """Stamp security headers on every response and default caching to deny (BE-024).
+    """Stamp security headers on every response and default caching to deny (backend/security-headers).
 
     Uses ``setdefault`` so route-level intent always wins: ``GET
     /leagues/{id}/query`` keeps its ``private, max-age=300`` opt-in, while every
@@ -199,7 +199,7 @@ lambda_client = boto3.client("lambda", config=_retry_config)
 s3_client = boto3.client("s3", config=_retry_config)
 S3_BUCKET = os.environ["S3_BUCKET_NAME"]
 
-# Minimum interval between `last_accessed_at` writes for a single league (BE-018).
+# Minimum interval between `last_accessed_at` writes for a single league (backend/league-access-tracking).
 # `get_league` already reads METADATA, so a fresher timestamp short-circuits the write;
 # this caps the tracking writes to at most one per league per hour by default.
 LEAGUE_ACCESS_THROTTLE_SECONDS = int(
@@ -237,7 +237,7 @@ from routes import delete_league, router  # noqa: E402, F401
 
 app.include_router(router)
 
-# OpenTelemetry distributed tracing → Better Stack (BE-020). A no-op unless the OTLP
+# OpenTelemetry distributed tracing → Better Stack (backend/otel-tracing). A no-op unless the OTLP
 # endpoint + token (SSM) are configured, so tests / local / unconfigured envs are
 # unaffected. Must run before Mangum wraps the app so request-flush middleware and
 # FastAPI instrumentation are in place.

@@ -130,7 +130,7 @@ module "s3-bidirectional-replication" {
   ]
 
   # The player stats refresher no longer triggers off player-metadata puts — it runs
-  # on a weekly CloudWatch Events schedule as a Fargate task (see BE-011 / regional).
+  # on a weekly CloudWatch Events schedule as a Fargate task (see backend/sleeper-player-stats-refresher / regional).
   primary_event_notifications = [
     {
       lambda_function_arn = "arn:aws:lambda:us-east-1:${var.account_id}:function:leagueql-processor-${var.environment}"
@@ -189,7 +189,7 @@ module "onboarding-lambda-role" {
         ]
       },
       {
-        # BE-020: the chain Lambdas continue the OTel trace and export to Better Stack;
+        # backend/otel-tracing: the chain Lambdas continue the OTel trace and export to Better Stack;
         # the OTLP source token is a SecureString SSM parameter (out-of-band, never in TF state).
         Sid    = "ReadOtelTokenSsmParameter"
         Effect = "Allow"
@@ -297,7 +297,7 @@ module "processing-lambda-role" {
         ]
       },
       {
-        # BE-020: the chain Lambdas continue the OTel trace and export to Better Stack;
+        # backend/otel-tracing: the chain Lambdas continue the OTel trace and export to Better Stack;
         # the OTLP source token is a SecureString SSM parameter (out-of-band, never in TF state).
         Sid    = "ReadOtelTokenSsmParameter"
         Effect = "Allow"
@@ -437,7 +437,7 @@ module "player-metadata-lambda-role" {
   }
 }
 
-# Feature-flag source of truth (BE-017 / FE-026) is an SSM Parameter Store parameter
+# Feature-flag source of truth (backend/feature-flags / frontend/feature-flags) is an SSM Parameter Store parameter
 # named `/leagueql/${var.environment}/feature-flags` in each region (each regional
 # API Lambda reads its own region's copy), holding the flag JSON. Like the
 # Better Stack/Discord SSM values, it is created and edited **out-of-band** in the SSM
@@ -537,7 +537,7 @@ module "api-lambda-role" {
         ]
       },
       {
-        # BE-020: the API Lambda exports OpenTelemetry traces to Better Stack; the OTLP
+        # backend/otel-tracing: the API Lambda exports OpenTelemetry traces to Better Stack; the OTLP
         # source token is a SecureString SSM parameter (set out-of-band, never in TF state).
         Sid    = "ReadOtelTokenSsmParameter"
         Effect = "Allow"
@@ -550,7 +550,7 @@ module "api-lambda-role" {
         ]
       },
       {
-        # BE-017: feature flags are resolved at runtime from an SSM Parameter Store
+        # backend/feature-flags: feature flags are resolved at runtime from an SSM Parameter Store
         # parameter (IAM-role access, no secret). The parameter is set out-of-band in
         # the SSM console, never in TF state. Grant read on both regions' copy.
         Sid    = "ReadFeatureFlagsSsmParameter"
@@ -969,7 +969,7 @@ module "sleeper-refresh-lambda-role" {
         ]
       },
       {
-        # BE-020: the chain Lambdas continue the OTel trace and export to Better Stack;
+        # backend/otel-tracing: the chain Lambdas continue the OTel trace and export to Better Stack;
         # the OTLP source token is a SecureString SSM parameter (out-of-band, never in TF state).
         Sid    = "ReadOtelTokenSsmParameter"
         Effect = "Allow"

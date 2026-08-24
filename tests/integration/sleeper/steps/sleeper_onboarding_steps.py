@@ -19,7 +19,7 @@ def step_invoke_onboarder(context):
         "requestType": "ONBOARD",
         "correlation_id": context.test_correlation_id,
         # Record the test user as owner so the league mirrors a real API onboard
-        # and the owner-gated cleanup DELETE (same user) succeeds (BE-016).
+        # and the owner-gated cleanup DELETE (same user) succeeds (backend/league-authorization).
         "ownerUserId": context.clerk_user_id,
         "body": {"leagueId": context.test_league_id, "platform": "SLEEPER"},
     }

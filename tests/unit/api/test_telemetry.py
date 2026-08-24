@@ -1,4 +1,4 @@
-"""Tests for src/api/telemetry.py — FastAPI-specific OTel wiring (BE-020).
+"""Tests for src/api/telemetry.py — FastAPI-specific OTel wiring (backend/otel-tracing).
 
 The shared provider/exporter/gating now lives in ``common.tracing`` (covered by
 tests/unit/common/test_tracing.py). Here we only verify that ``telemetry.py`` gates

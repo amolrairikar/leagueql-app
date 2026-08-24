@@ -72,7 +72,7 @@ const navItems = [
 ];
 
 // Transactions (waivers/trades/free agents) only exist for Sleeper leagues — ESPN
-// exposes no equivalent data — so the nav entry is Sleeper-gated (BE-019 / FE-027).
+// exposes no equivalent data — so the nav entry is Sleeper-gated (backend/sleeper-transactions / frontend/transactions).
 const sleeperOnlyNavItems = [
   { title: 'Transactions', url: '/transactions', icon: Repeat },
 ];
@@ -204,7 +204,7 @@ export function AppSidebar() {
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                     {/* Non-owners (shared league-mates) see the dashboard but
-                        none of the owner-only actions (LQL-01 / FE-025). */}
+                        none of the owner-only actions (backend/league-authorization / frontend/ownership-transfer). */}
                     {!isOwner && (
                       <SidebarMenuItem>
                         <SidebarMenuButton
@@ -340,7 +340,7 @@ export function AppSidebar() {
           ) : (
             // Desktop only — on mobile the sidebar is a modal sheet that breaks
             // Clerk's portaled dropdown, so the account menu moves to the header
-            // (<HeaderAccount/>, FE-014/FE-019).
+            // (<HeaderAccount/>, frontend/navigation-sidebar/frontend/authentication).
             !isMobile && <UserButton showName={state === 'expanded'} />
           )}
         </SidebarFooter>

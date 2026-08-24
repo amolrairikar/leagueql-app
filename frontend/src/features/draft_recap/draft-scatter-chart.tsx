@@ -21,7 +21,7 @@ import {
 import { positionColorMeta } from '@/lib/color-constants';
 
 /**
- * Tooltip for a hovered dot (FE-036): the player, the manager who drafted them,
+ * Tooltip for a hovered dot (frontend/draft-value-scatter): the player, the manager who drafted them,
  * the points scored, and the draft position. Exported so it can be unit-tested
  * without driving a recharts hover (unreliable in jsdom).
  */
@@ -55,7 +55,7 @@ export function DraftScatterTooltip({
 }
 
 /**
- * Scatterplot of draft value (FE-036): draft position (x) vs. season points (y),
+ * Scatterplot of draft value (frontend/draft-value-scatter): draft position (x) vs. season points (y),
  * one dot per scored pick, grouped into a series per position so each is colored
  * from the shared position palette ({@link positionColorMeta}) and appears in the
  * legend. `points` is already filtered to the selected position by the caller; the

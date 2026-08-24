@@ -1,4 +1,4 @@
-Feature: ESPN membership verification (LQL-01 / BE-016 / FE-025)
+Feature: ESPN membership verification (backend/league-authorization / frontend/ownership-transfer)
   ESPN league reads are member-gated. A non-member is shown a verification prompt
   and joins through the shared Join League dialog; verifying their ESPN cookies
   unlocks the league, and rejected cookies surface an inline error.

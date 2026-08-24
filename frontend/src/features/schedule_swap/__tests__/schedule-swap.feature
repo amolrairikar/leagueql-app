@@ -1,4 +1,4 @@
-Feature: Schedule-swap simulator (FE-031)
+Feature: Schedule-swap simulator (frontend/schedule-swap-simulator)
   The standings page hosts a free N×N schedule-swap matrix: each row is a team's
   weekly scores, each column a manager's schedule, and the diagonal is the actual record.
 

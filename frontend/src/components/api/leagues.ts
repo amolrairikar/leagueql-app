@@ -76,7 +76,7 @@ export function getAllMatchups(
 }
 
 /**
- * Verify the caller's ESPN league membership (LQL-01 / BE-016 / FE-025).
+ * Verify the caller's ESPN league membership (backend/league-authorization / frontend/ownership-transfer).
  *
  * Sends the caller's ESPN cookies (filled by the Chrome extension) to the
  * backend, which proxies an authenticated read of the league. On success the

@@ -14,7 +14,7 @@ from sleeper_client import resolve_sleeper_canonical_league_id
 from utils import correlation_id_var, logger, publish_failure
 from writer import write_pending_league_lookup
 
-# Continue the trace started upstream (API or Sleeper refresh) → Better Stack (BE-020).
+# Continue the trace started upstream (API or Sleeper refresh) → Better Stack (backend/otel-tracing).
 # A no-op unless tracing is configured, so tests / unconfigured envs are unaffected.
 init_tracing("leagueql-onboarder")
 
@@ -52,7 +52,7 @@ def _record_failure(
 
 
 def lambda_handler(event, context) -> dict[str, str | int]:
-    """Entry point: continue the upstream trace (BE-020), then run the onboarder.
+    """Entry point: continue the upstream trace (backend/otel-tracing), then run the onboarder.
 
     Wraps :func:`_handle` in a span that continues the trace carried in
     ``event["trace_context"]`` (a no-op when tracing is disabled) and force-flushes
@@ -112,7 +112,7 @@ def _handle(event, context) -> dict[str, str | int]:
     # Sleeper renews a league each season under a brand-new league ID linked back to the
     # prior season via previous_league_id. When we don't already know the canonical league
     # — for either an ONBOARD or a REFRESH — walk that chain to see whether this ID is a
-    # renewal of a league we have already onboarded (BE-001 / BE-002):
+    # renewal of a league we have already onboarded (backend/league-onboarding / backend/league-refresh):
     #   * chain resolves an existing canonical -> the league is already onboarded and this
     #     is just a new season to register, so fold it into the new-season-refresh path
     #     (register the new league ID's LEAGUE_LOOKUP against the existing canonical and
@@ -295,7 +295,7 @@ def _handle(event, context) -> dict[str, str | int]:
             }
         # Renewed Sleeper season resolved to an existing league but hasn't started yet.
         # Persist the new league ID as a pending LEAGUE_LOOKUP so the scheduled
-        # auto-refresh (BE-012) can poll it and attach the season automatically once it
+        # auto-refresh (backend/scheduled-sleeper-auto-refresh) can poll it and attach the season automatically once it
         # begins — Sleeper only links seasons backwards, so without this the new ID would
         # be forgotten. Only on first discovery (is_new_season_refresh); a later poll of
         # an already-pending ID passes the canonical in and leaves the record untouched.

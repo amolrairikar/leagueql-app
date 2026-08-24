@@ -34,7 +34,7 @@ export class ApiError extends Error {
 // The API client never reads a credential cookie itself. A provider (registered
 // once at app init from Clerk's `useAuth().getToken` via `AuthTokenBridge`)
 // supplies a fresh, short-lived session JWT per request, so the bearer token is
-// not parsed out of the JS-readable `__session` cookie (LQL-05 / FE-019).
+// not parsed out of the JS-readable `__session` cookie (frontend/authentication).
 
 type AuthTokenProvider = () => Promise<string | null | undefined>;
 

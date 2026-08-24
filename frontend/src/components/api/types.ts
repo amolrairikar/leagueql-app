@@ -58,7 +58,7 @@ export interface SeasonStandingsItem {
   champion: string;
 }
 
-/** A team involved in a transaction, resolved from a Sleeper roster_id (BE-019 / FE-027). */
+/** A team involved in a transaction, resolved from a Sleeper roster_id (backend/sleeper-transactions / frontend/transactions). */
 export interface TransactionTeam {
   roster_id: string;
   team_name: string | null;
@@ -82,7 +82,7 @@ export interface TransactionDraftPick {
   to_roster_id: string | null;
 }
 
-/** A completed Sleeper transaction (waiver, trade, free agent, commissioner). BE-019 / FE-027. */
+/** A completed Sleeper transaction (waiver, trade, free agent, commissioner). backend/sleeper-transactions / frontend/transactions. */
 export interface TransactionItem {
   season: string;
   transaction_id: string;
@@ -103,7 +103,7 @@ export interface GetLeagueResponse {
   data: {
     seasons: string[];
     league_name?: string;
-    /** Whether the authenticated caller is the league owner (LQL-01 / BE-016 / FE-025). */
+    /** Whether the authenticated caller is the league owner (backend/league-authorization / frontend/ownership-transfer). */
     is_owner?: boolean;
   };
 }

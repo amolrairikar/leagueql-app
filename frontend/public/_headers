@@ -1,4 +1,4 @@
-# Cloudflare _headers — applied to every served asset (FE-024).
+# Cloudflare _headers — applied to every served asset (frontend/security-headers).
 #
 # The Content-Security-Policy is enforced (it ran as Report-Only first and was validated
 # against the running app — Clerk incl. Google sign-in, the API, charts, the Stripe

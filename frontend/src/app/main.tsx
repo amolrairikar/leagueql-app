@@ -9,7 +9,7 @@ import { ThemeProvider } from '@/components/theme-provider';
 import { initFeatureFlags } from '@/lib/feature-flags';
 import { initTelemetry } from '@/lib/telemetry';
 
-// OpenTelemetry tracing + Web Vitals → Better Stack (FE-029). No-op unless VITE_TRACES_URL
+// OpenTelemetry tracing + Web Vitals → Better Stack (frontend/observability). No-op unless VITE_TRACES_URL
 // is configured (and never under Vitest), so dev/test bootstraps are unaffected.
 initTelemetry();
 
@@ -23,7 +23,7 @@ function render() {
   );
 }
 
-// Resolve global feature flags from the backend (AWS SSM Parameter Store, FE-026) before
+// Resolve global feature flags from the backend (AWS SSM Parameter Store, frontend/feature-flags) before
 // first paint so the UI renders with the right flags, then render regardless of
 // the outcome (a failed fetch leaves the fail-safe all-off flags). No-op under
 // Vitest, where initFeatureFlags resolves immediately.

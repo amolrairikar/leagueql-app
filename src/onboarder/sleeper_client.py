@@ -163,7 +163,7 @@ class SleeperClient:
         self.league_id = league_id
         # season -> league_id for seasons that exist on Sleeper but have not started yet
         # (pre_draft/drafting). Populated by _get_league_seasons; used to register a
-        # renewed season's league ID as pending (BE-001 / BE-012).
+        # renewed season's league ID as pending (backend/league-onboarding / backend/scheduled-sleeper-auto-refresh).
         self.pending_seasons: dict[str, str] = {}
         self.season_mapping = self._get_league_seasons(is_refresh=is_refresh)
         self.request_urls = self._build_all_request_urls()

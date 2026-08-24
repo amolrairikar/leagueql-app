@@ -1,6 +1,6 @@
 name: leagueql-player-metadata-canary
 
-# Live Sleeper player-metadata contract canary (BE-010). Kept in its own workflow
+# Live Sleeper player-metadata contract canary (backend/player-metadata-refresher). Kept in its own workflow
 # — separate from the commit-triggered build pipeline — so the once-per-day
 # Sleeper players endpoint is hit at most once a day on a cron (Sundays and
 # Mondays only), with no chance of a scheduled run triggering the build

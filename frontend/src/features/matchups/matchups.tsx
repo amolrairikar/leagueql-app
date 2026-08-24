@@ -485,7 +485,7 @@ export default function Matchups() {
           />
         </Suspense>
 
-        {/* Weekly awards is a free section (FE-032) and always renders. */}
+        {/* Weekly awards is a free section (frontend/weekly-awards) and always renders. */}
         <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mt-8 mb-2.5">
           Weekly awards &amp; superlatives
         </p>

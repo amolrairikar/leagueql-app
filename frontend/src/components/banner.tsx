@@ -6,7 +6,7 @@ import { isBannerEnabled } from '@/lib/feature-flags';
 
 // Current banner content. This is the one place to edit for any banner update —
 // swap the message/link to promote whatever the active campaign is (Discord
-// today). The banner only shows once the `banner` feature flag (FE-030) is on.
+// today). The banner only shows once the `banner` feature flag (frontend/informational-banner) is on.
 // The message is rendered as PREFIX + LINK_LABEL + SUFFIX, with LINK_LABEL turned
 // into the link when LINK_URL is set — so the link lives inline within the
 // sentence (today: the word "community" links to the Discord invite). Leave
@@ -17,7 +17,7 @@ const BANNER_MESSAGE_SUFFIX = '!';
 const BANNER_LINK_URL = 'https://discord.gg/jE2dm89GWh';
 
 // localStorage key remembering a dismissal so the banner stays hidden for this
-// browser (FE-030). Mirrors the direct localStorage pattern in theme-provider.tsx.
+// browser (frontend/informational-banner). Mirrors the direct localStorage pattern in theme-provider.tsx.
 const DISMISSED_STORAGE_KEY = 'leagueql.bannerDismissed';
 
 // localStorage can throw (private browsing, disabled storage, or an unwired test
@@ -40,7 +40,7 @@ function persistDismissed(): void {
 }
 
 /**
- * Thin, full-width informational banner below the in-app header (FE-030). A
+ * Thin, full-width informational banner below the in-app header (frontend/informational-banner). A
  * generic, content-driven banner (see the BANNER_* constants) gated behind the
  * `banner` feature flag and dismissible — a dismissal is remembered in
  * localStorage. Renders nothing when the flag is off, in demo mode, or once the
@@ -50,7 +50,7 @@ export function Banner() {
   const [dismissed, setDismissed] = useState(readDismissed);
 
   // Suppressed in demo mode so the promotional invite doesn't clutter the
-  // sample-data experience (FE-030).
+  // sample-data experience (frontend/informational-banner).
   if (!isBannerEnabled() || isDemoMode() || dismissed) return null;
 
   const dismiss = () => {

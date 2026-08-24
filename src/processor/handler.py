@@ -19,7 +19,7 @@ from utils import correlation_id_var, logger, publish_failure
 from queries import QUERIES
 
 # Continue the trace the onboarder propagated via the manifest's S3 metadata → Better
-# Stack (BE-020). A no-op unless tracing is configured, so tests / unconfigured envs
+# Stack (backend/otel-tracing). A no-op unless tracing is configured, so tests / unconfigured envs
 # are unaffected.
 init_tracing("leagueql-processor")
 
@@ -1083,7 +1083,7 @@ def _register_sleeper_raw_data(
                     }
                 )
         elif item["data_type"].startswith("transactions"):
-            # Only completed transactions are surfaced (BE-019); failed waiver
+            # Only completed transactions are surfaced (backend/sleeper-transactions); failed waiver
             # claims and other non-complete records are dropped.
             for record in item["data"]:
                 if record.get("status") == "complete":
@@ -1149,7 +1149,7 @@ _EMPTY_VIEW_DTYPES: dict[str, dict[str, str]] = {
     # A Sleeper league whose onboarded seasons carry no completed transactions yields an
     # empty `transactions` list. The TRANSACTIONS transform is a `SELECT * FROM transactions`
     # passthrough (no arithmetic), so object columns suffice; it simply produces no rows and
-    # writes no TRANSACTIONS#{season} item (BE-019). Columns mirror the transaction row shape
+    # writes no TRANSACTIONS#{season} item (backend/sleeper-transactions). Columns mirror the transaction row shape
     # built by compile_sleeper_transactions.
     "transactions": {
         "season": "object",
@@ -1413,12 +1413,12 @@ def _lambda_handler_impl(event, context) -> None:
 
     manifest_metadata = manifest_response.get("Metadata", {})
     correlation_id_var.set(manifest_metadata.get("correlation_id", ""))
-    # A backfill re-onboard (BE-019) sets reprocess_all so every season in the manifest
+    # A backfill re-onboard (backend/sleeper-transactions) sets reprocess_all so every season in the manifest
     # is rebuilt from the raw season files already in S3, rather than only the latest
     # season the normal refresh diff would select.
     reprocess_all = manifest_metadata.get("reprocess_all") == "true"
 
-    # Continue the onboarder's trace across the S3 event (BE-020): the heavy
+    # Continue the onboarder's trace across the S3 event (backend/otel-tracing): the heavy
     # processing and its DynamoDB/S3 child spans hang off this span. A no-op when
     # tracing is disabled.
     with traced_handler("processor.handle", carrier=manifest_metadata):
@@ -1444,7 +1444,7 @@ def _process_manifest(
     """Build and persist every precomputed view for the onboarded league.
 
     Split out from :func:`_lambda_handler_impl` so the work runs inside the
-    ``processor.handle`` span that continues the onboarder's trace (BE-020).
+    ``processor.handle`` span that continues the onboarder's trace (backend/otel-tracing).
     """
     platform = next(iter(manifest))
     all_seasons = manifest[platform]
@@ -1589,7 +1589,7 @@ def _process_manifest(
     ]
 
     # Transactions are Sleeper-only (ESPN exposes no equivalent data) and skipped when a
-    # league has no completed transactions, so the view is built conditionally (BE-019).
+    # league has no completed transactions, so the view is built conditionally (backend/sleeper-transactions).
     if platform == "SLEEPER" and grouped.get("transactions"):
         TRANSACTIONS_SCHEMA = KeySchema(
             pk=f"LEAGUE#{canonical_league_id}",

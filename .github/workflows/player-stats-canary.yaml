@@ -1,6 +1,6 @@
 name: leagueql-player-stats-canary
 
-# Live Sleeper player-stats end-to-end canary (BE-011). Kept in its own workflow —
+# Live Sleeper player-stats end-to-end canary (backend/sleeper-player-stats-refresher). Kept in its own workflow —
 # separate from the commit-triggered build pipeline — so the live Sleeper stats
 # endpoint is hit at most once a day on a cron (Sundays and Mondays only), with
 # no chance of a scheduled run

@@ -1204,7 +1204,7 @@ def _txn_created_ms(season: str, week: int, rng: random.Random) -> int:
 
 
 def _txn_player(player: dict, pos: str, roster_id: str) -> dict:
-    """A TransactionPlayer row (player_id is a string on the wire, per FE-027)."""
+    """A TransactionPlayer row (player_id is a string on the wire, per frontend/transactions)."""
     return {
         "player_id": str(player["player_id"]),
         "player_name": player["full_name"],
@@ -1220,7 +1220,7 @@ def build_transactions(
     draft_picks: list[dict],
     rng: random.Random,
 ) -> list[dict]:
-    """Synthesize a Sleeper season's transactions (BE-019 / FE-027).
+    """Synthesize a Sleeper season's transactions (backend/sleeper-transactions / frontend/transactions).
 
     For each game week, generates a handful of waiver/free-agent adds (each
     dropping a player already on the roster and adding an undrafted free agent)
@@ -1341,7 +1341,9 @@ def build_transactions(
                     }
                 )
 
-    transactions.sort(key=lambda t: -t["created"])  # newest-first, per BE-019
+    transactions.sort(
+        key=lambda t: -t["created"]
+    )  # newest-first, per backend/sleeper-transactions
     return [sanitize_value(t) for t in transactions]
 
 

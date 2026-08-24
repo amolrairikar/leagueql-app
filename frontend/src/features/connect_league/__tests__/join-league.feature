@@ -1,4 +1,4 @@
-Feature: Join League dialog (FE-002 / FE-025)
+Feature: Join League dialog (frontend/connect-league / frontend/ownership-transfer)
   A non-member joins a private ESPN league by verifying their ESPN cookies. The
   dialog only verifies membership — it never onboards or refreshes the league.
 

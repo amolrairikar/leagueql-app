@@ -37,14 +37,14 @@ TABLE_NAME = "leagueql-table-test"
 BUCKET_NAME = "leagueql-test-bucket"
 REGION = "us-east-1"
 # Default authenticated caller for API scenarios; the shared seeding step records
-# this user as the league owner so owner-gated endpoints pass (LQL-01 / BE-016).
+# this user as the league owner so owner-gated endpoints pass (backend/league-authorization).
 DEFAULT_USER = "owner_user"
 
 # Environment the modules read at import time. Set before any handler import.
 _ENV = {
     "DYNAMODB_TABLE_NAME": TABLE_NAME,
     "S3_BUCKET_NAME": BUCKET_NAME,
-    # BE-010: player metadata refresher writes the Sleeper players cache here.
+    # backend/player-metadata-refresher: player metadata refresher writes the Sleeper players cache here.
     "PLAYER_METADATA_S3_KEY": "player-metadata/sleeper_nfl_players.json",
     "ONBOARDER_LAMBDA_NAME": "onboarder-test",
     "AWS_DEFAULT_REGION": REGION,
@@ -198,7 +198,7 @@ def _load_handlers(context) -> None:
 
     context.api = TestClient(main.app, raise_server_exceptions=False)
 
-    # --- player metadata refresher (BE-010) --------------------------------
+    # --- player metadata refresher (backend/player-metadata-refresher) --------------------------------
     pm_pkg = types.ModuleType("player_metadata")
     pm_pkg.__path__ = [str(_SRC / "player_metadata")]
     sys.modules["player_metadata"] = pm_pkg
@@ -262,8 +262,8 @@ def before_scenario(context, scenario):
     feature_flags._override_for_testing({})
     # Per-scenario ``mock.patch`` handles (started in steps) to stop on teardown.
     context._patches = []
-    # Every league route now sits behind the Clerk JWT dependency (LQL-01 /
-    # BE-016). Authenticate as the default owner so owner-gated endpoints pass;
+    # Every league route now sits behind the Clerk JWT dependency (backend/league-authorization /
+    # backend/league-authorization). Authenticate as the default owner so owner-gated endpoints pass;
     # the shared seeding step records DEFAULT_USER as the league owner. Steps that
     # need a different caller layer their own ``patch.dict`` override on top.
     import routes

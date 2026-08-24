@@ -1,4 +1,4 @@
-Feature: ESPN members proxy API (BE-009)
+Feature: ESPN members proxy API (backend/espn-members-proxy)
   POST /leagues/{id}/espn_members proxies the ESPN Fantasy API server-side and maps
   members, falling back to the owner id when a display name is absent.
 

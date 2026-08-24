@@ -83,8 +83,8 @@ def get_sleeper_leagues() -> list[dict]:
         )
 
     # Also refresh pending renewals: a renewed Sleeper season is registered as a
-    # LEAGUE_LOOKUP with a `pending_season` marker and no `seasons` set (BE-001 /
-    # BE-012) before its season starts. Poll each so the season attaches automatically
+    # LEAGUE_LOOKUP with a `pending_season` marker and no `seasons` set (backend/league-onboarding /
+    # backend/scheduled-sleeper-auto-refresh) before its season starts. Poll each so the season attaches automatically
     # once it flips to in_season (the refresh then promotes it to a real season). These
     # are additional to a canonical's most-recent real season above, so a league
     # mid-renewal is refreshed on both its current and its pending league ID.

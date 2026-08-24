@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/dialog';
 
 /**
- * Lineup-efficiency chip shown under a team's name in the box score (FE-034). It
+ * Lineup-efficiency chip shown under a team's name in the box score (frontend/lineup-efficiency). It
  * reads `⚡ {pct}% efficient` and opens a slot-by-slot start/sit report of the
  * points the manager left on the bench.
  *

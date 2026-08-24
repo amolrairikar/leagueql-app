@@ -1,4 +1,4 @@
-Feature: Player records (FE-010)
+Feature: Player records (frontend/player-records)
   All-time player performance records render from the league's box scores, with an
   inline error when the underlying matchup data fails to load.
 

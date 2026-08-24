@@ -11,7 +11,7 @@ import logging
 import time
 from contextvars import ContextVar
 
-# OpenTelemetry is only bundled with the API Lambda (BE-020). This module is
+# OpenTelemetry is only bundled with the API Lambda (backend/otel-tracing). This module is
 # vendored into every function's zip, so the import is guarded — functions without
 # OTel installed (Onboarder, Processor, …) simply omit ``trace_id`` from their logs.
 try:

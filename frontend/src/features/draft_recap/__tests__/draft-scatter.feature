@@ -1,4 +1,4 @@
-Feature: Draft value scatter (FE-036)
+Feature: Draft value scatter (frontend/draft-value-scatter)
   The free Draft Recap scatterplot plots each scored pick's draft position against
   its season points, filterable by a single position dropdown, computed client-side
   from the DRAFT view.
