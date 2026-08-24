@@ -88,7 +88,7 @@ export const FEATURES: Feature[] = [
   {
     icon: History,
     title: 'Complete History',
-    desc: 'Every season, every week, every score. Currently supported integrations include ESPN and Sleeper.',
+    desc: "Every season, every week, every score. We pull your full league history using your fantasy platform's API.",
   },
   {
     icon: Swords,
@@ -113,7 +113,7 @@ export const FEATURES: Feature[] = [
   {
     icon: Shuffle,
     title: 'Platform Migration',
-    desc: 'Switched fantasy platforms? Use our league migration wizard to preserve your full all-time history across platforms.',
+    desc: 'Switched fantasy platforms? Use our league migration wizard to preserve your all-time history across platforms.',
   },
 ];
 

@@ -10,7 +10,7 @@ layout).
 The page reads top-to-bottom as: **hero** (social-proof count pill, headline, subhead, primary
 "Connect Your League" + "View Demo" CTAs, and the revealed inline connect form) → **product
 showcase** ("See it in action" — a swipeable scroll-snap carousel of product screenshots with
-dot indicators, auto-advancing at every breakpoint)
+dot indicators, auto-advancing and wrapping around at either edge at every breakpoint)
 → **"Works with" strip** (ESPN + Sleeper logos) → **feature highlights** (lucide-icon cards) →
 **"How it works"** (3 numbered steps) → **final CTA band** → marketing `Footer`. A fixed grid +
 primary-glow backdrop and `fadeUp` hero entrance animations are decorative and honor
@@ -39,7 +39,10 @@ primary-glow backdrop and `fadeUp` hero entrance animations are decorative and h
   onboard. An ESPN `403` (already onboarded but the caller isn't a member of the private league
   yet) opens the **Join League** dialog (membership verification) in place rather than the
   onboard form (LQL-01 / BE-016 / FE-025). Other failures show a generic inline message.
-- **Mobile layout:** feature grid and hero must remain legible on small screens.
+- **Mobile layout:** feature grid and hero must remain legible on small screens. In the
+  "Works with" strip, the "Works with" label sits on its own line (full width) with the
+  platform chips wrapping below it on mobile; the label returns inline with the chips at `sm`
+  and up.
 
 ## Acceptance Criteria
 - [ ] `/` renders the hero, product showcase, "Works with" strip, feature highlights, "How it
@@ -47,6 +50,8 @@ primary-glow backdrop and `fadeUp` hero entrance animations are decorative and h
 - [ ] The product showcase renders product screenshots in a swipeable scroll-snap carousel with
       dot indicators, auto-advancing (pausing on pointer interaction; disabled under
       `prefers-reduced-motion`).
+- [ ] The carousel wraps around: swiping past the last slide loops to the first, and swiping
+      back from the first loops to the last (seamless in both directions).
 - [ ] The live onboarded-league count is shown when the counts endpoint responds, and the
       page still renders (count pill hidden) if it fails.
 - [ ] CTAs route to sign in / connect league (or into the app for signed-in users) and to
