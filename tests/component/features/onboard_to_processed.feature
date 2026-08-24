@@ -68,6 +68,21 @@ Feature: Onboard-to-processed pipeline (BE-001, BE-004)
     Then the API responds with status 200
     And no query response row has "playoff_round" equal to "Losers Bracket"
 
+  Scenario: A preseason Sleeper league with no player stats yet builds DRAFT without erroring (BE-004)
+    # A new Sleeper season created before its first games have been played has player
+    # metadata but no accumulated stats, so player_scoring_totals computes to no rows. The
+    # empty-view guard must register it as a typed 0-row view so the DRAFT (SLEEPER)
+    # transform still binds (yielding draft rows with no scoring) instead of crashing the
+    # whole run on a 0-column DataFrame.
+    Given Sleeper player metadata is cached in S3 with no player stats
+    When the onboarder runs an ONBOARD for "SLEEPER" league "400" with fixture "sleeper/raw_data_2024.json"
+    Then the onboarder returns status 200
+    And a METADATA item exists for the onboarded league
+    When the processor processes the onboarded league
+    Then a JOB_STATUS "COMPLETED" exists for the job
+    And the league has at least one "DRAFT#2024" item
+    And the league has at least one "STANDINGS#2024" item
+
   Scenario: An upstream auth failure records a FAILED job and writes no METADATA
     When the onboarder fails to reach the platform
     Then the onboarder returns status 502

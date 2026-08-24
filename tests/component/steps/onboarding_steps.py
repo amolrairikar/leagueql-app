@@ -88,6 +88,24 @@ def step_seed_player_cache(context):
     )
 
 
+@given("Sleeper player metadata is cached in S3 with no player stats")
+def step_seed_player_cache_no_stats(context):
+    # A Sleeper league onboarded before its first games (e.g. a new season created in the
+    # preseason) has player metadata but no accumulated stats yet, so the stats object is
+    # empty. player_scoring_totals then computes to no rows — the empty-view guard must let
+    # the processor build the remaining views (DRAFT included) instead of crashing.
+    context.s3.put_object(
+        Bucket=context.bucket_name,
+        Key="player-metadata/sleeper_nfl_players.json",
+        Body=json.dumps(load_fixture("sleeper", "player_metadata.json")),
+    )
+    context.s3.put_object(
+        Bucket=context.bucket_name,
+        Key="player-stats/sleeper_nfl_player_stats.json",
+        Body=json.dumps({}),
+    )
+
+
 @when(
     'the onboarder runs an ONBOARD for "{platform}" league "{league_id}" '
     'with fixture "{fixture}"'
