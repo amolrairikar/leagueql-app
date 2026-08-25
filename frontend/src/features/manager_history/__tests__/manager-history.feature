@@ -7,6 +7,12 @@ Feature: Manager history (frontend/manager-history)
     When I open the manager history page
     Then I see the manager "Alice"
 
+  Scenario: An unplayed 0-0 week never appears in a manager's season schedule
+    Given manager history data includes an unplayed 0-0 week
+    When I open the manager history page
+    And I open the 2024 season schedule
+    Then the schedule shows the played game but not the unplayed 0-0 game
+
   Scenario: A failed load surfaces an inline error
     Given the manager history data fails to load
     When I open the manager history page

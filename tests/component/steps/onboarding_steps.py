@@ -291,3 +291,39 @@ def step_champion(context, team_name):
     item = get_item(context, f"LEAGUE#{context.canonical}", "STANDINGS#2024")
     champs = [row["team_name"] for row in item["data"] if row.get("champion") == "Yes"]
     assert team_name in champs, f"champions were {champs}"
+
+
+@then('every "{sk}" row shows games_played {games:d} and ties {ties:d}')
+def step_standings_games_ties(context, sk, games, ties):
+    # A 0-0 unplayed week must not inflate games played or add a phantom tie.
+    item = get_item(context, f"LEAGUE#{context.canonical}", sk)
+    assert item, f"no {sk} item written"
+    for row in item["data"]:
+        assert int(row["games_played"]) == games, (
+            f"{row.get('team_name')} games_played={row['games_played']}, expected {games}"
+        )
+        assert int(row["ties"]) == ties, (
+            f"{row.get('team_name')} ties={row['ties']}, expected {ties}"
+        )
+
+
+@then('no "{sk}" row is for week "{week}"')
+def step_no_weekly_snapshot(context, sk, week):
+    # The excluded unplayed week produces no weekly_stats rows, so it never appears as a snapshot.
+    item = get_item(context, f"LEAGUE#{context.canonical}", sk)
+    assert item, f"no {sk} item written"
+    weeks = [str(row["snapshot_week"]) for row in item["data"]]
+    assert week not in weeks, f"week {week} unexpectedly present in {sk}: {weeks}"
+
+
+@then('the "{sk}" item stores an unplayed 0-0 matchup')
+def step_matchup_stores_unplayed(context, sk):
+    # The placeholder row stays in the MATCHUPS view even though standings ignore it.
+    item = get_item(context, f"LEAGUE#{context.canonical}", sk)
+    assert item, f"no {sk} item written"
+    unplayed = [
+        row
+        for row in item["data"]
+        if float(row["team_a_score"]) == 0 and float(row["team_b_score"]) == 0
+    ]
+    assert unplayed, f"no 0-0 matchup found in {sk}: {item['data']}"

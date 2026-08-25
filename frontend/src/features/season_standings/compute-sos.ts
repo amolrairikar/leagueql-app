@@ -1,4 +1,5 @@
 import type { MatchupItem, SeasonStandingsItem } from '@/components/api/types';
+import { isUnplayedMatchup } from '@/lib/matchups';
 
 /** A regular-season game is one with no playoff tier (`NONE` or absent). */
 function isRegularSeason(m: MatchupItem): boolean {
@@ -30,6 +31,8 @@ export function computeStrengthOfSchedule(
 
   for (const m of matchups) {
     if (!isRegularSeason(m)) continue;
+    // Unplayed 0-0 placeholder weeks add no real opponent to anyone's schedule.
+    if (isUnplayedMatchup(m)) continue;
     addOpponent(m.team_a_id, m.team_b_id);
     addOpponent(m.team_b_id, m.team_a_id);
   }

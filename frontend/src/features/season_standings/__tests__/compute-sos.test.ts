@@ -12,14 +12,20 @@ function standing(
   return { team_id: teamId, win_pct: winPct };
 }
 
-/** Minimal matchup between two teams in a given week. */
-function game(aId: string, bId: string, tier = 'NONE'): MatchupItem {
+/** Minimal matchup between two teams; scores default to a played (non 0-0) game. */
+function game(
+  aId: string,
+  bId: string,
+  tier = 'NONE',
+  aScore = 100,
+  bScore = 90,
+): MatchupItem {
   return {
     team_a_id: aId,
     team_a_display_name: aId,
     team_a_team_name: `Team ${aId}`,
     team_a_team_logo: null,
-    team_a_score: 0,
+    team_a_score: aScore,
     team_a_starters: [],
     team_a_bench: [],
     team_a_primary_owner_id: `owner-${aId}`,
@@ -28,7 +34,7 @@ function game(aId: string, bId: string, tier = 'NONE'): MatchupItem {
     team_b_display_name: bId,
     team_b_team_name: `Team ${bId}`,
     team_b_team_logo: null,
-    team_b_score: 0,
+    team_b_score: bScore,
     team_b_starters: [],
     team_b_bench: [],
     team_b_primary_owner_id: `owner-${bId}`,
@@ -81,6 +87,16 @@ describe('computeStrengthOfSchedule', () => {
     const sos = computeStrengthOfSchedule(standings, [
       game('1', '2'),
       game('1', '99'),
+    ]);
+    expect(sos['1']).toBe(0.5);
+  });
+
+  it('excludes unplayed 0-0 weeks so they add no phantom opponents', () => {
+    // Team 1's only real opponent is team 2 (0.5); the 0-0 game against team 3 is
+    // an unplayed placeholder and must not pull team 3 into team 1's schedule.
+    const sos = computeStrengthOfSchedule(standings, [
+      game('1', '2'),
+      game('1', '3', 'NONE', 0, 0),
     ]);
     expect(sos['1']).toBe(0.5);
   });

@@ -16,6 +16,7 @@ import {
 } from '@/features/manager_comparison/api-calls';
 import { avatarColor } from '@/lib/color-constants';
 import { getLeagueCookies } from '@/lib/cookie-handler';
+import { isUnplayedMatchup } from '@/lib/matchups';
 import { initials, pct } from '@/lib/utils';
 
 interface Manager {
@@ -148,6 +149,8 @@ function buildManagers(
   const championships = new Map<string, number>();
 
   for (const m of matchups) {
+    // Unplayed 0-0 placeholder weeks contribute no record, scores, or playoff data.
+    if (isUnplayedMatchup(m)) continue;
     for (const side of ['a', 'b'] as const) {
       const rawOwnerId = m[`team_${side}_primary_owner_id`];
       const ownerId = migrationMapping.get(rawOwnerId) ?? rawOwnerId;
@@ -243,6 +246,8 @@ function buildGameLogs(
 ): GameLog[] {
   const logs: GameLog[] = [];
   for (const m of matchups) {
+    // Unplayed 0-0 placeholder weeks never appear in the head-to-head game log.
+    if (isUnplayedMatchup(m)) continue;
     const aOwner =
       migrationMapping.get(m.team_a_primary_owner_id) ??
       m.team_a_primary_owner_id;

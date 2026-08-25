@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import { defineFeature, loadFeature } from 'jest-cucumber';
 
 import HomePage from '../home-page';
@@ -57,6 +57,21 @@ const MATCHUPS = [
     playoff_round: null,
     winner: '1',
     loser: '2',
+  },
+];
+
+// The played week 1, plus an unplayed 0-0 placeholder week 2 between the same two
+// managers. Counted, it would add a phantom tie to the all-time standings and a
+// second total-matchups game; it must be excluded from both.
+const MATCHUPS_WITH_UNPLAYED = [
+  ...MATCHUPS,
+  {
+    ...MATCHUPS[0],
+    week: '2',
+    team_a_score: 0,
+    team_b_score: 0,
+    winner: 'TIE',
+    loser: 'TIE',
   },
 ];
 
@@ -133,6 +148,42 @@ defineFeature(feature, (test) => {
     and(/^I see the champion "(.*)"$/, async (text) => {
       expect((await screen.findAllByText(text)).length).toBeGreaterThan(0);
     });
+  });
+
+  test('Unplayed 0-0 matchups are excluded from all-time standings and total matchups', ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    given('a connected league whose data includes an unplayed 0-0 week', () => {
+      server.use(
+        leagueMetadata({ league_name: 'My League', seasons: ['2024'] }),
+        leagueQuery({
+          SEASON_STANDINGS: STANDINGS,
+          MATCHUPS: MATCHUPS_WITH_UNPLAYED,
+        }),
+      );
+    });
+    when('I open the home dashboard', async () => {
+      await renderRoute(<HomePage />, { route: '/home', league });
+    });
+    then(
+      /^the all-time standings show "(.*)" and no phantom tie "(.*)"$/,
+      async (record, phantom) => {
+        // Alice's all-time record stays 1-0-0; a counted 0-0 tie would make it 1-0-1.
+        expect(await screen.findByText(record)).toBeInTheDocument();
+        expect(screen.queryByText(phantom)).toBeNull();
+      },
+    );
+    and(
+      /^the "(.*)" stat counts only the played game as "(.*)"$/,
+      (label, value) => {
+        const labelEl = screen.getByText(label);
+        const card = labelEl.parentElement!;
+        expect(within(card).getByText(value)).toBeInTheDocument();
+      },
+    );
   });
 
   test('A failed data load shows a single inline error', ({

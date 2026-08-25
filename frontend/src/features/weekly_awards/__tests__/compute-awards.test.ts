@@ -168,6 +168,32 @@ describe('computeWeeklyAwards', () => {
     expect(awards.highest?.teamId).toBe('T1');
   });
 
+  it('excludes an unplayed 0-0 week from awards, tallies, and streaks', () => {
+    // T1 beats T2 in weeks 1 and 2 (a 2-game streak). Week 3 is an unplayed 0-0
+    // placeholder between the same two teams — it must win no award, add no tally
+    // count, and neither extend nor break the streak.
+    const matchups = [
+      game('1', 'T1', 120, 'T2', 90),
+      game('2', 'T1', 100, 'T2', 80),
+      game('3', 'T1', 0, 'T2', 0), // unplayed placeholder for a future week
+    ];
+    const { awards, tally, longestStreak, weeks } = computeWeeklyAwards(
+      matchups,
+      3,
+    );
+    // The week still lists (it exists in the data) but yields no awards.
+    expect(weeks).toEqual([1, 2, 3]);
+    expect(awards).toEqual({});
+    // Tally reflects only the two played weeks: T1 has 2 highest, 2 blowout, etc.,
+    // and week 3 contributes nothing (T1 highest count stays at 2, not 3).
+    const byId = Object.fromEntries(tally.map((r) => [r.teamId, r]));
+    expect(byId.T1.counts.highest).toBe(2);
+    expect(byId.T1.counts.blowout).toBe(2);
+    // The 0-0 week is not counted as a tie, so the streak stands at 2 (not reset).
+    expect(longestStreak?.teamId).toBe('T1');
+    expect(longestStreak?.length).toBe(2);
+  });
+
   it('computes awards for playoff weeks too', () => {
     const matchups = [game('14', 'T1', 130, 'T2', 70, 'WINNERS_BRACKET')];
     const { awards, weeks } = computeWeeklyAwards(matchups, 14);

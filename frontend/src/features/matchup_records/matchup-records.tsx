@@ -16,6 +16,7 @@ import {
 import { avatarColor } from '@/lib/color-constants';
 import { RECORD_COLORS, UI_COLORS } from '@/lib/color-constants';
 import { getLeagueCookies } from '@/lib/cookie-handler';
+import { isUnplayedMatchup } from '@/lib/matchups';
 import { type Result, toResult } from '@/lib/result';
 import { initials } from '@/lib/utils';
 
@@ -90,6 +91,8 @@ function extractRecords(
   for (const m of matchups) {
     const week = parseInt(m.week, 10);
     if (isNaN(week)) continue;
+    // Unplayed 0-0 placeholder weeks never surface on a record board.
+    if (isUnplayedMatchup(m)) continue;
 
     const aColor = colorMap.get(m.team_a_id) ?? UI_COLORS.default;
     const bColor = colorMap.get(m.team_b_id) ?? UI_COLORS.default;

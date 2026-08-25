@@ -1,0 +1,422 @@
+[
+ {
+  "season": "2024",
+  "data_type": "users",
+  "data": [
+   {
+    "user_id": "uA",
+    "display_name": "Alice",
+    "avatar": "av1",
+    "league_id": "100",
+    "metadata": {
+     "team_name": "Team Alice"
+    }
+   },
+   {
+    "user_id": "uB",
+    "display_name": "Bob",
+    "avatar": "av2",
+    "league_id": "100",
+    "metadata": {
+     "team_name": "Team Bob"
+    }
+   }
+  ]
+ },
+ {
+  "season": "2024",
+  "data_type": "rosters",
+  "data": [
+   {
+    "roster_id": 1,
+    "owner_id": "uA",
+    "league_id": "100"
+   },
+   {
+    "roster_id": 2,
+    "owner_id": "uB",
+    "league_id": "100"
+   }
+  ]
+ },
+ {
+  "season": "2024",
+  "data_type": "matchups_week1",
+  "data": [
+   {
+    "matchup_id": 1,
+    "roster_id": 1,
+    "points": 100.0,
+    "starters": [
+     "p1",
+     "p2"
+    ],
+    "starters_points": [
+     20.0,
+     15.0
+    ],
+    "players": [
+     "p1",
+     "p2",
+     "p3"
+    ],
+    "players_points": {
+     "p1": 20.0,
+     "p2": 15.0,
+     "p3": 5.0
+    }
+   },
+   {
+    "matchup_id": 1,
+    "roster_id": 2,
+    "points": 95.0,
+    "starters": [
+     "p3",
+     "p4"
+    ],
+    "starters_points": [
+     18.0,
+     12.0
+    ],
+    "players": [
+     "p3",
+     "p4",
+     "p1"
+    ],
+    "players_points": {
+     "p3": 18.0,
+     "p4": 12.0,
+     "p1": 3.0
+    }
+   }
+  ]
+ },
+ {
+  "season": "2024",
+  "data_type": "matchups_week2",
+  "data": [
+   {
+    "matchup_id": 1,
+    "roster_id": 1,
+    "points": 110.0,
+    "starters": [
+     "p1",
+     "p2"
+    ],
+    "starters_points": [
+     22.0,
+     16.0
+    ],
+    "players": [
+     "p1",
+     "p2",
+     "p3"
+    ],
+    "players_points": {
+     "p1": 22.0,
+     "p2": 16.0,
+     "p3": 6.0
+    }
+   },
+   {
+    "matchup_id": 1,
+    "roster_id": 2,
+    "points": 120.0,
+    "starters": [
+     "p3",
+     "p4"
+    ],
+    "starters_points": [
+     25.0,
+     14.0
+    ],
+    "players": [
+     "p3",
+     "p4",
+     "p1"
+    ],
+    "players_points": {
+     "p3": 25.0,
+     "p4": 14.0,
+     "p1": 4.0
+    }
+   }
+  ]
+ },
+ {
+  "season": "2024",
+  "data_type": "matchups_week3",
+  "data": [
+   {
+    "matchup_id": 1,
+    "roster_id": 1,
+    "points": 0.0,
+    "starters": [
+     "p1",
+     "p2"
+    ],
+    "starters_points": [
+     0.0,
+     0.0
+    ],
+    "players": [
+     "p1",
+     "p2",
+     "p3"
+    ],
+    "players_points": {
+     "p1": 0.0,
+     "p2": 0.0,
+     "p3": 0.0
+    }
+   },
+   {
+    "matchup_id": 1,
+    "roster_id": 2,
+    "points": 0.0,
+    "starters": [
+     "p3",
+     "p4"
+    ],
+    "starters_points": [
+     0.0,
+     0.0
+    ],
+    "players": [
+     "p3",
+     "p4",
+     "p1"
+    ],
+    "players_points": {
+     "p3": 0.0,
+     "p4": 0.0,
+     "p1": 0.0
+    }
+   }
+  ]
+ },
+ {
+  "season": "2024",
+  "data_type": "matchups_week17",
+  "data": [
+   {
+    "matchup_id": 1,
+    "roster_id": 1,
+    "points": 130.0,
+    "starters": [
+     "p1",
+     "p2"
+    ],
+    "starters_points": [
+     30.0,
+     20.0
+    ],
+    "players": [
+     "p1",
+     "p2",
+     "p3"
+    ],
+    "players_points": {
+     "p1": 30.0,
+     "p2": 20.0,
+     "p3": 8.0
+    }
+   },
+   {
+    "matchup_id": 1,
+    "roster_id": 2,
+    "points": 120.0,
+    "starters": [
+     "p3",
+     "p4"
+    ],
+    "starters_points": [
+     24.0,
+     18.0
+    ],
+    "players": [
+     "p3",
+     "p4",
+     "p1"
+    ],
+    "players_points": {
+     "p3": 24.0,
+     "p4": 18.0,
+     "p1": 5.0
+    }
+   }
+  ]
+ },
+ {
+  "season": "2024",
+  "data_type": "playoff_bracket",
+  "data": [
+   {
+    "r": 1,
+    "m": 1,
+    "t1": 1,
+    "t2": 2,
+    "w": 1,
+    "l": 2,
+    "p": 1
+   }
+  ]
+ },
+ {
+  "season": "2024",
+  "data_type": "losers_bracket",
+  "data": []
+ },
+ {
+  "season": "2024",
+  "data_type": "draft_picks",
+  "data": [
+   {
+    "round": 1,
+    "draft_slot": 1,
+    "pick_no": 1,
+    "player_id": "p1",
+    "roster_id": 1,
+    "picked_by": "uA",
+    "is_keeper": null,
+    "metadata": {
+     "first_name": "Pat",
+     "last_name": "Quarterback",
+     "position": "QB"
+    }
+   },
+   {
+    "round": 1,
+    "draft_slot": 2,
+    "pick_no": 2,
+    "player_id": "p2",
+    "roster_id": 2,
+    "picked_by": "uB",
+    "is_keeper": null,
+    "metadata": {
+     "first_name": "Run",
+     "last_name": "Back",
+     "position": "RB"
+    }
+   },
+   {
+    "round": 2,
+    "draft_slot": 2,
+    "pick_no": 3,
+    "player_id": "p3",
+    "roster_id": 2,
+    "picked_by": "uB",
+    "is_keeper": null,
+    "metadata": {
+     "first_name": "Wide",
+     "last_name": "Receiver",
+     "position": "WR"
+    }
+   },
+   {
+    "round": 2,
+    "draft_slot": 1,
+    "pick_no": 4,
+    "player_id": "p4",
+    "roster_id": 1,
+    "picked_by": "uA",
+    "is_keeper": null,
+    "metadata": {
+     "first_name": "Tight",
+     "last_name": "End",
+     "position": "TE"
+    }
+   }
+  ]
+ },
+ {
+  "season": "2024",
+  "data_type": "transactions_week1",
+  "data": [
+   {
+    "transaction_id": "txn-trade-1",
+    "type": "trade",
+    "status": "complete",
+    "leg": 1,
+    "created": 1700000000000,
+    "roster_ids": [
+     1,
+     2
+    ],
+    "adds": {
+     "p1": 2,
+     "p2": 1
+    },
+    "drops": {
+     "p1": 1,
+     "p2": 2
+    },
+    "draft_picks": [
+     {
+      "round": 3,
+      "season": "2025",
+      "owner_id": 2,
+      "previous_owner_id": 1
+     }
+    ],
+    "settings": null
+   },
+   {
+    "transaction_id": "txn-waiver-1",
+    "type": "waiver",
+    "status": "complete",
+    "leg": 1,
+    "created": 1700000100000,
+    "roster_ids": [
+     1
+    ],
+    "adds": {
+     "p3": 1
+    },
+    "drops": null,
+    "draft_picks": [],
+    "settings": {
+     "waiver_bid": 7
+    }
+   },
+   {
+    "transaction_id": "txn-waiver-failed",
+    "type": "waiver",
+    "status": "failed",
+    "leg": 1,
+    "created": 1700000200000,
+    "roster_ids": [
+     2
+    ],
+    "adds": {
+     "p4": 2
+    },
+    "drops": null,
+    "draft_picks": [],
+    "settings": {
+     "waiver_bid": 3
+    }
+   }
+  ]
+ },
+ {
+  "season": "2024",
+  "data_type": "league_settings",
+  "data": {
+   "name": "Component Test League",
+   "scoring_settings": {
+    "pt": 1.0
+   },
+   "roster_positions": [
+    "QB",
+    "RB",
+    "WR",
+    "TE",
+    "BN"
+   ],
+   "settings": {
+    "playoff_week_start": 17
+   }
+  }
+ }
+]

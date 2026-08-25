@@ -40,3 +40,14 @@ On a data-load failure the dashboard SHALL show one inline error in place of the
 #### Scenario: Load failure
 - **WHEN** the single league-data request fails
 - **THEN** an inline `ErrorAlert` replaces the stats/champions/standings/chart sections rather than rendering empty tables, and no global error banner appears
+
+### Requirement: Exclude unplayed matchups from dashboard stats
+
+All-time standings and total-games statistics derived from matchups SHALL exclude unplayed
+matchups — a matchup whose team scores are both exactly `0`.
+
+#### Scenario: Unplayed matchup excluded from dashboard
+
+- **WHEN** the matchups include an unplayed `0-0` week
+- **THEN** all-time standings (games, wins/losses/ties, points) and the total-games stat count
+  played matchups only
