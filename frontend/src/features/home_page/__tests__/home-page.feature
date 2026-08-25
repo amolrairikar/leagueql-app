@@ -16,6 +16,12 @@ Feature: Home dashboard (frontend/home-dashboard)
     Then I see the champion "N/A"
     And I see the champion "TBD"
 
+  Scenario: Unplayed 0-0 matchups are excluded from all-time standings and total matchups
+    Given a connected league whose data includes an unplayed 0-0 week
+    When I open the home dashboard
+    Then the all-time standings show "1-0-0" and no phantom tie "1-0-1"
+    And the "Total matchups" stat counts only the played game as "1"
+
   Scenario: A failed data load shows a single inline error
     Given a connected league whose data fails to load
     When I open the home dashboard

@@ -18,6 +18,7 @@ import type { MatchupItem } from '@/features/matchups/api-calls';
 import { avatarColor } from '@/lib/color-constants';
 import { getLeagueCookies } from '@/lib/cookie-handler';
 import { ErrorAlert } from '@/lib/error-alert';
+import { isUnplayedMatchup } from '@/lib/matchups';
 import { toResult, type Result } from '@/lib/result';
 
 interface StatItem {
@@ -347,6 +348,8 @@ function buildAllTimeStandings(
   };
 
   for (const m of matchups) {
+    // Unplayed 0-0 placeholder weeks add no wins/losses/ties or PF/PA.
+    if (isUnplayedMatchup(m)) continue;
     // Playoff standings only count winners' bracket games
     const include =
       mode === 'regular'
@@ -713,6 +716,8 @@ function computeChampions(
 function computeTotalGames(matchups: MatchupItem[], seasons: string[]): number {
   const countBySeason = new Map<string, number>();
   for (const m of matchups) {
+    // Unplayed 0-0 placeholder weeks are not games played.
+    if (isUnplayedMatchup(m)) continue;
     countBySeason.set(m.season, (countBySeason.get(m.season) ?? 0) + 1);
   }
   return seasons.reduce(

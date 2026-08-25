@@ -7,6 +7,11 @@ Feature: Player records (frontend/player-records)
     When I open the player records page
     Then I see the player "Pat Quarterback"
 
+  Scenario: An unplayed 0-0 week's players never surface on a score board
+    Given player box-score data includes an unplayed 0-0 week
+    When I open the player records page
+    Then I do not see the player "Phantom Player"
+
   Scenario: A failed load surfaces an inline error
     Given the player data fails to load
     When I open the player records page

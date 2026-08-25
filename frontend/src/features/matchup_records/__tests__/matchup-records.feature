@@ -12,6 +12,11 @@ Feature: Matchup records (frontend/matchup-records)
     When I open the matchup records page
     Then the "Lowest Team Score" card lists both "Alice" and "Bob"
 
+  Scenario: An unplayed 0-0 matchup never surfaces on a record board
+    Given matchup records data includes an unplayed 0-0 week
+    When I open the matchup records page
+    Then the "Lowest Team Score" card does not list "Cara"
+
   Scenario: A failed load surfaces an inline error
     Given the matchup records data fails to load
     When I open the matchup records page

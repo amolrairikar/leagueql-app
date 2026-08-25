@@ -103,6 +103,28 @@ describe('computeScheduleSwap', () => {
     expect(matrix.get('T1')!.get('T1')).toMatchObject({ wins: 2, games: 2 });
   });
 
+  it('excludes unplayed 0-0 weeks from simulated records', () => {
+    // Add an unplayed week 3 (0-0) between T1 and T2. It must add no games to any
+    // simulated record — every team's totals stay identical to the played weeks.
+    const withUnplayed = [...MATCHUPS, game('3', 'T1', 0, 'T2', 0)];
+    const { matrix } = computeScheduleSwap(withUnplayed);
+    // Diagonal (actual) records are unchanged: still two games each, no phantom tie.
+    expect(matrix.get('T1')!.get('T1')).toMatchObject({
+      wins: 2,
+      losses: 0,
+      ties: 0,
+      games: 2,
+    });
+    expect(matrix.get('T2')!.get('T2')).toMatchObject({
+      wins: 1,
+      losses: 1,
+      ties: 0,
+      games: 2,
+    });
+    // And no swapped cell gained a game from the placeholder week either.
+    expect(matrix.get('T3')!.get('T1')).toMatchObject({ games: 2 });
+  });
+
   it('returns no teams when there are no regular-season games', () => {
     const { teams } = computeScheduleSwap([
       game('1', 'T1', 10, 'T2', 200, 'WINNERS_BRACKET'),

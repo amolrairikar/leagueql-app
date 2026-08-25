@@ -1,4 +1,5 @@
 import type { MatchupItem } from '@/components/api/types';
+import { isUnplayedMatchup } from '@/lib/matchups';
 
 /** The per-week award types, in display order (frontend/weekly-awards). */
 export type AwardKey =
@@ -112,11 +113,13 @@ function emptyCounts(): Record<AwardKey, number> {
 /**
  * The two scored sides of a real matchup, or `null` for a bye/placeholder.
  *
- * Skips self-matchup placeholders (`team_a_id === team_b_id`) and rows where
- * either side has no finite score, so byes never feed an award.
+ * Skips self-matchup placeholders (`team_a_id === team_b_id`), unplayed `0-0`
+ * placeholder weeks, and rows where either side has no finite score, so neither
+ * byes nor future/unplayed weeks feed an award, tally, or streak.
  */
 function sides(m: MatchupItem): [SideScore, SideScore] | null {
   if (m.team_a_id === m.team_b_id) return null;
+  if (isUnplayedMatchup(m)) return null;
   const a = Number(m.team_a_score);
   const b = Number(m.team_b_score);
   if (!Number.isFinite(a) || !Number.isFinite(b)) return null;

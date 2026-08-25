@@ -83,6 +83,24 @@ Feature: Onboard-to-processed pipeline (backend/league-onboarding, backend/data-
     And the league has at least one "DRAFT#2024" item
     And the league has at least one "STANDINGS#2024" item
 
+  Scenario: An unplayed 0-0 regular-season week is excluded from standings but still stored (backend/data-processing-pipeline)
+    # An in-progress season persists future/unplayed weeks as 0-0 placeholder matchups
+    # (winner="TIE"). These must not be counted as tied games in STANDINGS/WEEKLY_STANDINGS,
+    # yet the MATCHUPS view must still store the 0-0 rows (a future live-odds sim replays them).
+    Given Sleeper player metadata and stats are cached in S3
+    When the onboarder runs an ONBOARD for "SLEEPER" league "500" with fixture "sleeper/raw_data_2024_unplayed_week.json"
+    Then the onboarder returns status 200
+    And a METADATA item exists for the onboarded league
+    When the processor processes the onboarded league
+    Then a JOB_STATUS "COMPLETED" exists for the job
+    # Weeks 1-2 are played; week 3 is an unplayed 0-0 week. Each team's standings count only the
+    # two played weeks — no phantom tie or extra game from week 3.
+    And every "STANDINGS#2024" row shows games_played 2 and ties 0
+    And no "WEEKLY_STANDINGS#2024" row is for week "3"
+    # The 0-0 placeholder rows are still written to the matchups view.
+    And the league has at least one "MATCHUPS#2024#WEEK#03" item
+    And the "MATCHUPS#2024#WEEK#03" item stores an unplayed 0-0 matchup
+
   Scenario: An upstream auth failure records a FAILED job and writes no METADATA
     When the onboarder fails to reach the platform
     Then the onboarder returns status 502

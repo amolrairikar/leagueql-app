@@ -39,3 +39,13 @@ The section SHALL render an empty-state message for fewer-than-two teams or no r
 #### Scenario: Sparse or failed data
 - **WHEN** the season has fewer than two teams / no regular-season data, or the `MATCHUPS` query fails (404 or error)
 - **THEN** an empty-state or inline message renders instead of a crash or empty grid
+
+### Requirement: Exclude unplayed matchups from simulation
+
+The schedule-swap simulation SHALL exclude unplayed matchups — a matchup whose team scores are
+both exactly `0` — so simulated records replay only played weeks.
+
+#### Scenario: Unplayed matchup excluded from simulation
+
+- **WHEN** the season's matchups include an unplayed `0-0` week
+- **THEN** the simulated records for every schedule are computed from played weeks only

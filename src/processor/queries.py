@@ -231,6 +231,7 @@ QUERIES = {
             CAST(team_b_score AS DOUBLE) AS points_against
         FROM matchups_output
         WHERE playoff_tier_type = 'NONE'
+            AND NOT (CAST(team_a_score AS DOUBLE) = 0 AND CAST(team_b_score AS DOUBLE) = 0)
         UNION ALL
         SELECT
             season,
@@ -241,6 +242,7 @@ QUERIES = {
             team_a_score AS points_against
         FROM matchups_output
         WHERE playoff_tier_type = 'NONE'
+            AND NOT (CAST(team_a_score AS DOUBLE) = 0 AND CAST(team_b_score AS DOUBLE) = 0)
     ),
     league_rankings AS (
         SELECT
@@ -312,6 +314,7 @@ QUERIES = {
             CAST(team_b_score AS DOUBLE) AS points_against
         FROM matchups_output
         WHERE playoff_tier_type = 'NONE'
+            AND NOT (CAST(team_a_score AS DOUBLE) = 0 AND CAST(team_b_score AS DOUBLE) = 0)
         UNION ALL
         SELECT 
             season,
@@ -323,6 +326,7 @@ QUERIES = {
             team_a_score AS points_against
         FROM matchups_output
         WHERE playoff_tier_type = 'NONE'
+            AND NOT (CAST(team_a_score AS DOUBLE) = 0 AND CAST(team_b_score AS DOUBLE) = 0)
     ),
     league_rankings AS (
         SELECT 

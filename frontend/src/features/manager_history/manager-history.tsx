@@ -46,6 +46,7 @@ import {
   UI_COLORS,
 } from '@/lib/color-constants';
 import { getLeagueCookies, type Platform } from '@/lib/cookie-handler';
+import { isUnplayedMatchup } from '@/lib/matchups';
 import { type Result, toResult } from '@/lib/result';
 import { pct } from '@/lib/utils';
 
@@ -234,6 +235,8 @@ function processData(
   const scheduleMap = new Map<string, Map<string, RawScheduleGame[]>>();
 
   for (const m of matchups) {
+    // Unplayed 0-0 placeholder weeks add no result, high score, or rivalry game.
+    if (isUnplayedMatchup(m)) continue;
     const aOwner = remapOwner(m.team_a_primary_owner_id);
     const bOwner = remapOwner(m.team_b_primary_owner_id);
     const { season } = m;

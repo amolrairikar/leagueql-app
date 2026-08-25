@@ -1,4 +1,5 @@
 import type { MatchupItem } from '@/components/api/types';
+import { isUnplayedMatchup } from '@/lib/matchups';
 
 /** A win/loss/tie tally over some set of (possibly swapped) games. */
 export interface SwapRecord {
@@ -53,6 +54,8 @@ export function computeScheduleSwap(matchups: MatchupItem[]): ScheduleSwapData {
 
   for (const m of matchups) {
     if (!isRegularSeason(m)) continue;
+    // Unplayed 0-0 placeholder weeks add no real scores to swap against.
+    if (isUnplayedMatchup(m)) continue;
     const week = m.week;
     if (!scoreByWeek.has(week)) scoreByWeek.set(week, new Map());
     if (!oppByWeek.has(week)) oppByWeek.set(week, new Map());
