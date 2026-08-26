@@ -19,9 +19,11 @@ class TestGetNflState:
     def test_raises_on_http_error(self, sleeper_refresh_utils):
         mock_resp = MagicMock()
         mock_resp.raise_for_status.side_effect = requests.exceptions.HTTPError("err")
-        with patch("requests.get", return_value=mock_resp):
-            with pytest.raises(requests.exceptions.HTTPError):
-                sleeper_refresh_utils.get_nfl_state()
+        with (
+            patch("requests.get", return_value=mock_resp),
+            pytest.raises(requests.exceptions.HTTPError),
+        ):
+            sleeper_refresh_utils.get_nfl_state()
 
 
 class TestGetSleeperLeagues:
@@ -181,10 +183,12 @@ class TestInvokeOnboarderLambda:
     def test_raises_when_status_not_202(self, sleeper_refresh_utils):
         mock_lambda = MagicMock()
         mock_lambda.invoke.return_value = {"StatusCode": 500}
-        with patch.object(sleeper_refresh_utils, "_lambda_client", mock_lambda):
-            with pytest.raises(Exception, match="status code 500"):
-                sleeper_refresh_utils.invoke_onboarder_lambda(
-                    "league-123",
-                    canonical_league_id="canonical-abc",
-                    correlation_id="test-corr-id",
-                )
+        with (
+            patch.object(sleeper_refresh_utils, "_lambda_client", mock_lambda),
+            pytest.raises(Exception, match="status code 500"),
+        ):
+            sleeper_refresh_utils.invoke_onboarder_lambda(
+                "league-123",
+                canonical_league_id="canonical-abc",
+                correlation_id="test-corr-id",
+            )

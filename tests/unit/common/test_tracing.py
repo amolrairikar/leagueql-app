@@ -290,7 +290,9 @@ class TestTracedHandlerEnabled:
             patch("opentelemetry.trace.get_tracer", return_value=tracer),
             patch.object(tracing, "force_flush") as flush,
         ):
-            with pytest.raises(ValueError):
-                with tracing.traced_handler("onboarder.handle", root=True):
-                    raise ValueError("boom")
+            with (
+                pytest.raises(ValueError),
+                tracing.traced_handler("onboarder.handle", root=True),
+            ):
+                raise ValueError("boom")
             flush.assert_called_once()

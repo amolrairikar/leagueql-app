@@ -38,13 +38,15 @@ class TestLambdaHandlerSleeperRefresh:
     def test_raises_when_nfl_state_fails(self, sleeper_refresh_handler):
         """A failed NFL-state fetch must raise so the Lambda Errors alarm fires,
         rather than silently reporting a failed run as a 502."""
-        with patch.object(
-            sleeper_refresh_handler,
-            "get_nfl_state",
-            side_effect=Exception("network error"),
+        with (
+            patch.object(
+                sleeper_refresh_handler,
+                "get_nfl_state",
+                side_effect=Exception("network error"),
+            ),
+            pytest.raises(Exception, match="network error"),
         ):
-            with pytest.raises(Exception, match="network error"):
-                sleeper_refresh_handler.lambda_handler({}, self._make_context())
+            sleeper_refresh_handler.lambda_handler({}, self._make_context())
 
     def test_raises_when_get_leagues_fails(self, sleeper_refresh_handler):
         """A failed league-list query must raise (refreshes zero leagues) so the
@@ -60,9 +62,9 @@ class TestLambdaHandlerSleeperRefresh:
                 "get_sleeper_leagues",
                 side_effect=Exception("DDB error"),
             ),
+            pytest.raises(Exception, match="DDB error"),
         ):
-            with pytest.raises(Exception, match="DDB error"):
-                sleeper_refresh_handler.lambda_handler({}, self._make_context())
+            sleeper_refresh_handler.lambda_handler({}, self._make_context())
 
     def test_returns_200_when_no_leagues(self, sleeper_refresh_handler):
         with (
@@ -186,11 +188,9 @@ class TestLambdaHandlerSleeperRefresh:
                 "invoke_onboarder_lambda",
                 side_effect=[None, Exception("fail")],
             ) as mock_invoke,
+            pytest.raises(RuntimeError, match="Failed to trigger refresh for 1 of 2"),
         ):
-            with pytest.raises(
-                RuntimeError, match="Failed to trigger refresh for 1 of 2"
-            ):
-                sleeper_refresh_handler.lambda_handler({}, self._make_context())
+            sleeper_refresh_handler.lambda_handler({}, self._make_context())
 
         # A failure on lg2 must not stop lg1 from being attempted: both are tried.
         assert mock_invoke.call_count == 2

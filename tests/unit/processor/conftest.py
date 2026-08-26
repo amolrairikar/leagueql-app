@@ -29,22 +29,22 @@ def _bootstrap_processor():
     sys.modules.setdefault("newrelic", _nr_mock)
     sys.modules.setdefault("newrelic.agent", _nr_mock.agent)
 
-    with patch.dict(os.environ, env):
-        with (
-            patch("boto3.client") as mock_client,
-            patch("boto3.resource") as mock_resource,
-        ):
-            mock_client.return_value = MagicMock()
-            mock_resource.return_value.Table.return_value = MagicMock()
+    with (
+        patch.dict(os.environ, env),
+        patch("boto3.client") as mock_client,
+        patch("boto3.resource") as mock_resource,
+    ):
+        mock_client.return_value = MagicMock()
+        mock_resource.return_value.Table.return_value = MagicMock()
 
-            utils_mod = _load_module("processor.utils", _SRC / "utils.py")
-            sys.modules["utils"] = utils_mod
+        utils_mod = _load_module("processor.utils", _SRC / "utils.py")
+        sys.modules["utils"] = utils_mod
 
-            queries_mod = _load_module("processor.queries", _SRC / "queries.py")
-            sys.modules["queries"] = queries_mod
+        queries_mod = _load_module("processor.queries", _SRC / "queries.py")
+        sys.modules["queries"] = queries_mod
 
-            handler_mod = _load_module("processor.handler", _SRC / "handler.py")
-            sys.modules["processor.handler"] = handler_mod
+        handler_mod = _load_module("processor.handler", _SRC / "handler.py")
+        sys.modules["processor.handler"] = handler_mod
 
     for name, prev in saved.items():
         if prev is None:

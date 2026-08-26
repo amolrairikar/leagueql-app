@@ -1,9 +1,10 @@
 """Tests for onboarder/sleeper_client.py."""
 
+from unittest.mock import MagicMock, patch
+
 import botocore.exceptions
 import pytest
 import requests
-from unittest.mock import MagicMock, patch
 
 
 def _mock_http_response(json_data, status_code=200, raise_error=False):
@@ -60,9 +61,11 @@ class TestResolveSleeperCanonicalLeagueId:
     def test_http_error_raises(self, onboarder_sleeper_client, monkeypatch):
         monkeypatch.setenv("DYNAMODB_TABLE_NAME", "test-table")
         http_resp = _mock_http_response({}, raise_error=True)
-        with patch("requests.get", return_value=http_resp):
-            with pytest.raises(requests.exceptions.HTTPError):
-                onboarder_sleeper_client.resolve_sleeper_canonical_league_id("new-1")
+        with (
+            patch("requests.get", return_value=http_resp),
+            pytest.raises(requests.exceptions.HTTPError),
+        ):
+            onboarder_sleeper_client.resolve_sleeper_canonical_league_id("new-1")
 
     def test_dynamodb_client_error_raises(self, onboarder_sleeper_client, monkeypatch):
         monkeypatch.setenv("DYNAMODB_TABLE_NAME", "test-table")
@@ -76,9 +79,9 @@ class TestResolveSleeperCanonicalLeagueId:
                     {"Error": {"Code": "InternalError", "Message": "fail"}}, "GetItem"
                 ),
             ),
+            pytest.raises(botocore.exceptions.ClientError),
         ):
-            with pytest.raises(botocore.exceptions.ClientError):
-                onboarder_sleeper_client.resolve_sleeper_canonical_league_id("new-1")
+            onboarder_sleeper_client.resolve_sleeper_canonical_league_id("new-1")
 
     def test_item_without_canonical_id_continues_chain(
         self, onboarder_sleeper_client, monkeypatch
@@ -227,15 +230,19 @@ class TestSleeperClientGetLeagueSeasons:
 
     def test_http_error_raises(self, onboarder_sleeper_client):
         http_resp = _mock_http_response({}, raise_error=True)
-        with patch("requests.get", return_value=http_resp):
-            with pytest.raises(requests.exceptions.HTTPError):
-                onboarder_sleeper_client.SleeperClient("league-2024")
+        with (
+            patch("requests.get", return_value=http_resp),
+            pytest.raises(requests.exceptions.HTTPError),
+        ):
+            onboarder_sleeper_client.SleeperClient("league-2024")
 
     def test_missing_league_id_raises_runtime_error(self, onboarder_sleeper_client):
         http_resp = _mock_http_response({"season": "2024"})
-        with patch("requests.get", return_value=http_resp):
-            with pytest.raises(RuntimeError, match="missing field"):
-                onboarder_sleeper_client.SleeperClient("league-2024")
+        with (
+            patch("requests.get", return_value=http_resp),
+            pytest.raises(RuntimeError, match="missing field"),
+        ):
+            onboarder_sleeper_client.SleeperClient("league-2024")
 
     def test_chain_depth_limit_raises(self, onboarder_sleeper_client):
         # previous_league_id never reaches "0", so the shared chain walk must bail
@@ -243,9 +250,11 @@ class TestSleeperClientGetLeagueSeasons:
         http_resp = _mock_http_response(
             {"season": "2024", "league_id": "lg", "previous_league_id": "lg-prev"}
         )
-        with patch("requests.get", return_value=http_resp):
-            with pytest.raises(RuntimeError, match="maximum chain depth"):
-                onboarder_sleeper_client.SleeperClient("lg")
+        with (
+            patch("requests.get", return_value=http_resp),
+            pytest.raises(RuntimeError, match="maximum chain depth"),
+        ):
+            onboarder_sleeper_client.SleeperClient("lg")
 
 
 class TestSleeperClientGetSeasons:

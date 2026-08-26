@@ -25,8 +25,8 @@ _SRC = Path(__file__).parents[2] / "src"
 sys.path.insert(0, str(_SRC / "api"))
 sys.path.insert(0, str(_SRC))  # makes the shared ``common`` package importable
 
-from fastapi import HTTPException  # noqa: E402
-from main import Platform, delete_league  # noqa: E402
+from fastapi import HTTPException
+from main import Platform, delete_league
 
 
 def parse_args():

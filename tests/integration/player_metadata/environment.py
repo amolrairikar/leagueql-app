@@ -23,9 +23,7 @@ def _load_module(unique_name, path):
 def before_all(context):
     missing = [v for v in _REQUIRED_ENV_VARS if not os.environ.get(v)]
     if missing:
-        raise EnvironmentError(
-            f"Missing required environment variables: {', '.join(missing)}"
-        )
+        raise OSError(f"Missing required environment variables: {', '.join(missing)}")
 
     s3_bucket = f"leagueql-dev-bucket-east-{os.environ['AWS_ACCOUNT_ID']}"
     os.environ["S3_BUCKET_NAME"] = s3_bucket

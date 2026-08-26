@@ -2,6 +2,7 @@
 import json
 import os
 import time
+
 import boto3
 import botocore.exceptions
 from utils import build_retry_session, logger
@@ -21,7 +22,7 @@ def fetch_nfl_state() -> dict | None:
         response = http_session.get(SLEEPER_NFL_STATE_URL, timeout=10)
         response.raise_for_status()
         return response.json()
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — best-effort fetch; caller handles None
         logger.warning("Failed to fetch NFL state: %s", e)
         return None
 

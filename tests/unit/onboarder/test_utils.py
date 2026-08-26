@@ -90,7 +90,7 @@ class TestFetchWithRetry:
         )
         session.get.return_value = resp_500
 
-        with pytest.raises(Exception):
+        with pytest.raises(aiohttp.ClientResponseError):
             await onboarder_utils.fetch_with_retry(
                 session=session, url="http://test.com", max_retries=1, base_delay=0
             )

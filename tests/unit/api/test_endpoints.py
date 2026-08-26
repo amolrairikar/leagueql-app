@@ -1,6 +1,7 @@
 """Tests for FastAPI endpoint handlers in main.py."""
 
 from datetime import datetime, timedelta, timezone
+from typing import ClassVar
 from unittest.mock import MagicMock, patch
 
 import botocore.exceptions
@@ -17,7 +18,7 @@ class TestHealthEndpoint:
 class TestSecurityHeaders:
     """Every response carries the hardening headers and a default-deny cache (backend/security-headers)."""
 
-    EXPECTED = {
+    EXPECTED: ClassVar = {
         "x-content-type-options": "nosniff",
         "content-security-policy": (
             "default-src 'none'; frame-ancestors 'none'; base-uri 'none'"
@@ -720,7 +721,7 @@ class TestDeleteLeagueEndpoint:
         mock_table.update_item.assert_called_once_with(
             Key={"PK": "APP#STATS", "SK": "LEAGUE_COUNT"},
             UpdateExpression="ADD league_count :delta",
-            ExpressionAttributeValues={":delta": Decimal("-1")},
+            ExpressionAttributeValues={":delta": Decimal(-1)},
         )
 
     def test_client_error_during_delete_returns_500(
@@ -902,7 +903,7 @@ _VALID_MAPPING_ENTRY = {
 class TestMigrateLeagueEndpoint:
     # Successful migration: get_item calls are (1) current league lookup,
     # (2) metadata fetch, (3) new platform league lookup (returns {} → 404).
-    _PAYLOAD = {
+    _PAYLOAD: ClassVar = {
         "newPlatformLeagueId": "456",
         "newPlatform": "SLEEPER",
         "season": "2025",
@@ -1204,7 +1205,7 @@ class TestGetLatestStoredMatchup:
 class TestEspnMembersEndpoint:
     """The /espn_members endpoint proxies ESPN's API server-side to avoid CORS."""
 
-    _PAYLOAD = {"swid": "{abc}", "s2": "s2-token"}
+    _PAYLOAD: ClassVar = {"swid": "{abc}", "s2": "s2-token"}
     _URL = "/leagues/123/espn_members?platform=ESPN&espnLeagueId=99&season=2024"
 
     def test_returns_members_on_success(self, client, mock_table, league_lookup_item):
@@ -1621,7 +1622,7 @@ class TestClaimOwnershipEndpoint:
 
 
 class TestVerifyMembershipEndpoint:
-    _PAYLOAD = {"swid": "{abc}", "s2": "s2-token"}
+    _PAYLOAD: ClassVar = {"swid": "{abc}", "s2": "s2-token"}
 
     def _seasons_query(self, mock_table):
         mock_table.query.return_value = {

@@ -34,5 +34,5 @@ def publish_failure(error_message: str, subject: str) -> None:
             Subject=subject,
             Message=f"Correlation ID: {correlation_id_var.get()}\nError: {error_message}",
         )
-    except Exception:
+    except Exception:  # noqa: BLE001 — notification is best-effort, never raise
         logger.warning("Failed to publish SNS failure notification", exc_info=True)

@@ -90,9 +90,7 @@ def _cleanup_test_league(context, test_league_id: str) -> None:
 def before_all(context):
     missing = [v for v in _REQUIRED_ENV_VARS if not os.environ.get(v)]
     if missing:
-        raise EnvironmentError(
-            f"Missing required environment variables: {', '.join(missing)}"
-        )
+        raise OSError(f"Missing required environment variables: {', '.join(missing)}")
 
     os.environ.setdefault("DYNAMODB_TABLE_NAME", "leagueql-table-dev")
     os.environ.setdefault("ONBOARDER_LAMBDA_NAME", "leagueql-onboarder-dev")

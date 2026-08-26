@@ -100,14 +100,16 @@ class TestUploadResultsToS3:
         mock_s3.put_object.side_effect = botocore.exceptions.ClientError(
             {"Error": {"Code": "AccessDenied", "Message": "denied"}}, "PutObject"
         )
-        with patch.object(onboarder_writer, "_s3", mock_s3):
-            with pytest.raises(botocore.exceptions.ClientError):
-                onboarder_writer.upload_results_to_s3(
-                    results=self._make_results(),
-                    bucket_name="test-bucket",
-                    prefix="raw-api-data/league-abc",
-                    platform="SLEEPER",
-                )
+        with (
+            patch.object(onboarder_writer, "_s3", mock_s3),
+            pytest.raises(botocore.exceptions.ClientError),
+        ):
+            onboarder_writer.upload_results_to_s3(
+                results=self._make_results(),
+                bucket_name="test-bucket",
+                prefix="raw-api-data/league-abc",
+                platform="SLEEPER",
+            )
 
     def test_manifest_get_non_nosuchkey_error_propagates(self, onboarder_writer):
         mock_s3 = MagicMock()
@@ -115,14 +117,16 @@ class TestUploadResultsToS3:
         mock_s3.get_object.side_effect = botocore.exceptions.ClientError(
             {"Error": {"Code": "InternalError", "Message": "fail"}}, "GetObject"
         )
-        with patch.object(onboarder_writer, "_s3", mock_s3):
-            with pytest.raises(botocore.exceptions.ClientError):
-                onboarder_writer.upload_results_to_s3(
-                    results=self._make_results(),
-                    bucket_name="test-bucket",
-                    prefix="raw-api-data/league-abc",
-                    platform="SLEEPER",
-                )
+        with (
+            patch.object(onboarder_writer, "_s3", mock_s3),
+            pytest.raises(botocore.exceptions.ClientError),
+        ):
+            onboarder_writer.upload_results_to_s3(
+                results=self._make_results(),
+                bucket_name="test-bucket",
+                prefix="raw-api-data/league-abc",
+                platform="SLEEPER",
+            )
 
 
 class TestWriteLeagueRecords:
@@ -258,15 +262,17 @@ class TestWriteLeagueRecords:
             {"Error": {"Code": "InternalError", "Message": "fail"}},
             "TransactWriteItems",
         )
-        with patch.object(onboarder_writer, "_dynamodb", mock_ddb):
-            with pytest.raises(botocore.exceptions.ClientError):
-                onboarder_writer.write_league_records(
-                    league_id="123",
-                    platform="SLEEPER",
-                    canonical_league_id="canonical-abc",
-                    seasons=["2024"],
-                    request_type="ONBOARD",
-                )
+        with (
+            patch.object(onboarder_writer, "_dynamodb", mock_ddb),
+            pytest.raises(botocore.exceptions.ClientError),
+        ):
+            onboarder_writer.write_league_records(
+                league_id="123",
+                platform="SLEEPER",
+                canonical_league_id="canonical-abc",
+                seasons=["2024"],
+                request_type="ONBOARD",
+            )
 
 
 class TestWritePendingLeagueLookup:
@@ -306,11 +312,13 @@ class TestWritePendingLeagueLookup:
         mock_ddb.put_item.side_effect = botocore.exceptions.ClientError(
             {"Error": {"Code": "InternalError", "Message": "fail"}}, "PutItem"
         )
-        with patch.object(onboarder_writer, "_dynamodb", mock_ddb):
-            with pytest.raises(botocore.exceptions.ClientError):
-                onboarder_writer.write_pending_league_lookup(
-                    league_id="league-2026",
-                    platform="SLEEPER",
-                    canonical_league_id="canonical-abc",
-                    pending_season="2026",
-                )
+        with (
+            patch.object(onboarder_writer, "_dynamodb", mock_ddb),
+            pytest.raises(botocore.exceptions.ClientError),
+        ):
+            onboarder_writer.write_pending_league_lookup(
+                league_id="league-2026",
+                platform="SLEEPER",
+                canonical_league_id="canonical-abc",
+                pending_season="2026",
+            )

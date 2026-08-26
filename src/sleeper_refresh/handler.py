@@ -1,8 +1,9 @@
 import json
 import uuid
 
+from utils import get_nfl_state, get_sleeper_leagues, invoke_onboarder_lambda, logger
+
 from common.tracing import init_tracing, traced_handler
-from utils import logger, get_nfl_state, get_sleeper_leagues, invoke_onboarder_lambda
 
 # Originate a trace per refreshed league → Better Stack (backend/otel-tracing); the onboarder/
 # processor continue it. A no-op unless tracing is configured, so tests /
@@ -104,7 +105,7 @@ def lambda_handler(event, context) -> dict[str, str | int]:
                     league["league_id"],
                     correlation_id,
                 )
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 — isolate one league's failure
                 failure_count += 1
                 logger.error(
                     "Failed to trigger refresh for league %s: %s",

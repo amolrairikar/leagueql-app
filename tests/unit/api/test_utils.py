@@ -178,7 +178,7 @@ class TestUpdateLeagueCount:
         mock_table.update_item.assert_called_once_with(
             Key={"PK": "APP#STATS", "SK": "LEAGUE_COUNT"},
             UpdateExpression="ADD league_count :delta",
-            ExpressionAttributeValues={":delta": Decimal("1")},
+            ExpressionAttributeValues={":delta": Decimal(1)},
         )
 
     def test_decrements_count(self, mock_table):
@@ -188,7 +188,7 @@ class TestUpdateLeagueCount:
         mock_table.update_item.assert_called_once_with(
             Key={"PK": "APP#STATS", "SK": "LEAGUE_COUNT"},
             UpdateExpression="ADD league_count :delta",
-            ExpressionAttributeValues={":delta": Decimal("-1")},
+            ExpressionAttributeValues={":delta": Decimal(-1)},
         )
 
 
@@ -206,7 +206,6 @@ class TestRequireLeagueOwner:
 
     def test_owner_mismatch_raises_403(self):
         from fastapi import HTTPException
-
         from main import require_league_owner
 
         with pytest.raises(HTTPException) as exc:
@@ -217,7 +216,6 @@ class TestRequireLeagueOwner:
 
     def test_absent_owner_raises_403(self):
         from fastapi import HTTPException
-
         from main import require_league_owner
 
         with pytest.raises(HTTPException) as exc:
@@ -276,7 +274,6 @@ class TestRequireLeagueMember:
 
     def test_espn_non_member_raises_403(self):
         from fastapi import HTTPException
-
         from main import Platform, require_league_member
 
         with pytest.raises(HTTPException) as exc:
@@ -290,7 +287,6 @@ class TestRequireLeagueMember:
 
     def test_espn_missing_members_treated_as_empty(self):
         from fastapi import HTTPException
-
         from main import Platform, require_league_member
 
         with pytest.raises(HTTPException) as exc:
@@ -327,7 +323,6 @@ class TestAddLeagueMember:
     def test_client_error_raises_500(self, mock_table):
         import botocore.exceptions
         from fastapi import HTTPException
-
         from main import add_league_member
 
         mock_table.update_item.side_effect = botocore.exceptions.ClientError(
@@ -554,7 +549,6 @@ class TestJobStatusHelpers:
 
     def test_get_job_status_raises_500_on_client_error(self, mock_table):
         from fastapi import HTTPException
-
         from main import get_job_status
 
         mock_table.get_item.side_effect = botocore.exceptions.ClientError(

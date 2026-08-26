@@ -24,9 +24,11 @@ def _load_module(unique_name: str, path: Path) -> object:
 def _bootstrap_handler():
     """Load the handler with the webhook URL resolved to a fixed test value."""
     env = {"DISCORD_WEBHOOK_URL_SSM_PARAM": "/leagueql/test/discord/webhook_url"}
-    with patch.dict(os.environ, env):
-        with patch("common.secrets.get_ssm_parameter", return_value=TEST_WEBHOOK_URL):
-            _load_module("discord_notifier.handler", _SRC / "handler.py")
+    with (
+        patch.dict(os.environ, env),
+        patch("common.secrets.get_ssm_parameter", return_value=TEST_WEBHOOK_URL),
+    ):
+        _load_module("discord_notifier.handler", _SRC / "handler.py")
     yield
 
 

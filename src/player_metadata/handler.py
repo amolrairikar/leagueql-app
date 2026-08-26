@@ -3,7 +3,6 @@ import os
 import random
 
 import boto3
-
 from utils import build_retry_session, logger
 
 s3_client = boto3.client("s3")
@@ -21,7 +20,7 @@ def fetch_nfl_state() -> dict | None:
         response = http_session.get(SLEEPER_NFL_STATE_URL, timeout=10)
         response.raise_for_status()
         return response.json()
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — best-effort fetch; caller handles None
         logger.warning("Failed to fetch NFL state: %s", e)
         return None
 

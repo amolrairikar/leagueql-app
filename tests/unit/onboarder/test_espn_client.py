@@ -143,9 +143,11 @@ class TestESPNClientGetSeasons:
     def test_get_league_seasons_http_error(self, onboarder_espn_client):
         mock_resp = MagicMock()
         mock_resp.raise_for_status.side_effect = requests.exceptions.HTTPError("403")
-        with patch("requests.get", return_value=mock_resp):
-            with pytest.raises(requests.exceptions.HTTPError):
-                onboarder_espn_client.ESPNClient(league_id="123", latest_season="2024")
+        with (
+            patch("requests.get", return_value=mock_resp),
+            pytest.raises(requests.exceptions.HTTPError),
+        ):
+            onboarder_espn_client.ESPNClient(league_id="123", latest_season="2024")
 
 
 class TestESPNClientConstructRequestUrl:

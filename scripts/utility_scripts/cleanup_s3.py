@@ -47,8 +47,7 @@ def iter_versions(s3_client, bucket: str, prefix: str):
     if prefix:
         page_cfg["Prefix"] = prefix
 
-    for page in paginator.paginate(**page_cfg):
-        yield page
+    yield from paginator.paginate(**page_cfg)
 
 
 def collect_deleted_objects(s3_client, bucket: str, prefix: str) -> list[dict]:
@@ -69,9 +68,9 @@ def collect_deleted_objects(s3_client, bucket: str, prefix: str) -> list[dict]:
     """
     key_data: dict[str, dict] = defaultdict(lambda: {"markers": [], "versions": []})
 
-    page_count = 0
-    for page in iter_versions(s3_client, bucket, prefix):
-        page_count += 1
+    for page_count, page in enumerate(
+        iter_versions(s3_client, bucket, prefix), start=1
+    ):
         if page_count % 10 == 0:
             logger.info("Scanned %d pages so far…", page_count)
 
@@ -92,7 +91,7 @@ def collect_deleted_objects(s3_client, bucket: str, prefix: str) -> list[dict]:
 
     to_delete = []
     matched_keys = 0
-    for key, data in key_data.items():
+    for data in key_data.values():
         if any(m["IsLatest"] for m in data["markers"]):
             matched_keys += 1
             to_delete.extend(data["markers"])

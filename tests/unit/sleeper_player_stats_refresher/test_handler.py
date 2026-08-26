@@ -60,9 +60,11 @@ class TestFetchStats:
         mock_session = MagicMock()
         mock_session.get.return_value = mock_resp
 
-        with patch.object(stats_refresher_handler, "http_session", mock_session):
-            with pytest.raises(requests.exceptions.HTTPError):
-                stats_refresher_handler.fetch_stats("p1", "2024")
+        with (
+            patch.object(stats_refresher_handler, "http_session", mock_session),
+            pytest.raises(requests.exceptions.HTTPError),
+        ):
+            stats_refresher_handler.fetch_stats("p1", "2024")
 
     def test_returns_none_when_data_not_dict(self, stats_refresher_handler):
         mock_resp = MagicMock()
@@ -112,11 +114,11 @@ class TestMainRefresher:
         return mock_s3
 
     def test_raises_when_nfl_state_unavailable(self, stats_refresher_handler):
-        with patch.object(
-            stats_refresher_handler, "fetch_nfl_state", return_value=None
+        with (
+            patch.object(stats_refresher_handler, "fetch_nfl_state", return_value=None),
+            pytest.raises(RuntimeError, match="Failed to fetch NFL state"),
         ):
-            with pytest.raises(RuntimeError, match="Failed to fetch NFL state"):
-                stats_refresher_handler.main()
+            stats_refresher_handler.main()
 
     def test_skips_when_off_season(self, stats_refresher_handler):
         mock_s3 = MagicMock()
@@ -465,8 +467,8 @@ class TestMainRefresher:
             patch.object(
                 stats_refresher_handler, "fetch_stats", return_value={"pass_yd": 300}
             ),
+            pytest.raises(botocore.exceptions.ClientError),
         ):
-            with pytest.raises(botocore.exceptions.ClientError):
-                stats_refresher_handler.main()
+            stats_refresher_handler.main()
 
         mock_s3.put_object.assert_not_called()

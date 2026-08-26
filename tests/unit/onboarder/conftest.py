@@ -39,23 +39,22 @@ def _bootstrap_onboarder():
     sys.modules.setdefault("newrelic", _nr_mock)
     sys.modules.setdefault("newrelic.agent", _nr_mock.agent)
 
-    with patch.dict(os.environ, env):
-        with patch("boto3.client") as mock_client:
-            mock_client.return_value = MagicMock()
+    with patch.dict(os.environ, env), patch("boto3.client") as mock_client:
+        mock_client.return_value = MagicMock()
 
-            # Load in dependency order, registering under both bare and unique names
-            for bare in [
-                "utils",
-                "writer",
-                "espn_client",
-                "sleeper_client",
-                "onboarding_service",
-            ]:
-                mod = _load_module(f"onboarder.{bare}", _SRC / f"{bare}.py")
-                sys.modules[bare] = mod
+        # Load in dependency order, registering under both bare and unique names
+        for bare in [
+            "utils",
+            "writer",
+            "espn_client",
+            "sleeper_client",
+            "onboarding_service",
+        ]:
+            mod = _load_module(f"onboarder.{bare}", _SRC / f"{bare}.py")
+            sys.modules[bare] = mod
 
-            h_mod = _load_module("onboarder.handler", _SRC / "handler.py")
-            sys.modules["handler"] = h_mod
+        h_mod = _load_module("onboarder.handler", _SRC / "handler.py")
+        sys.modules["handler"] = h_mod
 
     # Restore bare names so other conftest fixtures can register their own modules
     for name, prev in saved.items():

@@ -611,8 +611,8 @@ def resolve_lineup(
         entry = (pid, player["full_name"], week_scores[pid])
         by_pos.setdefault(pos, []).append(entry)
 
-    for pos in by_pos:
-        by_pos[pos].sort(key=lambda x: -x[2])
+    for entries in by_pos.values():
+        entries.sort(key=lambda x: -x[2])
 
     used_pids: set[int] = set()
     starters: list[dict] = []

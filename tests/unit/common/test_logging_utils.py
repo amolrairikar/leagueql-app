@@ -4,7 +4,7 @@ import json
 import logging
 from unittest.mock import MagicMock, patch
 
-import common.logging_utils as logging_utils
+from common import logging_utils
 from common.logging_utils import JsonFormatter, correlation_id_var, setup_logger
 
 

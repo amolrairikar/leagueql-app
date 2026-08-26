@@ -116,7 +116,7 @@ def init_tracing(service_name: str) -> bool:
             logger.info("OTel tracing disabled: no OTLP endpoint/token configured")
             return False
         build_provider(service_name)
-    except Exception:
+    except Exception:  # noqa: BLE001
         # Tracing setup must NEVER crash the handler. Guards against the SSM
         # parameter not existing yet (a deploy-ordering window), IAM not yet
         # allowing the read, or an exporter/instrumentation misconfiguration.
@@ -146,7 +146,7 @@ def inject_context(carrier: dict | None = None) -> dict:
         )
 
         TraceContextTextMapPropagator().inject(carrier)
-    except Exception:  # propagation must never break the caller
+    except Exception:  # noqa: BLE001 — propagation must never break the caller
         logger.warning("OTel inject_context failed; carrier left untraced")
     return carrier
 
@@ -165,7 +165,7 @@ def extract_context(carrier):
         )
 
         return TraceContextTextMapPropagator().extract(carrier)
-    except Exception:  # a bad carrier must never break the handler
+    except Exception:  # noqa: BLE001 — a bad carrier must never break the handler
         logger.warning("OTel extract_context failed; starting a fresh trace")
         return None
 
@@ -176,7 +176,7 @@ def force_flush() -> None:
         return
     try:
         _provider.force_flush()
-    except Exception:  # a flush failure must never break the handler
+    except Exception:  # noqa: BLE001 — a flush failure must never break the handler
         logger.warning("OTel span force_flush failed")
 
 

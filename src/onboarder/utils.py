@@ -1,6 +1,7 @@
 import asyncio
+from collections.abc import Awaitable, Callable, Sequence
 from functools import partial
-from typing import Any, Awaitable, Callable, Sequence
+from typing import Any
 
 import aiohttp
 
@@ -94,17 +95,16 @@ async def fetch_with_retry(
     for attempt in range(max_retries + 1):
         try:
             async with session.get(url=url, headers=headers or {}) as response:
-                if response.status in retryable_statuses:
-                    if attempt < max_retries:
-                        logger.warning(
-                            "Retryable status %s for url: %s (attempt %s/%s)",
-                            response.status,
-                            url,
-                            attempt + 1,
-                            max_retries,
-                        )
-                        await asyncio.sleep(base_delay * (2**attempt))
-                        continue
+                if response.status in retryable_statuses and attempt < max_retries:
+                    logger.warning(
+                        "Retryable status %s for url: %s (attempt %s/%s)",
+                        response.status,
+                        url,
+                        attempt + 1,
+                        max_retries,
+                    )
+                    await asyncio.sleep(base_delay * (2**attempt))
+                    continue
                 response.raise_for_status()
                 return await response.json()
         except (aiohttp.ClientConnectionError, asyncio.TimeoutError) as e:
@@ -137,7 +137,9 @@ def validate_api_results(
     for result in results:
         if isinstance(result, BaseException):
             logger.error("Unhandled exception in gather: %s", result)
-            raise RuntimeError(
+            # A gathered BaseException signals a fetch failure, not an invalid
+            # argument type, so RuntimeError (not TypeError) is correct here.
+            raise RuntimeError(  # noqa: TRY004
                 f"Unexpected error occurred while fetching data: {result}"
             )
         if result["data"] is None:

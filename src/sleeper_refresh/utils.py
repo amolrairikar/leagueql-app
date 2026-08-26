@@ -127,4 +127,4 @@ def invoke_onboarder_lambda(
     # Check if invocation was successful
     status_code = response.get("StatusCode")
     if status_code != 202:
-        raise Exception(f"Lambda invocation failed with status code {status_code}")
+        raise RuntimeError(f"Lambda invocation failed with status code {status_code}")

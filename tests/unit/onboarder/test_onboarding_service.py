@@ -105,18 +105,20 @@ class TestOnboardingServiceInit:
     def test_http_error_in_espn_client_init_propagates(
         self, onboarder_onboarding_service, onboarder_espn_client
     ):
-        with patch.object(
-            onboarder_espn_client.ESPNClient,
-            "_get_league_seasons",
-            side_effect=requests.exceptions.HTTPError("403"),
+        with (
+            patch.object(
+                onboarder_espn_client.ESPNClient,
+                "_get_league_seasons",
+                side_effect=requests.exceptions.HTTPError("403"),
+            ),
+            pytest.raises(requests.exceptions.HTTPError),
         ):
-            with pytest.raises(requests.exceptions.HTTPError):
-                onboarder_onboarding_service.OnboardingService(
-                    league_id="123",
-                    platform="ESPN",
-                    request_type="ONBOARD",
-                    latest_season="2024",
-                )
+            onboarder_onboarding_service.OnboardingService(
+                league_id="123",
+                platform="ESPN",
+                request_type="ONBOARD",
+                latest_season="2024",
+            )
 
 
 class TestOnboardingServiceRun:
