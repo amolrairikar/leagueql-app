@@ -2,6 +2,10 @@ import json
 import uuid
 
 import requests
+from onboarding_service import OnboardingService
+from sleeper_client import resolve_sleeper_canonical_league_id
+from utils import correlation_id_var, logger, publish_failure
+from writer import write_pending_league_lookup
 
 from common.job_status import (
     SYSTEMIC_FAILURE_CODES,
@@ -9,10 +13,6 @@ from common.job_status import (
     write_job_status,
 )
 from common.tracing import init_tracing, traced_handler
-from onboarding_service import OnboardingService
-from sleeper_client import resolve_sleeper_canonical_league_id
-from utils import correlation_id_var, logger, publish_failure
-from writer import write_pending_league_lookup
 
 # Continue the trace started upstream (API or Sleeper refresh) → Better Stack (backend/otel-tracing).
 # A no-op unless tracing is configured, so tests / unconfigured envs are unaffected.
@@ -147,7 +147,7 @@ def _handle(event, context) -> dict[str, str | int]:
                     }
                 ),
             }
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — surface any failure as a handled error
             logger.error(
                 "Unexpected error resolving Sleeper canonical league ID: %s", e
             )
@@ -390,7 +390,7 @@ def _handle(event, context) -> dict[str, str | int]:
                 }
             ),
         }
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — surface any failure as a handled error
         logger.error(
             "Unexpected error occurred while running onboarding service: %s", e
         )

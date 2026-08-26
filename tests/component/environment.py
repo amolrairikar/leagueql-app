@@ -186,7 +186,7 @@ def _load_handlers(context) -> None:
     )
 
     # --- API (main/helpers/routes are plain top-level modules) -------------
-    import main  # noqa: F811  (resolved via _API_SRC on sys.path)
+    import main
 
     # No real Lambda exists under moto[s3,dynamodb]; the API only needs to record
     # that it *would* invoke the onboarder, so stub the Lambda client.

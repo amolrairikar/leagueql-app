@@ -8,9 +8,7 @@ _REQUIRED_ENV_VARS = ["AWS_ACCOUNT_ID"]
 def before_all(context):
     missing = [v for v in _REQUIRED_ENV_VARS if not os.environ.get(v)]
     if missing:
-        raise EnvironmentError(
-            f"Missing required environment variables: {', '.join(missing)}"
-        )
+        raise OSError(f"Missing required environment variables: {', '.join(missing)}")
 
     environment = os.environ.get("ENVIRONMENT", "dev")
     account_id = os.environ["AWS_ACCOUNT_ID"]
@@ -55,6 +53,6 @@ def after_scenario(context, scenario):
     if test_key:
         try:
             context.s3_client.delete_object(Bucket=context.s3_bucket, Key=test_key)
-        except Exception:  # noqa: S110 — best-effort teardown cleanup, intentionally swallowed
+        except Exception:  # noqa: S110,BLE001 — best-effort teardown cleanup, intentionally swallowed
             # Best-effort cleanup — never fail the suite on teardown.
             pass

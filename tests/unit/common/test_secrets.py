@@ -2,7 +2,7 @@
 
 from unittest.mock import MagicMock, patch
 
-import common.secrets as secrets
+from common import secrets
 
 
 def test_get_ssm_parameter_returns_decrypted_value():

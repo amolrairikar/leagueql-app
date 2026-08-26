@@ -14,7 +14,7 @@ def _most_recent_completed_season() -> str:
     # The NFL regular season runs Sep–Jan. Before September the most recent
     # completed season is the previous calendar year; otherwise it is the
     # current year.
-    today = datetime.date.today()
+    today = datetime.datetime.now(tz=datetime.timezone.utc).date()
     return str(today.year if today.month >= 9 else today.year - 1)
 
 

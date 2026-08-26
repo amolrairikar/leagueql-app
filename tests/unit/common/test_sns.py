@@ -2,7 +2,7 @@
 
 from unittest.mock import MagicMock, patch
 
-import common.sns as sns
+from common import sns
 
 
 def test_publish_failure_noop_when_unconfigured():

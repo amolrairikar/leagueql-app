@@ -1,12 +1,12 @@
 import asyncio
 import os
-from typing import Any, Iterator
+from collections.abc import Iterator
+from typing import Any
 
 import aiohttp
 import boto3
 import botocore.exceptions
 import requests
-
 from utils import (
     fetch_with_retry,
     logger,
@@ -386,6 +386,6 @@ class SleeperClient:
                 if data is None and data_type in ("playoff_bracket", "losers_bracket"):
                     data = []
                 return {"season": season, "data_type": data_type, "data": data}
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 — isolate one request's failure
                 logger.error("Failed request for url: %s, error: %s", url, e)
                 return {"season": season, "data_type": data_type, "data": None}

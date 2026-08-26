@@ -15,6 +15,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Annotated, Any
 
 import botocore.exceptions
+import main
 import requests as http_requests
 from boto3.dynamodb.conditions import Key
 from fastapi import (
@@ -26,29 +27,6 @@ from fastapi import (
     Request,
     Response,
     status,
-)
-
-import main
-from common.feature_flags import (
-    BANNER,
-    is_enabled,
-)
-from common.onboarder_invoke import invoke_onboarder
-from main import (
-    QUERY_TYPE_TO_SK_BASE,
-    REFRESH_COOLDOWN_MINUTES,
-    S3_BUCKET,
-    APIResponse,
-    ClaimOwnershipPayload,
-    EspnMembersPayload,
-    MigratePayload,
-    OnboardingPayload,
-    Platform,
-    QueryResponse,
-    QueryType,
-    RequestType,
-    correlation_id_var,
-    logger,
 )
 from helpers import (
     _is_conditional_check_failure,
@@ -69,6 +47,28 @@ from helpers import (
     set_active_job,
     update_league_count,
 )
+from main import (
+    QUERY_TYPE_TO_SK_BASE,
+    REFRESH_COOLDOWN_MINUTES,
+    S3_BUCKET,
+    APIResponse,
+    ClaimOwnershipPayload,
+    EspnMembersPayload,
+    MigratePayload,
+    OnboardingPayload,
+    Platform,
+    QueryResponse,
+    QueryType,
+    RequestType,
+    correlation_id_var,
+    logger,
+)
+
+from common.feature_flags import (
+    BANNER,
+    is_enabled,
+)
+from common.onboarder_invoke import invoke_onboarder
 
 router = APIRouter()
 

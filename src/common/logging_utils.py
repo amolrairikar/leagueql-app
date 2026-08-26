@@ -16,7 +16,7 @@ from contextvars import ContextVar
 # OTel installed (Onboarder, Processor, …) simply omit ``trace_id`` from their logs.
 try:
     from opentelemetry import trace as _otel_trace
-except Exception:  # pragma: no cover - exercised only where OTel is absent
+except Exception:  # noqa: BLE001  # pragma: no cover - exercised only where OTel is absent
     _otel_trace = None
 
 correlation_id_var: ContextVar[str] = ContextVar("correlation_id", default="")
@@ -38,7 +38,7 @@ def _active_trace_ids() -> dict[str, str]:
             "trace_id": format(ctx.trace_id, "032x"),
             "span_id": format(ctx.span_id, "016x"),
         }
-    except Exception:  # tracing must never break logging
+    except Exception:  # noqa: BLE001 — tracing must never break logging
         return {}
 
 

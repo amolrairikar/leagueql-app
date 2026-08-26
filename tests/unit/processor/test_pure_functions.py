@@ -135,7 +135,7 @@ class TestCompileESPNStarterStats:
             ]
         )
         slot_map = {1: 2}  # slot 2 = RB
-        stats, ids = processor_handler.compile_espn_starter_stats(roster, slot_map)
+        stats, _ids = processor_handler.compile_espn_starter_stats(roster, slot_map)
         assert stats[0]["fantasy_position"] == "RB"
 
     def test_falls_back_to_eligible_slots_when_not_in_slot_map(self, processor_handler):
@@ -150,7 +150,7 @@ class TestCompileESPNStarterStats:
                 },
             ]
         )
-        stats, ids = processor_handler.compile_espn_starter_stats(roster, slot_map={})
+        stats, _ids = processor_handler.compile_espn_starter_stats(roster, slot_map={})
         assert stats[0]["fantasy_position"] == "WR"
 
     @pytest.mark.parametrize(
@@ -1248,9 +1248,9 @@ class TestLambdaHandlerFailure:
             ),
             patch.object(processor_handler, "publish_failure") as mock_pf,
             patch.object(processor_handler, "write_job_status") as mock_wjs,
+            pytest.raises(RuntimeError),
         ):
-            with pytest.raises(RuntimeError):
-                processor_handler.lambda_handler({}, MagicMock())
+            processor_handler.lambda_handler({}, MagicMock())
         mock_pf.assert_called_once()
         mock_wjs.assert_called_once()
         args, kwargs = mock_wjs.call_args

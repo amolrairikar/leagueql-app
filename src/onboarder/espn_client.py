@@ -1,11 +1,10 @@
 import asyncio
 import json
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 import aiohttp
 import requests
-from yarl import URL
-
 from utils import (
     V2_CUTOFF,
     fetch_with_retry,
@@ -14,6 +13,7 @@ from utils import (
     run_fetches,
     validate_api_results,
 )
+from yarl import URL
 
 DATA_FETCH_TYPES = [
     "users",
@@ -157,7 +157,7 @@ class ESPNClient:
             response.raise_for_status()
         except requests.exceptions.HTTPError as e:
             logger.error("Error fetching active seasons for league: %s", e)
-            raise e
+            raise
 
         previous_seasons = response.json().get("status", {}).get("previousSeasons", [])
         previous_seasons = [str(season) for season in previous_seasons]
@@ -296,7 +296,7 @@ class ESPNClient:
                 if isinstance(data, list):
                     data = data[0]
                 return {"season": season, "data_type": data_type, "data": data}
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 — isolate one request's failure
                 logger.error("Failed request for url: %s, error: %s", url, e)
                 return {"season": season, "data_type": data_type, "data": None}
 

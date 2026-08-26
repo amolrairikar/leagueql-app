@@ -22,14 +22,13 @@ def _bootstrap_stats_refresher():
     saved = {n: sys.modules.get(n) for n in ["utils", "handler"]}
     env = {"S3_BUCKET_NAME": "test-bucket"}
 
-    with patch.dict(os.environ, env):
-        with patch("boto3.client") as mock_client:
-            mock_client.return_value = MagicMock()
-            with patch("requests.Session"):
-                utils_mod = _load_module("stats_refresher.utils", _SRC / "utils.py")
-                sys.modules["utils"] = utils_mod
+    with patch.dict(os.environ, env), patch("boto3.client") as mock_client:
+        mock_client.return_value = MagicMock()
+        with patch("requests.Session"):
+            utils_mod = _load_module("stats_refresher.utils", _SRC / "utils.py")
+            sys.modules["utils"] = utils_mod
 
-                _load_module("stats_refresher.handler", _SRC / "handler.py")
+            _load_module("stats_refresher.handler", _SRC / "handler.py")
 
     for name, prev in saved.items():
         if prev is None:

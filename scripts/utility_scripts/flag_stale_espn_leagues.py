@@ -41,10 +41,10 @@ _SRC = Path(__file__).parents[2] / "src"
 sys.path.insert(0, str(_SRC / "api"))
 sys.path.insert(0, str(_SRC))  # makes the shared ``common`` package importable
 
-import boto3  # noqa: E402
-from fastapi import HTTPException  # noqa: E402
-from helpers import get_league_metadata  # noqa: E402
-from main import Platform, delete_league  # noqa: E402
+import boto3
+from fastapi import HTTPException
+from helpers import get_league_metadata
+from main import Platform, delete_league
 
 DYNAMODB_TABLE_NAME = os.environ["DYNAMODB_TABLE_NAME"]
 

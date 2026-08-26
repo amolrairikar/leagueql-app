@@ -63,7 +63,7 @@ import boto3
 # payload contract the API and Sleeper auto-refresh use, rather than duplicating it.
 _SRC = Path(__file__).resolve().parents[2] / "src"
 sys.path.insert(0, str(_SRC))
-from common.onboarder_invoke import invoke_onboarder  # noqa: E402
+from common.onboarder_invoke import invoke_onboarder
 
 TABLE_NAME_FMT = "leagueql-table-{env}"
 ONBOARDER_LAMBDA_FMT = "leagueql-onboarder-{env}"

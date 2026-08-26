@@ -8,7 +8,7 @@ are re-exported from this module so ``main.<helper>`` remains the public surface
 
 import os
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 import boto3
 import botocore.config
@@ -46,7 +46,7 @@ ORIGINS = _parse_cors_origins(os.environ.get("CORS_ALLOW_ORIGINS", ""))
 
 class APIResponse(BaseModel):
     detail: str
-    data: Optional[Any] = None
+    data: Any | None = None
 
 
 class QueryResponse(BaseModel):
@@ -56,9 +56,9 @@ class QueryResponse(BaseModel):
 class OnboardingPayload(BaseModel):
     leagueId: str = Field(max_length=100)
     platform: str = Field(max_length=100)
-    season: Optional[str] = Field(default=None, max_length=100)
-    s2: Optional[str] = Field(default=None)
-    swid: Optional[str] = Field(default=None, max_length=100)
+    season: str | None = Field(default=None, max_length=100)
+    s2: str | None = Field(default=None)
+    swid: str | None = Field(default=None, max_length=100)
 
 
 class CaseInsensitiveEnum(str, Enum):
@@ -126,9 +126,9 @@ class ManagerMappingEntry(BaseModel):
 class MigratePayload(BaseModel):
     newPlatformLeagueId: str = Field(max_length=100)
     newPlatform: Platform
-    season: Optional[str] = Field(default=None, max_length=10)
-    s2: Optional[str] = Field(default=None)
-    swid: Optional[str] = Field(default=None, max_length=100)
+    season: str | None = Field(default=None, max_length=10)
+    s2: str | None = Field(default=None)
+    swid: str | None = Field(default=None, max_length=100)
     managerMapping: list[ManagerMappingEntry] = Field(
         default_factory=list, max_length=64
     )
@@ -209,7 +209,7 @@ LEAGUE_ACCESS_THROTTLE_SECONDS = int(
 
 # Re-export helpers so ``main.<helper>`` stays the public surface. Imported after
 # the infrastructure above so helpers can resolve ``main`` attributes at call time.
-from helpers import (  # noqa: E402, F401
+from helpers import (  # noqa: F401
     _query_all_keys,
     add_league_member,
     collect_league_keys,
@@ -233,7 +233,7 @@ from helpers import (  # noqa: E402, F401
 
 # ``delete_league`` is re-exported because external scripts/integration tests
 # call it directly (scripts/utility_scripts/delete_test_league.py).
-from routes import delete_league, router  # noqa: E402, F401
+from routes import delete_league, router  # noqa: F401
 
 app.include_router(router)
 
@@ -241,7 +241,7 @@ app.include_router(router)
 # endpoint + token (SSM) are configured, so tests / local / unconfigured envs are
 # unaffected. Must run before Mangum wraps the app so request-flush middleware and
 # FastAPI instrumentation are in place.
-from telemetry import init_tracing  # noqa: E402
+from telemetry import init_tracing
 
 init_tracing(app)
 

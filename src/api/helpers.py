@@ -13,17 +13,17 @@ from functools import partial
 from typing import Any
 
 import botocore.exceptions
+import main
 import requests as http_requests
 from boto3.dynamodb.conditions import Key
 from fastapi import HTTPException, status
-
-import main
-from common.job_status import JOB_TTL_SECONDS
-from common.sns import publish_failure as _publish_failure
 from main import (
     SLEEPER_STATE_URL,
     logger,
 )
+
+from common.job_status import JOB_TTL_SECONDS
+from common.sns import publish_failure as _publish_failure
 
 # Binds the API's SNS subject; the shared implementation handles the no-op guard,
 # correlation_id, and error swallowing.
@@ -129,7 +129,7 @@ def get_nfl_state() -> dict | None:
         resp = http_requests.get(SLEEPER_STATE_URL, timeout=(5, 10))
         resp.raise_for_status()
         return resp.json()
-    except Exception:
+    except Exception:  # noqa: BLE001 — best-effort guard; never block refresh on this
         logger.warning(
             "Failed to fetch NFL state; skipping refresh guard", exc_info=True
         )

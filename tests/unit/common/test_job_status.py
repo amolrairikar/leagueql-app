@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 import botocore.exceptions
 import pytest
 
-import common.job_status as job_status
+from common import job_status
 
 
 class _FakeResponse:

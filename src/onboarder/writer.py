@@ -6,9 +6,9 @@ from typing import Any
 import boto3
 import botocore.config
 import botocore.exceptions
+from utils import correlation_id_var, logger
 
 from common.tracing import inject_context
-from utils import correlation_id_var, logger
 
 _retry_config = botocore.config.Config(retries={"mode": "standard"})
 _s3 = boto3.client("s3", config=_retry_config)

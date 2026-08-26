@@ -19,7 +19,7 @@ def _mock_common_job_status_client():
     # building a real client / needing a region); then pin the module global to a
     # mock for the whole session.
     with patch("boto3.client"):
-        import common.job_status as job_status
+        from common import job_status
 
     job_status._dynamodb = MagicMock()
     yield

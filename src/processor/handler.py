@@ -2,21 +2,23 @@ import datetime
 import json
 import os
 from collections import defaultdict
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from decimal import Decimal
 from enum import Enum
-from typing import Any, Callable
+from typing import Any
 
 import boto3
 import botocore.config
 import botocore.exceptions
 import duckdb
 import pandas as pd
+from queries import QUERIES
+from utils import correlation_id_var, logger, publish_failure
+
 from common.job_status import write_job_status
 from common.tracing import init_tracing, traced_handler
-from utils import correlation_id_var, logger, publish_failure
-from queries import QUERIES
 
 # Continue the trace the onboarder propagated via the manifest's S3 metadata → Better
 # Stack (backend/otel-tracing). A no-op unless tracing is configured, so tests / unconfigured envs
@@ -483,7 +485,7 @@ def read_s3_object(bucket: str, key: str, version_id: str | None = None) -> Any:
         return json.loads(file_content)
     except botocore.exceptions.ClientError as e:
         logger.error("Error reading raw onboarding data from S3: %s", e)
-        raise e
+        raise
 
 
 def get_previous_version_id(bucket: str, key: str) -> str | None:
@@ -1001,7 +1003,7 @@ def _register_sleeper_raw_data(
             paired: dict[int, list[dict]] = defaultdict(list)
             for entry in item["data"]:
                 paired[entry["matchup_id"]].append(entry)
-            for _, teams in paired.items():
+            for teams in paired.values():
                 if len(teams) != 2:
                     continue
                 team_a, team_b = teams[0], teams[1]
@@ -1215,7 +1217,7 @@ def register_raw_data(
             player_stats=player_stats or {},
         )
     else:
-        raise ValueError("Unsupported platform: %s" % platform)
+        raise ValueError(f"Unsupported platform: {platform}")
 
     for data_type, rows in grouped.items():
         if data_type == "league_name_by_season":
@@ -1394,7 +1396,7 @@ def _lambda_handler_impl(event, context) -> None:
         bucket = record["s3"]["bucket"]["name"]
         key = record["s3"]["object"]["key"]
     except (KeyError, IndexError) as e:
-        raise ValueError("Unexpected S3 event structure: missing key %s" % e) from e
+        raise ValueError(f"Unexpected S3 event structure: missing key {e}") from e
 
     logger.info("Put request principal: %s", put_request_principal)
     if put_request_principal == "s3-replication":
@@ -1481,12 +1483,12 @@ def _process_manifest(
                 season_data = future.result()
                 raw_data.extend(season_data)
                 logger.info("Successfully processed season %s", season)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 — isolate one season's failure
                 logger.error("Season %s generated an exception: %s", season, exc)
                 failed_seasons.append(season)
 
     if failed_seasons:
-        raise RuntimeError("Failed to load seasons from S3: %s" % failed_seasons)
+        raise RuntimeError(f"Failed to load seasons from S3: {failed_seasons}")
 
     player_metadata: dict = {}
     player_stats: dict = {}

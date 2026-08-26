@@ -96,9 +96,9 @@ class TestLambdaHandlerPlayerMetadata:
                 return_value={"season_type": "regular"},
             ),
             patch.object(player_metadata_handler, "http_session", mock_session),
+            pytest.raises(ValueError, match="Unexpected player metadata"),
         ):
-            with pytest.raises(ValueError, match="Unexpected player metadata"):
-                player_metadata_handler.lambda_handler({}, MagicMock())
+            player_metadata_handler.lambda_handler({}, MagicMock())
 
     def test_raises_on_non_dict_response(self, player_metadata_handler):
         mock_resp = MagicMock()
@@ -114,9 +114,9 @@ class TestLambdaHandlerPlayerMetadata:
                 return_value={"season_type": "regular"},
             ),
             patch.object(player_metadata_handler, "http_session", mock_session),
+            pytest.raises(ValueError),
         ):
-            with pytest.raises(ValueError):
-                player_metadata_handler.lambda_handler({}, MagicMock())
+            player_metadata_handler.lambda_handler({}, MagicMock())
 
     def test_raises_when_required_fields_missing(self, player_metadata_handler):
         players = {str(i): {"first_name": f"Player{i}"} for i in range(15)}
@@ -133,9 +133,9 @@ class TestLambdaHandlerPlayerMetadata:
                 return_value={"season_type": "regular"},
             ),
             patch.object(player_metadata_handler, "http_session", mock_session),
+            pytest.raises(ValueError, match="missing required fields"),
         ):
-            with pytest.raises(ValueError, match="missing required fields"):
-                player_metadata_handler.lambda_handler({}, MagicMock())
+            player_metadata_handler.lambda_handler({}, MagicMock())
 
     def test_proceeds_when_nfl_state_is_none(self, player_metadata_handler):
         """When fetch_nfl_state returns None, assume season is active and proceed."""

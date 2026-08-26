@@ -26,14 +26,13 @@ def _bootstrap_sleeper_refresh():
         "ONBOARDER_LAMBDA_NAME": "test-onboarder",
     }
 
-    with patch.dict(os.environ, env):
-        with patch("boto3.client") as mock_client:
-            mock_client.return_value = MagicMock()
-            utils_mod = _load_module("sleeper_refresh.utils", _SRC / "utils.py")
-            sys.modules["utils"] = utils_mod
+    with patch.dict(os.environ, env), patch("boto3.client") as mock_client:
+        mock_client.return_value = MagicMock()
+        utils_mod = _load_module("sleeper_refresh.utils", _SRC / "utils.py")
+        sys.modules["utils"] = utils_mod
 
-            handler_mod = _load_module("sleeper_refresh.handler", _SRC / "handler.py")
-            sys.modules["handler"] = handler_mod
+        handler_mod = _load_module("sleeper_refresh.handler", _SRC / "handler.py")
+        sys.modules["handler"] = handler_mod
 
     for name, prev in saved.items():
         if prev is None:

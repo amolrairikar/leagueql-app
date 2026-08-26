@@ -39,9 +39,11 @@ class TestReadS3Object:
         mock_s3.get_object.side_effect = botocore.exceptions.ClientError(
             {"Error": {"Code": "NoSuchKey", "Message": "x"}}, "GetObject"
         )
-        with patch.object(processor_handler, "s3_client", mock_s3):
-            with pytest.raises(botocore.exceptions.ClientError):
-                processor_handler.read_s3_object("bucket", "key")
+        with (
+            patch.object(processor_handler, "s3_client", mock_s3),
+            pytest.raises(botocore.exceptions.ClientError),
+        ):
+            processor_handler.read_s3_object("bucket", "key")
 
 
 class TestGetPreviousVersionId:
@@ -52,12 +54,12 @@ class TestGetPreviousVersionId:
                 {
                     "Key": "k",
                     "VersionId": "v1",
-                    "LastModified": dt.datetime(2024, 1, 1),
+                    "LastModified": dt.datetime(2024, 1, 1, tzinfo=dt.timezone.utc),
                 },
                 {
                     "Key": "k",
                     "VersionId": "v2",
-                    "LastModified": dt.datetime(2024, 1, 2),
+                    "LastModified": dt.datetime(2024, 1, 2, tzinfo=dt.timezone.utc),
                 },
             ]
         }
@@ -72,7 +74,7 @@ class TestGetPreviousVersionId:
                 {
                     "Key": "k",
                     "VersionId": "v1",
-                    "LastModified": dt.datetime(2024, 1, 1),
+                    "LastModified": dt.datetime(2024, 1, 1, tzinfo=dt.timezone.utc),
                 },
             ]
         }
@@ -86,12 +88,12 @@ class TestGetPreviousVersionId:
                 {
                     "Key": "k",
                     "VersionId": "v1",
-                    "LastModified": dt.datetime(2024, 1, 1),
+                    "LastModified": dt.datetime(2024, 1, 1, tzinfo=dt.timezone.utc),
                 },
                 {
                     "Key": "other",
                     "VersionId": "v9",
-                    "LastModified": dt.datetime(2024, 1, 5),
+                    "LastModified": dt.datetime(2024, 1, 5, tzinfo=dt.timezone.utc),
                 },
             ]
         }
@@ -640,14 +642,16 @@ class TestProcessorTracePropagation:
         resp["Metadata"]["traceparent"] = "00-abc-def-01"
         mock_s3.get_object.return_value = resp
         proc = MagicMock()
-        with patch.multiple(
-            processor_handler,
-            s3_client=mock_s3,
-            get_previous_version_id=MagicMock(return_value=None),
-            _process_manifest=proc,
+        with (
+            patch.multiple(
+                processor_handler,
+                s3_client=mock_s3,
+                get_previous_version_id=MagicMock(return_value=None),
+                _process_manifest=proc,
+            ),
+            patch.object(processor_handler, "traced_handler") as th,
         ):
-            with patch.object(processor_handler, "traced_handler") as th:
-                processor_handler._lambda_handler_impl(_s3_event(), MagicMock())
+            processor_handler._lambda_handler_impl(_s3_event(), MagicMock())
         th.assert_called_once_with(
             "processor.handle",
             carrier={"correlation_id": "corr-1", "traceparent": "00-abc-def-01"},
@@ -674,22 +678,24 @@ class TestLambdaHandlerImpl:
         grouped = {"league_name_by_season": {"2024": "My League"}}
         write_meta = MagicMock()
         update_count = MagicMock()
-        with patch.multiple(
-            processor_handler,
-            s3_client=mock_s3,
-            get_previous_version_id=MagicMock(return_value=None),
-            read_s3_object=MagicMock(return_value=[{"data_type": "users", "data": {}}]),
-            register_raw_data=MagicMock(return_value=grouped),
-            dataframe_to_dynamo_items=MagicMock(return_value=[]),
-            write_items=MagicMock(),
-            write_metadata_items=write_meta,
-            update_league_count=update_count,
-            QUERIES=_FAKE_QUERIES,
+        with (
+            patch.multiple(
+                processor_handler,
+                s3_client=mock_s3,
+                get_previous_version_id=MagicMock(return_value=None),
+                read_s3_object=MagicMock(
+                    return_value=[{"data_type": "users", "data": {}}]
+                ),
+                register_raw_data=MagicMock(return_value=grouped),
+                dataframe_to_dynamo_items=MagicMock(return_value=[]),
+                write_items=MagicMock(),
+                write_metadata_items=write_meta,
+                update_league_count=update_count,
+                QUERIES=_FAKE_QUERIES,
+            ),
+            patch.object(processor_handler.duckdb, "connect", return_value=MagicMock()),
         ):
-            with patch.object(
-                processor_handler.duckdb, "connect", return_value=MagicMock()
-            ):
-                processor_handler._lambda_handler_impl(_s3_event(), MagicMock())
+            processor_handler._lambda_handler_impl(_s3_event(), MagicMock())
         update_count.assert_called_once_with(delta=1)
         # league_name extracted from the most recent season and passed through.
         assert write_meta.call_args[1]["league_name"] == "My League"
@@ -712,24 +718,24 @@ class TestLambdaHandlerImpl:
                 return {"p1": {"2024": {"pts": 10}}}
             return [{"data_type": "users", "data": []}]  # season data
 
-        with patch.multiple(
-            processor_handler,
-            s3_client=mock_s3,
-            get_previous_version_id=MagicMock(return_value="v-prev"),
-            read_s3_object=MagicMock(side_effect=fake_read),
-            # grouped without a league_name_by_season key exercises the
-            # `if "league_name_by_season" in grouped` false branch.
-            register_raw_data=MagicMock(return_value={}),
-            dataframe_to_dynamo_items=MagicMock(return_value=[]),
-            write_items=MagicMock(),
-            write_metadata_items=write_meta,
-            update_league_count=update_count,
-            QUERIES=_FAKE_QUERIES,
+        with (
+            patch.multiple(
+                processor_handler,
+                s3_client=mock_s3,
+                get_previous_version_id=MagicMock(return_value="v-prev"),
+                read_s3_object=MagicMock(side_effect=fake_read),
+                # grouped without a league_name_by_season key exercises the
+                # `if "league_name_by_season" in grouped` false branch.
+                register_raw_data=MagicMock(return_value={}),
+                dataframe_to_dynamo_items=MagicMock(return_value=[]),
+                write_items=MagicMock(),
+                write_metadata_items=write_meta,
+                update_league_count=update_count,
+                QUERIES=_FAKE_QUERIES,
+            ),
+            patch.object(processor_handler.duckdb, "connect", return_value=MagicMock()),
         ):
-            with patch.object(
-                processor_handler.duckdb, "connect", return_value=MagicMock()
-            ):
-                processor_handler._lambda_handler_impl(_s3_event(), MagicMock())
+            processor_handler._lambda_handler_impl(_s3_event(), MagicMock())
         # Refresh: count is not incremented and refresh flag is set.
         update_count.assert_not_called()
         assert write_meta.call_args[1]["refresh"] is True
@@ -745,26 +751,26 @@ class TestLambdaHandlerImpl:
 
         def fake_read(bucket, key, version_id=None):
             read_keys.append((key, version_id))
-            if key.endswith("players.json") or key.endswith("player_stats.json"):
+            if key.endswith(("players.json", "player_stats.json")):
                 return {}
             return [{"data_type": "users", "data": []}]
 
-        with patch.multiple(
-            processor_handler,
-            s3_client=mock_s3,
-            get_previous_version_id=MagicMock(return_value="v-prev"),
-            read_s3_object=MagicMock(side_effect=fake_read),
-            register_raw_data=MagicMock(return_value={}),
-            dataframe_to_dynamo_items=MagicMock(return_value=[]),
-            write_items=MagicMock(),
-            write_metadata_items=MagicMock(),
-            update_league_count=MagicMock(),
-            QUERIES=_FAKE_QUERIES,
+        with (
+            patch.multiple(
+                processor_handler,
+                s3_client=mock_s3,
+                get_previous_version_id=MagicMock(return_value="v-prev"),
+                read_s3_object=MagicMock(side_effect=fake_read),
+                register_raw_data=MagicMock(return_value={}),
+                dataframe_to_dynamo_items=MagicMock(return_value=[]),
+                write_items=MagicMock(),
+                write_metadata_items=MagicMock(),
+                update_league_count=MagicMock(),
+                QUERIES=_FAKE_QUERIES,
+            ),
+            patch.object(processor_handler.duckdb, "connect", return_value=MagicMock()),
         ):
-            with patch.object(
-                processor_handler.duckdb, "connect", return_value=MagicMock()
-            ):
-                processor_handler._lambda_handler_impl(_s3_event(), MagicMock())
+            processor_handler._lambda_handler_impl(_s3_event(), MagicMock())
 
         # No versioned (previous-manifest) read happened, and both seasons were read.
         assert all(version_id is None for _, version_id in read_keys)
@@ -782,28 +788,28 @@ class TestLambdaHandlerImpl:
         }
 
         def fake_read(bucket, key, version_id=None):
-            if key.endswith("players.json") or key.endswith("player_stats.json"):
+            if key.endswith(("players.json", "player_stats.json")):
                 return {}
             return [{"data_type": "users", "data": []}]
 
-        with patch.multiple(
-            processor_handler,
-            s3_client=mock_s3,
-            get_previous_version_id=MagicMock(return_value=None),
-            read_s3_object=MagicMock(side_effect=fake_read),
-            register_raw_data=MagicMock(
-                return_value={"transactions": [{"season": "2024"}]}
+        with (
+            patch.multiple(
+                processor_handler,
+                s3_client=mock_s3,
+                get_previous_version_id=MagicMock(return_value=None),
+                read_s3_object=MagicMock(side_effect=fake_read),
+                register_raw_data=MagicMock(
+                    return_value={"transactions": [{"season": "2024"}]}
+                ),
+                dataframe_to_dynamo_items=df_to_items,
+                write_items=MagicMock(),
+                write_metadata_items=MagicMock(),
+                update_league_count=MagicMock(),
+                QUERIES=fake_queries,
             ),
-            dataframe_to_dynamo_items=df_to_items,
-            write_items=MagicMock(),
-            write_metadata_items=MagicMock(),
-            update_league_count=MagicMock(),
-            QUERIES=fake_queries,
+            patch.object(processor_handler.duckdb, "connect", return_value=MagicMock()),
         ):
-            with patch.object(
-                processor_handler.duckdb, "connect", return_value=MagicMock()
-            ):
-                processor_handler._lambda_handler_impl(_s3_event(), MagicMock())
+            processor_handler._lambda_handler_impl(_s3_event(), MagicMock())
 
         entity_types = {
             call.kwargs["schema"].entity_type for call in df_to_items.call_args_list
@@ -816,24 +822,26 @@ class TestLambdaHandlerImpl:
         df_to_items = MagicMock(return_value=[])
         # Even if a (hypothetical) transactions group were present, ESPN must not
         # produce a TRANSACTIONS view — the schema is Sleeper-gated.
-        with patch.multiple(
-            processor_handler,
-            s3_client=mock_s3,
-            get_previous_version_id=MagicMock(return_value=None),
-            read_s3_object=MagicMock(return_value=[{"data_type": "users", "data": {}}]),
-            register_raw_data=MagicMock(
-                return_value={"transactions": [{"season": "2024"}]}
+        with (
+            patch.multiple(
+                processor_handler,
+                s3_client=mock_s3,
+                get_previous_version_id=MagicMock(return_value=None),
+                read_s3_object=MagicMock(
+                    return_value=[{"data_type": "users", "data": {}}]
+                ),
+                register_raw_data=MagicMock(
+                    return_value={"transactions": [{"season": "2024"}]}
+                ),
+                dataframe_to_dynamo_items=df_to_items,
+                write_items=MagicMock(),
+                write_metadata_items=MagicMock(),
+                update_league_count=MagicMock(),
+                QUERIES=_FAKE_QUERIES,
             ),
-            dataframe_to_dynamo_items=df_to_items,
-            write_items=MagicMock(),
-            write_metadata_items=MagicMock(),
-            update_league_count=MagicMock(),
-            QUERIES=_FAKE_QUERIES,
+            patch.object(processor_handler.duckdb, "connect", return_value=MagicMock()),
         ):
-            with patch.object(
-                processor_handler.duckdb, "connect", return_value=MagicMock()
-            ):
-                processor_handler._lambda_handler_impl(_s3_event(), MagicMock())
+            processor_handler._lambda_handler_impl(_s3_event(), MagicMock())
         entity_types = {
             call.kwargs["schema"].entity_type for call in df_to_items.call_args_list
         }
@@ -853,23 +861,23 @@ class TestLambdaHandlerImpl:
                 raise not_found
             return [{"data_type": "users", "data": []}]
 
-        with patch.multiple(
-            processor_handler,
-            s3_client=mock_s3,
-            get_previous_version_id=MagicMock(return_value=None),
-            read_s3_object=MagicMock(side_effect=fake_read),
-            register_raw_data=MagicMock(return_value={"league_name_by_season": {}}),
-            dataframe_to_dynamo_items=MagicMock(return_value=[]),
-            write_items=MagicMock(),
-            write_metadata_items=MagicMock(),
-            update_league_count=MagicMock(),
-            QUERIES=_FAKE_QUERIES,
+        with (
+            patch.multiple(
+                processor_handler,
+                s3_client=mock_s3,
+                get_previous_version_id=MagicMock(return_value=None),
+                read_s3_object=MagicMock(side_effect=fake_read),
+                register_raw_data=MagicMock(return_value={"league_name_by_season": {}}),
+                dataframe_to_dynamo_items=MagicMock(return_value=[]),
+                write_items=MagicMock(),
+                write_metadata_items=MagicMock(),
+                update_league_count=MagicMock(),
+                QUERIES=_FAKE_QUERIES,
+            ),
+            patch.object(processor_handler.duckdb, "connect", return_value=MagicMock()),
         ):
-            with patch.object(
-                processor_handler.duckdb, "connect", return_value=MagicMock()
-            ):
-                # Missing metadata/stats are tolerated (warnings, not failures).
-                processor_handler._lambda_handler_impl(_s3_event(), MagicMock())
+            # Missing metadata/stats are tolerated (warnings, not failures).
+            processor_handler._lambda_handler_impl(_s3_event(), MagicMock())
 
     def test_sleeper_player_metadata_other_error_raises(self, processor_handler):
         mock_s3 = MagicMock()
@@ -883,18 +891,18 @@ class TestLambdaHandlerImpl:
                 raise other_error
             return [{"data_type": "users", "data": []}]
 
-        with patch.multiple(
-            processor_handler,
-            s3_client=mock_s3,
-            get_previous_version_id=MagicMock(return_value=None),
-            read_s3_object=MagicMock(side_effect=fake_read),
-            QUERIES=_FAKE_QUERIES,
+        with (
+            patch.multiple(
+                processor_handler,
+                s3_client=mock_s3,
+                get_previous_version_id=MagicMock(return_value=None),
+                read_s3_object=MagicMock(side_effect=fake_read),
+                QUERIES=_FAKE_QUERIES,
+            ),
+            patch.object(processor_handler.duckdb, "connect", return_value=MagicMock()),
+            pytest.raises(botocore.exceptions.ClientError),
         ):
-            with patch.object(
-                processor_handler.duckdb, "connect", return_value=MagicMock()
-            ):
-                with pytest.raises(botocore.exceptions.ClientError):
-                    processor_handler._lambda_handler_impl(_s3_event(), MagicMock())
+            processor_handler._lambda_handler_impl(_s3_event(), MagicMock())
 
     def test_sleeper_player_stats_other_error_raises(self, processor_handler):
         mock_s3 = MagicMock()
@@ -910,51 +918,55 @@ class TestLambdaHandlerImpl:
                 raise other_error
             return [{"data_type": "users", "data": []}]
 
-        with patch.multiple(
-            processor_handler,
-            s3_client=mock_s3,
-            get_previous_version_id=MagicMock(return_value=None),
-            read_s3_object=MagicMock(side_effect=fake_read),
-            QUERIES=_FAKE_QUERIES,
+        with (
+            patch.multiple(
+                processor_handler,
+                s3_client=mock_s3,
+                get_previous_version_id=MagicMock(return_value=None),
+                read_s3_object=MagicMock(side_effect=fake_read),
+                QUERIES=_FAKE_QUERIES,
+            ),
+            patch.object(processor_handler.duckdb, "connect", return_value=MagicMock()),
+            pytest.raises(botocore.exceptions.ClientError),
         ):
-            with patch.object(
-                processor_handler.duckdb, "connect", return_value=MagicMock()
-            ):
-                with pytest.raises(botocore.exceptions.ClientError):
-                    processor_handler._lambda_handler_impl(_s3_event(), MagicMock())
+            processor_handler._lambda_handler_impl(_s3_event(), MagicMock())
 
     def test_failed_season_read_raises_runtime_error(self, processor_handler):
         mock_s3 = MagicMock()
         mock_s3.get_object.return_value = _manifest_response({"ESPN": ["2024"]})
-        with patch.multiple(
-            processor_handler,
-            s3_client=mock_s3,
-            get_previous_version_id=MagicMock(return_value=None),
-            read_s3_object=MagicMock(side_effect=RuntimeError("S3 down")),
-            QUERIES=_FAKE_QUERIES,
+        with (
+            patch.multiple(
+                processor_handler,
+                s3_client=mock_s3,
+                get_previous_version_id=MagicMock(return_value=None),
+                read_s3_object=MagicMock(side_effect=RuntimeError("S3 down")),
+                QUERIES=_FAKE_QUERIES,
+            ),
+            pytest.raises(RuntimeError, match="Failed to load seasons"),
         ):
-            with pytest.raises(RuntimeError, match="Failed to load seasons"):
-                processor_handler._lambda_handler_impl(_s3_event(), MagicMock())
+            processor_handler._lambda_handler_impl(_s3_event(), MagicMock())
 
     def test_no_league_name_when_grouping_empty(self, processor_handler):
         # grouped has an empty league_name_by_season -> league_name stays None.
         mock_s3 = MagicMock()
         mock_s3.get_object.return_value = _manifest_response({"ESPN": ["2024"]})
         write_meta = MagicMock()
-        with patch.multiple(
-            processor_handler,
-            s3_client=mock_s3,
-            get_previous_version_id=MagicMock(return_value=None),
-            read_s3_object=MagicMock(return_value=[{"data_type": "users", "data": {}}]),
-            register_raw_data=MagicMock(return_value={"league_name_by_season": {}}),
-            dataframe_to_dynamo_items=MagicMock(return_value=[]),
-            write_items=MagicMock(),
-            write_metadata_items=write_meta,
-            update_league_count=MagicMock(),
-            QUERIES=_FAKE_QUERIES,
+        with (
+            patch.multiple(
+                processor_handler,
+                s3_client=mock_s3,
+                get_previous_version_id=MagicMock(return_value=None),
+                read_s3_object=MagicMock(
+                    return_value=[{"data_type": "users", "data": {}}]
+                ),
+                register_raw_data=MagicMock(return_value={"league_name_by_season": {}}),
+                dataframe_to_dynamo_items=MagicMock(return_value=[]),
+                write_items=MagicMock(),
+                write_metadata_items=write_meta,
+                update_league_count=MagicMock(),
+                QUERIES=_FAKE_QUERIES,
+            ),
+            patch.object(processor_handler.duckdb, "connect", return_value=MagicMock()),
         ):
-            with patch.object(
-                processor_handler.duckdb, "connect", return_value=MagicMock()
-            ):
-                processor_handler._lambda_handler_impl(_s3_event(), MagicMock())
+            processor_handler._lambda_handler_impl(_s3_event(), MagicMock())
         assert write_meta.call_args[1]["league_name"] is None

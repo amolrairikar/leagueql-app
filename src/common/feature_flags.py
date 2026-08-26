@@ -99,7 +99,7 @@ def _refresh_if_stale() -> None:
     _last_refresh_at = now
     try:
         config = _fetch_flags()
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — fail open to last-known flags
         logger.warning("Feature-flag refresh failed (%s); using last-known flags", exc)
         return
     if config != _cached_config:
@@ -115,7 +115,7 @@ def _initialize() -> None:
         return
     try:
         _cached_config = _fetch_flags()
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — fail open with all flags default off
         logger.warning(
             "Initial feature-flag fetch failed (%s); all flags default off", exc
         )

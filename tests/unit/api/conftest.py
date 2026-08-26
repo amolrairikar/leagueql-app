@@ -16,21 +16,21 @@ def _bootstrap_main():
     sys.modules.setdefault("newrelic", _nr_mock)
     sys.modules.setdefault("newrelic.agent", _nr_mock.agent)
 
-    with patch.dict(
-        os.environ,
-        {
-            "DYNAMODB_TABLE_NAME": "test-table",
-            "S3_BUCKET_NAME": "test-bucket",
-            "ONBOARDER_LAMBDA_NAME": "test-onboarder",
-        },
+    with (
+        patch.dict(
+            os.environ,
+            {
+                "DYNAMODB_TABLE_NAME": "test-table",
+                "S3_BUCKET_NAME": "test-bucket",
+                "ONBOARDER_LAMBDA_NAME": "test-onboarder",
+            },
+        ),
+        patch("boto3.resource") as mock_resource,
+        patch("boto3.client") as mock_client,
     ):
-        with (
-            patch("boto3.resource") as mock_resource,
-            patch("boto3.client") as mock_client,
-        ):
-            mock_resource.return_value.Table.return_value = MagicMock()
-            mock_client.return_value = MagicMock()
-            import main  # noqa: F401
+        mock_resource.return_value.Table.return_value = MagicMock()
+        mock_client.return_value = MagicMock()
+        import main  # noqa: F401
 
 
 @pytest.fixture(autouse=True)

@@ -49,7 +49,7 @@ def init_tracing(app) -> bool:
             logger.info("OTel tracing disabled: no OTLP endpoint/token configured")
             return False
         _install_tracing(app)
-    except Exception:
+    except Exception:  # noqa: BLE001
         # Tracing setup must NEVER crash the API. This guards against, e.g., the SSM
         # parameter not existing yet (a deploy-ordering window), IAM not yet allowing
         # the read, or an exporter/instrumentation misconfiguration. On any failure
