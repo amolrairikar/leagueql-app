@@ -54,6 +54,14 @@ resource "aws_dynamodb_table" "global_table" {
     type = "S"
   }
 
+  # Only METADATA items carry `onboarded_at`, so GSI3 (below) is effectively a
+  # sparse index over METADATA items — the big MATCHUPS/STANDINGS/DRAFT/... items
+  # lack this attribute and are omitted from the index.
+  attribute {
+    name = "onboarded_at"
+    type = "S"
+  }
+
   global_secondary_index {
     name               = "GSI1"
     projection_type    = "INCLUDE"
@@ -73,6 +81,26 @@ resource "aws_dynamodb_table" "global_table" {
     }
     key_schema {
       attribute_name = "league_id"
+      key_type       = "RANGE"
+    }
+  }
+
+  # GSI3: sparse index over METADATA items for the leagues-overview dashboard.
+  # HASH = SK (constant "METADATA" on these items), RANGE = onboarded_at so a
+  # single `SK = "METADATA"` Query returns every league sorted by onboard time,
+  # replacing a full-table Scan-with-filter. Only items carrying `onboarded_at`
+  # (i.e. METADATA) are indexed. INCLUDE projects the dashboard display fields so
+  # the Query needs no follow-up GetItem.
+  global_secondary_index {
+    name               = "GSI3"
+    projection_type    = "INCLUDE"
+    non_key_attributes = ["platform", "league_name", "last_refresh_at", "last_accessed_at", "active_platform", "migrated_from", "migrated_at"]
+    key_schema {
+      attribute_name = var.range_key
+      key_type       = "HASH"
+    }
+    key_schema {
+      attribute_name = "onboarded_at"
       key_type       = "RANGE"
     }
   }

@@ -7,7 +7,7 @@
 | Table name | `fantasy-football-recap-db` |
 | Billing mode | On-demand (pay-per-request) |
 | Primary key | `PK` (String) + `SK` (String) |
-| GSIs | `GSI1` - Get all league IDs for a canonical league ID; `GSI2` - Look up a league by platform and league ID |
+| GSIs | `GSI1` - Get all league IDs for a canonical league ID; `GSI2` - Look up a league by platform and league ID; `GSI3` - List all onboarded leagues (sparse index over METADATA items) |
 | TTL | Enabled on the `ttl` attribute (Unix epoch seconds). Only JOB_STATUS items set it, so old onboard/refresh/migrate jobs are reaped ~24h after their last write; items without a `ttl` attribute never expire |
 
 ---
@@ -31,6 +31,22 @@
 |---|---|---|---|
 | `platform` | String | Partition key | The platform the league belongs to (e.g., "ESPN", "SLEEPER") |
 | `league_id` | String | Sort key | The league ID for the platform |
+
+### GSI3: All-leagues index
+Sparse index used to list every onboarded league (e.g. a leagues-overview dashboard) with a
+single `SK = "METADATA"` query, replacing a full-table scan filtered to METADATA. The partition
+key is the base-table sort key `SK` (the constant string `METADATA` on these items), and the
+sort key is `onboarded_at`, so results come back ordered by onboard time (use
+`ScanIndexForward=False` for newest-first). Because only METADATA items carry `onboarded_at`,
+the big per-league view items (`MATCHUPS`, `STANDINGS`, `DRAFT`, …) are omitted — the index
+stays sparse. Projection is `INCLUDE` of the dashboard display fields (`platform`,
+`league_name`, `last_refresh_at`, `last_accessed_at`, `active_platform`, `migrated_from`,
+`migrated_at`), so the query needs no follow-up `GetItem`.
+
+| Attribute | Type | Role | Description |
+|---|---|---|---|
+| `SK` | String | Partition key | Base-table sort key; always `METADATA` for indexed items |
+| `onboarded_at` | String | Sort key | ISO 8601 timestamp of when the league was onboarded |
 
 ---
 
