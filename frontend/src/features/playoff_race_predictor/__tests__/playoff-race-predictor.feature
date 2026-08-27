@@ -16,6 +16,12 @@ Feature: Playoff-race predictor (frontend/playoff-race-predictor)
     When I pick the winner "alice"
     Then the "Reset picks" control is enabled
 
+  Scenario: The standings table shows a playoff-odds column
+    Given an in-progress season with unplayed regular-season games
+    When I open the playoff bracket page
+    Then I see "Playoff odds"
+    And I see "100%"
+
   Scenario: A finished regular season with no bracket shows the empty state
     Given the latest season's regular season is finished with no bracket
     When I open the playoff bracket page

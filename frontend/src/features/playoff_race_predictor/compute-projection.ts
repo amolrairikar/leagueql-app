@@ -308,3 +308,129 @@ export function projectStandings(
       };
     });
 }
+
+/**
+ * Above this many unpicked matchups the outcome space (2^N) is too large to
+ * enumerate exactly on every pick, so odds fall back to Monte Carlo sampling.
+ * A ~12-team league's realistic race window (the last ~3 weeks, 18 matchups)
+ * stays comfortably under this bound and is computed exactly.
+ */
+const MAX_EXACT_MATCHUPS = 20;
+/** Random outcomes drawn when the space is too large to enumerate exactly. */
+const MONTE_CARLO_SAMPLES = 50_000;
+
+/** Small seeded PRNG so the sampling path is deterministic (and testable). */
+function mulberry32(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * Each team's chance (0..1) of finishing in a top-`numPlayoffTeams` seed across
+ * every possible result of the remaining *unpicked* matchups, treating each such
+ * matchup as an equally likely 50/50 coin flip. Picked matchups are locked to
+ * their result (folded into the fixed base), so odds are conditional on picks;
+ * with no picks the base view enumerates all outcomes.
+ *
+ * Points-for is never simulated — it is fixed at its season-to-date value and
+ * only breaks ties — so each matchup contributes a single win/loss bit and the
+ * outcome space is exactly 2^N. Seeding per scenario uses the same rule as
+ * {@link projectStandings} (wins desc, then points-for desc, then team id).
+ *
+ * Computed exactly by enumerating all 2^N combinations when N is small
+ * ({@link MAX_EXACT_MATCHUPS}); otherwise estimated by Monte Carlo sampling.
+ */
+export function computePlayoffOdds(
+  model: PredictorModel,
+  picks: Picks,
+): Map<string, number> {
+  const ids = [...model.teams.keys()];
+  const n = ids.length;
+  const index = new Map(ids.map((id, i) => [id, i]));
+
+  // Fixed base: baseline wins plus every picked result; points-for is fixed.
+  const baseWins = new Int32Array(n);
+  const pf = new Float64Array(n);
+  for (let i = 0; i < n; i++) {
+    const base = model.baseline.get(ids[i]) ?? emptyRecord();
+    baseWins[i] = base.wins;
+    pf[i] = base.pf;
+  }
+  // Unpicked matchups become free win/loss bits; picked ones lock into baseWins.
+  const freeA: number[] = [];
+  const freeB: number[] = [];
+  for (const group of model.weeks) {
+    for (const pm of group.matchups) {
+      const winner = picks[pm.key];
+      if (winner) {
+        baseWins[index.get(winner)!]++;
+      } else {
+        freeA.push(index.get(pm.teamAId)!);
+        freeB.push(index.get(pm.teamBId)!);
+      }
+    }
+  }
+  const numFree = freeA.length;
+
+  // Fixed tiebreak order (points-for desc, then id asc) => rank position; a
+  // lower position outranks a higher one when win totals are equal.
+  const tieRank = new Int32Array(n);
+  ids
+    .map((_, i) => i)
+    .sort((x, y) => pf[y] - pf[x] || ids[x].localeCompare(ids[y]))
+    .forEach((idx, pos) => {
+      tieRank[idx] = pos;
+    });
+
+  const numPlayoff = model.numPlayoffTeams;
+  const wins = new Int32Array(n);
+  const counts = new Float64Array(n);
+
+  // Tally, for the current `wins`, which teams land in a top-numPlayoff seed.
+  const tallyScenario = (): void => {
+    for (let i = 0; i < n; i++) {
+      const wi = wins[i];
+      const ri = tieRank[i];
+      let above = 0;
+      for (let j = 0; j < n; j++) {
+        if (j === i) continue;
+        const wj = wins[j];
+        if (wj > wi || (wj === wi && tieRank[j] < ri)) above++;
+      }
+      if (above < numPlayoff) counts[i]++;
+    }
+  };
+
+  let scenarios: number;
+  if (numFree <= MAX_EXACT_MATCHUPS) {
+    // Exact enumeration of all 2^numFree combinations (covers numFree === 0).
+    scenarios = 2 ** numFree;
+    for (let mask = 0; mask < scenarios; mask++) {
+      wins.set(baseWins);
+      for (let b = 0; b < numFree; b++) {
+        wins[(mask >> b) & 1 ? freeB[b] : freeA[b]]++;
+      }
+      tallyScenario();
+    }
+  } else {
+    // Monte Carlo: sample random outcomes with a fixed seed for determinism.
+    scenarios = MONTE_CARLO_SAMPLES;
+    const rand = mulberry32(0x9e3779b1);
+    for (let s = 0; s < scenarios; s++) {
+      wins.set(baseWins);
+      for (let b = 0; b < numFree; b++) {
+        wins[rand() < 0.5 ? freeA[b] : freeB[b]]++;
+      }
+      tallyScenario();
+    }
+  }
+
+  const odds = new Map<string, number>();
+  for (let i = 0; i < n; i++) odds.set(ids[i], counts[i] / scenarios);
+  return odds;
+}
