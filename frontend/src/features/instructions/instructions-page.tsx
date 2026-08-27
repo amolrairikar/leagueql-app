@@ -11,10 +11,10 @@ const TOC_ITEMS = [
   { id: 'demo-mode', label: 'Demo Mode', level: 2 },
   { id: 'authentication', label: 'Authentication', level: 2 },
   { id: 'connecting-a-league', label: 'Connecting a League', level: 1 },
-  { id: 'espn-leagues', label: 'ESPN Leagues', level: 2 },
+  { id: 'espn-leagues', label: 'ESPN', level: 2 },
   { id: 'espn-form-fields', label: 'Form Fields', level: 3 },
   { id: 'chrome-extension', label: 'Chrome Extension', level: 3 },
-  { id: 'sleeper-leagues', label: 'Sleeper Leagues', level: 2 },
+  { id: 'sleeper-leagues', label: 'Sleeper', level: 2 },
   { id: 'sleeper-form-fields', label: 'Form Fields', level: 3 },
   { id: 'league-ownership', label: 'League Ownership', level: 2 },
   { id: 'joining-an-espn-league', label: 'Joining an ESPN League', level: 3 },
@@ -40,7 +40,7 @@ interface FaqItem {
 const FAQ_ITEMS: FaqItem[] = [
   {
     q: 'Why do I need to provide my ESPN cookies?',
-    a: 'ESPN private leagues require authentication. The SWID and ESPN S2 cookies prove you are a member of the league. They are used once to fetch data and are not stored.',
+    a: 'ESPN leagues are private and require logging in to ESPN to view. The SWID and ESPN S2 cookies provide the authentication required to fetch data. These cookies are not stored.',
   },
   {
     q: 'Where do I find my ESPN cookies?',
@@ -57,8 +57,9 @@ const FAQ_ITEMS: FaqItem[] = [
     q: 'The connection timed out. What happened?',
     a: (
       <>
-        If the page shows a timeout error, note the operation ID displayed and
-        try again. If the issue persists, file a bug report with{' '}
+        If the page shows a timeout error, try again once as there may be an
+        issue with the ESPN or Sleeper servers. If the issue persists, file a
+        bug report with{' '}
         <a
           href="mailto:support@leagueql.com"
           className="text-primary underline underline-offset-2 hover:text-primary/80"
@@ -104,10 +105,9 @@ const FAQ_ITEMS: FaqItem[] = [
     q: 'My leaguemate onboarded our ESPN league. How do I view it?',
     a: (
       <>
-        Open the league, then use the <Kbd>Verify membership</Kbd> prompt to
-        confirm your ESPN cookies grant you access. Once verified you become a
-        member and the dashboard unlocks. Sleeper leagues are public, so no
-        verification is needed.
+        Enter the league ID and click <Kbd>Connect</Kbd>, then use the
+        <Kbd>Verify membership</Kbd> prompt to confirm your ESPN cookies grant
+        you access. Once verified the dashboard unlocks.
       </>
     ),
   },
@@ -347,7 +347,7 @@ export default function InstructionsPage() {
                 <p className="text-muted-foreground leading-relaxed">
                   Want to explore the app before connecting your own league?
                   Click <Kbd>View Demo</Kbd> on the landing page. A sample
-                  league is pre-loaded so you can navigate every page. Click
+                  league is pre-loaded so you can navigate every page. Click{' '}
                   <Kbd>Exit Demo</Kbd> in the sidebar to return to the landing
                   page and connect your own league.
                 </p>
@@ -378,7 +378,7 @@ export default function InstructionsPage() {
 
             <div className="space-y-8">
               <div>
-                <SubHeading id="espn-leagues">ESPN Leagues</SubHeading>
+                <SubHeading id="espn-leagues">ESPN</SubHeading>
                 <p className="text-muted-foreground leading-relaxed mb-4">
                   If the league has already been onboarded, you are taken
                   straight to your dashboard (or, if you are not yet a member of
@@ -386,8 +386,8 @@ export default function InstructionsPage() {
                   <SectionLink id="joining-an-espn-league">
                     Joining an ESPN League
                   </SectionLink>{' '}
-                  below). If it is a new league, you are taken to a separate
-                  form to enter your ESPN credentials and complete onboarding.
+                  ). If not, you are taken to a separate form to enter your ESPN
+                  credentials and complete onboarding.
                 </p>
                 <img
                   src={espnOnboardFormScreenshot}
@@ -415,11 +415,14 @@ export default function InstructionsPage() {
                         <>
                           Found in your browser&apos;s DevTools under{' '}
                           <strong className="text-foreground">
-                            Application → Cookies → fantasy.espn.com
+                            Application → Cookies → fantasy.espn.com → SWID
                           </strong>
                         </>,
                       ],
-                      ['ESPN S2 Cookie', 'Found in the same location as SWID'],
+                      [
+                        'ESPN S2 Cookie',
+                        'Found in the same location as SWID but under the name espn_s2',
+                      ],
                     ]}
                   />
                 </div>
@@ -473,11 +476,11 @@ export default function InstructionsPage() {
               </div>
 
               <div>
-                <SubHeading id="sleeper-leagues">Sleeper Leagues</SubHeading>
+                <SubHeading id="sleeper-leagues">Sleeper</SubHeading>
                 <p className="text-muted-foreground leading-relaxed mb-4">
-                  Enter your league ID, then click <Kbd>Connect</Kbd>.
-                  Onboarding typically takes ~45 seconds, after which you are
-                  redirected to your league&apos;s dashboard.
+                  Enter your league ID, then click <Kbd>Connect</Kbd>. After
+                  onboarding is completed, you are redirected to your
+                  league&apos;s dashboard.
                 </p>
                 <SubSubHeading id="sleeper-form-fields">
                   Form Fields
@@ -503,9 +506,9 @@ export default function InstructionsPage() {
                   League Ownership
                 </SubHeading>
                 <p className="text-muted-foreground leading-relaxed mb-3">
-                  The first person to connect a league becomes its owner. Only
-                  the owner sees and can use the league&apos;s management
-                  actions in the sidebar:
+                  The first person to connect a league becomes its owner in
+                  LeagueQL. Only the owner sees and can use the league&apos;s
+                  management actions in the sidebar:
                 </p>
                 <ul className="list-disc pl-6 space-y-2 text-muted-foreground leading-relaxed mb-3">
                   <li>Refresh League</li>
@@ -526,8 +529,8 @@ export default function InstructionsPage() {
                     <p className="text-muted-foreground leading-relaxed mb-3">
                       Because ESPN league data is private, leaguemates other
                       than the owner must prove they belong to the league before
-                      they can view it. When you open an ESPN league you are not
-                      yet a member of, you will see a{' '}
+                      they can view it. When you connect for the first time to
+                      an onboarded ESPN league, you will see a{' '}
                       <strong className="text-foreground">
                         Verify your ESPN league membership
                       </strong>{' '}
@@ -558,13 +561,6 @@ export default function InstructionsPage() {
                       </Kbd>
                     </p>
                     <br></br>
-                    <Callout>
-                      The owner never needs to verify; they are a member
-                      automatically. Verification reuses the same SWID / ESPN S2
-                      cookies as onboarding; they are used once to confirm
-                      access and are never stored. Sleeper leagues are public,
-                      so they never show this prompt.
-                    </Callout>
                   </div>
 
                   <div>
@@ -657,8 +653,7 @@ export default function InstructionsPage() {
                   Click the Refresh League button in the sidebar. This navigates
                   you to the league connection page where you can submit your
                   credentials again. The system detects the league already
-                  exists and runs a refresh instead of a full re-onboard, which
-                  is faster.
+                  exists and fetches the latest data for your league.
                 </p>
                 <SubSubHeading id="refresh-sleeper">Sleeper</SubSubHeading>
                 <MinorHeading>Midseason Refreshes</MinorHeading>
