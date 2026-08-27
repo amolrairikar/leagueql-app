@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildPredictorModel,
+  computePlayoffOdds,
   projectStandings,
   recordEnteringWeek,
   totalPickableMatchups,
@@ -197,6 +198,101 @@ describe('buildPredictorModel (replay)', () => {
     expect(model.weeks.map((w) => w.week)).toEqual([3, 4, 5]);
     // Baseline is only weeks 1-2, so t1 has 2 wins entering the window (not 5).
     expect(model.baseline.get('t1')!.wins).toBe(2);
+  });
+});
+
+describe('computePlayoffOdds', () => {
+  const sum = (odds: Map<string, number>) =>
+    [...odds.values()].reduce((a, b) => a + b, 0);
+
+  it('gives two otherwise-symmetric teams 50% each for one deciding game', () => {
+    // One unplayed regular-season game, one playoff spot, no baseline edge.
+    const model = buildPredictorModel(
+      [game('t1', 't2', 1)],
+      settings({ num_playoff_teams: 1, regular_season_weeks: 1 }),
+      'live',
+    );
+    const odds = computePlayoffOdds(model, {});
+    expect(odds.get('t1')).toBeCloseTo(0.5, 10);
+    expect(odds.get('t2')).toBeCloseTo(0.5, 10);
+  });
+
+  it('reads 100% for a clinched team and 0% for eliminated teams', () => {
+    const matchups = [
+      game('t1', 't2', 1, 100, 50),
+      game('t1', 't3', 2, 100, 50),
+      game('t1', 't2', 3, 100, 50),
+      game('t1', 't3', 4, 100, 50),
+      game('t1', 't2', 5, 100, 50),
+      game('t2', 't3', 6), // the only unplayed (pickable) game
+    ];
+    const model = buildPredictorModel(
+      matchups,
+      settings({ num_playoff_teams: 1, regular_season_weeks: 6 }),
+      'live',
+    );
+    const odds = computePlayoffOdds(model, {});
+    expect(odds.get('t1')).toBe(1); // 5-0, cannot be caught
+    expect(odds.get('t2')).toBe(0);
+    expect(odds.get('t3')).toBe(0);
+  });
+
+  it('always keeps exactly num_playoff_teams worth of odds in play', () => {
+    // Every outcome seats exactly N teams, so the odds sum to N regardless.
+    const model = buildPredictorModel(liveMatchups(), settings(), 'live');
+    expect(sum(computePlayoffOdds(model, {}))).toBeCloseTo(2, 10);
+  });
+
+  it('is conditional on picks: locking in a team lifts it to 100%', () => {
+    const model = buildPredictorModel(liveMatchups(), settings(), 'live');
+    const base = computePlayoffOdds(model, {});
+    // t1 is 2-0 but not yet clinched (t2 and t3 can each reach 3 wins).
+    expect(base.get('t1')!).toBeLessThan(1);
+    expect(base.get('t1')!).toBeGreaterThan(0.5);
+    // Win both remaining games and t1 is locked into the top seed.
+    const picks: Picks = { '3:0': 't1', '4:0': 't1' };
+    expect(computePlayoffOdds(model, picks).get('t1')).toBe(1);
+  });
+
+  it('is deterministic (0/1) once every matchup is picked', () => {
+    const model = buildPredictorModel(liveMatchups(), settings(), 'live');
+    const picks: Picks = {
+      '3:0': 't1',
+      '3:1': 't3',
+      '4:0': 't1',
+      '4:1': 't2',
+    };
+    const odds = computePlayoffOdds(model, picks);
+    for (const v of odds.values()) expect(v === 0 || v === 1).toBe(true);
+    expect(sum(odds)).toBeCloseTo(2, 10);
+  });
+
+  it('falls back to seeded sampling for a large outcome space', () => {
+    // 6 teams over 8 unplayed weeks = 24 free matchups (> the exact cap),
+    // forcing the Monte Carlo path.
+    const teams = ['t1', 't2', 't3', 't4', 't5', 't6'];
+    const matchups: MatchupItem[] = [];
+    for (let week = 1; week <= 8; week++) {
+      matchups.push(game(teams[0], teams[1], week));
+      matchups.push(game(teams[2], teams[3], week));
+      matchups.push(game(teams[4], teams[5], week));
+    }
+    const model = buildPredictorModel(
+      matchups,
+      settings({ num_playoff_teams: 4, regular_season_weeks: 8 }),
+      'live',
+    );
+    expect(totalPickableMatchups(model)).toBe(24);
+    const first = computePlayoffOdds(model, {});
+    const second = computePlayoffOdds(model, {});
+    // Seeded RNG => identical results across runs.
+    expect([...second.entries()]).toEqual([...first.entries()]);
+    // Sampled or not, odds stay in range and sum to the number of seeds.
+    for (const v of first.values()) {
+      expect(v).toBeGreaterThanOrEqual(0);
+      expect(v).toBeLessThanOrEqual(1);
+    }
+    expect(sum(first)).toBeCloseTo(4, 10);
   });
 });
 

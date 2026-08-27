@@ -4,7 +4,6 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
-  Info,
   RotateCcw,
 } from 'lucide-react';
 import { Suspense, use, useMemo, useState } from 'react';
@@ -12,6 +11,7 @@ import { Suspense, use, useMemo, useState } from 'react';
 import { getLeagueSettings, getMatchups } from './api-calls';
 import {
   buildPredictorModel,
+  computePlayoffOdds,
   projectStandings,
   recordEnteringWeek,
   type PickableMatchup,
@@ -208,7 +208,7 @@ function PredictorHeader({
         type="button"
         onClick={onReset}
         disabled={!canReset}
-        className="inline-flex items-center gap-1.5 text-[13px] font-medium px-3 py-1.5 rounded-lg border border-border bg-card hover:bg-muted disabled:opacity-45 disabled:hover:bg-card whitespace-nowrap"
+        className="inline-flex items-center gap-1.5 text-[13px] font-medium px-3 py-1.5 rounded-lg border border-border bg-card hover:bg-muted disabled:opacity-45 disabled:hover:bg-card whitespace-nowrap cursor-pointer disabled:cursor-default"
       >
         <RotateCcw className="w-3.5 h-3.5" />
         Reset picks
@@ -239,7 +239,7 @@ function WeekStepper({
         aria-label="Previous week"
         disabled={active === 0}
         onClick={() => onSelect(active - 1)}
-        className="w-8 h-8 rounded-lg border border-border bg-card grid place-items-center hover:bg-muted disabled:opacity-40 disabled:hover:bg-card"
+        className="w-8 h-8 rounded-lg border border-border bg-card grid place-items-center hover:bg-muted disabled:opacity-40 disabled:hover:bg-card cursor-pointer disabled:cursor-default"
       >
         <ChevronLeft className="w-4 h-4" />
       </button>
@@ -253,7 +253,7 @@ function WeekStepper({
               type="button"
               onClick={() => onSelect(i)}
               className={cn(
-                'flex flex-col items-center gap-0.5 min-w-[74px] px-3 py-1 rounded-lg border',
+                'flex flex-col items-center gap-0.5 min-w-[74px] px-3 py-1 rounded-lg border cursor-pointer',
                 i === active
                   ? 'border-primary bg-primary/10'
                   : 'border-border bg-card hover:bg-muted',
@@ -282,7 +282,7 @@ function WeekStepper({
         aria-label="Next week"
         disabled={active === model.weeks.length - 1}
         onClick={() => onSelect(active + 1)}
-        className="w-8 h-8 rounded-lg border border-border bg-card grid place-items-center hover:bg-muted disabled:opacity-40 disabled:hover:bg-card"
+        className="w-8 h-8 rounded-lg border border-border bg-card grid place-items-center hover:bg-muted disabled:opacity-40 disabled:hover:bg-card cursor-pointer disabled:cursor-default"
       >
         <ChevronRight className="w-4 h-4" />
       </button>
@@ -355,7 +355,7 @@ function TeamCard({
       type="button"
       onClick={() => onPick(matchup, teamId)}
       className={cn(
-        'flex items-center gap-2.5 px-3.5 py-2.5 rounded-[10px] border w-full text-left transition-colors',
+        'flex items-center gap-2.5 px-3.5 py-2.5 rounded-[10px] border w-full text-left transition-colors cursor-pointer',
         state === 'win' && 'border-primary bg-primary/10',
         state === 'lose' && 'opacity-50 border-border',
         state === 'none' && 'border-border bg-card hover:border-ring',
@@ -395,6 +395,9 @@ function StandingsTable({
 }) {
   const rows = useMemo(() => projectStandings(model, picks), [model, picks]);
 
+  // Playoff odds = share of remaining outcomes each team makes the top-N seed.
+  const odds = useMemo(() => computePlayoffOdds(model, picks), [model, picks]);
+
   // Games left = pickable matchups still involving each team.
   const gamesLeft = useMemo(() => {
     const counts = new Map<string, number>();
@@ -422,7 +425,7 @@ function StandingsTable({
       <div className="overflow-x-auto">
         <table
           className="w-full border-collapse text-[13px]"
-          style={{ minWidth: '560px' }}
+          style={{ minWidth: '640px' }}
         >
           <thead>
             <tr>
@@ -431,6 +434,9 @@ function StandingsTable({
               </th>
               <th className="text-right text-[10px] font-medium uppercase tracking-[0.07em] text-muted-foreground px-3.5 py-2 border-b border-border/50 bg-muted">
                 Proj. record
+              </th>
+              <th className="text-right text-[10px] font-medium uppercase tracking-[0.07em] text-muted-foreground px-3.5 py-2 border-b border-border/50 bg-muted">
+                Playoff odds
               </th>
               <th className="text-right text-[10px] font-medium uppercase tracking-[0.07em] text-muted-foreground px-3.5 py-2 border-b border-border/50 bg-muted">
                 Win %
@@ -451,20 +457,24 @@ function StandingsTable({
                 showLineAbove={i === model.numPlayoffTeams}
                 color={colorByTeam.get(row.team.teamId) ?? avatarColor(i)}
                 gamesLeft={gamesLeft.get(row.team.teamId) ?? 0}
+                playoffOdds={odds.get(row.team.teamId) ?? null}
               />
             ))}
           </tbody>
         </table>
       </div>
-      <div className="flex items-center gap-2 px-4 py-2.5 border-t border-border/50 text-[11px] text-muted-foreground">
-        <Info className="w-3 h-3 shrink-0" />
-        <span>
-          Records combine games already played with your picks. PF is
-          season-to-date and breaks ties.
-        </span>
-      </div>
     </div>
   );
+}
+
+/** Format a 0..1 playoff-odds value: exact 0/100, `<1%`/`>99%` extremes, else integer %. */
+function formatOdds(odds: number | null): string {
+  if (odds === null) return '—';
+  if (odds <= 0) return '0%';
+  if (odds >= 1) return '100%';
+  if (odds < 0.01) return '<1%';
+  if (odds > 0.99) return '>99%';
+  return `${Math.round(odds * 100)}%`;
 }
 
 function StandingRowView({
@@ -472,17 +482,19 @@ function StandingRowView({
   showLineAbove,
   color,
   gamesLeft,
+  playoffOdds,
 }: {
   row: ReturnType<typeof projectStandings>[number];
   showLineAbove: boolean;
   color: string;
   gamesLeft: number;
+  playoffOdds: number | null;
 }) {
   return (
     <>
       {showLineAbove && (
         <tr>
-          <td colSpan={5} className="p-0">
+          <td colSpan={6} className="p-0">
             <div className="flex items-center gap-2.5 px-3.5 py-1.5 border-y border-dashed border-primary">
               <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-primary whitespace-nowrap">
                 Playoff line
@@ -552,6 +564,20 @@ function StandingRowView({
               {Math.abs(row.movement)}
             </span>
           )}
+        </td>
+        <td className="px-3.5 py-2.5 text-right tabular-nums">
+          <span
+            className={cn(
+              'font-medium',
+              playoffOdds !== null && playoffOdds >= 0.99
+                ? 'text-emerald-600 dark:text-emerald-400'
+                : playoffOdds !== null && playoffOdds <= 0.01
+                  ? 'text-muted-foreground'
+                  : 'text-foreground',
+            )}
+          >
+            {formatOdds(playoffOdds)}
+          </span>
         </td>
         <td className="px-3.5 py-2.5 text-right tabular-nums text-muted-foreground">
           {row.winPct.toFixed(3)}

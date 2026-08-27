@@ -147,6 +147,32 @@ defineFeature(feature, (test) => {
     });
   });
 
+  test('The standings table shows a playoff-odds column', ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    given('an in-progress season with unplayed regular-season games', () => {
+      server.use(
+        leagueQuery({
+          PLAYOFF_BRACKET: [],
+          MATCHUPS: IN_PROGRESS,
+          WEEKLY_STANDINGS: [],
+          LEAGUE_SETTINGS: SETTINGS,
+        }),
+      );
+    });
+    when('I open the playoff bracket page', open);
+    then(/^I see "(.*)"$/, async (text) => {
+      expect((await screen.findAllByText(text)).length).toBeGreaterThan(0);
+    });
+    // alice and carol are in the top 2 across every remaining outcome -> 100%.
+    and(/^I see "(.*)"$/, async (text) => {
+      expect((await screen.findAllByText(text)).length).toBeGreaterThan(0);
+    });
+  });
+
   test('A finished regular season with no bracket shows the empty state', ({
     given,
     when,
