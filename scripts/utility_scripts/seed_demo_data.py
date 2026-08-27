@@ -1091,6 +1091,27 @@ def build_season_items(
     ]
     items.append({"PK": pk, "SK": f"PLAYOFF_BRACKET#{season}", "data": bracket_stamped})
 
+    # ── LEAGUE_SETTINGS ───────────────────────────────────────────────────────
+    # Per-season playoff configuration backing the playoff-race predictor's cutoff
+    # line and its last-3-weeks replay in demo mode.
+    items.append(
+        {
+            "PK": pk,
+            "SK": f"LEAGUE_SETTINGS#{season}",
+            "data": [
+                sanitize_value(
+                    {
+                        "season": season,
+                        "num_playoff_teams": N_PLAYOFF_TEAMS,
+                        "num_playoff_teams_assumed": False,
+                        "playoff_week_start": N_REG_WEEKS + 1,
+                        "regular_season_weeks": N_REG_WEEKS,
+                    }
+                )
+            ],
+        }
+    )
+
     # ── DRAFT ─────────────────────────────────────────────────────────────────
     # Compute total_points per player (sum of regular-season weekly scores)
     # For non-rostered weeks or bye weeks: use generated score regardless

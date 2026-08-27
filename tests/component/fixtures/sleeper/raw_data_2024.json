@@ -206,7 +206,7 @@
       "name": "Component Test League",
       "scoring_settings": { "pt": 1.0 },
       "roster_positions": ["QB", "RB", "WR", "TE", "BN"],
-      "settings": { "playoff_week_start": 17 }
+      "settings": { "playoff_week_start": 17, "playoff_teams": 4 }
     }
   }
 ]

@@ -1573,3 +1573,70 @@ class TestSleeperDraftRankCalculation:
         assert pd.isna(rows["10"]["bid_amount"])
         assert rows["10"]["drafted_position_rank"] == 1
         assert rows["11"]["drafted_position_rank"] == 2
+
+
+class TestDefaultPlayoffWeekStart:
+    @pytest.mark.parametrize(
+        "season,expected",
+        [("2019", 14), ("2020", 14), ("2021", 15), ("2024", 15)],
+    )
+    def test_boundary(self, processor_handler, season, expected):
+        assert processor_handler.default_playoff_week_start(season) == expected
+
+
+class TestBuildLeagueSettingsRow:
+    def test_sleeper_style_derives_regular_season_weeks(self, processor_handler):
+        row = processor_handler.build_league_settings_row(
+            season="2024", playoff_week_start=15, num_playoff_teams=6
+        )
+        assert row == {
+            "season": "2024",
+            "num_playoff_teams": 6,
+            "num_playoff_teams_assumed": False,
+            "playoff_week_start": 15,
+            "regular_season_weeks": 14,
+        }
+
+    def test_espn_style_from_matchup_period_count(self, processor_handler):
+        # ESPN supplies regular_season_weeks (matchupPeriodCount) and playoff_week_start.
+        row = processor_handler.build_league_settings_row(
+            season="2024",
+            playoff_week_start=15,
+            regular_season_weeks=14,
+            num_playoff_teams=4,
+        )
+        assert row["regular_season_weeks"] == 14
+        assert row["playoff_week_start"] == 15
+        assert row["num_playoff_teams"] == 4
+
+    def test_missing_playoff_team_count_defaults_to_six(self, processor_handler):
+        row = processor_handler.build_league_settings_row(
+            season="2024", playoff_week_start=15
+        )
+        assert row["num_playoff_teams"] == 6
+        assert row["num_playoff_teams_assumed"] is True
+
+    def test_provided_playoff_team_count_not_assumed(self, processor_handler):
+        row = processor_handler.build_league_settings_row(
+            season="2024", playoff_week_start=15, num_playoff_teams=4
+        )
+        assert row["num_playoff_teams_assumed"] is False
+
+    def test_missing_playoff_week_start_uses_season_default(self, processor_handler):
+        # No playoff_week_start and season < 2021 -> default 14, regular weeks 13.
+        row = processor_handler.build_league_settings_row(season="2019")
+        assert row["playoff_week_start"] == 14
+        assert row["regular_season_weeks"] == 13
+        assert row["num_playoff_teams"] == 6
+
+    @pytest.mark.parametrize("bad", [0, -1, None])
+    def test_non_positive_values_fall_back(self, processor_handler, bad):
+        row = processor_handler.build_league_settings_row(
+            season="2024",
+            playoff_week_start=bad,
+            num_playoff_teams=bad,
+            regular_season_weeks=bad,
+        )
+        assert row["playoff_week_start"] == 15
+        assert row["regular_season_weeks"] == 14
+        assert row["num_playoff_teams"] == 6

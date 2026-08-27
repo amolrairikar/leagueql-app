@@ -1,10 +1,6 @@
 import type { MatchupItem, SeasonStandingsItem } from '@/components/api/types';
+import { isRegularSeason } from '@/features/schedule_swap/compute-schedule-swap';
 import { isUnplayedMatchup } from '@/lib/matchups';
-
-/** A regular-season game is one with no playoff tier (`NONE` or absent). */
-function isRegularSeason(m: MatchupItem): boolean {
-  return !m.playoff_tier_type || m.playoff_tier_type === 'NONE';
-}
 
 /**
  * Strength of schedule per team (frontend/season-standings): the average season win% of every

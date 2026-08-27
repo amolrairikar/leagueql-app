@@ -1,8 +1,9 @@
-import { screen } from '@testing-library/react';
+import { act, fireEvent, screen } from '@testing-library/react';
 import { defineFeature, loadFeature } from 'jest-cucumber';
 
 import HomePage from '../../home_page/home-page';
 import LeagueQLLanding from '../../landing_page/landing-page';
+import PlayoffBracket from '../../playoff_bracket/playoff-bracket';
 import Transactions from '../../transactions/transactions';
 
 import { isDemoMode } from '@/lib/cookie-handler';
@@ -67,6 +68,47 @@ defineFeature(feature, (test) => {
       // button / summary column).
       const cards = await screen.findAllByText('Trade');
       expect(cards.length).toBeGreaterThan(0);
+    });
+  });
+
+  test('The playoff bracket page offers a Bracket / Playoff Race toggle', ({
+    given,
+    when,
+    then,
+  }) => {
+    // Uses the committed demo dataset (no MSW): the 2025 demo season is completed,
+    // so the bracket renders and the demo-only toggle can switch to the predictor.
+    given('demo mode is active', () => {
+      setDemoMode();
+    });
+    when('I open the playoff bracket page in demo mode', async () => {
+      await renderRoute(<PlayoffBracket />, {
+        route: '/playoff_bracket',
+        league: {
+          leagueId: DEMO_LEAGUE_ID,
+          platform: DEMO_PLATFORM,
+          seasons: DEMO_SEASONS,
+        },
+      });
+    });
+    then(/^I see the "(.*)" toggle$/, async (label) => {
+      expect(
+        await screen.findByRole('button', { name: label }),
+      ).toBeInTheDocument();
+    });
+    when('I switch to the Playoff Race view', async () => {
+      const toggle = await screen.findByRole('button', {
+        name: 'Playoff Race',
+      });
+      // The predictor mounts and loads demo fixtures via `use(promise)`, which
+      // React 19 only flushes inside an act scope.
+      await act(async () => {
+        fireEvent.click(toggle);
+        await Promise.resolve();
+      });
+    });
+    then(/^I see the predictor heading "(.*)"$/, async (text) => {
+      expect((await screen.findAllByText(text)).length).toBeGreaterThan(0);
     });
   });
 

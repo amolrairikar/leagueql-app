@@ -212,14 +212,20 @@ paths:
             a season suffix (e.g. SEASON_STANDINGS#2024). Cross-season views
             such as ALL_TIME_STANDINGS do not require a suffix. TRANSACTIONS#{season}
             is Sleeper-only (ESPN leagues have no transaction data and return 404).
+            LEAGUE_SETTINGS#{season} returns the season's playoff configuration
+            (num_playoff_teams, playoff_week_start, regular_season_weeks).
           schema:
             type: string
-            # TODO: Fill this out as the list of views evolves
             enum:
               - TEAMS
               - MATCHUPS
               - SEASON_STANDINGS
+              - WEEKLY_STANDINGS
+              - PLAYOFF_BRACKET
+              - DRAFT
               - TRANSACTIONS
+              - PLATFORM_MIGRATION
+              - LEAGUE_SETTINGS
             example: "SEASON_STANDINGS"
       responses:
         "200":
