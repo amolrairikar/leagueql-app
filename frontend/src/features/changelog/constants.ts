@@ -17,6 +17,19 @@ export interface ChangelogRelease {
 // Newest release first.
 export const CHANGELOG: ChangelogRelease[] = [
   {
+    version: '1.5.0',
+    date: 'August 27, 2026',
+    sections: [
+      {
+        title: 'Added',
+        items: [
+          "Playoff race predictor on the Playoff Bracket page: before the playoffs begin, step through the remaining regular-season weeks and pick each matchup's winner to watch the projected standings re-sort live. Standings are ordered by wins (season points-for breaks ties) and show seed-movement indicators, a cutoff line after your league's number of playoff teams, clinched-seed markers, and a playoff-odds column giving each team's chance of making the postseason.",
+          'Available in demo mode, which replays the last three regular-season weeks as an interactive race.',
+        ],
+      },
+    ],
+  },
+  {
     version: '1.4.0',
     date: 'August 22, 2026',
     sections: [
@@ -35,10 +48,10 @@ export const CHANGELOG: ChangelogRelease[] = [
       {
         title: 'Added',
         items: [
-          'Schedule-swap simulator on the standings page: see what every team’s record would be under each other manager’s schedule, and find out who was schedule-lucky or robbed.',
+          "Schedule-swap simulator on the standings page: see what every team's record would be under each other manager's schedule, and find out who was schedule-lucky or robbed.",
           'Weekly awards & superlatives on the matchups page: per-week award cards (highest score, biggest blowout, closest call, and more) plus a running tally of who has collected the most.',
           'Lineup efficiency in every box score: see how many points each manager left on the bench, with a slot-by-slot start/sit report.',
-          'Draft value chart on the draft recap page: a scatterplot of every pick’s draft position against the points the pick scored.',
+          "Draft value chart on the draft recap page: a scatterplot of every pick's draft position against the points the pick scored.",
         ],
       },
     ],
@@ -50,7 +63,7 @@ export const CHANGELOG: ChangelogRelease[] = [
       {
         title: 'Added',
         items: [
-          'Owner summary table on the Transactions page: see each owner’s waiver, free-agent, and trade counts for the season at a glance, with a combined total and rows ranked by who was most active.',
+          "Owner summary table on the Transactions page: see each owner's waiver, free-agent, and trade counts for the season at a glance, with a combined total and rows ranked by who was most active.",
         ],
       },
     ],
@@ -62,7 +75,7 @@ export const CHANGELOG: ChangelogRelease[] = [
       {
         title: 'Added',
         items: [
-          'Transactions page for Sleeper leagues: browse each season’s completed waivers, trades, and free-agent moves, newest first.',
+          "Transactions page for Sleeper leagues: browse each season's completed waivers, trades, and free-agent moves, newest first.",
           'Each transaction shows its type, week, and date, with the players and draft picks every team added (green) and dropped (red), plus the FAAB bid on waiver claims.',
           'Filter transactions by type (All, Trades, Waivers, Free Agents) and switch between onboarded seasons.',
         ],
@@ -82,7 +95,7 @@ export const CHANGELOG: ChangelogRelease[] = [
           'All historical league matchups + box scores',
           'Playoff brackets from each season',
           'Head-to-head comparison of any two managers',
-          'Year-to-year history of each manager’s performance',
+          "Year-to-year history of each manager's performance",
           'Recap of draft picks and grades',
           'All-time fantasy player performance records',
           'All-time fantasy team performance records',
