@@ -29,7 +29,7 @@ export interface ScheduleSwapData {
 }
 
 /** A regular-season game is one with no playoff tier (`NONE` or absent). */
-function isRegularSeason(m: MatchupItem): boolean {
+export function isRegularSeason(m: MatchupItem): boolean {
   return !m.playoff_tier_type || m.playoff_tier_type === 'NONE';
 }
 

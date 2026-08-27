@@ -12,6 +12,13 @@ Feature: Demo mode (frontend/demo-mode)
     When I open the transactions page in demo mode
     Then I see a transaction card for the 2025 demo season
 
+  Scenario: The playoff bracket page offers a Bracket / Playoff Race toggle
+    Given demo mode is active
+    When I open the playoff bracket page in demo mode
+    Then I see the "Playoff Race" toggle
+    When I switch to the Playoff Race view
+    Then I see the predictor heading "Playoff Picture"
+
   Scenario: Returning to the landing page exits demo mode
     Given demo mode is active
     When I open the landing page

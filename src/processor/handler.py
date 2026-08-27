@@ -82,6 +82,48 @@ class EntityType(str, Enum):
     PLAYOFF_BRACKET = "PLAYOFF_BRACKET"
     DRAFT = "DRAFT"
     TRANSACTIONS = "TRANSACTIONS"
+    LEAGUE_SETTINGS = "LEAGUE_SETTINGS"
+
+
+def default_playoff_week_start(season: str) -> int:
+    """Fallback playoff start week when a platform omits it: week 15 from the
+    2021 season onward (17-game NFL schedule), week 14 before that."""
+    return 15 if int(season) >= 2021 else 14
+
+
+def build_league_settings_row(
+    season: str,
+    playoff_week_start: int | None = None,
+    num_playoff_teams: int | None = None,
+    regular_season_weeks: int | None = None,
+) -> dict:
+    """
+    Build a single per-season LEAGUE_SETTINGS row, applying defaults for any value
+    the platform did not provide: playoff start week falls back to
+    ``default_playoff_week_start``, regular-season length to ``playoff_week_start - 1``,
+    and the playoff-team count to 6.
+    """
+    pws = (
+        playoff_week_start
+        if isinstance(playoff_week_start, int) and playoff_week_start > 0
+        else default_playoff_week_start(season)
+    )
+    rsw = (
+        regular_season_weeks
+        if isinstance(regular_season_weeks, int) and regular_season_weeks > 0
+        else pws - 1
+    )
+    has_npt = isinstance(num_playoff_teams, int) and num_playoff_teams > 0
+    npt = num_playoff_teams if has_npt else 6
+    return {
+        "season": season,
+        "num_playoff_teams": npt,
+        # True when the platform did not provide a playoff-team count and the
+        # default (6) was used, so the UI can label its cutoff line as assumed.
+        "num_playoff_teams_assumed": not has_npt,
+        "playoff_week_start": pws,
+        "regular_season_weeks": rsw,
+    }
 
 
 @dataclass(frozen=True)
@@ -681,6 +723,7 @@ def _register_espn_raw_data(
         [],
     )
     league_name_by_season: dict[str, str] = {}
+    league_settings_by_season: dict[str, dict] = {}
     for item in raw_data:
         if item["data_type"] == "users":
             for record in item["data"].get("members", []):
@@ -696,6 +739,19 @@ def _register_espn_raw_data(
             league_name = settings.get("name")
             if league_name:
                 league_name_by_season[item["season"]] = league_name
+            schedule_settings = settings.get("scheduleSettings", {})
+            matchup_period_count = schedule_settings.get("matchupPeriodCount")
+            league_settings_by_season[item["season"]] = build_league_settings_row(
+                season=item["season"],
+                num_playoff_teams=schedule_settings.get("playoffTeamCount"),
+                regular_season_weeks=matchup_period_count,
+                playoff_week_start=(
+                    matchup_period_count + 1
+                    if isinstance(matchup_period_count, int)
+                    and matchup_period_count > 0
+                    else None
+                ),
+            )
         elif item["data_type"].startswith("matchups"):
             for record in item["data"].get("matchups", []):
                 team_a_id = record.get("home", {}).get("teamId", "")
@@ -787,6 +843,7 @@ def _register_espn_raw_data(
         "draft_picks": all_draft_picks,
         "player_scoring_totals": all_player_scoring_totals,
         "league_name_by_season": league_name_by_season,
+        "league_settings_by_season": league_settings_by_season,
     }
 
 
@@ -970,14 +1027,21 @@ def _register_sleeper_raw_data(
     # because league_settings items can appear after matchups items in raw_data.
     roster_positions_by_season: dict[str, list[str]] = {}
     playoff_week_start_by_season: dict[str, int] = {}
+    num_playoff_teams_by_season: dict[str, int] = {}
+    settings_seasons: set[str] = set()
     for item in raw_data:
         if item["data_type"] == "league_settings":
+            settings_seasons.add(item["season"])
             rp = item["data"].get("roster_positions")
             if rp:
                 roster_positions_by_season[item["season"]] = rp
-            pws = item["data"].get("settings", {}).get("playoff_week_start")
+            settings = item["data"].get("settings", {})
+            pws = settings.get("playoff_week_start")
             if isinstance(pws, int) and pws > 0:
                 playoff_week_start_by_season[item["season"]] = pws
+            npt = settings.get("playoff_teams")
+            if isinstance(npt, int) and npt > 0:
+                num_playoff_teams_by_season[item["season"]] = npt
 
     all_users, all_rosters, all_matchups, all_draft_picks = [], [], [], []
     # Completed transactions paired with their season, resolved after the loop once
@@ -1115,6 +1179,15 @@ def _register_sleeper_raw_data(
         roster_team_map=build_sleeper_roster_team_map(all_users, all_rosters),
     )
 
+    league_settings_by_season = {
+        season: build_league_settings_row(
+            season=season,
+            playoff_week_start=playoff_week_start_by_season.get(season),
+            num_playoff_teams=num_playoff_teams_by_season.get(season),
+        )
+        for season in settings_seasons
+    }
+
     return {
         "users": all_users,
         "rosters": all_rosters,
@@ -1124,6 +1197,7 @@ def _register_sleeper_raw_data(
         "player_scoring_totals": player_scoring_totals,
         "transactions": transactions,
         "league_name_by_season": league_name_by_season,
+        "league_settings_by_season": league_settings_by_season,
     }
 
 
@@ -1220,7 +1294,9 @@ def register_raw_data(
         raise ValueError(f"Unsupported platform: {platform}")
 
     for data_type, rows in grouped.items():
-        if data_type == "league_name_by_season":
+        # Season-keyed metadata dicts (not row lists) are returned in `grouped` for the
+        # writer, but they are not DuckDB views and must not be registered as such.
+        if data_type in ("league_name_by_season", "league_settings_by_season"):
             continue
         if not rows and data_type in _EMPTY_VIEW_DTYPES:
             # DuckDB cannot register a 0-column frame, and downstream queries reference
@@ -1610,6 +1686,21 @@ def _process_manifest(
         con.register(f"{schema.entity_type.value}_output", rel)
         write_items(
             items=dataframe_to_dynamo_items(rel=rel, schema=schema),
+        )
+
+    # LEAGUE_SETTINGS is a tiny per-season key/value view extracted directly from the
+    # platform settings blob (not a DuckDB transform), so it is written on its own.
+    league_settings_by_season = grouped.get("league_settings_by_season", {})
+    if league_settings_by_season:
+        write_items(
+            items=[
+                {
+                    "PK": f"LEAGUE#{canonical_league_id}",
+                    "SK": f"LEAGUE_SETTINGS#{season}",
+                    "data": [{k: sanitize_value(v) for k, v in row.items()}],
+                }
+                for season, row in league_settings_by_season.items()
+            ],
         )
 
     write_metadata_items(

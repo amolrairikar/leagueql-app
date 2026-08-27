@@ -283,6 +283,44 @@ class TestRegisterESPNRawDataMatchups:
         result = processor_handler._register_espn_raw_data(raw)
         assert result["members"] == []
 
+    def test_settings_extracts_league_settings(self, processor_handler):
+        raw = [
+            {
+                "season": "2024",
+                "data_type": "settings",
+                "data": {
+                    "settings": {
+                        "name": "My League",
+                        "scheduleSettings": {
+                            "playoffTeamCount": 4,
+                            "matchupPeriodCount": 14,
+                        },
+                    }
+                },
+            }
+        ]
+        result = processor_handler._register_espn_raw_data(raw)
+        assert result["league_settings_by_season"]["2024"] == {
+            "season": "2024",
+            "num_playoff_teams": 4,
+            "num_playoff_teams_assumed": False,
+            "playoff_week_start": 15,
+            "regular_season_weeks": 14,
+        }
+
+    def test_settings_missing_playoff_count_defaults(self, processor_handler):
+        # No scheduleSettings at all -> defaults (num_playoff_teams 6, season-based week).
+        raw = [
+            {
+                "season": "2024",
+                "data_type": "settings",
+                "data": {"settings": {"name": "My League"}},
+            }
+        ]
+        result = processor_handler._register_espn_raw_data(raw)
+        assert result["league_settings_by_season"]["2024"]["num_playoff_teams"] == 6
+        assert result["league_settings_by_season"]["2024"]["playoff_week_start"] == 15
+
 
 class TestTraceSleeperChampionshipPathContinue:
     def test_skips_unknown_and_revisited_match_ids(self, processor_handler):
@@ -406,6 +444,37 @@ class TestRegisterSleeperRawDataBranches:
         ]
         result = processor_handler._register_sleeper_raw_data(raw, {}, {})
         assert result["matchups"][0]["winner"] == 2  # team_b outscored team_a
+
+    def test_league_settings_extracted(self, processor_handler):
+        raw = [
+            {
+                "season": "2024",
+                "data_type": "league_settings",
+                "data": {
+                    "name": "My League",
+                    "settings": {"playoff_week_start": 15, "playoff_teams": 6},
+                },
+            }
+        ]
+        result = processor_handler._register_sleeper_raw_data(raw, {}, {})
+        assert result["league_settings_by_season"]["2024"] == {
+            "season": "2024",
+            "num_playoff_teams": 6,
+            "num_playoff_teams_assumed": False,
+            "playoff_week_start": 15,
+            "regular_season_weeks": 14,
+        }
+
+    def test_league_settings_missing_playoff_teams_defaults(self, processor_handler):
+        raw = [
+            {
+                "season": "2024",
+                "data_type": "league_settings",
+                "data": {"settings": {"playoff_week_start": 15}},
+            }
+        ]
+        result = processor_handler._register_sleeper_raw_data(raw, {}, {})
+        assert result["league_settings_by_season"]["2024"]["num_playoff_teams"] == 6
 
     def test_tie_matchup_marks_tie(self, processor_handler):
         raw = [
@@ -700,6 +769,55 @@ class TestLambdaHandlerImpl:
         # league_name extracted from the most recent season and passed through.
         assert write_meta.call_args[1]["league_name"] == "My League"
         assert write_meta.call_args[1]["refresh"] is False
+
+    def test_league_settings_view_written(self, processor_handler):
+        mock_s3 = MagicMock()
+        mock_s3.get_object.return_value = _manifest_response({"SLEEPER": ["2024"]})
+        grouped = {
+            "league_name_by_season": {"2024": "My League"},
+            "league_settings_by_season": {
+                "2024": {
+                    "season": "2024",
+                    "num_playoff_teams": 6,
+                    "playoff_week_start": 15,
+                    "regular_season_weeks": 14,
+                }
+            },
+        }
+        write_items = MagicMock()
+
+        def fake_read(bucket, key, version_id=None):
+            if key.endswith(("players.json", "player_stats.json")):
+                return {}
+            return [{"data_type": "users", "data": []}]
+
+        with (
+            patch.multiple(
+                processor_handler,
+                s3_client=mock_s3,
+                get_previous_version_id=MagicMock(return_value=None),
+                read_s3_object=MagicMock(side_effect=fake_read),
+                register_raw_data=MagicMock(return_value=grouped),
+                dataframe_to_dynamo_items=MagicMock(return_value=[]),
+                write_items=write_items,
+                write_metadata_items=MagicMock(),
+                update_league_count=MagicMock(),
+                QUERIES=_FAKE_QUERIES,
+            ),
+            patch.object(processor_handler.duckdb, "connect", return_value=MagicMock()),
+        ):
+            processor_handler._lambda_handler_impl(_s3_event(), MagicMock())
+
+        # One write_items call carries the LEAGUE_SETTINGS item with the season's data.
+        settings_items = [
+            item
+            for call in write_items.call_args_list
+            for item in call.kwargs["items"]
+            if item["SK"] == "LEAGUE_SETTINGS#2024"
+        ]
+        assert len(settings_items) == 1
+        assert settings_items[0]["data"][0]["num_playoff_teams"] == 6
+        assert settings_items[0]["data"][0]["regular_season_weeks"] == 14
 
     def test_sleeper_refresh_reads_previous_manifest_and_player_data(
         self, processor_handler

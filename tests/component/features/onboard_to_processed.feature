@@ -25,6 +25,14 @@ Feature: Onboard-to-processed pipeline (backend/league-onboarding, backend/data-
     When I GET "/leagues/100/query?platform=SLEEPER&queryType=TRANSACTIONS#2024"
     Then the API responds with status 200
     And the query response has 2 row(s)
+    # backend/data-processing-pipeline: the LEAGUE_SETTINGS view is extracted from the Sleeper
+    # settings blob (playoff_teams=4, playoff_week_start=17 -> regular_season_weeks=16).
+    When I GET "/leagues/100/query?platform=SLEEPER&queryType=LEAGUE_SETTINGS#2024"
+    Then the API responds with status 200
+    And the query response has 1 row(s)
+    And a query response row has "num_playoff_teams" equal to "4"
+    And a query response row has "playoff_week_start" equal to "17"
+    And a query response row has "regular_season_weeks" equal to "16"
 
   Scenario: Onboarding a renewed Sleeper season reuses the existing league without a duplicate METADATA (backend/league-onboarding)
     # A Sleeper league renews under a new league ID linked by previous_league_id. Onboarding

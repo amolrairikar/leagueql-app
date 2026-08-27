@@ -12,10 +12,12 @@ import {
 
 import type { Platform } from '@/components/api/types';
 import { BoxScoreCard } from '@/components/box-score-card';
+import PlayoffRacePredictor from '@/features/playoff_race_predictor/playoff-race-predictor';
 import SeasonSelect from '@/features/season_select/season-select';
 import { AVATAR_COLORS, UI_COLORS } from '@/lib/color-constants';
-import { getLeagueCookies } from '@/lib/cookie-handler';
+import { getLeagueCookies, isDemoMode } from '@/lib/cookie-handler';
 import { type Result, toResult } from '@/lib/result';
+import { cn } from '@/lib/utils';
 
 interface Team {
   team_id: string;
@@ -333,6 +335,40 @@ function BracketLoading() {
   );
 }
 
+/** Demo-only segmented control switching between the bracket and the predictor. */
+function DemoBracketToggle({
+  value,
+  onChange,
+}: {
+  value: 'bracket' | 'predictor';
+  onChange: (v: 'bracket' | 'predictor') => void;
+}) {
+  const options: { key: 'bracket' | 'predictor'; label: string }[] = [
+    { key: 'bracket', label: 'Bracket' },
+    { key: 'predictor', label: 'Playoff Race' },
+  ];
+  return (
+    <div className="inline-flex items-center gap-1 p-1 mb-6 rounded-lg border border-border bg-card">
+      {options.map((o) => (
+        <button
+          key={o.key}
+          type="button"
+          onClick={() => onChange(o.key)}
+          aria-pressed={value === o.key}
+          className={cn(
+            'text-[13px] font-medium px-3 py-1.5 rounded-md',
+            value === o.key
+              ? 'bg-primary text-primary-foreground'
+              : 'text-muted-foreground hover:text-foreground',
+          )}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function PlayoffBracket() {
   const {
     leagueId,
@@ -344,6 +380,13 @@ export default function PlayoffBracket() {
     allSeasons.length > 0 ? allSeasons[allSeasons.length - 1] : '2025',
   );
   const [selectedMatchId, setSelectedMatchId] = useState<number | null>(null);
+
+  // Only the most recent season can still be in progress (playoffs not yet
+  // decided); any earlier season is complete.
+  const latestSeason = useMemo(
+    () => [...allSeasons].sort((a, b) => Number(b) - Number(a))[0] ?? '',
+    [allSeasons],
+  );
 
   const bracketPromise = useMemo(
     (): Promise<BracketResult> =>
@@ -384,6 +427,9 @@ export default function PlayoffBracket() {
           <BracketContent
             promise={bracketPromise}
             platform={platform}
+            leagueId={leagueId}
+            season={selectedSeason}
+            isLatestSeason={selectedSeason === latestSeason}
             selectedMatchId={selectedMatchId}
             onSelectMatch={setSelectedMatchId}
           />
@@ -396,16 +442,23 @@ export default function PlayoffBracket() {
 function BracketContent({
   promise,
   platform,
+  leagueId,
+  season,
+  isLatestSeason,
   selectedMatchId,
   onSelectMatch,
 }: {
   promise: Promise<BracketResult>;
   platform: Platform;
+  leagueId: string;
+  season: string;
+  isLatestSeason: boolean;
   selectedMatchId: number | null;
   onSelectMatch: (id: number | null) => void;
 }) {
   const result = use(promise);
   const boxScoreRef = useRef<HTMLDivElement>(null);
+  const [demoView, setDemoView] = useState<'bracket' | 'predictor'>('bracket');
 
   useEffect(() => {
     if (selectedMatchId !== null) {
@@ -428,6 +481,20 @@ function BracketContent({
     result.data;
 
   if (matches.length === 0) {
+    // While the latest season's regular season is still in progress there is no
+    // bracket yet — offer the interactive predictor instead of a dead empty state.
+    // The predictor self-gates (renders the empty message if the season isn't
+    // actually in progress).
+    if (isLatestSeason) {
+      return (
+        <PlayoffRacePredictor
+          leagueId={leagueId}
+          platform={platform}
+          season={season}
+          mode="live"
+        />
+      );
+    }
     return (
       <div className="text-center py-12">
         <p className="text-muted-foreground">{PLAYOFF_EMPTY_MESSAGE}</p>
@@ -516,8 +583,26 @@ function BracketContent({
     ? findMatchupForBracketMatch(selectedMatch)
     : null;
 
+  // Demo mode only: a toggle lets visitors explore the predictor over a completed
+  // season (replaying its final regular-season weeks) alongside the real bracket.
+  const demo = isDemoMode();
+  if (demo && demoView === 'predictor') {
+    return (
+      <>
+        <DemoBracketToggle value={demoView} onChange={setDemoView} />
+        <PlayoffRacePredictor
+          leagueId={leagueId}
+          platform={platform}
+          season={season}
+          mode="replay"
+        />
+      </>
+    );
+  }
+
   return (
     <>
+      {demo && <DemoBracketToggle value={demoView} onChange={setDemoView} />}
       {/* Main bracket */}
       <div className="overflow-x-auto -mx-6 px-6 mb-6">
         <div

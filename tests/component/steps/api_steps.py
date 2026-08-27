@@ -198,6 +198,22 @@ def step_no_row_field_equals(context, field, value):
     assert not offenders, f"rows with {field}={value}: {offenders}"
 
 
+@then('a query response row has "{field}" equal to "{value}"')
+def step_row_field_equals(context, field, value):
+    data = context.response.json()["data"]
+
+    def matches(actual):
+        if isinstance(actual, (int, float)):
+            try:
+                return float(actual) == float(value)
+            except ValueError:
+                return False
+        return str(actual) == value
+
+    found = [row for row in data if matches(row.get(field))]
+    assert found, f"no row with {field}={value} in {data}"
+
+
 @then('the response data field "{field}" equals "{value}"')
 def step_data_field(context, field, value):
     actual = context.response.json()["data"].get(field)

@@ -22237,6 +22237,15 @@
         "season": "2022"
       }
     ],
+    "LEAGUE_SETTINGS#2022": [
+      {
+        "season": "2022",
+        "num_playoff_teams": 4,
+        "num_playoff_teams_assumed": false,
+        "playoff_week_start": 16,
+        "regular_season_weeks": 15
+      }
+    ],
     "DRAFT#2022": [
       {
         "team_id": "8",
@@ -52543,6 +52552,15 @@
         "team_1_from": "{\"w\": 1}",
         "team_2_from": "{\"w\": 2}",
         "season": "2023"
+      }
+    ],
+    "LEAGUE_SETTINGS#2023": [
+      {
+        "season": "2023",
+        "num_playoff_teams": 4,
+        "num_playoff_teams_assumed": false,
+        "playoff_week_start": 16,
+        "regular_season_weeks": 15
       }
     ],
     "DRAFT#2023": [
@@ -82853,6 +82871,15 @@
         "season": "2024"
       }
     ],
+    "LEAGUE_SETTINGS#2024": [
+      {
+        "season": "2024",
+        "num_playoff_teams": 4,
+        "num_playoff_teams_assumed": false,
+        "playoff_week_start": 16,
+        "regular_season_weeks": 15
+      }
+    ],
     "DRAFT#2024": [
       {
         "team_id": "6",
@@ -113159,6 +113186,15 @@
         "team_1_from": "{\"w\": 1}",
         "team_2_from": "{\"w\": 2}",
         "season": "2025"
+      }
+    ],
+    "LEAGUE_SETTINGS#2025": [
+      {
+        "season": "2025",
+        "num_playoff_teams": 4,
+        "num_playoff_teams_assumed": false,
+        "playoff_week_start": 16,
+        "regular_season_weeks": 15
       }
     ],
     "DRAFT#2025": [

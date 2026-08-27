@@ -12,6 +12,11 @@ Feature: Playoff bracket (frontend/playoff-bracket)
     When I open the playoff bracket page
     Then I see "Failed to load playoff bracket data."
 
+  Scenario: An in-progress latest season shows the predictor instead of the empty state
+    Given the latest season is in progress with games still to play
+    When I open the playoff bracket page
+    Then I see "Playoff Picture"
+
   Scenario: A season with no bracket shows an empty state
     Given the selected season has no playoff bracket
     When I open the playoff bracket page

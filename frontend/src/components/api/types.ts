@@ -58,6 +58,20 @@ export interface SeasonStandingsItem {
   champion: string;
 }
 
+/**
+ * Per-season league playoff configuration (backend/query-precomputed-views
+ * `LEAGUE_SETTINGS#{season}`), backing the playoff-race predictor's cutoff line and
+ * regular-season boundary. `num_playoff_teams_assumed` is true when the platform did
+ * not provide a playoff-team count and the default (6) was used.
+ */
+export interface LeagueSettingsItem {
+  season: string;
+  num_playoff_teams: number;
+  num_playoff_teams_assumed: boolean;
+  playoff_week_start: number;
+  regular_season_weeks: number;
+}
+
 /** A team involved in a transaction, resolved from a Sleeper roster_id (backend/sleeper-transactions / frontend/transactions). */
 export interface TransactionTeam {
   roster_id: string;

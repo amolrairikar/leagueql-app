@@ -684,6 +684,39 @@ Stores the manager identity mapping created when a league migrates from one plat
 </details>
 
 <details>
+<summary><b>LEAGUE_SETTINGS</b></summary>
+
+Per-season league playoff configuration, extracted by the processor from the platform's
+league-settings payload. Backs the playoff-race predictor's cutoff line and its
+regular-season boundary. `num_playoff_teams` defaults to `6` when the platform omits it;
+`playoff_week_start` falls back to week 15 (season ≥ 2021) or 14 otherwise, and
+`regular_season_weeks` to `playoff_week_start - 1`.
+
+| Attribute | Type | Required | Description |
+|---|---|---|---|
+| `PK` | String | Yes | `LEAGUE#{league_id}` |
+| `SK` | String | Yes | `LEAGUE_SETTINGS#{season}` |
+| `data` | List\<Array\> | Yes | Single-element list holding the season's settings object |
+
+**Example:**
+```json
+{
+  "PK": "LEAGUE#123456789",
+  "SK": "LEAGUE_SETTINGS#2025",
+  "data": [
+    {
+      "season": "2025",
+      "num_playoff_teams": 6,
+      "num_playoff_teams_assumed": false,
+      "playoff_week_start": 15,
+      "regular_season_weeks": 14
+    }
+  ]
+}
+```
+</details>
+
+<details>
 <summary><b>JOB_STATUS</b></summary>
 
 Tracks the lifecycle of a single onboard/refresh/migrate job so the frontend can poll it
