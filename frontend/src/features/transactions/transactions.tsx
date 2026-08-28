@@ -1,5 +1,13 @@
-import { ArrowDown, ArrowUp, Repeat } from 'lucide-react';
-import { Suspense, use, useMemo, useState } from 'react';
+import {
+  ArrowDown,
+  ArrowLeftRight,
+  ArrowUp,
+  Gavel,
+  type LucideIcon,
+  Repeat,
+  UserPlus,
+} from 'lucide-react';
+import { type ReactNode, Suspense, use, useMemo, useState } from 'react';
 
 import { TeamAvatar } from '@/components/team-avatar';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -17,34 +25,68 @@ import {
 import { avatarColor } from '@/lib/color-constants';
 import { getLeagueCookies } from '@/lib/cookie-handler';
 import { type Result, toResult } from '@/lib/result';
+import { cn } from '@/lib/utils';
 
 type TransactionsResult = Result<TransactionItem[]>;
 
 type StandingsResult = Result<SeasonStandingsItem[]>;
 
-const TYPE_LABELS: Record<string, string> = {
-  trade: 'Trade',
-  waiver: 'Waiver',
-  free_agent: 'Free Agent',
-  commissioner: 'Commissioner',
+/**
+ * Per-type presentation: label, icon, and the accent classes for the type chip. The commissioner
+ * entry is a neutral fallback — it is never filterable, but a stray commissioner move still renders
+ * a sensible chip.
+ */
+const TYPE_META: Record<
+  string,
+  { label: string; Icon: LucideIcon; chip: string }
+> = {
+  trade: {
+    label: 'Trade',
+    Icon: Repeat,
+    chip: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400',
+  },
+  waiver: {
+    label: 'Waiver',
+    Icon: Gavel,
+    chip: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+  },
+  free_agent: {
+    label: 'Free Agent',
+    Icon: UserPlus,
+    chip: 'bg-sky-500/10 text-sky-600 dark:text-sky-400',
+  },
+  commissioner: {
+    label: 'Commissioner',
+    Icon: Repeat,
+    chip: 'bg-muted text-muted-foreground',
+  },
 };
 
-type TypeFilter = 'all' | 'trade' | 'waiver' | 'free_agent';
+function typeMeta(type: string) {
+  return TYPE_META[type] ?? TYPE_META.commissioner;
+}
+
+type TypeFilter = 'trade' | 'waiver' | 'free_agent';
 
 const TYPE_FILTERS: { value: TypeFilter; label: string }[] = [
-  { value: 'all', label: 'All' },
   { value: 'trade', label: 'Trades' },
   { value: 'waiver', label: 'Waivers' },
   { value: 'free_agent', label: 'Free Agents' },
 ];
 
-function typeLabel(type: string): string {
-  return TYPE_LABELS[type] ?? type;
-}
-
-function playerLabel(player: TransactionPlayer): string {
+function playerLabel(player: TransactionPlayer): ReactNode {
   const name = player.player_name ?? `Player ${player.player_id}`;
-  return player.position ? `${name} (${player.position})` : name;
+  return (
+    <span>
+      {name}
+      {player.position && (
+        <span className="text-muted-foreground font-normal">
+          {' '}
+          {player.position}
+        </span>
+      )}
+    </span>
+  );
 }
 
 function teamLabel(txn: TransactionItem, rosterId: string | null): string {
@@ -137,106 +179,176 @@ function buildOwnerSummary(transactions: TransactionItem[]): OwnerSummaryRow[] {
   );
 }
 
-function TransactionCard({ txn }: { txn: TransactionItem }) {
+/** A single add (green ↑) or drop (red ↓) row inside a team panel. */
+function MoveRow({
+  direction,
+  children,
+}: {
+  direction: 'add' | 'drop';
+  children: ReactNode;
+}) {
+  const Icon = direction === 'add' ? ArrowUp : ArrowDown;
+  return (
+    <li
+      className={cn(
+        'flex items-center gap-1.5 text-[12px]',
+        direction === 'add'
+          ? 'text-emerald-600 dark:text-emerald-400'
+          : 'text-red-600 dark:text-red-400',
+      )}
+    >
+      <Icon className="w-3 h-3 shrink-0" />
+      {children}
+    </li>
+  );
+}
+
+/** One team's panel within a transaction card: its avatar, name, and the moves it received. */
+function TeamPanel({
+  txn,
+  rosterId,
+  isTrade,
+  visual,
+}: {
+  txn: TransactionItem;
+  rosterId: string;
+  isTrade: boolean;
+  visual: OwnerVisual | undefined;
+}) {
+  const adds = txn.adds.filter((a) => a.roster_id === rosterId);
+  // In a trade, every drop is the other side's add, so showing both per team is
+  // redundant — each team's panel shows only what it received. Waivers and free
+  // agents are a single roster's own add/drop, so both are shown there.
+  const drops = isTrade
+    ? []
+    : txn.drops.filter((d) => d.roster_id === rosterId);
+  const picksIn = txn.draft_picks.filter((p) => p.to_roster_id === rosterId);
+  const picksOut = isTrade
+    ? []
+    : txn.draft_picks.filter((p) => p.from_roster_id === rosterId);
+
+  const team = txn.teams.find((t) => t.roster_id === rosterId);
+  const teamName =
+    [team?.team_name, team?.display_name].find((n) => n) ??
+    `Roster ${rosterId}`;
+  const ownerUsername =
+    [team?.display_name, team?.team_name].find((n) => n) ??
+    `Roster ${rosterId}`;
+  const empty =
+    adds.length === 0 &&
+    drops.length === 0 &&
+    picksIn.length === 0 &&
+    picksOut.length === 0;
+
+  return (
+    <div className="flex-1 min-w-0 rounded-lg border border-border/50 bg-muted/40 p-3">
+      <div className="flex items-center gap-2 mb-2">
+        <TeamAvatar
+          teamLogo={visual?.teamLogo ?? null}
+          teamName={teamName}
+          ownerUsername={ownerUsername}
+          color={avatarColor(visual?.colorIndex ?? 0)}
+        />
+        <span className="text-[13px] font-semibold text-foreground truncate">
+          {teamLabel(txn, rosterId)}
+        </span>
+      </div>
+      <ul className="flex flex-col gap-1">
+        {adds.map((p) => (
+          <MoveRow key={`add-${p.player_id}`} direction="add">
+            {playerLabel(p)}
+          </MoveRow>
+        ))}
+        {picksIn.map((p, i) => (
+          <MoveRow key={`pickin-${i}`} direction="add">
+            {p.season} Round {p.round} pick
+          </MoveRow>
+        ))}
+        {drops.map((p) => (
+          <MoveRow key={`drop-${p.player_id}`} direction="drop">
+            {playerLabel(p)}
+          </MoveRow>
+        ))}
+        {picksOut.map((p, i) => (
+          <MoveRow key={`pickout-${i}`} direction="drop">
+            {p.season} Round {p.round} pick
+          </MoveRow>
+        ))}
+        {empty && (
+          <li className="text-[12px] text-muted-foreground">No moves</li>
+        )}
+      </ul>
+    </div>
+  );
+}
+
+function TransactionCard({
+  txn,
+  visuals,
+}: {
+  txn: TransactionItem;
+  visuals: Map<string, OwnerVisual>;
+}) {
   const date = new Date(txn.created).toLocaleDateString(undefined, {
     month: 'short',
     day: 'numeric',
   });
 
-  // In a trade, every drop is the other side's add, so showing both per team is
-  // redundant — each team's card shows only what it received. Waivers and free
-  // agents are a single roster's own add/drop, so both are shown there.
+  const meta = typeMeta(txn.type);
   const isTrade = txn.type === 'trade';
+  const rosterIds = involvedRosterIds(txn);
+  const panel = (rosterId: string) => (
+    <TeamPanel
+      key={rosterId}
+      txn={txn}
+      rosterId={rosterId}
+      isTrade={isTrade}
+      visual={visuals.get(rosterId)}
+    />
+  );
 
   return (
-    <div className="bg-card border border-border/50 rounded-lg p-4">
-      <div className="flex items-center justify-between mb-3">
+    <div className="bg-card border border-border/50 rounded-xl p-4 shadow-sm">
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <span
+          className={cn(
+            'inline-flex items-center gap-1.5 text-[11px] font-semibold px-2 py-0.5 rounded-full',
+            meta.chip,
+          )}
+        >
+          <meta.Icon className="w-3 h-3" />
+          {meta.label}
+        </span>
         <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.07em] text-foreground">
-            <Repeat className="w-3.5 h-3.5 text-muted-foreground" />
-            {typeLabel(txn.type)}
-          </span>
           {txn.waiver_bid != null && txn.waiver_bid > 0 && (
-            <span className="text-[11px] text-muted-foreground">
+            <span className="inline-flex items-center text-[10.5px] font-medium px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400">
               ${txn.waiver_bid} FAAB
             </span>
           )}
+          <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+            Week {txn.week} · {date}
+          </span>
         </div>
-        <span className="text-[11px] text-muted-foreground">
-          Week {txn.week} · {date}
-        </span>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {involvedRosterIds(txn).map((rosterId) => {
-          const adds = txn.adds.filter((a) => a.roster_id === rosterId);
-          const drops = isTrade
-            ? []
-            : txn.drops.filter((d) => d.roster_id === rosterId);
-          const picksIn = txn.draft_picks.filter(
-            (p) => p.to_roster_id === rosterId,
-          );
-          const picksOut = isTrade
-            ? []
-            : txn.draft_picks.filter((p) => p.from_roster_id === rosterId);
-          return (
-            <div
-              key={rosterId}
-              className="rounded-md border border-border/40 p-3"
-            >
-              <p className="text-[13px] font-medium text-foreground mb-1.5">
-                {teamLabel(txn, rosterId)}
-              </p>
-              <ul className="flex flex-col gap-1">
-                {adds.map((p) => (
-                  <li
-                    key={`add-${p.player_id}`}
-                    className="flex items-center gap-1.5 text-[12px] text-emerald-600 dark:text-emerald-400"
-                  >
-                    <ArrowUp className="w-3 h-3 shrink-0" />
-                    {playerLabel(p)}
-                  </li>
-                ))}
-                {picksIn.map((p, i) => (
-                  <li
-                    key={`pickin-${i}`}
-                    className="flex items-center gap-1.5 text-[12px] text-emerald-600 dark:text-emerald-400"
-                  >
-                    <ArrowUp className="w-3 h-3 shrink-0" />
-                    {p.season} Round {p.round} pick
-                  </li>
-                ))}
-                {drops.map((p) => (
-                  <li
-                    key={`drop-${p.player_id}`}
-                    className="flex items-center gap-1.5 text-[12px] text-red-600 dark:text-red-400"
-                  >
-                    <ArrowDown className="w-3 h-3 shrink-0" />
-                    {playerLabel(p)}
-                  </li>
-                ))}
-                {picksOut.map((p, i) => (
-                  <li
-                    key={`pickout-${i}`}
-                    className="flex items-center gap-1.5 text-[12px] text-red-600 dark:text-red-400"
-                  >
-                    <ArrowDown className="w-3 h-3 shrink-0" />
-                    {p.season} Round {p.round} pick
-                  </li>
-                ))}
-                {adds.length === 0 &&
-                  drops.length === 0 &&
-                  picksIn.length === 0 &&
-                  picksOut.length === 0 && (
-                    <li className="text-[12px] text-muted-foreground">
-                      No moves
-                    </li>
-                  )}
-              </ul>
-            </div>
-          );
-        })}
-      </div>
+      {isTrade && rosterIds.length === 2 ? (
+        <div className="flex flex-col sm:flex-row sm:items-stretch gap-2">
+          {panel(rosterIds[0])}
+          <div className="hidden sm:flex items-center justify-center shrink-0 px-1 text-muted-foreground">
+            <ArrowLeftRight className="w-4 h-4" />
+          </div>
+          {panel(rosterIds[1])}
+        </div>
+      ) : (
+        <div
+          className={cn(
+            'grid grid-cols-1 gap-2',
+            rosterIds.length > 1 && 'sm:grid-cols-2',
+          )}
+        >
+          {rosterIds.map(panel)}
+        </div>
+      )}
     </div>
   );
 }
@@ -265,6 +377,31 @@ function buildStandingsVisuals(
   );
 }
 
+/**
+ * Avatar visuals for the transaction cards. Every roster that appears in a transaction gets a
+ * color, so a card can render an avatar even when standings is missing: rosters are seeded in
+ * first-appearance order, then Season Standings visuals (logo + positional color) are overlaid so
+ * a roster present in standings matches its Season Standings / summary-table avatar exactly.
+ */
+function buildTransactionVisuals(
+  transactions: TransactionItem[],
+  standings: SeasonStandingsItem[],
+): Map<string, OwnerVisual> {
+  const visuals = new Map<string, OwnerVisual>();
+  let i = 0;
+  for (const txn of transactions) {
+    for (const rosterId of involvedRosterIds(txn)) {
+      if (!visuals.has(rosterId)) {
+        visuals.set(rosterId, { colorIndex: i++, teamLogo: '' });
+      }
+    }
+  }
+  standings.forEach((s, idx) =>
+    visuals.set(s.team_id, { colorIndex: idx, teamLogo: s.team_logo }),
+  );
+  return visuals;
+}
+
 function SummaryTable({
   promise,
   standingsPromise,
@@ -286,12 +423,13 @@ function SummaryTable({
   const visuals = standingsResult.ok
     ? buildStandingsVisuals(standingsResult.data)
     : new Map<string, OwnerVisual>();
+  const maxTotal = Math.max(...rows.map((r) => r.total), 1);
 
   const headCell =
-    'text-[10px] font-medium uppercase tracking-[0.07em] text-muted-foreground px-3.5 py-2.5 border-b border-border/50 bg-muted';
+    'text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground px-3.5 py-2.5 border-b border-border/50 bg-muted';
 
   return (
-    <div className="bg-card border border-border/50 rounded-lg overflow-hidden">
+    <div className="bg-card border border-border/50 rounded-xl overflow-hidden shadow-sm">
       <div className="max-h-[70vh] overflow-auto">
         <table
           className="w-full border-collapse text-[13px]"
@@ -337,17 +475,29 @@ function SummaryTable({
                       </div>
                     </div>
                   </td>
-                  <td className="px-3.5 py-2.5 text-right text-muted-foreground">
+                  <td className="px-3.5 py-2.5 text-right text-muted-foreground tabular-nums">
                     {row.waiver}
                   </td>
-                  <td className="px-3.5 py-2.5 text-right text-muted-foreground">
+                  <td className="px-3.5 py-2.5 text-right text-muted-foreground tabular-nums">
                     {row.free_agent}
                   </td>
-                  <td className="px-3.5 py-2.5 text-right text-muted-foreground">
+                  <td className="px-3.5 py-2.5 text-right text-muted-foreground tabular-nums">
                     {row.trade}
                   </td>
-                  <td className="px-3.5 py-2.5 text-right font-medium text-foreground">
-                    {row.total}
+                  <td className="px-3.5 py-2.5 text-right">
+                    <span className="inline-flex items-center justify-end gap-2">
+                      <span className="hidden sm:block h-1.5 w-12 rounded-full bg-muted overflow-hidden">
+                        <span
+                          className="block h-full rounded-full bg-primary"
+                          style={{
+                            width: `${Math.round((row.total / maxTotal) * 100)}%`,
+                          }}
+                        />
+                      </span>
+                      <span className="font-semibold text-foreground tabular-nums">
+                        {row.total}
+                      </span>
+                    </span>
                   </td>
                 </tr>
               );
@@ -361,12 +511,15 @@ function SummaryTable({
 
 function TransactionsBody({
   promise,
+  standingsPromise,
   typeFilter,
 }: {
   promise: Promise<TransactionsResult>;
+  standingsPromise: Promise<StandingsResult>;
   typeFilter: TypeFilter;
 }) {
   const result = use(promise);
+  const standingsResult = use(standingsPromise);
 
   if (!result.ok) {
     return (
@@ -376,8 +529,15 @@ function TransactionsBody({
     );
   }
 
+  // Card avatars reuse the Season Standings logo/color when available (matching the summary
+  // table), falling back to an appearance-order color + initials otherwise.
+  const visuals = buildTransactionVisuals(
+    result.data,
+    standingsResult.ok ? standingsResult.data : [],
+  );
+
   const transactions = [...result.data]
-    .filter((t) => typeFilter === 'all' || t.type === typeFilter)
+    .filter((t) => t.type === typeFilter)
     .sort((a, b) => b.created - a.created);
 
   if (transactions.length === 0) {
@@ -391,7 +551,7 @@ function TransactionsBody({
   return (
     <div className="flex flex-col gap-3">
       {transactions.map((txn) => (
-        <TransactionCard key={txn.transaction_id} txn={txn} />
+        <TransactionCard key={txn.transaction_id} txn={txn} visuals={visuals} />
       ))}
     </div>
   );
@@ -423,7 +583,7 @@ export default function Transactions() {
   const defaultSeason =
     [...seasons].sort((a, b) => Number(b) - Number(a))[0] ?? '';
   const [selectedSeason, setSelectedSeason] = useState(defaultSeason);
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>('trade');
 
   const transactionsPromise = useMemo(
     (): Promise<TransactionsResult> =>
@@ -478,21 +638,28 @@ export default function Transactions() {
           </Suspense>
         </div>
 
-        <div className="flex items-center gap-1 mb-4">
-          {TYPE_FILTERS.map((f) => (
-            <button
-              key={f.value}
-              type="button"
-              onClick={() => setTypeFilter(f.value)}
-              className={`text-[12px] px-2.5 py-1 rounded-md border transition-colors cursor-pointer ${
-                typeFilter === f.value
-                  ? 'bg-foreground text-background border-foreground'
-                  : 'bg-card text-muted-foreground border-border/50 hover:text-foreground'
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
+        <div className="inline-flex items-center gap-0.5 p-0.5 mb-4 rounded-lg bg-muted border border-border/60">
+          {TYPE_FILTERS.map((f) => {
+            const active = typeFilter === f.value;
+            const { Icon } = typeMeta(f.value);
+            return (
+              <button
+                key={f.value}
+                type="button"
+                aria-pressed={active}
+                onClick={() => setTypeFilter(f.value)}
+                className={cn(
+                  'inline-flex items-center gap-1.5 text-[12px] font-medium px-3 py-1.5 rounded-md transition-colors cursor-pointer',
+                  active
+                    ? 'bg-card text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                <Icon className="w-3.5 h-3.5" />
+                {f.label}
+              </button>
+            );
+          })}
         </div>
 
         <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-2.5">
@@ -506,6 +673,7 @@ export default function Transactions() {
           <Suspense fallback={<SkeletonList />}>
             <TransactionsBody
               promise={transactionsPromise}
+              standingsPromise={standingsPromise}
               typeFilter={typeFilter}
             />
           </Suspense>

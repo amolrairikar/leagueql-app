@@ -24,11 +24,23 @@ The Transactions nav item SHALL appear only for Sleeper leagues and be hidden fo
 - **THEN** the Transactions sidebar item appears; for ESPN it is hidden
 
 ### Requirement: Season selector and type filter
-The season selector SHALL list all onboarded seasons and default to the latest, and the type filter SHALL narrow the wire to All / Trades / Waivers / Free Agents.
+The season selector SHALL list all onboarded seasons and default to the latest, and the type
+filter SHALL narrow the wire to Trades / Waivers / Free Agents, defaulting to Trades (there is
+no "All" option).
 
 #### Scenario: Select and filter
 - **WHEN** the page loads
-- **THEN** the season selector lists all onboarded seasons defaulting to the latest, and the type filter narrows the transaction wire by type
+- **THEN** the season selector lists all onboarded seasons defaulting to the latest, and the
+  type filter defaults to Trades and narrows the transaction wire to the selected type
+
+#### Scenario: Default shows trades
+- **WHEN** the page first renders a season with transactions
+- **THEN** only trade transactions are listed and the Trades filter is the selected option, with
+  no "All" option offered
+
+#### Scenario: Narrow to another type
+- **WHEN** the Waivers or Free Agents filter is selected
+- **THEN** the wire narrows to only that type's transactions
 
 ### Requirement: Empty and error states
 A season with no transactions SHALL show an empty state and a load error SHALL show an inline error (no global banner).
