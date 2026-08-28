@@ -2,7 +2,7 @@ import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { defineFeature, loadFeature } from 'jest-cucumber';
 
-import type { TransactionItem } from '../api-calls';
+import type { MatchupItem, TransactionItem } from '../api-calls';
 import Transactions from '../transactions';
 
 import { avatarColor } from '@/lib/color-constants';
@@ -155,6 +155,116 @@ const STANDINGS = [
     team_logo: 'https://logos.test/alice.png',
   },
   { team_id: '2', team_name: 'Team Bob', team_logo: BOB_LOGO },
+];
+
+// A single trade in week 3: Bob (roster 2) receives "Star Player", Alice (roster 1) receives
+// "Role Player" plus a Round 2 pick. Used by the rest-of-season points scenarios below.
+const ROS_TRANSACTIONS: TransactionItem[] = [
+  {
+    season: '2024',
+    transaction_id: 'tr',
+    type: 'trade',
+    week: 3,
+    created: 1700000000000,
+    roster_ids: ['1', '2'],
+    teams: [
+      { roster_id: '1', team_name: 'Team Alice', display_name: 'Alice' },
+      { roster_id: '2', team_name: 'Team Bob', display_name: 'Bob' },
+    ],
+    adds: [
+      {
+        player_id: '10',
+        player_name: 'Star Player',
+        position: 'RB',
+        roster_id: '2',
+      },
+      {
+        player_id: '11',
+        player_name: 'Role Player',
+        position: 'WR',
+        roster_id: '1',
+      },
+    ],
+    drops: [
+      {
+        player_id: '10',
+        player_name: 'Star Player',
+        position: 'RB',
+        roster_id: '1',
+      },
+      {
+        player_id: '11',
+        player_name: 'Role Player',
+        position: 'WR',
+        roster_id: '2',
+      },
+    ],
+    draft_picks: [
+      { round: 2, season: '2024', from_roster_id: '2', to_roster_id: '1' },
+    ],
+    waiver_bid: null,
+  },
+];
+
+/** A minimal matchup box score placing each `{id, pts}` player in week `week`. */
+function mkMatchup(
+  week: number,
+  players: { id: number; pts: number }[],
+): MatchupItem {
+  return {
+    team_a_id: '1',
+    team_a_display_name: 'Alice',
+    team_a_team_name: 'Team Alice',
+    team_a_team_logo: null,
+    team_a_score: 0,
+    team_a_starters: players.map((p) => ({
+      player_id: p.id,
+      full_name: `Player ${p.id}`,
+      points_scored: p.pts,
+      position: 'RB',
+    })),
+    team_a_bench: [],
+    team_a_primary_owner_id: 'o1',
+    team_a_secondary_owner_id: null,
+    team_b_id: '2',
+    team_b_display_name: 'Bob',
+    team_b_team_name: 'Team Bob',
+    team_b_team_logo: null,
+    team_b_score: 0,
+    team_b_starters: [],
+    team_b_bench: [],
+    team_b_primary_owner_id: 'o2',
+    team_b_secondary_owner_id: null,
+    playoff_tier_type: 'NONE',
+    playoff_round: null,
+    winner: '',
+    loser: '',
+    week: String(week),
+    season: '2024',
+  };
+}
+
+// Star Player (id 10) scores 100 in week 2 (before the trade, excluded), then 30 + 40 after it
+// → 70.00 for Bob. Role Player (id 11) scores 10 + 15 → 25.00 for Alice. Bob wins by 45.00.
+const ROS_MATCHUPS: MatchupItem[] = [
+  mkMatchup(2, [{ id: 10, pts: 100 }]),
+  mkMatchup(3, [
+    { id: 10, pts: 30 },
+    { id: 11, pts: 10 },
+  ]),
+  mkMatchup(4, [
+    { id: 10, pts: 40 },
+    { id: 11, pts: 15 },
+  ]),
+];
+
+// Both sides score 20.00 from the trade onward → a tie.
+const ROS_MATCHUPS_TIE: MatchupItem[] = [
+  mkMatchup(2, [{ id: 10, pts: 100 }]),
+  mkMatchup(3, [
+    { id: 10, pts: 20 },
+    { id: 11, pts: 20 },
+  ]),
 ];
 
 defineFeature(feature, (test) => {
@@ -348,6 +458,124 @@ defineFeature(feature, (test) => {
         expect(logo.parentElement).toHaveStyle({ background: avatarColor(1) });
       },
     );
+  });
+
+  test("A trade shows each side's rest-of-season points and the winner", ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    given('a trade with matchup box scores is available', () => {
+      server.use(
+        leagueQuery({ TRANSACTIONS: ROS_TRANSACTIONS, MATCHUPS: ROS_MATCHUPS }),
+      );
+    });
+    when('I open the transactions page', async () => {
+      await renderRoute(<Transactions />, { route: '/transactions', league });
+    });
+    then(/^I see the points "(.*)"$/, async (pts) => {
+      expect((await screen.findAllByText(pts)).length).toBeGreaterThan(0);
+    });
+    and(/^I see the points "(.*)"$/, async (pts) => {
+      expect((await screen.findAllByText(pts)).length).toBeGreaterThan(0);
+    });
+    and(/^the trade winner is "(.*)" by "(.*)"$/, async (team, margin) => {
+      expect(
+        await screen.findByText(`${team} won by ${margin} pts`),
+      ).toBeInTheDocument();
+    });
+  });
+
+  test('Rest-of-season points exclude weeks before the trade', ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    given('a trade with matchup box scores is available', () => {
+      server.use(
+        leagueQuery({ TRANSACTIONS: ROS_TRANSACTIONS, MATCHUPS: ROS_MATCHUPS }),
+      );
+    });
+    when('I open the transactions page', async () => {
+      await renderRoute(<Transactions />, { route: '/transactions', league });
+    });
+    then(/^I see the points "(.*)"$/, async (pts) => {
+      expect((await screen.findAllByText(pts)).length).toBeGreaterThan(0);
+    });
+    // Star Player's week-2 (pre-trade) 100 points must be excluded; 170.00 would mean it wasn't.
+    and(/^I do not see the points "(.*)"$/, (pts) => {
+      expect(screen.queryByText(pts)).toBeNull();
+    });
+  });
+
+  test('A traded pick shows no points', ({ given, when, then, and }) => {
+    given('a trade with matchup box scores is available', () => {
+      server.use(
+        leagueQuery({ TRANSACTIONS: ROS_TRANSACTIONS, MATCHUPS: ROS_MATCHUPS }),
+      );
+    });
+    when('I open the transactions page', async () => {
+      await renderRoute(<Transactions />, { route: '/transactions', league });
+    });
+    then(/^I see the traded pick "(.*)"$/, async (label) => {
+      expect(
+        (await screen.findAllByText(label, { exact: false })).length,
+      ).toBeGreaterThan(0);
+    });
+    and(/^a received item shows no points "(.*)"$/, async (dash) => {
+      expect((await screen.findAllByText(dash)).length).toBeGreaterThan(0);
+    });
+  });
+
+  test('Evenly scored trade sides show a tie', ({ given, when, then, and }) => {
+    given('a trade with evenly scored matchup box scores is available', () => {
+      server.use(
+        leagueQuery({
+          TRANSACTIONS: ROS_TRANSACTIONS,
+          MATCHUPS: ROS_MATCHUPS_TIE,
+        }),
+      );
+    });
+    when('I open the transactions page', async () => {
+      await renderRoute(<Transactions />, { route: '/transactions', league });
+    });
+    then(/^I see the trade tie message "(.*)"$/, async (msg) => {
+      expect(
+        (await screen.findAllByText(msg, { exact: false })).length,
+      ).toBeGreaterThan(0);
+    });
+    and('there is no trade winner', () => {
+      expect(screen.queryByText(/won by/)).toBeNull();
+    });
+  });
+
+  test('A trade renders without points when box scores are unavailable', ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    given('a trade with no matchup box scores is available', () => {
+      // No MATCHUPS key → the matchups query 404s, which degrades silently to no points.
+      server.use(leagueQuery({ TRANSACTIONS: ROS_TRANSACTIONS }));
+    });
+    when('I open the transactions page', async () => {
+      await renderRoute(<Transactions />, { route: '/transactions', league });
+    });
+    then(/^I see the received player "(.*)"$/, async (name) => {
+      expect(
+        (await screen.findAllByText(name, { exact: false })).length,
+      ).toBeGreaterThan(0);
+    });
+    and('there is no trade winner', () => {
+      expect(screen.queryByText(/won by/)).toBeNull();
+      expect(screen.queryByText(/Even/)).toBeNull();
+    });
+    and(/^I do not see the message "(.*)"$/, (msg) => {
+      expect(screen.queryByText(msg)).toBeNull();
+    });
   });
 
   test('A season with no transactions shows an empty state', ({

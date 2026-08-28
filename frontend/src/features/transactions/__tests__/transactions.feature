@@ -45,6 +45,38 @@ Feature: Transactions (frontend/transactions)
     When I open the transactions page
     Then owner "Bob" shows the standings team logo and standings color
 
+  Scenario: A trade shows each side's rest-of-season points and the winner
+    Given a trade with matchup box scores is available
+    When I open the transactions page
+    Then I see the points "70.00"
+    And I see the points "25.00"
+    And the trade winner is "Bob" by "+45.00"
+
+  Scenario: Rest-of-season points exclude weeks before the trade
+    Given a trade with matchup box scores is available
+    When I open the transactions page
+    Then I see the points "70.00"
+    And I do not see the points "170.00"
+
+  Scenario: A traded pick shows no points
+    Given a trade with matchup box scores is available
+    When I open the transactions page
+    Then I see the traded pick "2024 Round 2 pick"
+    And a received item shows no points "—"
+
+  Scenario: Evenly scored trade sides show a tie
+    Given a trade with evenly scored matchup box scores is available
+    When I open the transactions page
+    Then I see the trade tie message "Even"
+    And there is no trade winner
+
+  Scenario: A trade renders without points when box scores are unavailable
+    Given a trade with no matchup box scores is available
+    When I open the transactions page
+    Then I see the received player "Star Player"
+    And there is no trade winner
+    And I do not see the message "Failed to load matchups."
+
   Scenario: A season with no transactions shows an empty state
     Given the league has no transactions
     When I open the transactions page

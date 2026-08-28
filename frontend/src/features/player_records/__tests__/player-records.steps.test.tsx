@@ -19,7 +19,7 @@ const MATCHUPS_WITH_UNPLAYED: MatchupItem[] = [
     team_b_score: 0,
     team_a_starters: [
       {
-        player_id: 'phantom',
+        player_id: 9999,
         full_name: 'Phantom Player',
         points_scored: 0,
         position: 'QB',
