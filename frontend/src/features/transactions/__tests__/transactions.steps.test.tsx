@@ -1,4 +1,5 @@
 import { screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { defineFeature, loadFeature } from 'jest-cucumber';
 
 import type { TransactionItem } from '../api-calls';
@@ -157,6 +158,57 @@ const STANDINGS = [
 ];
 
 defineFeature(feature, (test) => {
+  test('Trades are shown by default with no All option', ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    given('transactions data is available', () => {
+      server.use(leagueQuery({ TRANSACTIONS }));
+    });
+    when('I open the transactions page', async () => {
+      await renderRoute(<Transactions />, { route: '/transactions', league });
+    });
+    then(/^I see the received player "(.*)"$/, async (name) => {
+      expect(
+        (await screen.findAllByText(name, { exact: false })).length,
+      ).toBeGreaterThan(0);
+    });
+    and(/^I do not see the player "(.*)"$/, (name) => {
+      // "Wide Receiver" is a waiver add, hidden while the default Trades filter is active.
+      expect(screen.queryByText(name, { exact: false })).toBeNull();
+    });
+    and('there is no "All" filter option', () => {
+      expect(screen.queryByRole('button', { name: 'All' })).toBeNull();
+    });
+  });
+
+  test('Selecting Free Agents narrows the wire', ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    given('transactions data is available', () => {
+      server.use(leagueQuery({ TRANSACTIONS }));
+    });
+    when('I open the transactions page', async () => {
+      await renderRoute(<Transactions />, { route: '/transactions', league });
+    });
+    and(/^I select the "(.*)" filter$/, async (label) => {
+      await userEvent.click(screen.getByRole('button', { name: label }));
+    });
+    then(/^I see the received player "(.*)"$/, async (name) => {
+      expect(
+        (await screen.findAllByText(name, { exact: false })).length,
+      ).toBeGreaterThan(0);
+    });
+    and(/^I do not see the player "(.*)"$/, (name) => {
+      expect(screen.queryByText(name, { exact: false })).toBeNull();
+    });
+  });
+
   test('A trade shows only what each team received', ({
     given,
     when,
@@ -203,6 +255,9 @@ defineFeature(feature, (test) => {
     });
     when('I open the transactions page', async () => {
       await renderRoute(<Transactions />, { route: '/transactions', league });
+    });
+    and(/^I select the "(.*)" filter$/, async (label) => {
+      await userEvent.click(screen.getByRole('button', { name: label }));
     });
     then(/^I see the received player "(.*)"$/, async (name) => {
       expect(
@@ -283,7 +338,10 @@ defineFeature(feature, (test) => {
     then(
       'owner "Bob" shows the standings team logo and standings color',
       async () => {
-        const logo = await screen.findByRole('img', { name: 'Team Bob' });
+        // Scope to the summary table: the transaction cards also render Bob's avatar (same
+        // standings logo), so a page-wide query would match more than one image.
+        const table = await screen.findByRole('table');
+        const logo = within(table).getByRole('img', { name: 'Team Bob' });
         expect(logo).toHaveAttribute('src', BOB_LOGO);
         // Bob is roster_id 2 → standings index 1, so the avatar uses avatarColor(1)
         // even though he is the first row in the (total-sorted) summary.
