@@ -5,6 +5,7 @@ import {
   Gavel,
   type LucideIcon,
   Repeat,
+  Trophy,
   UserPlus,
 } from 'lucide-react';
 import { type ReactNode, Suspense, use, useMemo, useState } from 'react';
@@ -17,10 +18,15 @@ import {
   getSeasonStandings,
 } from '@/features/season_standings/api-calls';
 import {
+  type MatchupItem,
   type TransactionItem,
   type TransactionPlayer,
   type TransactionTeam,
+  type WeeklyPlayerPoints,
+  buildWeeklyPlayerPoints,
+  getSeasonMatchups,
   getTransactions,
+  rosPointsFor,
 } from '@/features/transactions/api-calls';
 import { avatarColor } from '@/lib/color-constants';
 import { getLeagueCookies } from '@/lib/cookie-handler';
@@ -30,6 +36,8 @@ import { cn } from '@/lib/utils';
 type TransactionsResult = Result<TransactionItem[]>;
 
 type StandingsResult = Result<SeasonStandingsItem[]>;
+
+type MatchupsResult = Result<MatchupItem[]>;
 
 /**
  * Per-type presentation: label, icon, and the accent classes for the type chip. The commissioner
@@ -179,12 +187,18 @@ function buildOwnerSummary(transactions: TransactionItem[]): OwnerSummaryRow[] {
   );
 }
 
-/** A single add (green ↑) or drop (red ↓) row inside a team panel. */
+/**
+ * A single add (green ↑) or drop (red ↓) row inside a team panel. `points`, when provided,
+ * renders right-aligned in the foreground color — the rest-of-season points for a traded
+ * player (a `—` placeholder for a traded pick, which scores nothing).
+ */
 function MoveRow({
   direction,
+  points,
   children,
 }: {
   direction: 'add' | 'drop';
+  points?: ReactNode;
   children: ReactNode;
 }) {
   const Icon = direction === 'add' ? ArrowUp : ArrowDown;
@@ -198,23 +212,42 @@ function MoveRow({
       )}
     >
       <Icon className="w-3 h-3 shrink-0" />
-      {children}
+      <span className="min-w-0 truncate">{children}</span>
+      {points != null && (
+        <span className="ml-auto shrink-0 text-[12px] font-medium tabular-nums text-foreground">
+          {points}
+        </span>
+      )}
     </li>
   );
 }
 
-/** One team's panel within a transaction card: its avatar, name, and the moves it received. */
+/**
+ * One team's panel within a transaction card: its avatar, name, and the moves it received.
+ *
+ * For a two-team trade with matchup box scores loaded, `weekly` is non-null and each acquired
+ * player shows their rest-of-season points; the panel gains a per-side total footer, and the
+ * higher-scoring side (`isWinner`) is tinted and tagged "Won".
+ */
 function TeamPanel({
   txn,
   rosterId,
   isTrade,
   visual,
+  weekly,
+  sideTotal,
+  isWinner,
 }: {
   txn: TransactionItem;
   rosterId: string;
   isTrade: boolean;
   visual: OwnerVisual | undefined;
+  weekly: WeeklyPlayerPoints | null;
+  sideTotal: number | null;
+  isWinner: boolean;
 }) {
+  const showRos = weekly != null;
+  const tradeWeek = txn.week ?? 0;
   const adds = txn.adds.filter((a) => a.roster_id === rosterId);
   // In a trade, every drop is the other side's add, so showing both per team is
   // redundant — each team's panel shows only what it received. Waivers and free
@@ -240,8 +273,20 @@ function TeamPanel({
     picksIn.length === 0 &&
     picksOut.length === 0;
 
+  // A traded pick scores nothing; show a muted dash so the points column still lines up.
+  const pickPoints = showRos ? (
+    <span className="text-muted-foreground font-normal">—</span>
+  ) : undefined;
+
   return (
-    <div className="flex-1 min-w-0 rounded-lg border border-border/50 bg-muted/40 p-3">
+    <div
+      className={cn(
+        'flex-1 min-w-0 rounded-lg border p-3',
+        isWinner
+          ? 'border-emerald-500/30 bg-emerald-500/5'
+          : 'border-border/50 bg-muted/40',
+      )}
+    >
       <div className="flex items-center gap-2 mb-2">
         <TeamAvatar
           teamLogo={visual?.teamLogo ?? null}
@@ -249,18 +294,32 @@ function TeamPanel({
           ownerUsername={ownerUsername}
           color={avatarColor(visual?.colorIndex ?? 0)}
         />
-        <span className="text-[13px] font-semibold text-foreground truncate">
+        <span className="min-w-0 text-[13px] font-semibold text-foreground truncate">
           {teamLabel(txn, rosterId)}
         </span>
+        {isWinner && (
+          <span className="ml-auto shrink-0 inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+            <Trophy className="w-3 h-3" />
+            Won
+          </span>
+        )}
       </div>
       <ul className="flex flex-col gap-1">
         {adds.map((p) => (
-          <MoveRow key={`add-${p.player_id}`} direction="add">
+          <MoveRow
+            key={`add-${p.player_id}`}
+            direction="add"
+            points={
+              showRos
+                ? rosPointsFor(p.player_id, tradeWeek, weekly).toFixed(2)
+                : undefined
+            }
+          >
             {playerLabel(p)}
           </MoveRow>
         ))}
         {picksIn.map((p, i) => (
-          <MoveRow key={`pickin-${i}`} direction="add">
+          <MoveRow key={`pickin-${i}`} direction="add" points={pickPoints}>
             {p.season} Round {p.round} pick
           </MoveRow>
         ))}
@@ -278,16 +337,50 @@ function TeamPanel({
           <li className="text-[12px] text-muted-foreground">No moves</li>
         )}
       </ul>
+      {showRos && sideTotal != null && (
+        <div className="mt-2.5 pt-2 border-t border-border/50 flex items-baseline justify-between gap-2">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">
+            Rest-of-season pts
+          </span>
+          <span
+            className={cn(
+              'text-[15px] font-semibold tabular-nums',
+              isWinner
+                ? 'text-emerald-600 dark:text-emerald-400'
+                : 'text-foreground',
+            )}
+          >
+            {sideTotal.toFixed(2)}
+          </span>
+        </div>
+      )}
     </div>
   );
+}
+
+/** Sum of the rest-of-season points a roster's acquired players scored, for a trade. */
+function sideTotal(
+  txn: TransactionItem,
+  rosterId: string,
+  weekly: WeeklyPlayerPoints,
+): number {
+  const total = txn.adds
+    .filter((a) => a.roster_id === rosterId)
+    .reduce(
+      (sum, a) => sum + rosPointsFor(a.player_id, txn.week ?? 0, weekly),
+      0,
+    );
+  return Math.round(total * 100) / 100;
 }
 
 function TransactionCard({
   txn,
   visuals,
+  weekly,
 }: {
   txn: TransactionItem;
   visuals: Map<string, OwnerVisual>;
+  weekly: WeeklyPlayerPoints | null;
 }) {
   const date = new Date(txn.created).toLocaleDateString(undefined, {
     month: 'short',
@@ -297,13 +390,26 @@ function TransactionCard({
   const meta = typeMeta(txn.type);
   const isTrade = txn.type === 'trade';
   const rosterIds = involvedRosterIds(txn);
-  const panel = (rosterId: string) => (
+
+  // Rest-of-season points only apply to a two-team trade, and only once the season's matchup
+  // box scores have loaded. Totals drive both the per-side footers and the winner comparison.
+  const showRos = isTrade && rosterIds.length === 2 && weekly != null;
+  const totals = showRos
+    ? rosterIds.map((rid) => sideTotal(txn, rid, weekly))
+    : null;
+  const winnerIndex =
+    totals && totals[0] !== totals[1] ? (totals[0] > totals[1] ? 0 : 1) : null;
+
+  const panel = (rosterId: string, index: number) => (
     <TeamPanel
       key={rosterId}
       txn={txn}
       rosterId={rosterId}
       isTrade={isTrade}
       visual={visuals.get(rosterId)}
+      weekly={showRos ? weekly : null}
+      sideTotal={totals ? totals[index] : null}
+      isWinner={winnerIndex === index}
     />
   );
 
@@ -333,11 +439,11 @@ function TransactionCard({
 
       {isTrade && rosterIds.length === 2 ? (
         <div className="flex flex-col sm:flex-row sm:items-stretch gap-2">
-          {panel(rosterIds[0])}
+          {panel(rosterIds[0], 0)}
           <div className="hidden sm:flex items-center justify-center shrink-0 px-1 text-muted-foreground">
             <ArrowLeftRight className="w-4 h-4" />
           </div>
-          {panel(rosterIds[1])}
+          {panel(rosterIds[1], 1)}
         </div>
       ) : (
         <div
@@ -346,7 +452,23 @@ function TransactionCard({
             rosterIds.length > 1 && 'sm:grid-cols-2',
           )}
         >
-          {rosterIds.map(panel)}
+          {rosterIds.map((rid, i) => panel(rid, i))}
+        </div>
+      )}
+
+      {showRos && totals && (
+        <div className="mt-3 flex flex-col items-center gap-1 text-center">
+          <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold tabular-nums text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 rounded-full px-3 py-1">
+            <Trophy className="w-3 h-3 shrink-0" />
+            {winnerIndex === null
+              ? 'Even — both sides scored the same'
+              : `${teamLabel(txn, rosterIds[winnerIndex])} won by +${Math.abs(
+                  totals[0] - totals[1],
+                ).toFixed(2)} pts`}
+          </span>
+          <span className="text-[10.5px] text-muted-foreground">
+            Week {txn.week} → end of playoffs · every game each player scored
+          </span>
         </div>
       )}
     </div>
@@ -512,14 +634,17 @@ function SummaryTable({
 function TransactionsBody({
   promise,
   standingsPromise,
+  matchupsPromise,
   typeFilter,
 }: {
   promise: Promise<TransactionsResult>;
   standingsPromise: Promise<StandingsResult>;
+  matchupsPromise: Promise<MatchupsResult>;
   typeFilter: TypeFilter;
 }) {
   const result = use(promise);
   const standingsResult = use(standingsPromise);
+  const matchupsResult = use(matchupsPromise);
 
   if (!result.ok) {
     return (
@@ -536,6 +661,12 @@ function TransactionsBody({
     standingsResult.ok ? standingsResult.data : [],
   );
 
+  // Rest-of-season points for trades come from the season's matchup box scores. A missing or
+  // failed matchups load degrades silently — trades render without the points additions.
+  const weekly = matchupsResult.ok
+    ? buildWeeklyPlayerPoints(matchupsResult.data)
+    : null;
+
   const transactions = [...result.data]
     .filter((t) => t.type === typeFilter)
     .sort((a, b) => b.created - a.created);
@@ -551,7 +682,12 @@ function TransactionsBody({
   return (
     <div className="flex flex-col gap-3">
       {transactions.map((txn) => (
-        <TransactionCard key={txn.transaction_id} txn={txn} visuals={visuals} />
+        <TransactionCard
+          key={txn.transaction_id}
+          txn={txn}
+          visuals={visuals}
+          weekly={weekly}
+        />
       ))}
     </div>
   );
@@ -608,6 +744,22 @@ export default function Transactions() {
               (res) => res.data,
             ),
             'Failed to load standings.',
+          )
+        : Promise.resolve({ ok: true as const, data: [] }),
+    [leagueId, platform, selectedSeason],
+  );
+
+  // Matchup box scores drive the rest-of-season points shown on trades. Fetched in parallel
+  // with the transactions themselves; a missing/failed load is tolerated (trades render
+  // without the points additions), so it never blocks or errors the wire.
+  const matchupsPromise = useMemo(
+    (): Promise<MatchupsResult> =>
+      leagueId && selectedSeason
+        ? toResult(
+            getSeasonMatchups(leagueId, platform, selectedSeason).then(
+              (res) => res.data,
+            ),
+            'Failed to load matchups.',
           )
         : Promise.resolve({ ok: true as const, data: [] }),
     [leagueId, platform, selectedSeason],
@@ -674,6 +826,7 @@ export default function Transactions() {
             <TransactionsBody
               promise={transactionsPromise}
               standingsPromise={standingsPromise}
+              matchupsPromise={matchupsPromise}
               typeFilter={typeFilter}
             />
           </Suspense>

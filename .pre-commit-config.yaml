@@ -60,8 +60,8 @@ repos:
         pass_filenames: false
       - id: npm-build
         name: Run npm build
-        description: Runs npm run build to ensure the project compiles before committing.
-        entry: cd frontend && npm run build
+        description: "Runs a forced clean type-check + build (tsc -b --force) so a stale incremental cache can't hide type errors that CI's fresh clone would catch."
+        entry: cd frontend && npm run build:ci
         language: system
         files: \.(js|jsx|ts|tsx)$
         pass_filenames: false

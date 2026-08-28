@@ -15,14 +15,14 @@ export const LEAGUE = {
 
 const starters = (a: string, b: string) => [
   {
-    player_id: 'p1',
+    player_id: 1,
     full_name: a,
     points_scored: 30,
     position: 'QB',
     fantasy_position: 'QB',
   },
   {
-    player_id: 'p2',
+    player_id: 2,
     full_name: b,
     points_scored: 20,
     position: 'RB',
@@ -93,7 +93,7 @@ export const MATCHUPS = [
     team_a_starters: starters('Pat Quarterback', 'Run Back'),
     team_a_bench: [
       {
-        player_id: 'p3',
+        player_id: 3,
         full_name: 'Wide Receiver',
         points_scored: 10,
         position: 'WR',
@@ -109,7 +109,7 @@ export const MATCHUPS = [
     team_b_starters: starters('Quincy Back', 'Tight Endzone'),
     team_b_bench: [
       {
-        player_id: 'p6',
+        player_id: 6,
         full_name: 'Kicker Kid',
         points_scored: 8,
         position: 'K',
