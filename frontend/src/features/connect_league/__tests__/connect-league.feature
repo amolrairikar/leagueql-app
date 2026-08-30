@@ -28,6 +28,12 @@ Feature: Connect league onboarding flow (frontend/connect-league)
     When I onboard Sleeper league "100"
     Then I see a failure message "We could not reach Sleeper right now."
 
+  Scenario: A not-yet-drafted league shows the not-started message without a support prompt
+    Given onboarding will fail as NOT_STARTED with reason "This league hasn't started a season yet on ESPN. Connect it once your draft is complete and the season is underway."
+    When I onboard Sleeper league "100"
+    Then I see a failure message "hasn't started a season yet on ESPN"
+    And I do not see a contact support prompt
+
   Scenario: Opening an already-onboarded league as a non-owner routes home without refreshing
     Given the league is already onboarded and I am not its owner
     When I onboard Sleeper league "100"

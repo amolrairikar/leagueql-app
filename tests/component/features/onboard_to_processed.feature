@@ -115,3 +115,13 @@ Feature: Onboard-to-processed pipeline (backend/league-onboarding, backend/data-
     And a JOB_STATUS "FAILED" exists for the job
     And the JOB_STATUS failure_code is "ESPN_AUTH"
     And no METADATA item exists for the onboarded league
+
+  Scenario: A brand-new undrafted ESPN league fails NOT_STARTED and writes no data (backend/league-onboarding)
+    # ESPNClient excludes a not-yet-drafted latest season; a league whose only season
+    # hasn't drafted resolves to no seasons, so ONBOARD is a NOT_STARTED user error with
+    # nothing written — mirroring the Sleeper pre_draft behavior.
+    When the onboarder runs an ONBOARD for an ESPN league that has not drafted
+    Then the onboarder returns status 400
+    And a JOB_STATUS "FAILED" exists for the job
+    And the JOB_STATUS failure_code is "NOT_STARTED"
+    And no METADATA item exists for the onboarded league

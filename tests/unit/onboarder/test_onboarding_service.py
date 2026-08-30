@@ -94,12 +94,21 @@ class TestOnboardingServiceInit:
         assert svc.canonical_league_id == "existing-id"
 
     def test_is_refresh_passed_to_espn_client(self, onboarder_onboarding_service):
-        svc = onboarder_onboarding_service.OnboardingService(
-            league_id="123",
-            platform="ESPN",
-            request_type="REFRESH",
-            latest_season="2024",
-        )
+        # A refresh resolves seasons via the latest-season status request; a
+        # drafted latest season yields just that season.
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = {
+            "status": {"previousSeasons": [2022, 2023]},
+            "draftDetail": {"drafted": True},
+        }
+        with patch("requests.get", return_value=mock_resp):
+            svc = onboarder_onboarding_service.OnboardingService(
+                league_id="123",
+                platform="ESPN",
+                request_type="REFRESH",
+                latest_season="2024",
+            )
         assert svc.client.seasons == ["2024"]
 
     def test_http_error_in_espn_client_init_propagates(

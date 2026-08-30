@@ -14,13 +14,15 @@ const POLL_TIMEOUT_MS = 150000;
 export interface PollResult {
   status: 'success' | 'failed';
   failureReason?: string;
+  failureCode?: string;
 }
 
 /**
  * Poll an onboard/refresh/migrate job's status until it terminates.
  *
- * Returns `success` on COMPLETED, `failed` (with the backend `failureReason`)
- * on FAILED, and `failed` after too many consecutive errors or the timeout.
+ * Returns `success` on COMPLETED, `failed` (with the backend `failureReason`
+ * and `failureCode`) on FAILED, and `failed` after too many consecutive errors
+ * or the timeout.
  */
 export async function pollForCompletion(jobId: string): Promise<PollResult> {
   const deadline = Date.now() + POLL_TIMEOUT_MS;
@@ -30,13 +32,17 @@ export async function pollForCompletion(jobId: string): Promise<PollResult> {
     await sleep(POLL_INTERVAL_MS);
     try {
       const statusData = await getJobStatus(jobId);
-      const { status, failure_reason } = statusData.data;
+      const { status, failure_reason, failure_code } = statusData.data;
       consecutiveErrors = 0;
       if (status === 'COMPLETED') {
         return { status: 'success' };
       }
       if (status === 'FAILED') {
-        return { status: 'failed', failureReason: failure_reason ?? undefined };
+        return {
+          status: 'failed',
+          failureReason: failure_reason ?? undefined,
+          failureCode: failure_code ?? undefined,
+        };
       }
     } catch {
       consecutiveErrors += 1;
