@@ -42,11 +42,19 @@ const onboardOk = http.post(`${API}/leagues`, () =>
   ),
 );
 
-function jobStatus(status: string, failureReason: string | null = null) {
+function jobStatus(
+  status: string,
+  failureReason: string | null = null,
+  failureCode: string | null = null,
+) {
   return http.get(`${API}/jobs/:id`, () =>
     HttpResponse.json({
       detail: 'Found job status',
-      data: { status, failure_code: null, failure_reason: failureReason },
+      data: {
+        status,
+        failure_code: failureCode,
+        failure_reason: failureReason,
+      },
     }),
   );
 }
@@ -229,6 +237,35 @@ defineFeature(feature, (test) => {
     });
     then(/^I see a failure message "(.*)"$/, (reason) => {
       expect(screen.getByText(new RegExp(reason))).toBeInTheDocument();
+    });
+  });
+
+  test('A not-yet-drafted league shows the not-started message without a support prompt', ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    given(
+      /^onboarding will fail as NOT_STARTED with reason "(.*)"$/,
+      (reason) => {
+        server.use(
+          statefulGetLeague(),
+          onboardOk,
+          jobStatus('FAILED', reason, 'NOT_STARTED'),
+        );
+      },
+    );
+    when(/^I onboard Sleeper league "(.*)"$/, async (leagueId) => {
+      await onboardFlow(leagueId);
+    });
+    then(/^I see a failure message "(.*)"$/, (reason) => {
+      expect(screen.getByText(new RegExp(reason))).toBeInTheDocument();
+    });
+    and('I do not see a contact support prompt', () => {
+      expect(
+        screen.queryByText(/If the error persists/),
+      ).not.toBeInTheDocument();
     });
   });
 

@@ -63,6 +63,7 @@ export default function LeagueConnect() {
     'ONBOARD' | 'REFRESH' | null
   >(null);
   const [failureReason, setFailureReason] = useState<string | null>(null);
+  const [failureCode, setFailureCode] = useState<string | null>(null);
   const [loadingMessage, setLoadingMessage] = useState('');
   const loadingStartRef = useRef<number | null>(null);
   const loadingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
@@ -150,6 +151,7 @@ export default function LeagueConnect() {
     setPollStatus('idle');
     setLastRequestType(null);
     setFailureReason(null);
+    setFailureCode(null);
     const apiPlatform = API_PLATFORM[data.platform];
 
     let requestType: 'ONBOARD' | 'REFRESH';
@@ -250,6 +252,7 @@ export default function LeagueConnect() {
       : { status: 'failed' as const };
     if (result.status === 'failed') {
       setFailureReason(result.failureReason ?? null);
+      setFailureCode(result.failureCode ?? null);
     }
     setPollStatus(result.status);
     if (result.status === 'success') {
@@ -501,14 +504,21 @@ export default function LeagueConnect() {
                     : lastRequestType === 'REFRESH'
                       ? 'League refresh failed. Please try again. '
                       : 'League onboarding failed. Please try again. '}
-                  If the error persists, contact{' '}
-                  <a
-                    href="mailto:support@leagueql.com"
-                    className="underline underline-offset-4"
-                  >
-                    support
-                  </a>
-                  .
+                  {/* NOT_STARTED is a user-action state (the league simply hasn't
+                      drafted yet), not an error, so the contact-support prompt
+                      does not apply. */}
+                  {failureCode !== 'NOT_STARTED' && (
+                    <>
+                      If the error persists, contact{' '}
+                      <a
+                        href="mailto:support@leagueql.com"
+                        className="underline underline-offset-4"
+                      >
+                        support
+                      </a>
+                      .
+                    </>
+                  )}
                 </AlertDescription>
               </Alert>
             )}
