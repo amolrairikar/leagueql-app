@@ -6,6 +6,25 @@ import pytest
 import requests
 
 
+@pytest.fixture(autouse=True)
+def default_espn_status():
+    """Default the latest-season status request to a drafted league.
+
+    ESPNClient construction now fetches the latest season's status (mTeam +
+    mDraftDetail) for both onboard and refresh to resolve seasons and check the
+    draft. Patch requests.get so client construction never hits the network;
+    tests exercising season resolution override this with their own patch.
+    """
+    mock_resp = MagicMock()
+    mock_resp.raise_for_status = MagicMock()
+    mock_resp.json.return_value = {
+        "status": {"previousSeasons": []},
+        "draftDetail": {"drafted": True},
+    }
+    with patch("requests.get", return_value=mock_resp):
+        yield mock_resp
+
+
 class TestFilterFunctions:
     def test_filter_users(self, onboarder_espn_client):
         data = {"members": [{"id": "m1"}], "teams": [{"id": 1}], "extra": "ignored"}
@@ -21,6 +40,12 @@ class TestFilterFunctions:
         data = {"draftDetail": {"picks": [{"playerId": 1}]}}
         result = onboarder_espn_client._filter_draft_picks(data, "2024", "draft_picks")
         assert result == {"draft_picks": [{"playerId": 1}]}
+
+    def test_filter_draft_picks_not_yet_drafted(self, onboarder_espn_client):
+        # A not-yet-drafted season omits "picks" entirely; tolerate it defensively.
+        data = {"draftDetail": {"drafted": False, "inProgress": False}}
+        result = onboarder_espn_client._filter_draft_picks(data, "2026", "draft_picks")
+        assert result == {"draft_picks": []}
 
     def test_filter_matchups(self, onboarder_espn_client):
         data = {
@@ -131,7 +156,10 @@ class TestESPNClientInit:
 class TestESPNClientGetSeasons:
     def test_get_league_seasons_success(self, onboarder_espn_client):
         mock_resp = MagicMock()
-        mock_resp.json.return_value = {"status": {"previousSeasons": [2022, 2023]}}
+        mock_resp.json.return_value = {
+            "status": {"previousSeasons": [2022, 2023]},
+            "draftDetail": {"drafted": True},
+        }
         mock_resp.raise_for_status = MagicMock()
         with patch("requests.get", return_value=mock_resp):
             client = onboarder_espn_client.ESPNClient(
@@ -139,6 +167,67 @@ class TestESPNClientGetSeasons:
             )
         assert "2022" in client.seasons
         assert "2024" in client.seasons
+
+    def test_get_league_seasons_excludes_undrafted_latest(self, onboarder_espn_client):
+        # A multi-season league whose latest season has not drafted: prior seasons
+        # onboard, the undrafted latest season is excluded.
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {
+            "status": {"previousSeasons": [2024, 2025]},
+            "draftDetail": {"drafted": False, "inProgress": False},
+        }
+        mock_resp.raise_for_status = MagicMock()
+        with patch("requests.get", return_value=mock_resp):
+            client = onboarder_espn_client.ESPNClient(
+                league_id="123", latest_season="2026"
+            )
+        assert client.seasons == ["2024", "2025"]
+        assert "2026" not in client.seasons
+
+    def test_get_league_seasons_new_undrafted_league_is_empty(
+        self, onboarder_espn_client
+    ):
+        # A brand-new league whose only season has not drafted yields no seasons,
+        # which the handler surfaces as NOT_STARTED.
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {
+            "status": {"previousSeasons": []},
+            "draftDetail": {"drafted": False, "inProgress": False},
+        }
+        mock_resp.raise_for_status = MagicMock()
+        with patch("requests.get", return_value=mock_resp):
+            client = onboarder_espn_client.ESPNClient(
+                league_id="123", latest_season="2026"
+            )
+        assert client.seasons == []
+
+    def test_refresh_excludes_undrafted_latest(self, onboarder_espn_client):
+        # A refresh of a not-yet-drafted current season yields no seasons (no-op).
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {
+            "status": {"previousSeasons": [2024, 2025]},
+            "draftDetail": {"drafted": False, "inProgress": False},
+        }
+        mock_resp.raise_for_status = MagicMock()
+        with patch("requests.get", return_value=mock_resp):
+            client = onboarder_espn_client.ESPNClient(
+                league_id="123", latest_season="2026", is_refresh=True
+            )
+        assert client.seasons == []
+
+    def test_refresh_drafted_latest_uses_single_season(self, onboarder_espn_client):
+        # A refresh of a drafted current season considers only that season.
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {
+            "status": {"previousSeasons": [2024, 2025]},
+            "draftDetail": {"drafted": True},
+        }
+        mock_resp.raise_for_status = MagicMock()
+        with patch("requests.get", return_value=mock_resp):
+            client = onboarder_espn_client.ESPNClient(
+                league_id="123", latest_season="2026", is_refresh=True
+            )
+        assert client.seasons == ["2026"]
 
     def test_get_league_seasons_http_error(self, onboarder_espn_client):
         mock_resp = MagicMock()

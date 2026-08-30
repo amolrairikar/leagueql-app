@@ -42,6 +42,12 @@ class TestFailureReason:
         assert "Sleeper" in job_status.failure_reason("UPSTREAM", "SLEEPER")
         assert "ESPN" in job_status.failure_reason("NOT_FOUND", "ESPN")
 
+    def test_not_started_templates_for_espn(self):
+        # A not-yet-drafted ESPN league surfaces the NOT_STARTED message with the
+        # ESPN platform name.
+        message = job_status.failure_reason("NOT_STARTED", "ESPN")
+        assert "hasn't started a season yet on ESPN" in message
+
     def test_case_insensitive_platform(self):
         assert "Sleeper" in job_status.failure_reason("UPSTREAM", "sleeper")
 

@@ -151,6 +151,14 @@ def step_onboard_http_error(context):
     _run_onboarder(context, "ESPN", "555", "ONBOARD", {"season": "2024"})
 
 
+@when("the onboarder runs an ONBOARD for an ESPN league that has not drafted")
+def step_onboard_espn_not_drafted(context):
+    # A brand-new ESPN league whose only season has not drafted: ESPNClient excludes
+    # the undrafted latest season, so the client resolves to no seasons.
+    _patch_build_client(context, [])
+    _run_onboarder(context, "ESPN", "777", "ONBOARD", {"season": "2026"})
+
+
 @when(
     'the onboarder runs an ONBOARD for "{platform}" league "{league_id}" '
     'with no started seasons pending "{pending}"'

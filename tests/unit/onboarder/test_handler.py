@@ -445,6 +445,50 @@ class TestLambdaHandlerNoStartedSeasons:
         svc.run.assert_not_called()
         assert mock_wjs.call_args.args[1] == "COMPLETED"
 
+    def test_espn_onboard_undrafted_only_season_returns_400_not_started(
+        self, onboarder_handler
+    ):
+        # A brand-new ESPN league whose only season has not drafted resolves to no
+        # seasons and hits the same platform-generic NOT_STARTED path as Sleeper.
+        event = {
+            "requestType": "ONBOARD",
+            "correlation_id": "corr-1",
+            "body": {"leagueId": "123", "platform": "ESPN", "latestSeason": "2026"},
+        }
+        svc = self._make_service_mock()
+        with (
+            patch.object(onboarder_handler, "OnboardingService", return_value=svc),
+            patch.object(onboarder_handler, "write_job_status") as mock_wjs,
+        ):
+            result = onboarder_handler.lambda_handler(event, MagicMock())
+        assert result["statusCode"] == 400
+        svc.run.assert_not_called()
+        args, kwargs = mock_wjs.call_args
+        assert args[1] == "FAILED"
+        assert kwargs["failure_code"] == "NOT_STARTED"
+
+    def test_espn_refresh_undrafted_season_returns_200_completed(
+        self, onboarder_handler
+    ):
+        # A refresh of an undrafted ESPN current season resolves to no seasons and
+        # is a no-op success that leaves existing data untouched.
+        event = {
+            "requestType": "REFRESH",
+            "correlation_id": "corr-1",
+            "canonicalLeagueId": "canonical-abc",
+            "body": {"leagueId": "123", "platform": "ESPN", "latestSeason": "2026"},
+        }
+        svc = self._make_service_mock()
+        with (
+            patch.object(onboarder_handler, "OnboardingService", return_value=svc),
+            patch.object(onboarder_handler, "write_job_status") as mock_wjs,
+        ):
+            result = onboarder_handler.lambda_handler(event, MagicMock())
+        assert result["statusCode"] == 200
+        assert json.loads(result["body"])["status"] == "succeeded"
+        svc.run.assert_not_called()
+        assert mock_wjs.call_args.args[1] == "COMPLETED"
+
 
 class TestLambdaHandlerRecordsJobStatus:
     """Failure branches must record a FAILED JOB_STATUS with the right code."""

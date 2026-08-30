@@ -40,7 +40,11 @@ def _filter_settings(
 def _filter_draft_picks(
     data: dict[str, Any], _season: str, _data_type: str
 ) -> dict[str, Any]:
-    return {"draft_picks": data["draftDetail"]["picks"]}
+    # A not-yet-drafted season's draftDetail omits "picks" entirely
+    # (e.g. {"drafted": false, "inProgress": false}). Such seasons are excluded
+    # upstream in ESPNClient._get_league_seasons, so this filter should not see one
+    # in normal operation; tolerate the absent key defensively rather than KeyError.
+    return {"draft_picks": data.get("draftDetail", {}).get("picks", [])}
 
 
 def _filter_matchups(
@@ -102,7 +106,7 @@ class ESPNClient:
 
     Methods:
         __init__(league_id, latest_season, s2, swid, is_refresh): Constructor
-        _get_league_seasons(latest_season): Gets list of all the seasons league has been active.
+        _get_league_seasons(latest_season, is_refresh): Resolves the seasons to onboard, excluding a not-yet-drafted latest season.
         _construct_request_url(base_url, data_type, week): Creates full ESPN Fantasy Football API request URL based on the type of data to fetch.
         _build_all_request_urls(): Constructs all ESPN Fantasy Football API request URLs needed to fetch data for app.
         _make_cookies_dict(): Builds the raw cookies dict from s2 and SWID values.
@@ -127,29 +131,46 @@ class ESPNClient:
         self.league_id = league_id
         self.s2 = s2
         self.swid = swid
-        if is_refresh:
-            self.seasons = [latest_season]
-        else:
-            self.seasons = self._get_league_seasons(latest_season=latest_season)
+        self.seasons = self._get_league_seasons(
+            latest_season=latest_season, is_refresh=is_refresh
+        )
         self.request_urls = self._build_all_request_urls()
 
     def get_seasons(self) -> list[str]:
         """Returns the list of seasons this league has been active."""
         return self.seasons
 
-    def _get_league_seasons(self, latest_season: str) -> list[str]:
+    def _get_league_seasons(
+        self, latest_season: str, is_refresh: bool = False
+    ) -> list[str]:
         """
-        Gets list of all the seasons league has been active for prior to onboarding.
+        Gets the list of seasons to onboard, excluding a not-yet-drafted season.
+
+        A season whose draft has not yet occurred (``draftDetail.drafted`` is
+        ``False``) is excluded, mirroring the Sleeper ``pre_draft``/``drafting``
+        exclusion (backend/league-onboarding): it carries no usable data, so it
+        produces no S3 payload, no processed views, and no dropdown entry. ESPN
+        reports only completed seasons under ``status.previousSeasons``, so the
+        latest season is the only one that can be undrafted; a single
+        ``mTeam``+``mDraftDetail`` request on it settles both the season list and
+        the draft check.
+
+        For a refresh only the latest season is considered, so an undrafted latest
+        season yields an empty list — the caller treats that as a no-op refresh
+        that leaves the league's existing data untouched.
 
         Args:
             latest_season: Most recent season the league was active.
+            is_refresh: If True, only the latest season is considered.
 
         Returns:
-            List of all seasons league has been active.
+            List of seasons to onboard (may be empty when the latest season has
+                not drafted).
         """
         url = (
             f"https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl"
-            f"/seasons/{latest_season}/segments/0/leagues/{self.league_id}?view=mTeam"
+            f"/seasons/{latest_season}/segments/0/leagues/{self.league_id}"
+            f"?view=mTeam&view=mDraftDetail"
         )
         cookies = self._make_cookies_dict()
         response = requests.get(url=url, cookies=cookies, timeout=(5, 30))
@@ -159,14 +180,23 @@ class ESPNClient:
             logger.error("Error fetching active seasons for league: %s", e)
             raise
 
-        previous_seasons = response.json().get("status", {}).get("previousSeasons", [])
-        previous_seasons = [str(season) for season in previous_seasons]
-        all_seasons = previous_seasons + [latest_season]
+        body = response.json()
+        latest_drafted = body.get("draftDetail", {}).get("drafted", False)
+        if is_refresh:
+            all_seasons = [latest_season] if latest_drafted else []
+        else:
+            previous_seasons = [
+                str(season)
+                for season in body.get("status", {}).get("previousSeasons", [])
+            ]
+            all_seasons = previous_seasons + ([latest_season] if latest_drafted else [])
         logger.info(
-            "Resolved ESPN league seasons: league_id=%s season_count=%d seasons=%s",
+            "Resolved ESPN league seasons: league_id=%s season_count=%d seasons=%s "
+            "latest_drafted=%s",
             self.league_id,
             len(all_seasons),
             all_seasons,
+            latest_drafted,
         )
         return all_seasons
 
