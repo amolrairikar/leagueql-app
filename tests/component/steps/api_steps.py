@@ -264,6 +264,19 @@ def step_metadata_survives(context, canonical):
     assert get_item(context, f"LEAGUE#{canonical}", "METADATA"), "METADATA was deleted"
 
 
+@given('league "{canonical}" was last refreshed {days:d} days ago')
+def step_seed_last_refresh(context, canonical, days):
+    # Seed last_refresh_at so the weekly refresh cooldown can be exercised
+    # (backend/league-refresh). Written by the processor on a successful refresh;
+    # here we set it directly to drive the API cooldown check.
+    seeded = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    context.ddb_resource.Table(context.table_name).update_item(
+        Key={"PK": f"LEAGUE#{canonical}", "SK": "METADATA"},
+        UpdateExpression="SET last_refresh_at = :t",
+        ExpressionAttributeValues={":t": seeded},
+    )
+
+
 @given('league "{canonical}" was last accessed {minutes:d} minutes ago')
 def step_seed_last_accessed(context, canonical, minutes):
     # Seed a recent last_accessed_at and stash it so a later assertion can confirm

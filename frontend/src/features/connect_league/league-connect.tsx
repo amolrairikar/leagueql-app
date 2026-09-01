@@ -223,6 +223,7 @@ export default function LeagueConnect() {
 
     let onboardSucceeded = false;
     let capturedOperationId: string | null = null;
+    let capturedError: ApiError | null = null;
     for (let attempt = 1; attempt <= MAX_ONBOARD_ATTEMPTS; attempt++) {
       try {
         const onboardResult = await onboardLeague(requestType, body);
@@ -231,16 +232,29 @@ export default function LeagueConnect() {
         clearEspnCookies();
         break;
       } catch (err) {
-        const status = err instanceof ApiError ? err.status : 0;
+        capturedError = err instanceof ApiError ? err : null;
+        const status = capturedError?.status ?? 0;
         const isRetryable = status === 0 || status >= 500;
         if (!isRetryable || attempt === MAX_ONBOARD_ATTEMPTS) break;
         await sleep(ONBOARD_RETRY_DELAY_MS);
       }
     }
     if (!onboardSucceeded) {
-      // Retries exhausted on a network / 5xx failure — surface it inline.
       setLastRequestType(requestType);
-      setFailureReason(null);
+      // A 429 weekly cooldown or a 409 already-up-to-date / in-progress response
+      // isn't a failure — surface the backend message as a benign notice instead
+      // of a generic "please try again" error.
+      if (
+        capturedError &&
+        (capturedError.status === 429 || capturedError.status === 409)
+      ) {
+        setFailureReason(capturedError.message);
+        setFailureCode('COOLDOWN');
+      } else {
+        // Retries exhausted on a network / 5xx failure — surface it inline.
+        setFailureReason(null);
+        setFailureCode(null);
+      }
       setPollStatus('failed');
       return;
     }
@@ -491,7 +505,16 @@ export default function LeagueConnect() {
                 </AlertDescription>
               </Alert>
             )}
-            {pollStatus === 'failed' && (
+            {pollStatus === 'failed' && failureCode === 'COOLDOWN' && (
+              // A weekly cooldown (429) or already-up-to-date / in-progress (409)
+              // response is a benign state, not an error: show the backend message
+              // in a neutral alert with no contact-support prompt.
+              <Alert className="mt-4">
+                <AlertTitle>Refresh not available yet</AlertTitle>
+                <AlertDescription>{failureReason}</AlertDescription>
+              </Alert>
+            )}
+            {pollStatus === 'failed' && failureCode !== 'COOLDOWN' && (
               <Alert variant="destructive" className="mt-4">
                 <AlertTitle>
                   {lastRequestType === 'REFRESH'

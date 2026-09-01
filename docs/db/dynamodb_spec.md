@@ -142,7 +142,7 @@ the league will not appear as onboarded and a retry will re-run the full onboard
 | `SK` | String | Yes | `METADATA` |
 | `platform` | String | Yes | Platform the league belongs to. Enum: `ESPN`, `SLEEPER` |
 | `onboarded_at` | String | Yes | ISO 8601 timestamp of when the league was onboarded |
-| `last_refresh_at` | String | No | ISO 8601 timestamp of when the most recent refresh completed successfully. Used to enforce the per-league refresh cooldown. |
+| `last_refresh_at` | String | No | ISO 8601 timestamp of when the most recent refresh completed successfully. Used to enforce the per-league weekly refresh cooldown (a manual refresh is rejected with `429` while this is less than 7 days old). |
 | `last_accessed_at` | String | No | ISO 8601 (UTC) timestamp of when a member last opened the league via `GET /leagues/{leagueId}` (backend/league-access-tracking). Written at most once per hour (app-side throttle); absent on older items and on leagues never opened since the field shipped. Used to identify stale leagues for future pruning/archival. |
 | `league_name` | String | No | League name from the most recent season's settings |
 | `owner_user_id` | String | No | Clerk user ID of the league's owner — the authorization anchor for mutating endpoints (backend/league-authorization). Set **once** on first ONBOARD; never overwritten by REFRESH/MIGRATE. Absent for system-initiated onboards. |
