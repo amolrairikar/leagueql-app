@@ -32,9 +32,18 @@ def get_nfl_state() -> dict:
     return response.json()
 
 
-def get_sleeper_leagues() -> list[dict]:
+def get_sleeper_leagues(current_season: int) -> list[dict]:
     """
     Queries DynamoDB for all Sleeper league IDs using GSI2.
+
+    Only leagues whose newest onboarded season is not behind ``current_season``
+    are returned; a league (or pending renewal) whose season is behind the
+    current NFL season is skipped so a completed prior season is not re-refreshed
+    until the league is onboarded for the current season.
+
+    Args:
+        current_season: The current NFL season (year). Leagues and pending
+            renewals whose season is strictly less than this are skipped.
 
     Returns:
         list[dict]: List of dicts with league_id and canonical_league_id for the most recent season of each Sleeper league.
@@ -78,6 +87,12 @@ def get_sleeper_leagues() -> list[dict]:
     for canonical_id, league_data in leagues_by_canonical.items():
         league_data.sort(key=lambda x: int(x["season"]), reverse=True)
         best = league_data[0]
+        # Skip leagues not yet onboarded for the current NFL season: their newest
+        # onboarded season is a completed prior season whose data cannot change,
+        # and Sleeper links seasons backward-only so a refresh can never discover
+        # the new season (backend/scheduled-sleeper-auto-refresh).
+        if int(best["season"]) < current_season:
+            continue
         result.append(
             {"league_id": best["league_id"], "canonical_league_id": canonical_id}
         )
@@ -94,6 +109,10 @@ def get_sleeper_leagues() -> list[dict]:
         seasons = item.get("seasons", {}).get("SS", [])
         pending_season = item.get("pending_season", {}).get("S")
         if canonical_league_id and league_id and pending_season and not seasons:
+            # Skip abandoned pending renewals (a pending_season behind the current
+            # NFL season that never started); still poll a current/future pending.
+            if int(pending_season) < current_season:
+                continue
             result.append(
                 {"league_id": league_id, "canonical_league_id": canonical_league_id}
             )

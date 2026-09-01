@@ -6,11 +6,35 @@ from unittest.mock import MagicMock, patch
 from behave import given, then, when
 
 
+def _test_league_current_season(context) -> str:
+    """The test league's newest onboarded season, so the mocked NFL season is not
+    behind it — the refresher skips any league whose newest onboarded season is
+    behind the current NFL season. Using the calendar year would break off-season
+    (e.g. an Aug run before the new season starts, when the league's newest season
+    is still the prior year). Falls back to the current UTC year when the league is
+    not yet onboarded (the 'a Sleeper league exists in DynamoDB' step then fails)."""
+    resp = context.dynamodb_client.get_item(
+        TableName=context.table_name,
+        Key={
+            "PK": {"S": f"LEAGUE#{context.test_league_id}#PLATFORM#SLEEPER"},
+            "SK": {"S": "LEAGUE_LOOKUP"},
+        },
+    )
+    seasons = resp.get("Item", {}).get("seasons", {}).get("SS")
+    if seasons:
+        return max(seasons, key=int)
+    return str(datetime.now(timezone.utc).year)
+
+
 @given("the NFL state API returns week {week:d} of the regular season")
 def step_nfl_state_week(context, week):
     context.nfl_patcher = patch(
         "sleeper_refresh.handler.get_nfl_state",
-        return_value={"season_type": "regular", "week": week},
+        return_value={
+            "season_type": "regular",
+            "week": week,
+            "season": _test_league_current_season(context),
+        },
     )
     context.nfl_patcher.start()
 
