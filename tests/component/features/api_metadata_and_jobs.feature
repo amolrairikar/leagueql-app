@@ -9,6 +9,19 @@ Feature: League metadata and job status APIs (backend/league-metadata, backend/j
     And the response data field "league_name" equals "Test League"
     And the response has Cache-Control "no-store"
 
+  Scenario: A never-refreshed league returns null last_refresh_at (frontend/refresh-reminder-banner)
+    Given a LEAGUE_LOOKUP exists for league "100" platform "SLEEPER" canonical "canon-1"
+    When I GET "/leagues/100?platform=SLEEPER"
+    Then the API responds with status 200
+    And the response data field "last_refresh_at" is null
+
+  Scenario: A refreshed league returns its last_refresh_at (frontend/refresh-reminder-banner)
+    Given a LEAGUE_LOOKUP exists for league "100" platform "SLEEPER" canonical "canon-1"
+    And league "canon-1" was last refreshed 10 days ago
+    When I GET "/leagues/100?platform=SLEEPER"
+    Then the API responds with status 200
+    And the response data field "last_refresh_at" is present
+
   Scenario: An un-onboarded league returns 404
     When I GET "/leagues/404?platform=SLEEPER"
     Then the API responds with status 404

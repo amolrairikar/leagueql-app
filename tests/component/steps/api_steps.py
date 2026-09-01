@@ -225,6 +225,13 @@ def step_data_field_null(context, field):
     assert context.response.json()["data"].get(field) is None
 
 
+@then('the response data field "{field}" is present')
+def step_data_field_present(context, field):
+    assert context.response.json()["data"].get(field) is not None, (
+        f"{field} was missing/null"
+    )
+
+
 @then('the job status is "{status}"')
 def step_job_status_api(context, status):
     assert context.response.json()["data"]["status"] == status, context.response.text

@@ -134,6 +134,46 @@ class TestGetLeagueEndpoint:
         assert "2023" in data["seasons"]
         assert "2024" in data["seasons"]
 
+    def test_returns_refresh_and_onboard_timestamps(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        # The frontend derives data freshness from these fields to drive the
+        # stale-league refresh reminder (frontend/refresh-reminder-banner).
+        league_metadata_item["onboarded_at"] = "2025-01-15T12:00:00+00:00"
+        league_metadata_item["last_refresh_at"] = "2025-08-24T12:00:00+00:00"
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+        ]
+        mock_table.query.return_value = {
+            "Items": [{"seasons": {"2024"}, "canonical_league_id": "canonical-abc"}]
+        }
+        response = client.get("/leagues/123?platform=SLEEPER")
+        assert response.status_code == 200
+        data = response.json()["data"]
+        assert data["onboarded_at"] == "2025-01-15T12:00:00+00:00"
+        assert data["last_refresh_at"] == "2025-08-24T12:00:00+00:00"
+
+    def test_last_refresh_at_null_when_never_refreshed(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        # last_refresh_at is written only on REFRESH, so a never-refreshed league
+        # returns null for it while onboarded_at is always present.
+        league_metadata_item["onboarded_at"] = "2025-01-15T12:00:00+00:00"
+        league_metadata_item.pop("last_refresh_at", None)
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+        ]
+        mock_table.query.return_value = {
+            "Items": [{"seasons": {"2024"}, "canonical_league_id": "canonical-abc"}]
+        }
+        response = client.get("/leagues/123?platform=SLEEPER")
+        assert response.status_code == 200
+        data = response.json()["data"]
+        assert data["last_refresh_at"] is None
+        assert data["onboarded_at"] == "2025-01-15T12:00:00+00:00"
+
     def test_returns_404_for_unknown_league(self, client, mock_table):
         mock_table.get_item.return_value = {}
         response = client.get("/leagues/999?platform=SLEEPER")
