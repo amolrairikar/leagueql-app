@@ -10,7 +10,11 @@ from behave import given, then, when
 def step_nfl_state_week(context, week):
     context.nfl_patcher = patch(
         "sleeper_refresh.handler.get_nfl_state",
-        return_value={"season_type": "regular", "week": week},
+        return_value={
+            "season_type": "regular",
+            "week": week,
+            "season": str(datetime.now(timezone.utc).year),
+        },
     )
     context.nfl_patcher.start()
 
