@@ -168,8 +168,12 @@ paths:
       responses:
         "201":
           $ref: "#/components/responses/OnboardSuccessResponse"
+        "409":
+          $ref: "#/components/responses/ConflictError"
         "422":
           $ref: "#/components/responses/ValidationError"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
         "500":
           $ref: "#/components/responses/InternalError"
       security:
@@ -973,3 +977,16 @@ components:
           example:
             error: "Unauthorized"
             message: "Authentication required"
+
+    TooManyRequests:
+      description: >
+        The league is within the once-per-week refresh cooldown
+        (backend/league-refresh). A manual refresh is rejected while the most
+        recent successful refresh is less than 7 days old.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error: "Too many requests"
+            message: "This league can only be refreshed once per week. You can refresh again in 5 days."

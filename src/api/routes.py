@@ -49,7 +49,7 @@ from helpers import (
 )
 from main import (
     QUERY_TYPE_TO_SK_BASE,
-    REFRESH_COOLDOWN_MINUTES,
+    REFRESH_COOLDOWN_DAYS,
     S3_BUCKET,
     APIResponse,
     ClaimOwnershipPayload,
@@ -71,6 +71,23 @@ from common.feature_flags import (
 from common.onboarder_invoke import invoke_onboarder
 
 router = APIRouter()
+
+
+def _format_cooldown_wait(remaining: timedelta) -> str:
+    """Render the remaining refresh cooldown as a short human-readable phrase.
+
+    Rounds up to whole days when at least a day remains, otherwise falls back to
+    whole hours (minimum "1 hour"), so the 429 message reads naturally for the
+    weekly (7-day) window rather than as a raw minute count.
+    """
+    total_seconds = max(remaining.total_seconds(), 0)
+    if total_seconds >= 86400:
+        # Round partial days up so we never understate the wait.
+        days = int(-(-total_seconds // 86400))
+        return f"{days} day{'s' if days != 1 else ''}"
+    # Under a day: report whole hours, at least "1 hour".
+    hours = max(int(-(-total_seconds // 3600)), 1)
+    return f"{hours} hour{'s' if hours != 1 else ''}"
 
 
 @router.get("/health", status_code=status.HTTP_200_OK)
@@ -255,12 +272,13 @@ def onboard_league(
         last_refresh_at = league_metadata.get("last_refresh_at")
         if last_refresh_at:
             last_refresh_dt = datetime.fromisoformat(last_refresh_at)
-            if datetime.now(timezone.utc) - last_refresh_dt < timedelta(
-                minutes=REFRESH_COOLDOWN_MINUTES
-            ):
+            cooldown = timedelta(days=REFRESH_COOLDOWN_DAYS)
+            elapsed = datetime.now(timezone.utc) - last_refresh_dt
+            if elapsed < cooldown:
+                wait = _format_cooldown_wait(cooldown - elapsed)
                 raise HTTPException(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail=f"League was refreshed recently. Please wait {REFRESH_COOLDOWN_MINUTES} minutes before refreshing again.",
+                    detail=f"This league can only be refreshed once per week. You can refresh again in {wait}.",
                 )
 
         nfl_state = get_nfl_state()

@@ -34,6 +34,14 @@ Feature: Connect league onboarding flow (frontend/connect-league)
     Then I see a failure message "hasn't started a season yet on ESPN"
     And I do not see a contact support prompt
 
+  Scenario: A refresh blocked by the weekly cooldown shows a benign notice
+    Given a refresh will be blocked by the weekly cooldown with message "This league can only be refreshed once per week. You can refresh again in 5 days."
+    When I refresh Sleeper league "100"
+    Then I see a failure message "once per week"
+    And I see the notice title "Refresh not available yet"
+    And I do not see a contact support prompt
+    And I am not routed to the home page
+
   Scenario: Opening an already-onboarded league as a non-owner routes home without refreshing
     Given the league is already onboarded and I am not its owner
     When I onboard Sleeper league "100"

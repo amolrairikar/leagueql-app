@@ -186,7 +186,7 @@ async def _security_headers(request, call_next):
     return response
 
 
-REFRESH_COOLDOWN_MINUTES = 30
+REFRESH_COOLDOWN_DAYS = 7
 
 SLEEPER_STATE_URL = "https://api.sleeper.app/v1/state/nfl"
 

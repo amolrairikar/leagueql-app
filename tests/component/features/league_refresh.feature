@@ -14,3 +14,11 @@ Feature: League refresh reprocesses in place (backend/league-refresh, backend/ap
     Then a JOB_STATUS "COMPLETED" exists for the job
     And the league has exactly 3 "MATCHUPS#2024" item(s)
     And the LEAGUE_COUNT is 1
+
+  Scenario: A refresh within the weekly cooldown is rejected
+    Given a LEAGUE_LOOKUP exists for league "200" platform "SLEEPER" canonical "canon-2"
+    And league "canon-2" was last refreshed 2 days ago
+    And the request is authenticated as "owner_user"
+    When I POST a REFRESH of league "200" on "SLEEPER"
+    Then the API responds with status 429
+    And the API response detail contains "once per week"

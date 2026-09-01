@@ -269,6 +269,49 @@ defineFeature(feature, (test) => {
     });
   });
 
+  test('A refresh blocked by the weekly cooldown shows a benign notice', ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    given(
+      /^a refresh will be blocked by the weekly cooldown with message "(.*)"$/,
+      (message) => {
+        server.use(
+          // Existing, owner-readable league → the submit is a REFRESH.
+          http.get(`${API}/leagues/:id`, () =>
+            HttpResponse.json({
+              detail: 'Found league',
+              data: { seasons: ['2024'], league_name: 'L', is_owner: true },
+            }),
+          ),
+          // Refresh rejected by the weekly cooldown.
+          http.post(`${API}/leagues`, () =>
+            HttpResponse.json({ detail: message }, { status: 429 }),
+          ),
+        );
+      },
+    );
+    when(/^I refresh Sleeper league "(.*)"$/, async (leagueId) => {
+      await onboardFlow(leagueId);
+    });
+    then(/^I see a failure message "(.*)"$/, (message) => {
+      expect(screen.getByText(new RegExp(message))).toBeInTheDocument();
+    });
+    and(/^I see the notice title "(.*)"$/, (title) => {
+      expect(screen.getByText(title)).toBeInTheDocument();
+    });
+    and('I do not see a contact support prompt', () => {
+      expect(
+        screen.queryByText(/If the error persists/),
+      ).not.toBeInTheDocument();
+    });
+    and('I am not routed to the home page', () => {
+      expect(screen.queryByText('HOME PAGE')).not.toBeInTheDocument();
+    });
+  });
+
   test('Opening an already-onboarded league as a non-owner routes home without refreshing', ({
     given,
     when,

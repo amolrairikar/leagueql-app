@@ -279,6 +279,29 @@ class TestGetJobEndpoint:
         assert response.status_code == 422
 
 
+class TestFormatCooldownWait:
+    @pytest.mark.parametrize(
+        "remaining, expected",
+        [
+            (timedelta(days=7), "7 days"),
+            (timedelta(days=5), "5 days"),
+            (timedelta(days=1), "1 day"),
+            # Partial days round up so the wait is never understated.
+            (timedelta(days=4, hours=6), "5 days"),
+            (timedelta(days=1, seconds=1), "2 days"),
+            # Under a day falls back to whole hours (minimum "1 hour").
+            (timedelta(hours=12), "12 hours"),
+            (timedelta(hours=1), "1 hour"),
+            (timedelta(minutes=30), "1 hour"),
+            (timedelta(seconds=0), "1 hour"),
+        ],
+    )
+    def test_format_cooldown_wait(self, remaining, expected):
+        import routes
+
+        assert routes._format_cooldown_wait(remaining) == expected
+
+
 class TestOnboardLeagueEndpoint:
     def test_onboard_new_league(self, client, mock_table, mock_lambda_client):
         mock_table.get_item.return_value = {}
@@ -423,6 +446,7 @@ class TestOnboardLeagueEndpoint:
             json={"leagueId": "123", "platform": "SLEEPER"},
         )
         assert response.status_code == 429
+        assert "once per week" in response.json()["detail"]
 
     def test_refresh_proceeds_when_outside_cooldown(
         self,
@@ -434,7 +458,7 @@ class TestOnboardLeagueEndpoint:
     ):
         from datetime import datetime, timedelta, timezone
 
-        old_time = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
+        old_time = (datetime.now(timezone.utc) - timedelta(days=8)).isoformat()
         league_metadata_item["last_refresh_at"] = old_time
         mock_table.get_item.side_effect = [
             {"Item": league_lookup_item},
