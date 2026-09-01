@@ -48,6 +48,24 @@ class TestLambdaHandlerSleeperRefresh:
         ):
             sleeper_refresh_handler.lambda_handler({}, self._make_context())
 
+    def test_raises_when_nfl_state_missing_season(self, sleeper_refresh_handler):
+        """NFL state past the season_type/week gate but lacking a parseable
+        `season` is indeterminate: the handler must raise (no leagues refreshed)
+        so the error alarm fires rather than refreshing without a season reference."""
+        with (
+            patch.object(
+                sleeper_refresh_handler,
+                "get_nfl_state",
+                return_value={"season_type": "regular", "week": 5},
+            ),
+            patch.object(
+                sleeper_refresh_handler, "get_sleeper_leagues"
+            ) as mock_get_leagues,
+            pytest.raises(KeyError),
+        ):
+            sleeper_refresh_handler.lambda_handler({}, self._make_context())
+        mock_get_leagues.assert_not_called()
+
     def test_raises_when_get_leagues_fails(self, sleeper_refresh_handler):
         """A failed league-list query must raise (refreshes zero leagues) so the
         Lambda Errors alarm fires instead of reporting success."""
@@ -55,7 +73,7 @@ class TestLambdaHandlerSleeperRefresh:
             patch.object(
                 sleeper_refresh_handler,
                 "get_nfl_state",
-                return_value={"season_type": "regular", "week": 5},
+                return_value={"season_type": "regular", "week": 5, "season": "2024"},
             ),
             patch.object(
                 sleeper_refresh_handler,
@@ -71,7 +89,7 @@ class TestLambdaHandlerSleeperRefresh:
             patch.object(
                 sleeper_refresh_handler,
                 "get_nfl_state",
-                return_value={"season_type": "regular", "week": 5},
+                return_value={"season_type": "regular", "week": 5, "season": "2024"},
             ),
             patch.object(
                 sleeper_refresh_handler, "get_sleeper_leagues", return_value=[]
@@ -87,7 +105,7 @@ class TestLambdaHandlerSleeperRefresh:
             patch.object(
                 sleeper_refresh_handler,
                 "get_nfl_state",
-                return_value={"season_type": "regular", "week": 5},
+                return_value={"season_type": "regular", "week": 5, "season": "2024"},
             ),
             patch.object(
                 sleeper_refresh_handler,
@@ -116,7 +134,7 @@ class TestLambdaHandlerSleeperRefresh:
             patch.object(
                 sleeper_refresh_handler,
                 "get_nfl_state",
-                return_value={"season_type": "regular", "week": 5},
+                return_value={"season_type": "regular", "week": 5, "season": "2024"},
             ),
             patch.object(
                 sleeper_refresh_handler,
@@ -145,7 +163,7 @@ class TestLambdaHandlerSleeperRefresh:
             patch.object(
                 sleeper_refresh_handler,
                 "get_nfl_state",
-                return_value={"season_type": "regular", "week": 5},
+                return_value={"season_type": "regular", "week": 5, "season": "2024"},
             ),
             patch.object(
                 sleeper_refresh_handler,
@@ -173,7 +191,7 @@ class TestLambdaHandlerSleeperRefresh:
             patch.object(
                 sleeper_refresh_handler,
                 "get_nfl_state",
-                return_value={"season_type": "regular", "week": 5},
+                return_value={"season_type": "regular", "week": 5, "season": "2024"},
             ),
             patch.object(
                 sleeper_refresh_handler,

@@ -3,8 +3,8 @@ Feature: Scheduled Sleeper auto-refresh (backend/scheduled-sleeper-auto-refresh)
   onboarded Sleeper league; ESPN leagues are excluded and offseason/week-1 are skipped.
 
   Scenario: In-season run invokes the onboarder for each Sleeper league only
-    Given an onboarded Sleeper league "100" canonical "canon-1"
-    And an onboarded Sleeper league "200" canonical "canon-2"
+    Given an onboarded Sleeper league "100" canonical "canon-1" season "2024"
+    And an onboarded Sleeper league "200" canonical "canon-2" season "2024"
     And an onboarded ESPN league "300" canonical "canon-3"
     When the auto-refresh runs with NFL state season_type "regular" week "10"
     Then the auto-refresh response status is "succeeded"
@@ -13,13 +13,22 @@ Feature: Scheduled Sleeper auto-refresh (backend/scheduled-sleeper-auto-refresh)
     And the onboarder was invoked for league "200"
 
   Scenario: Offseason runs are skipped
-    Given an onboarded Sleeper league "100" canonical "canon-1"
+    Given an onboarded Sleeper league "100" canonical "canon-1" season "2024"
     When the auto-refresh runs with NFL state season_type "off" week "5"
     Then the auto-refresh response status is "skipped"
     And the onboarder was invoked 0 time(s)
 
   Scenario: Week 1 is skipped (matchups not settled)
-    Given an onboarded Sleeper league "100" canonical "canon-1"
+    Given an onboarded Sleeper league "100" canonical "canon-1" season "2024"
     When the auto-refresh runs with NFL state season_type "regular" week "1"
     Then the auto-refresh response status is "skipped"
     And the onboarder was invoked 0 time(s)
+
+  Scenario: Leagues behind the current NFL season are skipped
+    Given an onboarded Sleeper league "100" canonical "canon-1" season "2024"
+    And a pending Sleeper renewal "150" canonical "canon-1" pending season "2024"
+    And an onboarded Sleeper league "200" canonical "canon-2" season "2025"
+    When the auto-refresh runs with NFL state season_type "regular" week "10" season "2025"
+    Then the auto-refresh response status is "succeeded"
+    And the onboarder was invoked 1 time(s)
+    And the onboarder was invoked for league "200"

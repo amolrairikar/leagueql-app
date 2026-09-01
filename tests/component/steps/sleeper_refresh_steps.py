@@ -7,15 +7,34 @@ from behave import given, then, when
 from common_steps import put_item
 
 
-@given('an onboarded Sleeper league "{league_id}" canonical "{canonical}"')
-def step_seed_sleeper_league(context, league_id, canonical):
+@given(
+    'an onboarded Sleeper league "{league_id}" canonical "{canonical}" season "{season}"'
+)
+def step_seed_sleeper_league(context, league_id, canonical, season):
     put_item(
         context,
         {
             "PK": f"LEAGUE#{league_id}#PLATFORM#SLEEPER",
             "SK": "LEAGUE_LOOKUP",
             "canonical_league_id": canonical,
-            "seasons": {"2024"},
+            "seasons": {season},
+            "platform": "SLEEPER",
+            "league_id": league_id,
+        },
+    )
+
+
+@given(
+    'a pending Sleeper renewal "{league_id}" canonical "{canonical}" pending season "{season}"'
+)
+def step_seed_pending_renewal(context, league_id, canonical, season):
+    put_item(
+        context,
+        {
+            "PK": f"LEAGUE#{league_id}#PLATFORM#SLEEPER",
+            "SK": "LEAGUE_LOOKUP",
+            "canonical_league_id": canonical,
+            "pending_season": season,
             "platform": "SLEEPER",
             "league_id": league_id,
         },
@@ -41,7 +60,18 @@ def step_seed_espn_league(context, league_id, canonical):
     'the auto-refresh runs with NFL state season_type "{season_type}" week "{week:d}"'
 )
 def step_run_refresh(context, season_type, week):
-    nfl_state = {"season_type": season_type, "season": "2024", "week": week}
+    _run_refresh(context, season_type, week, "2024")
+
+
+@when(
+    'the auto-refresh runs with NFL state season_type "{season_type}" week "{week:d}" season "{season}"'
+)
+def step_run_refresh_with_season(context, season_type, week, season):
+    _run_refresh(context, season_type, week, season)
+
+
+def _run_refresh(context, season_type, week, season):
+    nfl_state = {"season_type": season_type, "season": season, "week": week}
     state_patch = patch.object(
         context.refresh_handler, "get_nfl_state", MagicMock(return_value=nfl_state)
     )

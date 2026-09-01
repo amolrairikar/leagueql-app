@@ -61,14 +61,27 @@ def lambda_handler(event, context) -> dict[str, str | int]:
             ),
         }
 
+    # Resolve the current NFL season, which gates league selection (leagues onboarded
+    # only through a completed prior season are skipped). Treat a missing/unparseable
+    # season as indeterminate NFL state and raise (see NFL-state note above) rather
+    # than refreshing without a current-season reference.
+    try:
+        current_season = int(nfl_state["season"])
+    except (KeyError, TypeError, ValueError):
+        logger.error("NFL state missing a parseable 'season': %s", nfl_state)
+        raise
+
     logger.info(
-        "NFL state: season_type=%s, week=%s, proceeding with refresh", season_type, week
+        "NFL state: season_type=%s, week=%s, season=%s, proceeding with refresh",
+        season_type,
+        week,
+        current_season,
     )
 
     # Query DynamoDB for all Sleeper leagues. Raise on failure (see NFL-state note
     # above) so a query failure that refreshes zero leagues trips the error alarm.
     try:
-        sleeper_leagues = get_sleeper_leagues()
+        sleeper_leagues = get_sleeper_leagues(current_season)
     except Exception:
         logger.error("Failed to fetch Sleeper leagues from DynamoDB", exc_info=True)
         raise

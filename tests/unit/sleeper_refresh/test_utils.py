@@ -44,7 +44,7 @@ class TestGetSleeperLeagues:
             ]
         }
         with patch.object(sleeper_refresh_utils, "_dynamodb_client", mock_ddb):
-            result = sleeper_refresh_utils.get_sleeper_leagues()
+            result = sleeper_refresh_utils.get_sleeper_leagues(2024)
         assert result == [
             {"league_id": "lg-2024", "canonical_league_id": "canonical-abc"}
         ]
@@ -73,7 +73,7 @@ class TestGetSleeperLeagues:
             },
         ]
         with patch.object(sleeper_refresh_utils, "_dynamodb_client", mock_ddb):
-            result = sleeper_refresh_utils.get_sleeper_leagues()
+            result = sleeper_refresh_utils.get_sleeper_leagues(2024)
         assert len(result) == 2
         assert all("league_id" in r and "canonical_league_id" in r for r in result)
         assert mock_ddb.query.call_count == 2
@@ -82,7 +82,7 @@ class TestGetSleeperLeagues:
         mock_ddb = MagicMock()
         mock_ddb.query.return_value = {"Items": []}
         with patch.object(sleeper_refresh_utils, "_dynamodb_client", mock_ddb):
-            result = sleeper_refresh_utils.get_sleeper_leagues()
+            result = sleeper_refresh_utils.get_sleeper_leagues(2024)
         assert result == []
 
     def test_skips_items_with_missing_fields(self, sleeper_refresh_utils):
@@ -93,7 +93,7 @@ class TestGetSleeperLeagues:
             ]
         }
         with patch.object(sleeper_refresh_utils, "_dynamodb_client", mock_ddb):
-            result = sleeper_refresh_utils.get_sleeper_leagues()
+            result = sleeper_refresh_utils.get_sleeper_leagues(2024)
         assert result == []
 
     def test_includes_pending_renewal_alongside_current_season(
@@ -118,7 +118,7 @@ class TestGetSleeperLeagues:
             ]
         }
         with patch.object(sleeper_refresh_utils, "_dynamodb_client", mock_ddb):
-            result = sleeper_refresh_utils.get_sleeper_leagues()
+            result = sleeper_refresh_utils.get_sleeper_leagues(2025)
         assert {r["league_id"] for r in result} == {"lg-2025", "lg-2026"}
         assert all(r["canonical_league_id"] == "canonical-abc" for r in result)
 
@@ -138,7 +138,7 @@ class TestGetSleeperLeagues:
             ]
         }
         with patch.object(sleeper_refresh_utils, "_dynamodb_client", mock_ddb):
-            result = sleeper_refresh_utils.get_sleeper_leagues()
+            result = sleeper_refresh_utils.get_sleeper_leagues(2026)
         # Only the pending poll entry, no most-recent entry (it has no real seasons yet).
         assert result == [{"league_id": "lg-2026", "canonical_league_id": "c1"}]
 
@@ -159,8 +159,65 @@ class TestGetSleeperLeagues:
             ]
         }
         with patch.object(sleeper_refresh_utils, "_dynamodb_client", mock_ddb):
-            result = sleeper_refresh_utils.get_sleeper_leagues()
+            result = sleeper_refresh_utils.get_sleeper_leagues(2024)
         assert len(result) == 2
+
+    def test_skips_league_behind_current_season(self, sleeper_refresh_utils):
+        # A league onboarded only through a completed prior season (2025) is skipped
+        # once the current NFL season (2026) is newer — its finished data cannot change
+        # and a refresh could never discover the new season.
+        mock_ddb = MagicMock()
+        mock_ddb.query.return_value = {
+            "Items": [
+                {
+                    "canonical_league_id": {"S": "c1"},
+                    "league_id": {"S": "lg-2025"},
+                    "seasons": {"SS": ["2024", "2025"]},
+                },
+            ]
+        }
+        with patch.object(sleeper_refresh_utils, "_dynamodb_client", mock_ddb):
+            result = sleeper_refresh_utils.get_sleeper_leagues(2026)
+        assert result == []
+
+    def test_refreshes_league_at_current_season(self, sleeper_refresh_utils):
+        # A league whose newest onboarded season equals the current NFL season is
+        # refreshed as normal.
+        mock_ddb = MagicMock()
+        mock_ddb.query.return_value = {
+            "Items": [
+                {
+                    "canonical_league_id": {"S": "c1"},
+                    "league_id": {"S": "lg-2026"},
+                    "seasons": {"SS": ["2025", "2026"]},
+                },
+            ]
+        }
+        with patch.object(sleeper_refresh_utils, "_dynamodb_client", mock_ddb):
+            result = sleeper_refresh_utils.get_sleeper_leagues(2026)
+        assert result == [{"league_id": "lg-2026", "canonical_league_id": "c1"}]
+
+    def test_skips_stale_pending_renewal(self, sleeper_refresh_utils):
+        # An abandoned pending renewal (pending_season behind the current NFL season)
+        # is not polled; a current/future pending still is.
+        mock_ddb = MagicMock()
+        mock_ddb.query.return_value = {
+            "Items": [
+                {
+                    "canonical_league_id": {"S": "c1"},
+                    "league_id": {"S": "lg-2025-pending"},
+                    "pending_season": {"S": "2025"},
+                },
+                {
+                    "canonical_league_id": {"S": "c2"},
+                    "league_id": {"S": "lg-2026-pending"},
+                    "pending_season": {"S": "2026"},
+                },
+            ]
+        }
+        with patch.object(sleeper_refresh_utils, "_dynamodb_client", mock_ddb):
+            result = sleeper_refresh_utils.get_sleeper_leagues(2026)
+        assert result == [{"league_id": "lg-2026-pending", "canonical_league_id": "c2"}]
 
 
 class TestInvokeOnboarderLambda:
