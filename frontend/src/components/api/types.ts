@@ -119,5 +119,13 @@ export interface GetLeagueResponse {
     league_name?: string;
     /** Whether the authenticated caller is the league owner (backend/league-authorization / frontend/ownership-transfer). */
     is_owner?: boolean;
+    /** ISO 8601 timestamp of when the league was onboarded. */
+    onboarded_at?: string;
+    /**
+     * ISO 8601 timestamp of the most recent successful refresh, or null until the
+     * league's first refresh. Freshness is `last_refresh_at ?? onboarded_at`
+     * (frontend/refresh-reminder-banner).
+     */
+    last_refresh_at?: string | null;
   };
 }

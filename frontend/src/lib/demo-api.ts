@@ -103,6 +103,11 @@ export async function getDemoLeague(): Promise<GetLeagueResponse> {
       // bypasses owner/membership gating anyway; this keeps the response shape
       // faithful to the real endpoint (backend/league-authorization).
       is_owner: true,
+      // A fresh "just now" refresh so the demo league is never flagged as stale by
+      // the refresh reminder (frontend/refresh-reminder-banner) — demo mode
+      // suppresses that banner anyway, but the shape stays faithful.
+      onboarded_at: new Date().toISOString(),
+      last_refresh_at: new Date().toISOString(),
     },
   };
 }

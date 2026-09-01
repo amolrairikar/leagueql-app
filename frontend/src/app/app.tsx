@@ -44,6 +44,7 @@ import PrivacyPage from '@/features/privacy/privacy-page';
 import SeasonStandings from '@/features/season_standings/season-standings';
 import { AppSidebar } from '@/features/sidebar/app-sidebar';
 import { HeaderAccount } from '@/features/sidebar/header-account';
+import { RefreshReminderBanner } from '@/features/sidebar/refresh-reminder-banner';
 import Transactions from '@/features/transactions/transactions';
 import { isDemoMode } from '@/lib/cookie-handler';
 import { recordRouteChange } from '@/lib/telemetry';
@@ -90,6 +91,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
             </div>
           </header>
           <Banner />
+          <RefreshReminderBanner />
           <ErrorBoundary resetKeys={[location.pathname]}>
             <MembershipGuard>{children}</MembershipGuard>
           </ErrorBoundary>

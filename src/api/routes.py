@@ -176,6 +176,10 @@ def get_league(
             "seasons": seasons,
             "league_name": metadata.get("league_name"),
             "is_owner": metadata.get("owner_user_id") == clerk_user_id,
+            # Frontend derives data freshness as last_refresh_at ?? onboarded_at:
+            # last_refresh_at is absent until the league's first successful refresh.
+            "last_refresh_at": metadata.get("last_refresh_at"),
+            "onboarded_at": metadata.get("onboarded_at"),
         },
     )
 

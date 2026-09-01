@@ -18,6 +18,8 @@ export function leagueMetadata(data: {
   seasons?: string[];
   league_name?: string | null;
   is_owner?: boolean;
+  onboarded_at?: string;
+  last_refresh_at?: string | null;
 }) {
   return http.get(`${API}/leagues/:id`, () =>
     HttpResponse.json({
@@ -26,6 +28,8 @@ export function leagueMetadata(data: {
         seasons: data.seasons ?? [],
         league_name: data.league_name ?? null,
         is_owner: data.is_owner ?? false,
+        onboarded_at: data.onboarded_at ?? null,
+        last_refresh_at: data.last_refresh_at ?? null,
       },
     }),
   );
