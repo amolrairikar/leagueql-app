@@ -250,6 +250,12 @@ def compile_sleeper_starter_stats(
         Tuple of (stats, ids) where stats is a list of dicts with player_id and
         points_scored, and ids is the list of starter player IDs.
     """
+    # Sleeper sends a null (not absent) starters/starters_points for a team with no
+    # lineup set that week (e.g. a bye or an unplayed week), so a `.get(key, default)`
+    # at the call site still yields None; coerce to empty so zip() doesn't crash.
+    starters = starters or []
+    starters_points = starters_points or []
+
     starter_slots: list[str] = []
     if roster_positions:
         starter_slots = [p for p in roster_positions if p not in SLEEPER_BENCH_SLOTS]
@@ -293,6 +299,11 @@ def compile_sleeper_bench_stats(
     Returns:
         List of dicts with player_id and points_scored.
     """
+    # As with starters, Sleeper can send a null players/players_points for a team
+    # with no lineup that week; coerce so iteration and .get() don't crash.
+    players = players or []
+    players_points = players_points or {}
+
     result = []
     for player_id in players:
         if player_id in starter_ids:
