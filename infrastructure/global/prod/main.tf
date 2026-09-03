@@ -126,6 +126,16 @@ module "s3-bidirectional-replication" {
       rule_name       = "expire-noncurrent-api-data"
       prefix          = "raw-api-data/"
       noncurrent_days = 2
+    },
+    {
+      rule_name       = "expire-noncurrent-player-metadata"
+      prefix          = "player-metadata/"
+      noncurrent_days = 2
+    },
+    {
+      rule_name       = "expire-noncurrent-player-stats"
+      prefix          = "player-stats/"
+      noncurrent_days = 2
     }
   ]
 
