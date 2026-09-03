@@ -94,7 +94,7 @@ resource "aws_dynamodb_table" "global_table" {
   global_secondary_index {
     name               = "GSI3"
     projection_type    = "INCLUDE"
-    non_key_attributes = ["platform", "league_name", "last_refresh_at", "last_accessed_at", "active_platform", "migrated_from", "migrated_at"]
+    non_key_attributes = ["platform", "league_name", "last_refresh_at", "last_accessed_at", "active_platform", "migrated_from", "migrated_at", "owner_user_id"]
     key_schema {
       attribute_name = var.range_key
       key_type       = "HASH"
