@@ -314,6 +314,22 @@ class TestCompileSleeperStarterStats:
         assert stats[0]["fantasy_position"] == "QB"
         assert stats[1]["fantasy_position"] == "WR"
 
+    def test_null_starters_yields_empty(self, processor_handler):
+        # Sleeper sends a null (not absent) starters for a team with no lineup that
+        # week; it must be tolerated like an empty list rather than crashing zip().
+        stats, ids = processor_handler.compile_sleeper_starter_stats(
+            starters=None, starters_points=None, player_metadata={}
+        )
+        assert stats == []
+        assert ids == []
+
+    def test_null_starters_points_yields_empty(self, processor_handler):
+        stats, ids = processor_handler.compile_sleeper_starter_stats(
+            starters=["1"], starters_points=None, player_metadata={}
+        )
+        assert stats == []
+        assert ids == ["1"]
+
 
 class TestCompileSleeperBenchStats:
     def test_excludes_starters_from_bench(self, processor_handler):
@@ -349,6 +365,28 @@ class TestCompileSleeperBenchStats:
             player_metadata=metadata,
         )
         assert result[0]["position"] == "D/ST"
+
+    def test_null_players_yields_empty(self, processor_handler):
+        # A null (not absent) players list for a team with no lineup that week must
+        # be tolerated like an empty list rather than crashing iteration.
+        result = processor_handler.compile_sleeper_bench_stats(
+            players=None,
+            players_points=None,
+            starter_ids=[],
+            player_metadata={},
+        )
+        assert result == []
+
+    def test_null_players_points_defaults_to_zero(self, processor_handler):
+        # A null players_points must not crash the .get() lookup; points default to 0.
+        metadata = {"5": {"first_name": "A", "last_name": "B", "position": "WR"}}
+        result = processor_handler.compile_sleeper_bench_stats(
+            players=["5"],
+            players_points=None,
+            starter_ids=[],
+            player_metadata=metadata,
+        )
+        assert result[0]["points_scored"] == 0.0
 
 
 class TestCompileSleeperPlayerScoringTotals:

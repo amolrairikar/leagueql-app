@@ -54,11 +54,15 @@ The processor SHALL compute `drafted_position_rank`, `actual_position_rank`, `dr
 - **THEN** each pick carries the computed rank/VORP analytics, with `vorp` null for K and D/ST, and auction fields (`bid_amount`, `nominating_team_id`) populated for auction drafts (null for snake)
 
 ### Requirement: Tolerate empty and absent inputs
-The processor SHALL write views without erroring when player metadata/stats or a Sleeper bracket are absent, guarding 0-column DuckDB registrations for views that can legitimately be empty.
+The processor SHALL write views without erroring when player metadata/stats or a Sleeper bracket are absent, when a Sleeper matchup entry's lineup fields (`starters`, `starters_points`, `players`, `players_points`) are null rather than merely omitted, guarding 0-column DuckDB registrations for views that can legitimately be empty.
 
 #### Scenario: Missing player metadata
 - **WHEN** `player_name`, `total_points`, or `position` is missing for some players
 - **THEN** the affected views are still written with null fields rather than erroring
+
+#### Scenario: Null Sleeper matchup lineup fields
+- **WHEN** a Sleeper matchup entry carries a null value for `starters`, `starters_points`, `players`, or `players_points` (e.g. a team with no lineup set that week)
+- **THEN** that team contributes no starter/bench stat rows for the matchup and the run completes without erroring, the same as when the field is absent or empty
 
 #### Scenario: Empty bracket season
 - **WHEN** a season's Sleeper `playoff_bracket`/`losers_bracket` raw data is empty or absent
