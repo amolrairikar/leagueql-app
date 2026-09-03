@@ -41,7 +41,7 @@ sort key is `onboarded_at`, so results come back ordered by onboard time (use
 the big per-league view items (`MATCHUPS`, `STANDINGS`, `DRAFT`, …) are omitted — the index
 stays sparse. Projection is `INCLUDE` of the dashboard display fields (`platform`,
 `league_name`, `last_refresh_at`, `last_accessed_at`, `active_platform`, `migrated_from`,
-`migrated_at`), so the query needs no follow-up `GetItem`.
+`migrated_at`, `owner_user_id`), so the query needs no follow-up `GetItem`.
 
 | Attribute | Type | Role | Description |
 |---|---|---|---|
