@@ -1,7 +1,7 @@
 # transactions Specification
 
 ## Purpose
-The `/transactions` page lists a season's completed transactions — waivers, trades, and free-agent moves — for the connected league, newest first, with per-team adds (green) and drops (red). Below the season selector, a per-owner summary table breaks down activity for the selected season. This is a Sleeper-only feature; ESPN exposes no transaction data.
+The `/transactions` page lists a season's completed transactions — waivers, trades, and free-agent moves — for the connected league, newest first, with per-team adds (green) and drops (red). Below the season selector, a per-owner summary table breaks down activity for the selected season. Available for both Sleeper (waivers/trades/free agents, all seasons) and ESPN (waivers/free agents, current season only) leagues; the type filter is platform-aware (ESPN offers no Trades).
 
 ## Requirements
 

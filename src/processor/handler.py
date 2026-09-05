@@ -716,20 +716,153 @@ def _build_espn_brackets(all_matchups: list[dict]) -> list[dict]:
     return all_brackets
 
 
+def build_espn_team_map(
+    all_members: list[dict], all_teams: list[dict]
+) -> dict[str, dict[str, dict]]:
+    """
+    Build a season → team_id → {team_name, display_name} lookup for ESPN leagues.
+
+    ESPN transactions reference teams by numeric ``teamId`` only; this resolves each
+    team to its name and its primary owner's display name (the same
+    ``primaryOwner → member`` join the ESPN TEAMS view performs) so transactions can
+    be shown with human-readable team labels.
+
+    Args:
+        all_members: ESPN member rows (each with id, displayName, season).
+        all_teams: ESPN team rows (each with id, name, primaryOwner, season).
+
+    Returns:
+        Mapping of season → team_id (str) → {"team_name", "display_name"}.
+    """
+    display_by_season: dict[tuple[str, str], str | None] = {}
+    for member in all_members:
+        display_by_season[(member["season"], member.get("id"))] = member.get(
+            "displayName"
+        )
+
+    team_map: dict[str, dict[str, dict]] = defaultdict(dict)
+    for team in all_teams:
+        season = team["season"]
+        team_id = str(team["id"])
+        team_map[season][team_id] = {
+            "team_name": team.get("name"),
+            "display_name": display_by_season.get((season, team.get("primaryOwner"))),
+        }
+    return team_map
+
+
+# ESPN transaction ``type`` → the transaction ``type`` the shared view stores (matching
+# compile_sleeper_transactions and the frontend TransactionItem union). Only EXECUTED
+# FREEAGENT/WAIVER records reach here; other ESPN types are dropped upstream.
+_ESPN_TRANSACTION_TYPE_MAP = {"FREEAGENT": "free_agent", "WAIVER": "waiver"}
+
+
+def _resolve_espn_transaction_player(
+    player_id: Any, roster_id: Any, player_by_id: dict
+) -> dict:
+    """
+    Resolve one ESPN transaction item into a player row.
+
+    Args:
+        player_id: ESPN ``playerId`` from the transaction item.
+        roster_id: The ESPN team the player moved to (add) or from (drop).
+        player_by_id: Mapping of ESPN player_id → {player_name, position}.
+
+    Returns:
+        Dict with player_id, player_name (None if unknown), position, and roster_id
+        (all ids stringified, matching the Sleeper row shape).
+    """
+    meta = player_by_id.get(player_id, {})
+    return {
+        "player_id": str(player_id),
+        "player_name": meta.get("player_name") or None,
+        "position": meta.get("position"),
+        "roster_id": str(roster_id),
+    }
+
+
+def compile_espn_transactions(
+    raw_transactions: list[tuple[dict, str]],
+    team_map: dict[str, dict[str, dict]],
+    player_by_id: dict,
+) -> list[dict]:
+    """
+    Build resolved transaction rows from raw ESPN transaction payloads.
+
+    Only EXECUTED FREEAGENT/WAIVER transactions are passed in (others are filtered
+    upstream in the ESPN client). Player IDs are resolved to names/positions and team
+    IDs to team labels. Produces the same row shape as compile_sleeper_transactions,
+    with ``draft_picks`` always empty (trades are not stored for ESPN).
+
+    Args:
+        raw_transactions: List of (transaction payload, season) tuples.
+        team_map: season → team_id → {team_name, display_name} (see build_espn_team_map).
+        player_by_id: Mapping of ESPN player_id → {player_name, position}.
+
+    Returns:
+        List of resolved transaction row dicts.
+    """
+    rows = []
+    for txn, season in raw_transactions:
+        season_teams = team_map.get(season, {})
+        team_id = str(txn.get("teamId"))
+        team_info = season_teams.get(team_id, {})
+        adds, drops = [], []
+        for item in txn.get("items") or []:
+            if item.get("type") == "ADD":
+                adds.append(
+                    _resolve_espn_transaction_player(
+                        item.get("playerId"), item.get("toTeamId"), player_by_id
+                    )
+                )
+            elif item.get("type") == "DROP":
+                drops.append(
+                    _resolve_espn_transaction_player(
+                        item.get("playerId"), item.get("fromTeamId"), player_by_id
+                    )
+                )
+        rows.append(
+            {
+                "season": season,
+                "transaction_id": txn.get("id"),
+                "type": _ESPN_TRANSACTION_TYPE_MAP.get(txn.get("type")),
+                "week": txn.get("scoringPeriodId"),
+                # Waivers process asynchronously (processDate); free agents execute
+                # immediately (proposedDate). Prefer the actual execution time.
+                "created": txn.get("processDate") or txn.get("proposedDate"),
+                "roster_ids": [team_id],
+                "teams": [
+                    {
+                        "roster_id": team_id,
+                        "team_name": team_info.get("team_name"),
+                        "display_name": team_info.get("display_name"),
+                    }
+                ],
+                "adds": adds,
+                "drops": drops,
+                "draft_picks": [],
+                "waiver_bid": txn.get("bidAmount"),
+            }
+        )
+    return rows
+
+
 def _register_espn_raw_data(
     raw_data: list[dict],
 ) -> dict[str, list[dict]]:
     """
     Parse raw ESPN API data into grouped lists ready for DuckDB registration.
 
-    Extracts members and teams from 'users' records and builds cleaned matchup
-    dicts (including starter/bench player stats) from 'matchups*' records.
+    Extracts members and teams from 'users' records, builds cleaned matchup dicts
+    (including starter/bench player stats) from 'matchups*' records, and compiles
+    current-season transactions from 'transactions' records.
 
     Args:
         raw_data: List of dicts with keys: season, data_type, data.
 
     Returns:
-        Dict with keys 'members', 'teams', 'matchups', and 'brackets', each mapping to a list of row dicts.
+        Dict with keys 'members', 'teams', 'matchups', 'brackets', 'draft_picks',
+        'player_scoring_totals', and 'transactions', each mapping to a list of row dicts.
     """
     all_members, all_teams, all_matchups, all_draft_picks, all_player_scoring_totals = (
         [],
@@ -738,6 +871,7 @@ def _register_espn_raw_data(
         [],
         [],
     )
+    raw_transactions: list[tuple[dict, str]] = []
     league_name_by_season: dict[str, str] = {}
     league_settings_by_season: dict[str, dict] = {}
     for item in raw_data:
@@ -849,8 +983,26 @@ def _register_espn_raw_data(
                     record["position"]
                 )
                 all_player_scoring_totals.append(record_copy)
+        elif item["data_type"] == "transactions":
+            for record in item["data"].get("transactions", []):
+                raw_transactions.append((record, item["season"]))
 
     brackets = _build_espn_brackets(all_matchups)
+    # Resolve transaction player IDs from the season's scoring-totals view (the
+    # kona_player_info fetch), matching how the Sleeper path resolves from cached
+    # player metadata; an unknown player falls back to a null name (graceful).
+    player_by_id = {
+        record["player_id"]: {
+            "player_name": record.get("player_name"),
+            "position": record.get("position"),
+        }
+        for record in all_player_scoring_totals
+    }
+    transactions = compile_espn_transactions(
+        raw_transactions=raw_transactions,
+        team_map=build_espn_team_map(all_members, all_teams),
+        player_by_id=player_by_id,
+    )
     return {
         "members": all_members,
         "teams": all_teams,
@@ -858,6 +1010,7 @@ def _register_espn_raw_data(
         "brackets": brackets,
         "draft_picks": all_draft_picks,
         "player_scoring_totals": all_player_scoring_totals,
+        "transactions": transactions,
         "league_name_by_season": league_name_by_season,
         "league_settings_by_season": league_settings_by_season,
     }
@@ -1762,9 +1915,10 @@ def _process_manifest(
         DRAFT_SCHEMA,
     ]
 
-    # Transactions are Sleeper-only (ESPN exposes no equivalent data) and skipped when a
-    # league has no completed transactions, so the view is built conditionally (backend/sleeper-transactions).
-    if platform == "SLEEPER" and grouped.get("transactions"):
+    # Transactions are built for both Sleeper (backend/sleeper-transactions) and ESPN
+    # (backend/espn-transactions); the compile step is what's platform-specific. The view
+    # is skipped when a league has no transactions, so it is built conditionally.
+    if grouped.get("transactions"):
         TRANSACTIONS_SCHEMA = KeySchema(
             pk=f"LEAGUE#{canonical_league_id}",
             sk=lambda row: f"TRANSACTIONS#{row['season']}",

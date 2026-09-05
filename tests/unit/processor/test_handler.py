@@ -321,6 +321,60 @@ class TestRegisterESPNRawDataMatchups:
         assert result["league_settings_by_season"]["2024"]["num_playoff_teams"] == 6
         assert result["league_settings_by_season"]["2024"]["playoff_week_start"] == 15
 
+    def test_transactions_branch_resolves_players_and_teams(self, processor_handler):
+        # A transactions record is compiled into a resolved row, with the added
+        # player's name coming from the season's player_scoring_totals view and the
+        # team label from the users (members/teams) view.
+        raw = [
+            {
+                "season": "2024",
+                "data_type": "users",
+                "data": {
+                    "members": [{"id": "{M9}", "displayName": "user9"}],
+                    "teams": [{"id": 9, "name": "Team Nine", "primaryOwner": "{M9}"}],
+                },
+            },
+            {
+                "season": "2024",
+                "data_type": "player_scoring_totals",
+                "data": {
+                    "player_scoring_totals": [
+                        {
+                            "player_id": 111,
+                            "player_name": "Joe Burrow",
+                            "position": 1,
+                            "total_points": 300,
+                        }
+                    ]
+                },
+            },
+            {
+                "season": "2024",
+                "data_type": "transactions",
+                "data": {
+                    "transactions": [
+                        {
+                            "id": "fa1",
+                            "type": "FREEAGENT",
+                            "scoringPeriodId": 2,
+                            "proposedDate": 100,
+                            "bidAmount": 0,
+                            "teamId": 9,
+                            "items": [
+                                {"type": "ADD", "playerId": 111, "toTeamId": 9},
+                            ],
+                        }
+                    ]
+                },
+            },
+        ]
+        result = processor_handler._register_espn_raw_data(raw)
+        row = result["transactions"][0]
+        assert row["type"] == "free_agent"
+        assert row["adds"][0]["player_name"] == "Joe Burrow"
+        assert row["teams"][0]["team_name"] == "Team Nine"
+        assert row["teams"][0]["display_name"] == "user9"
+
 
 class TestTraceSleeperChampionshipPathContinue:
     def test_skips_unknown_and_revisited_match_ids(self, processor_handler):
@@ -1051,12 +1105,13 @@ class TestLambdaHandlerImpl:
             sks=["TRANSACTIONS#2024"],
         )
 
-    def test_espn_never_writes_transactions_schema(self, processor_handler):
+    def test_espn_transactions_schema_written_when_present(self, processor_handler):
+        # ESPN now produces a TRANSACTIONS view when the current season has stored
+        # transactions (backend/espn-transactions).
         mock_s3 = MagicMock()
         mock_s3.get_object.return_value = _manifest_response({"ESPN": ["2024"]})
         df_to_items = MagicMock(return_value=[])
-        # Even if a (hypothetical) transactions group were present, ESPN must not
-        # produce a TRANSACTIONS view — the schema is Sleeper-gated.
+        fake_queries = {**_FAKE_QUERIES, "TRANSACTIONS": {"ESPN": "SELECT 1"}}
         with (
             patch.multiple(
                 processor_handler,
@@ -1068,6 +1123,35 @@ class TestLambdaHandlerImpl:
                 register_raw_data=MagicMock(
                     return_value={"transactions": [{"season": "2024"}]}
                 ),
+                dataframe_to_dynamo_items=df_to_items,
+                write_items=MagicMock(),
+                write_metadata_items=MagicMock(),
+                update_league_count=MagicMock(),
+                QUERIES=fake_queries,
+            ),
+            patch.object(processor_handler.duckdb, "connect", return_value=MagicMock()),
+        ):
+            processor_handler._lambda_handler_impl(_s3_event(), MagicMock())
+        entity_types = {
+            call.kwargs["schema"].entity_type for call in df_to_items.call_args_list
+        }
+        assert processor_handler.EntityType.TRANSACTIONS in entity_types
+
+    def test_espn_no_transactions_schema_when_empty(self, processor_handler):
+        # An ESPN league whose current season has no stored transactions writes no
+        # TRANSACTIONS view (backend/espn-transactions).
+        mock_s3 = MagicMock()
+        mock_s3.get_object.return_value = _manifest_response({"ESPN": ["2024"]})
+        df_to_items = MagicMock(return_value=[])
+        with (
+            patch.multiple(
+                processor_handler,
+                s3_client=mock_s3,
+                get_previous_version_id=MagicMock(return_value=None),
+                read_s3_object=MagicMock(
+                    return_value=[{"data_type": "users", "data": {}}]
+                ),
+                register_raw_data=MagicMock(return_value={"transactions": []}),
                 dataframe_to_dynamo_items=df_to_items,
                 write_items=MagicMock(),
                 write_metadata_items=MagicMock(),

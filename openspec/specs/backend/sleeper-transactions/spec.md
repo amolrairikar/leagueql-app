@@ -1,7 +1,7 @@
 # sleeper-transactions Specification
 
 ## Purpose
-Build a precomputed transactions view for Sleeper leagues — completed waiver claims, trades (players and/or draft picks), free-agent adds/drops, and commissioner moves — with opaque Sleeper player IDs resolved to names/positions and roster IDs resolved to team labels. The processor writes it to DynamoDB and it is read through the query API under `queryType=TRANSACTIONS#{season}`. Sleeper-only: ESPN produces no `TRANSACTIONS` items.
+Build a precomputed transactions view for Sleeper leagues — completed waiver claims, trades (players and/or draft picks), free-agent adds/drops, and commissioner moves — with opaque Sleeper player IDs resolved to names/positions and roster IDs resolved to team labels. The processor writes it to DynamoDB and it is read through the query API under `queryType=TRANSACTIONS#{season}`. This capability covers the Sleeper producer; ESPN transactions are produced by `backend/espn-transactions` into the same `TRANSACTIONS#{season}` items.
 
 ## Requirements
 

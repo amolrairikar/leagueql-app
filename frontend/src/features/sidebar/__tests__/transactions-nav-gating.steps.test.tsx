@@ -41,7 +41,7 @@ defineFeature(feature, (test) => {
     });
   });
 
-  test('ESPN leagues do not see the Transactions nav item', ({
+  test('ESPN leagues see the Transactions nav item', ({
     given,
     when,
     then,
@@ -53,8 +53,8 @@ defineFeature(feature, (test) => {
     when('I render the sidebar', async () => {
       await renderSidebarFor(platform);
     });
-    then(/^I do not see the "(.*)" nav item$/, (label) => {
-      expect(screen.queryByText(label)).not.toBeInTheDocument();
+    then(/^I see the "(.*)" nav item$/, async (label) => {
+      expect(await screen.findByText(label)).toBeInTheDocument();
     });
   });
 });

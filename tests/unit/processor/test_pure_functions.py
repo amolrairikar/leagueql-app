@@ -600,6 +600,130 @@ class TestCompileSleeperTransactions:
         assert len(rows[0]["adds"]) == 1
 
 
+class TestBuildEspnTeamMap:
+    def test_maps_team_to_name_and_owner_display(self, processor_handler):
+        members = [{"id": "{M1}", "displayName": "alice", "season": "2026"}]
+        teams = [
+            {"id": 9, "name": "Team Nine", "primaryOwner": "{M1}", "season": "2026"}
+        ]
+        result = processor_handler.build_espn_team_map(members, teams)
+        assert result["2026"]["9"] == {
+            "team_name": "Team Nine",
+            "display_name": "alice",
+        }
+
+    def test_missing_owner_yields_none_display(self, processor_handler):
+        teams = [
+            {"id": 3, "name": "Team Three", "primaryOwner": "{GHOST}", "season": "2026"}
+        ]
+        result = processor_handler.build_espn_team_map([], teams)
+        assert result["2026"]["3"] == {
+            "team_name": "Team Three",
+            "display_name": None,
+        }
+
+
+class TestCompileEspnTransactions:
+    def _team_map(self):
+        return {
+            "2026": {
+                "9": {"team_name": "Team Nine", "display_name": "user9"},
+                "3": {"team_name": "Team Three", "display_name": "user3"},
+            }
+        }
+
+    def _player_by_id(self):
+        return {
+            111: {"player_name": "Joe Burrow", "position": "QB"},
+            222: {"player_name": "Ja'Marr Chase", "position": "WR"},
+        }
+
+    def test_free_agent_resolves_add_drop_team_and_created(self, processor_handler):
+        txn = {
+            "id": "fa1",
+            "type": "FREEAGENT",
+            "scoringPeriodId": 2,
+            "proposedDate": 100,
+            "bidAmount": 0,
+            "teamId": 9,
+            "items": [
+                {"type": "ADD", "playerId": 111, "toTeamId": 9, "fromTeamId": 0},
+                {"type": "DROP", "playerId": 222, "toTeamId": 0, "fromTeamId": 9},
+            ],
+        }
+        rows = processor_handler.compile_espn_transactions(
+            [(txn, "2026")], self._team_map(), self._player_by_id()
+        )
+        row = rows[0]
+        assert row["season"] == "2026"
+        assert row["type"] == "free_agent"
+        assert row["week"] == 2
+        assert row["created"] == 100  # no processDate → proposedDate
+        assert row["roster_ids"] == ["9"]
+        assert row["teams"] == [
+            {"roster_id": "9", "team_name": "Team Nine", "display_name": "user9"}
+        ]
+        assert row["adds"] == [
+            {
+                "player_id": "111",
+                "player_name": "Joe Burrow",
+                "position": "QB",
+                "roster_id": "9",
+            }
+        ]
+        assert row["drops"][0]["player_id"] == "222"
+        assert row["drops"][0]["roster_id"] == "9"
+        assert row["draft_picks"] == []
+        assert row["waiver_bid"] == 0
+
+    def test_waiver_maps_type_bid_and_prefers_process_date(self, processor_handler):
+        txn = {
+            "id": "w1",
+            "type": "WAIVER",
+            "scoringPeriodId": 1,
+            "proposedDate": 100,
+            "processDate": 200,
+            "bidAmount": 17,
+            "teamId": 3,
+            "items": [{"type": "ADD", "playerId": 111, "toTeamId": 3}],
+        }
+        rows = processor_handler.compile_espn_transactions(
+            [(txn, "2026")], self._team_map(), self._player_by_id()
+        )
+        row = rows[0]
+        assert row["type"] == "waiver"
+        assert row["created"] == 200  # processDate preferred over proposedDate
+        assert row["waiver_bid"] == 17
+
+    def test_unknown_player_and_unresolved_team(self, processor_handler):
+        txn = {
+            "id": "fa2",
+            "type": "FREEAGENT",
+            "scoringPeriodId": 1,
+            "proposedDate": 300,
+            "bidAmount": 0,
+            "teamId": 12,  # not in team_map
+            "items": [{"type": "ADD", "playerId": 99999, "toTeamId": 12}],
+        }
+        rows = processor_handler.compile_espn_transactions(
+            [(txn, "2026")], self._team_map(), self._player_by_id()
+        )
+        row = rows[0]
+        assert row["teams"] == [
+            {"roster_id": "12", "team_name": None, "display_name": None}
+        ]
+        assert row["adds"][0]["player_name"] is None
+        assert row["adds"][0]["position"] is None
+
+    def test_empty_input_yields_no_rows(self, processor_handler):
+        assert (
+            processor_handler.compile_espn_transactions(
+                [], self._team_map(), self._player_by_id()
+            )
+            == []
+        )
+
+
 class TestDataframeToDynamoItems:
     def test_groups_rows_by_sk(self, processor_handler):
         con = duckdb.connect()

@@ -1,0 +1,128 @@
+[
+  {
+    "season": "2024",
+    "data_type": "users",
+    "data": {
+      "members": [
+        {
+          "id": "{M1}",
+          "displayName": "user1"
+        },
+        {
+          "id": "{M2}",
+          "displayName": "user2"
+        }
+      ],
+      "teams": [
+        {
+          "id": 1,
+          "name": "Team One",
+          "logo": "",
+          "owners": [
+            "{M1}"
+          ],
+          "rankCalculatedFinal": 1,
+          "primaryOwner": "{M1}"
+        },
+        {
+          "id": 2,
+          "name": "Team Two",
+          "logo": "",
+          "owners": [
+            "{M2}"
+          ],
+          "rankCalculatedFinal": 2,
+          "primaryOwner": "{M2}"
+        }
+      ]
+    }
+  },
+  {
+    "season": "2024",
+    "data_type": "settings",
+    "data": {
+      "settings": {
+        "name": "ESPN Test League",
+        "scheduleSettings": {
+          "playoffTeamCount": 2,
+          "matchupPeriodCount": 1
+        }
+      }
+    }
+  },
+  {
+    "season": "2024",
+    "data_type": "matchups_week1",
+    "data": {
+      "matchups": [
+        {
+          "matchupPeriodId": 1,
+          "playoffTierType": "NONE",
+          "home": {
+            "teamId": 1,
+            "totalPoints": "100.0",
+            "rosterForMatchupPeriod": {},
+            "rosterForCurrentScoringPeriod": {}
+          },
+          "away": {
+            "teamId": 2,
+            "totalPoints": "90.0",
+            "rosterForMatchupPeriod": {},
+            "rosterForCurrentScoringPeriod": {}
+          }
+        }
+      ]
+    }
+  },
+  {
+    "season": "2024",
+    "data_type": "draft_picks",
+    "data": {
+      "draft_picks": [
+        {
+          "id": 1,
+          "teamId": 1,
+          "playerId": 111,
+          "roundId": 1,
+          "roundPickNumber": 1,
+          "overallPickNumber": 1,
+          "keeper": false,
+          "reservedForKeeper": false,
+          "autoDraftTypeId": 0,
+          "bidAmount": 0,
+          "lineupSlotId": 0,
+          "memberId": "{M1}",
+          "nominatingTeamId": 0,
+          "tradeLocked": false
+        }
+      ]
+    }
+  },
+  {
+    "season": "2024",
+    "data_type": "player_scoring_totals",
+    "data": {
+      "player_scoring_totals": [
+        {
+          "player_id": 111,
+          "player_name": "Joe Burrow",
+          "position": 1,
+          "total_points": 300
+        },
+        {
+          "player_id": 222,
+          "player_name": "Joe Mixon",
+          "position": 2,
+          "total_points": 150
+        }
+      ]
+    }
+  },
+  {
+    "season": "2024",
+    "data_type": "transactions",
+    "data": {
+      "transactions": []
+    }
+  }
+]

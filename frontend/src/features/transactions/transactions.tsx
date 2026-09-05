@@ -484,7 +484,7 @@ interface OwnerVisual {
 /**
  * Maps each roster_id to the avatar logo and color *index* used on the Season Standings page
  * (frontend/season-standings), so the summary table shows the same avatar/color per owner. Standings keys on
- * team_id, which is the roster_id for Sleeper (the only platform with transactions), and its
+ * team_id, which is the transaction roster_id (Sleeper roster id / ESPN team id), and its
  * color is positional — `avatarColor(index)` over the API's returned order — so the index is
  * captured here rather than the resolved color.
  */
@@ -527,9 +527,11 @@ function buildTransactionVisuals(
 function SummaryTable({
   promise,
   standingsPromise,
+  showTrades,
 }: {
   promise: Promise<TransactionsResult>;
   standingsPromise: Promise<StandingsResult>;
+  showTrades: boolean;
 }) {
   const result = use(promise);
   const standingsResult = use(standingsPromise);
@@ -567,7 +569,9 @@ function SummaryTable({
               </th>
               <th className={`${headCell} text-right`}>Waivers</th>
               <th className={`${headCell} text-right`}>Free Agents</th>
-              <th className={`${headCell} text-right`}>Trades</th>
+              {showTrades && (
+                <th className={`${headCell} text-right`}>Trades</th>
+              )}
               <th className={`${headCell} text-right`}>Total</th>
             </tr>
           </thead>
@@ -603,9 +607,11 @@ function SummaryTable({
                   <td className="px-3.5 py-2.5 text-right text-muted-foreground tabular-nums">
                     {row.free_agent}
                   </td>
-                  <td className="px-3.5 py-2.5 text-right text-muted-foreground tabular-nums">
-                    {row.trade}
-                  </td>
+                  {showTrades && (
+                    <td className="px-3.5 py-2.5 text-right text-muted-foreground tabular-nums">
+                      {row.trade}
+                    </td>
+                  )}
                   <td className="px-3.5 py-2.5 text-right">
                     <span className="inline-flex items-center justify-end gap-2">
                       <span className="hidden sm:block h-1.5 w-12 rounded-full bg-muted overflow-hidden">
@@ -719,7 +725,17 @@ export default function Transactions() {
   const defaultSeason =
     [...seasons].sort((a, b) => Number(b) - Number(a))[0] ?? '';
   const [selectedSeason, setSelectedSeason] = useState(defaultSeason);
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>('trade');
+
+  // ESPN produces no trades, so its filter offers only Waivers / Free Agents and
+  // defaults to Free Agents (a Trades default would render an always-empty wire).
+  // Sleeper keeps Trades / Waivers / Free Agents, defaulting to Trades.
+  const isEspn = platform === 'ESPN';
+  const typeFilters = isEspn
+    ? TYPE_FILTERS.filter((f) => f.value !== 'trade')
+    : TYPE_FILTERS;
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>(
+    isEspn ? 'free_agent' : 'trade',
+  );
 
   const transactionsPromise = useMemo(
     (): Promise<TransactionsResult> =>
@@ -786,12 +802,13 @@ export default function Transactions() {
             <SummaryTable
               promise={transactionsPromise}
               standingsPromise={standingsPromise}
+              showTrades={!isEspn}
             />
           </Suspense>
         </div>
 
         <div className="inline-flex items-center gap-0.5 p-0.5 mb-4 rounded-lg bg-muted border border-border/60">
-          {TYPE_FILTERS.map((f) => {
+          {typeFilters.map((f) => {
             const active = typeFilter === f.value;
             const { Icon } = typeMeta(f.value);
             return (
