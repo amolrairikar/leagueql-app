@@ -47,6 +47,9 @@ _ENV = {
     # backend/player-metadata-refresher: player metadata refresher writes the Sleeper players cache here.
     "PLAYER_METADATA_S3_KEY": "player-metadata/sleeper_nfl_players.json",
     "ONBOARDER_LAMBDA_NAME": "onboarder-test",
+    # backend/admin-onboarding-report: the nightly report resolves the Discord webhook
+    # URL from this SSM parameter name at import; a moto SecureString is seeded below.
+    "DISCORD_WEBHOOK_URL_SSM_PARAM": "/leagueql/test/discord/webhook_url",
     "AWS_DEFAULT_REGION": REGION,
     "AWS_ACCESS_KEY_ID": "testing",
     "AWS_SECRET_ACCESS_KEY": "testing",
@@ -87,6 +90,7 @@ def _create_table() -> None:
             {"AttributeName": "canonical_league_id", "AttributeType": "S"},
             {"AttributeName": "platform", "AttributeType": "S"},
             {"AttributeName": "league_id", "AttributeType": "S"},
+            {"AttributeName": "onboarded_at", "AttributeType": "S"},
         ],
         GlobalSecondaryIndexes=[
             {
@@ -106,6 +110,29 @@ def _create_table() -> None:
                     {"AttributeName": "league_id", "KeyType": "RANGE"},
                 ],
                 "Projection": {"ProjectionType": "ALL"},
+            },
+            # GSI3: sparse all-leagues index over METADATA items (SK = "METADATA",
+            # sorted by onboarded_at). Backs the nightly admin onboarding report
+            # (backend/admin-onboarding-report). Mirrors infrastructure/modules/dynamodb/main.tf.
+            {
+                "IndexName": "GSI3",
+                "KeySchema": [
+                    {"AttributeName": "SK", "KeyType": "HASH"},
+                    {"AttributeName": "onboarded_at", "KeyType": "RANGE"},
+                ],
+                "Projection": {
+                    "ProjectionType": "INCLUDE",
+                    "NonKeyAttributes": [
+                        "platform",
+                        "league_name",
+                        "last_refresh_at",
+                        "last_accessed_at",
+                        "active_platform",
+                        "migrated_from",
+                        "migrated_at",
+                        "owner_user_id",
+                    ],
+                },
             },
         ],
     )
@@ -209,6 +236,17 @@ def _load_handlers(context) -> None:
         "player_metadata.handler", _SRC / "player_metadata" / "handler.py"
     )
 
+    # --- admin report (nightly onboarding digest; bare ``aggregations``) ------
+    admin_report_pkg = types.ModuleType("admin_report")
+    admin_report_pkg.__path__ = [str(_SRC / "admin_report")]
+    sys.modules["admin_report"] = admin_report_pkg
+    sys.modules["aggregations"] = _load_module(
+        "admin_report.aggregations", _SRC / "admin_report" / "aggregations.py"
+    )
+    context.admin_report_handler = _load_module(
+        "admin_report.handler", _SRC / "admin_report" / "handler.py"
+    )
+
 
 def before_all(context):
     _stub_newrelic()
@@ -222,6 +260,12 @@ def before_all(context):
     context._moto.start()
     _create_table()
     _create_bucket()
+    # backend/admin-onboarding-report resolves its Discord webhook from SSM at import.
+    boto3.client("ssm", region_name=REGION).put_parameter(
+        Name=_ENV["DISCORD_WEBHOOK_URL_SSM_PARAM"],
+        Value="https://discord.test/webhook",
+        Type="SecureString",
+    )
 
     context.region = REGION
     context.table_name = TABLE_NAME

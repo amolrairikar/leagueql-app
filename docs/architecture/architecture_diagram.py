@@ -89,6 +89,7 @@ with Diagram(
             sleeper_refresh = Lambda("Sleeper refresh\n(weekly)")
             player_meta = Lambda("Player metadata\nrefresher")
             stats_task = Fargate("Sleeper stats\nrefresher (Fargate)")
+            admin_report = Lambda("Admin onboarding\nreport (nightly, prod)")
 
         discord_fn = Lambda("Discord notifier\nLambda")
         sns = SimpleNotificationServiceSns("SNS\n(alerts)")
@@ -125,12 +126,16 @@ with Diagram(
     processor >> Edge(label="precomputed views") >> ddb
 
     # ── Scheduled jobs ────────────────────────────────────────────────────────
-    evb >> SCHED >> [sleeper_refresh, player_meta, stats_task]
+    evb >> SCHED >> [sleeper_refresh, player_meta, stats_task, admin_report]
     sleeper_refresh >> ASYNC >> onboarder
     # Player metadata + Sleeper stats land in S3; the processor reads both prefixes
     # (alongside the raw payloads) when building precomputed views.
     player_meta >> Edge(label="player metadata\nJSON") >> s3
     stats_task >> Edge(label="player stats\nJSON") >> s3
+    # Nightly onboarding-health digest: reads the METADATA all-leagues index (GSI3)
+    # and posts to the same Discord channel as the alert notifier (webhook URL from SSM).
+    admin_report >> Edge(label="query GSI3\n(METADATA)") >> ddb
+    admin_report >> Edge(label="webhook URL from SSM") >> discord
 
     # ── Alerting & config ─────────────────────────────────────────────────────
     sns >> discord_fn >> Edge(label="webhook URL from SSM") >> discord
