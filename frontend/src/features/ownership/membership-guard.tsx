@@ -2,7 +2,6 @@ import { ShieldCheck } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { getLeague } from '@/components/api/leagues';
-import type { Platform } from '@/components/api/types';
 import { Spinner } from '@/components/spinner';
 import { Button } from '@/components/ui/button';
 import { JoinLeagueDialog } from '@/features/connect_league/join-league-dialog';
@@ -30,7 +29,7 @@ export function MembershipGuard({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (bypass) return;
     let cancelled = false;
-    getLeague(leagueId, platform as Platform)
+    getLeague(leagueId, platform)
       .then(() => {
         if (!cancelled) setGate('ok');
       })

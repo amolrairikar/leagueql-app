@@ -14,9 +14,23 @@ Feature: Public pages render (frontend/landing-page, frontend/instructions-docs,
     When I open the landing page with the counts endpoint unavailable
     Then I see "Connect Your League"
 
+  Scenario: The landing page FAQ starts collapsed
+    When I open the landing page
+    Then I see "Why do I need to provide my ESPN cookies?"
+    And I do not see "ESPN leagues are private and require logging in to ESPN to view. The SWID and ESPN S2 cookies provide the authentication required to fetch data. These cookies are not stored."
+
+  Scenario: Expanding a landing page FAQ question reveals its answer
+    When I open the landing page
+    And I expand the FAQ question "Why do I need to provide my ESPN cookies?"
+    Then I see "ESPN leagues are private and require logging in to ESPN to view. The SWID and ESPN S2 cookies provide the authentication required to fetch data. These cookies are not stored."
+
   Scenario: The docs page renders
     When I open the docs page
     Then I see "Refresh League"
+
+  Scenario: The docs page no longer shows the FAQ
+    When I open the docs page
+    Then I do not see "Why do I need to provide my ESPN cookies?"
 
   Scenario: The privacy policy page renders
     When I open the privacy page

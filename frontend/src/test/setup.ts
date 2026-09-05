@@ -43,8 +43,7 @@ class IntersectionObserverStub {
   thresholds = [];
 }
 globalThis.IntersectionObserver =
-  globalThis.IntersectionObserver ??
-  (IntersectionObserverStub as unknown as typeof IntersectionObserver);
+  globalThis.IntersectionObserver ?? IntersectionObserverStub;
 
 // Radix UI primitives (Select, etc.) call pointer-capture + scrollIntoView APIs
 // that jsdom doesn't implement; stub them so dropdowns are drivable in tests.
@@ -88,17 +87,16 @@ if (typeof window.localStorage?.getItem !== 'function') {
 
 // The sidebar / theme read matchMedia; jsdom doesn't implement it.
 if (!window.matchMedia) {
-  window.matchMedia = (query: string) =>
-    ({
-      matches: false,
-      media: query,
-      onchange: null,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-      addListener: vi.fn(),
-      removeListener: vi.fn(),
-      dispatchEvent: vi.fn(),
-    }) as unknown as MediaQueryList;
+  window.matchMedia = (query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  });
 }
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));

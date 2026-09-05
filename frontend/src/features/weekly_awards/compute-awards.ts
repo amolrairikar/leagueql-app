@@ -3,12 +3,7 @@ import { isUnplayedMatchup } from '@/lib/matchups';
 
 /** The per-week award types, in display order (frontend/weekly-awards). */
 export type AwardKey =
-  | 'highest'
-  | 'lowest'
-  | 'blowout'
-  | 'narrowest'
-  | 'bestLoss'
-  | 'worstWin';
+  'highest' | 'lowest' | 'blowout' | 'narrowest' | 'bestLoss' | 'worstWin';
 
 export interface AwardDef {
   key: AwardKey;

@@ -22,7 +22,7 @@ function createMemoryStorage(): Storage {
     get length() {
       return store.size;
     },
-  } as Storage;
+  };
 }
 
 describe('Banner', () => {

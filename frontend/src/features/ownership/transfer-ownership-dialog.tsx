@@ -2,7 +2,6 @@ import { Check, Copy } from 'lucide-react';
 import { useState } from 'react';
 
 import { createTransferToken } from '@/components/api/leagues';
-import type { Platform } from '@/components/api/types';
 import { Spinner } from '@/components/spinner';
 import { Button } from '@/components/ui/button';
 import {
@@ -52,7 +51,7 @@ export function TransferOwnershipDialog({
     setLoading(true);
     setError(null);
     try {
-      const res = await createTransferToken(leagueId, platform as Platform);
+      const res = await createTransferToken(leagueId, platform);
       setToken(res.data.token);
     } catch (err) {
       setError(

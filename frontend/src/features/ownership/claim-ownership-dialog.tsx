@@ -1,7 +1,6 @@
 import { useState } from 'react';
 
 import { claimOwnership } from '@/components/api/leagues';
-import type { Platform } from '@/components/api/types';
 import { Spinner } from '@/components/spinner';
 import { Button } from '@/components/ui/button';
 import {
@@ -40,7 +39,7 @@ export function ClaimOwnershipDialog({
     setLoading(true);
     setError(null);
     try {
-      await claimOwnership(leagueId, platform as Platform, token.trim());
+      await claimOwnership(leagueId, platform, token.trim());
       clearApiCache();
       onOpenChange(false);
       if (onClaimed) onClaimed();

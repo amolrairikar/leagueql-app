@@ -26,6 +26,7 @@ import {
   HOW_STEPS,
   PLATFORMS,
 } from '@/features/landing_page/constants';
+import { Faq } from '@/features/landing_page/faq';
 import { ProductShowcase } from '@/features/landing_page/product-showcase';
 import type { Feature, HowStep } from '@/features/landing_page/types';
 import { ApiError } from '@/lib/api-client';
@@ -145,6 +146,10 @@ export default function LeagueQLLanding() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('connect') === 'true' && isSignedIn) {
+      // Reveal the connect form on return from Clerk sign-in (?connect=true).
+      // This must react to isSignedIn resolving asynchronously, so the state
+      // update legitimately belongs in this effect.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setShowConnectForm(true);
     }
   }, [isSignedIn]);
@@ -160,6 +165,10 @@ export default function LeagueQLLanding() {
     if (loading) {
       loadingStartRef.current = Date.now();
       const initial = computeLoadingState(0);
+      // Seed the progress UI the moment a load starts; the interval below drives
+      // subsequent ticks. The effect synchronizes with a timer (an external
+      // system), so seeding state here is intentional.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLoadingMessage(initial.message);
       setProgress(initial.progress);
       loadingIntervalRef.current = setInterval(() => {
@@ -307,7 +316,7 @@ export default function LeagueQLLanding() {
       />
 
       {/* HERO */}
-      <section className="relative z-10 flex flex-col items-center text-center px-6 pt-24 pb-16">
+      <section className="relative z-10 flex flex-col items-center text-center px-6 pt-24 pb-8">
         {leagueCount !== null && (
           <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-1.5 text-sm text-muted-foreground animate-[fadeUp_0.6s_0.1s_both]">
             <span className="flex items-center -space-x-1">
@@ -444,7 +453,7 @@ export default function LeagueQLLanding() {
       />
 
       {/* PRODUCT SHOWCASE */}
-      <section className="relative z-10 px-6 pt-16 pb-8">
+      <section className="relative z-10 px-6 pt-4 pb-8">
         <div className="mx-auto mb-11 flex max-w-160 flex-col items-center gap-3 text-center">
           <span className="text-xs font-medium uppercase tracking-[0.16em] text-primary">
             See it in action
@@ -522,6 +531,23 @@ export default function LeagueQLLanding() {
             />
           ))}
         </div>
+      </section>
+
+      {/* FAQ */}
+      <section className="relative z-10 px-6 pt-20 pb-8">
+        <div className="mx-auto mb-11 flex max-w-160 flex-col items-center gap-3 text-center">
+          <span className="text-xs font-medium uppercase tracking-[0.16em] text-primary">
+            FAQ
+          </span>
+          <h2 className="font-heading text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
+            Before you connect
+          </h2>
+          <p className="max-w-lg text-muted-foreground">
+            Everything you need to know about connecting and managing your
+            league.
+          </p>
+        </div>
+        <Faq />
       </section>
 
       {/* FINAL CTA */}

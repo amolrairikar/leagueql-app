@@ -226,7 +226,7 @@ function StandingsChart({
             <ChartTooltip
               content={
                 <ChartTooltipContent
-                  labelFormatter={(label) => `${label}`}
+                  labelFormatter={(label) => label}
                   indicator="line"
                 />
               }
