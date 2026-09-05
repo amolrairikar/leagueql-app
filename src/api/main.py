@@ -107,6 +107,13 @@ QUERY_TYPE_TO_SK_BASE = {
     QueryType.LEAGUE_SETTINGS: "LEAGUE_SETTINGS",
 }
 
+# Query types stored across multiple chunk items (SK `{BASE}#{season}#{chunk}`) rather
+# than a single item per suffix. A season-suffixed query for one of these must resolve
+# via a paginated begins_with prefix scan that concatenates the chunks, not an exact
+# get_item. The prefix (no trailing "#") also matches any legacy single-key item written
+# before chunking, so already-onboarded leagues resolve without a rewrite.
+PREFIX_READ_QUERY_TYPES = {QueryType.TRANSACTIONS}
+
 
 class EspnMembersPayload(BaseModel):
     swid: str

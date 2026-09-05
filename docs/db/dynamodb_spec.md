@@ -589,13 +589,15 @@ Represents all draft picks across all seasons in the fantasy league. One item pe
 <details>
 <summary><b>TRANSACTIONS</b></summary>
 
-Sleeper-only ([backend/sleeper-transactions](../requirements/backend/backend/sleeper-transactions-sleeper-transactions.md)). Represents completed league transactions (waivers, trades, free-agent moves, commissioner moves) for a season. One item per season; each transaction is an element in the `data` list. ESPN leagues have no equivalent data and no `TRANSACTIONS` item is written.
+Sleeper-only ([backend/sleeper-transactions](../requirements/backend/backend/sleeper-transactions-sleeper-transactions.md)). Represents completed league transactions (waivers, trades, free-agent moves, commissioner moves) for a season. ESPN leagues have no equivalent data and no `TRANSACTIONS` item is written.
+
+A season's transactions are unbounded and can exceed DynamoDB's 400 KB per-item limit, so they are **chunked**: a season is split across one or more items with a zero-padded chunk index appended to the sort key (`TRANSACTIONS#{season}#{chunk}`, e.g. `TRANSACTIONS#2025#0000`, `TRANSACTIONS#2025#0001`). Each item holds a slice of the season's transactions in its `data` list, kept under a conservative per-item cap. The query API reads a season with a `begins_with(TRANSACTIONS#{season})` prefix query and concatenates the chunks' `data` in sort-key order. The prefix has no trailing `#`, so it also matches a legacy single-key `TRANSACTIONS#{season}` item written before chunking; the processor deletes any such bare item when it rewrites a season's chunks.
 
 | Attribute | Type | Required | Description |
 |---|---|---|---|
 | `PK` | String | Yes | `LEAGUE#{canonical_league_id}` |
-| `SK` | String | Yes | `TRANSACTIONS#{season}` |
-| `data` | List\<Object\> | Yes | A list of objects, one per completed transaction |
+| `SK` | String | Yes | `TRANSACTIONS#{season}#{chunk}` — zero-padded 4-digit chunk index (e.g. `TRANSACTIONS#2025#0000`) |
+| `data` | List\<Object\> | Yes | A slice of the season's transactions, one object per completed transaction |
 
 **`data[n]` object:**
 
@@ -617,7 +619,7 @@ Sleeper-only ([backend/sleeper-transactions](../requirements/backend/backend/sle
 ```json
 {
   "PK": "LEAGUE#uuid-string",
-  "SK": "TRANSACTIONS#2025",
+  "SK": "TRANSACTIONS#2025#0000",
   "data": [
     {
       "season": "2025",

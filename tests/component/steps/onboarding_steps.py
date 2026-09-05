@@ -207,6 +207,48 @@ def step_single_metadata_preserved(context, canonical):
     assert items[0].get("owner_user_id"), "METADATA was overwritten by onboarding"
 
 
+@given("the transactions chunk size cap is {cap:d} bytes")
+def step_set_chunk_cap(context, cap):
+    # Force a small per-item payload cap so a modest fixture still splits across multiple
+    # TRANSACTIONS#{season}#{chunk} items, exercising the chunked write + concatenated read
+    # path without a giant fixture. moto does not enforce DynamoDB's 400 KB limit, so the
+    # observable behavior under test is the split-and-reassemble, not the raw rejection.
+    patcher = patch.object(context.processor_handler, "MAX_ITEM_DATA_BYTES", cap)
+    patcher.start()
+    context._patches.append(patcher)
+
+
+@given(
+    'a legacy bare "{sk}" item with {count:d} row(s) exists for the onboarded league'
+)
+def step_seed_legacy_bare_item(context, sk, count):
+    # Simulate a season stored under the pre-chunking format: a single bare
+    # TRANSACTIONS#{season} item. Reprocessing must delete it so the prefix read does not
+    # return its rows alongside the freshly written chunk items.
+    table = context.ddb_resource.Table(context.table_name)
+    table.put_item(
+        Item={
+            "PK": f"LEAGUE#{context.canonical}",
+            "SK": sk,
+            "data": [{"transaction_id": f"legacy-{i}"} for i in range(count)],
+        }
+    )
+
+
+@then('the league has more than one "{sk_prefix}" item')
+def step_has_multiple(context, sk_prefix):
+    from boto3.dynamodb.conditions import Key
+
+    table = context.ddb_resource.Table(context.table_name)
+    resp = table.query(
+        KeyConditionExpression=Key("PK").eq(f"LEAGUE#{context.canonical}")
+        & Key("SK").begins_with(sk_prefix)
+    )
+    assert len(resp["Items"]) > 1, (
+        f"expected multiple {sk_prefix} items, got {len(resp['Items'])}"
+    )
+
+
 @when("the processor processes the onboarded league")
 def step_process(context):
     manifest_key = f"raw-api-data/{context.canonical}/manifest.json"

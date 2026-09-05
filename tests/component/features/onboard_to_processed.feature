@@ -34,6 +34,39 @@ Feature: Onboard-to-processed pipeline (backend/league-onboarding, backend/data-
     And a query response row has "playoff_week_start" equal to "17"
     And a query response row has "regular_season_weeks" equal to "16"
 
+  Scenario: A large transactions season is chunked across items and round-trips through the query API (backend/sleeper-transactions)
+    # backend/sleeper-transactions: a season with more transactions than fit in one DynamoDB
+    # item is split across TRANSACTIONS#{season}#{chunk} items. A tiny per-item cap forces the
+    # split with the small fixture; the query API must concatenate the chunks back into the
+    # full row list with no row dropped or duplicated.
+    Given Sleeper player metadata and stats are cached in S3
+    And the transactions chunk size cap is 1 bytes
+    When the onboarder runs an ONBOARD for "SLEEPER" league "600" with fixture "sleeper/raw_data_2024.json"
+    Then the onboarder returns status 200
+    When the processor processes the onboarded league
+    Then a JOB_STATUS "COMPLETED" exists for the job
+    And the league has more than one "TRANSACTIONS#2024#" item
+    When I GET "/leagues/600/query?platform=SLEEPER&queryType=TRANSACTIONS#2024"
+    Then the API responds with status 200
+    And the query response has 2 row(s)
+
+  Scenario: Reprocessing a legacy single-item transactions season does not duplicate rows (backend/sleeper-transactions)
+    # backend/sleeper-transactions: a league onboarded before chunking has a single bare
+    # TRANSACTIONS#{season} item. Reprocessing must delete that bare item before writing the
+    # chunk items, so the prefix read returns each row exactly once — never the bare item's
+    # rows plus the chunks'.
+    Given Sleeper player metadata and stats are cached in S3
+    When the onboarder runs an ONBOARD for "SLEEPER" league "700" with fixture "sleeper/raw_data_2024.json"
+    Then the onboarder returns status 200
+    Given a legacy bare "TRANSACTIONS#2024" item with 2 row(s) exists for the onboarded league
+    When the processor processes the onboarded league
+    Then a JOB_STATUS "COMPLETED" exists for the job
+    # If the bare item were not deleted, the prefix read would return its 2 rows on top of
+    # the 2 rebuilt chunk rows (4 total); exactly 2 proves the bare item was removed.
+    When I GET "/leagues/700/query?platform=SLEEPER&queryType=TRANSACTIONS#2024"
+    Then the API responds with status 200
+    And the query response has 2 row(s)
+
   Scenario: Onboarding a renewed Sleeper season reuses the existing league without a duplicate METADATA (backend/league-onboarding)
     # A Sleeper league renews under a new league ID linked by previous_league_id. Onboarding
     # it must fold into the existing canonical league, registering the new ID's LEAGUE_LOOKUP
