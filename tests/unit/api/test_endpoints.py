@@ -956,6 +956,111 @@ class TestQueryLeagueEndpoint:
         sk_values = list(rendered.attribute_value_placeholders.values())
         assert any(str(v).startswith(sk_base) for v in sk_values)
 
+    def test_transactions_suffixed_query_uses_prefix_scan(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        # Transactions are stored across chunk items, so a season-suffixed query resolves
+        # via a begins_with prefix query (not an exact get_item) and concatenates chunks.
+        from boto3.dynamodb.conditions import ConditionExpressionBuilder
+
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+        ]
+        mock_table.query.return_value = {
+            "Items": [
+                {"SK": "TRANSACTIONS#2024#0000", "data": [{"transaction_id": "a"}]},
+                {"SK": "TRANSACTIONS#2024#0001", "data": [{"transaction_id": "b"}]},
+            ]
+        }
+        response = client.get(
+            "/leagues/123/query?platform=SLEEPER&queryType=TRANSACTIONS%232024"
+        )
+        assert response.status_code == 200
+        assert response.json()["data"] == [
+            {"transaction_id": "a"},
+            {"transaction_id": "b"},
+        ]
+        # The view read used query/begins_with; get_item was only lookup + metadata.
+        mock_table.query.assert_called_once()
+        assert mock_table.get_item.call_count == 2
+        # The prefix has no trailing "#", so it matches both chunk and legacy keys.
+        condition = mock_table.query.call_args[1]["KeyConditionExpression"]
+        rendered = ConditionExpressionBuilder().build_expression(condition)
+        sk_values = list(rendered.attribute_value_placeholders.values())
+        assert "TRANSACTIONS#2024" in sk_values
+
+    def test_standings_suffixed_query_still_uses_get_item(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        # A non-chunked suffixed view is unchanged: exact get_item, no prefix query.
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+            {"Item": {"SK": "STANDINGS#2024", "data": [{"rank": 1}]}},
+        ]
+        response = client.get(
+            "/leagues/123/query?platform=SLEEPER&queryType=SEASON_STANDINGS%232024"
+        )
+        assert response.status_code == 200
+        assert response.json()["data"] == [{"rank": 1}]
+        mock_table.query.assert_not_called()
+        assert mock_table.get_item.call_count == 3  # lookup, metadata, view
+
+    def test_transactions_query_concatenates_chunks_across_pages(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+        ]
+        mock_table.query.side_effect = [
+            {
+                "Items": [
+                    {"SK": "TRANSACTIONS#2024#0000", "data": [{"id": 1}, {"id": 2}]}
+                ],
+                "LastEvaluatedKey": {"PK": "x", "SK": "y"},
+            },
+            {"Items": [{"SK": "TRANSACTIONS#2024#0001", "data": [{"id": 3}]}]},
+        ]
+        response = client.get(
+            "/leagues/123/query?platform=SLEEPER&queryType=TRANSACTIONS%232024"
+        )
+        assert response.status_code == 200
+        assert response.json()["data"] == [{"id": 1}, {"id": 2}, {"id": 3}]
+        assert mock_table.query.call_count == 2
+
+    def test_transactions_query_reads_legacy_bare_item(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        # A league onboarded before chunking has a single bare TRANSACTIONS#{season}
+        # item, which the backward-compatible prefix query still matches.
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+        ]
+        mock_table.query.return_value = {
+            "Items": [{"SK": "TRANSACTIONS#2024", "data": [{"id": 1}]}]
+        }
+        response = client.get(
+            "/leagues/123/query?platform=SLEEPER&queryType=TRANSACTIONS%232024"
+        )
+        assert response.status_code == 200
+        assert response.json()["data"] == [{"id": 1}]
+
+    def test_transactions_query_returns_404_when_no_items(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+        ]
+        mock_table.query.return_value = {"Items": []}
+        response = client.get(
+            "/leagues/123/query?platform=SLEEPER&queryType=TRANSACTIONS%232024"
+        )
+        assert response.status_code == 404
+
 
 _VALID_MAPPING_ENTRY = {
     "currentPlatformOwnerId": "espn-owner-1",

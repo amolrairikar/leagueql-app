@@ -625,6 +625,94 @@ class TestDataframeToDynamoItems:
         assert "SK" in items[0]
         assert len(items[0]["data"]) == 2
 
+    def test_non_chunked_schema_keeps_bare_sk(self, processor_handler):
+        # A non-chunked schema stays exactly one item per sort key with the bare SK
+        # (no chunk suffix) — unchanged from the pre-chunking behavior.
+        con = duckdb.connect()
+        df = pd.DataFrame(
+            [
+                {"season": "2024", "team_id": "1"},
+                {"season": "2024", "team_id": "2"},
+            ]
+        )
+        con.register("teams_table", df)
+        rel = con.sql("SELECT * FROM teams_table")
+
+        schema = processor_handler.KeySchema(
+            pk="LEAGUE#abc",
+            sk=lambda row: f"TEAMS#{row['season']}",
+            entity_type=processor_handler.EntityType.TEAMS,
+        )
+
+        items = processor_handler.dataframe_to_dynamo_items(rel, schema)
+        assert len(items) == 1
+        assert items[0]["SK"] == "TEAMS#2024"  # no chunk suffix
+        assert len(items[0]["data"]) == 2
+
+    def test_chunked_schema_emits_ordered_indexed_items(self, processor_handler):
+        con = duckdb.connect()
+        df = pd.DataFrame(
+            [
+                {"season": "2024", "transaction_id": str(i), "blob": "x" * 50}
+                for i in range(10)
+            ]
+        )
+        con.register("txn_table", df)
+        rel = con.sql("SELECT * FROM txn_table")
+
+        schema = processor_handler.KeySchema(
+            pk="LEAGUE#abc",
+            sk=lambda row: f"TRANSACTIONS#{row['season']}",
+            entity_type=processor_handler.EntityType.TRANSACTIONS,
+            chunked=True,
+        )
+
+        # A small cap forces the single season's rows across multiple chunk items.
+        with patch.object(processor_handler, "MAX_ITEM_DATA_BYTES", 200):
+            items = processor_handler.dataframe_to_dynamo_items(rel, schema)
+
+        assert len(items) > 1
+        # Zero-padded, contiguous, in order.
+        assert [item["SK"] for item in items] == [
+            f"TRANSACTIONS#2024#{i:04d}" for i in range(len(items))
+        ]
+        # No row dropped or duplicated across chunks.
+        assert sum(len(item["data"]) for item in items) == 10
+
+
+class TestSplitRowsIntoChunks:
+    def test_empty_rows_yield_no_chunks(self, processor_handler):
+        assert processor_handler.split_rows_into_chunks([]) == []
+
+    def test_rows_under_cap_stay_one_chunk(self, processor_handler):
+        rows = [{"i": i} for i in range(5)]
+        chunks = processor_handler.split_rows_into_chunks(rows)
+        assert chunks == [rows]
+
+    def test_rows_split_across_chunks_under_cap(self, processor_handler):
+        rows = [{"i": i, "blob": "x" * 50} for i in range(20)]
+        with patch.object(processor_handler, "MAX_ITEM_DATA_BYTES", 200):
+            chunks = processor_handler.split_rows_into_chunks(rows)
+            assert len(chunks) > 1
+            # Order preserved, nothing dropped or duplicated.
+            assert [row for chunk in chunks for row in chunk] == rows
+            # Any chunk holding more than one row stays within the cap.
+            for chunk in chunks:
+                size = sum(processor_handler._row_size_bytes(row) for row in chunk)
+                assert len(chunk) == 1 or size <= processor_handler.MAX_ITEM_DATA_BYTES
+
+    def test_oversized_row_becomes_its_own_chunk(self, processor_handler):
+        rows = [
+            {"i": 0, "blob": "x" * 10},
+            {"i": 1, "blob": "y" * 500},  # alone exceeds the cap
+            {"i": 2, "blob": "z" * 10},
+        ]
+        with patch.object(processor_handler, "MAX_ITEM_DATA_BYTES", 100):
+            chunks = processor_handler.split_rows_into_chunks(rows)
+        assert [row for chunk in chunks for row in chunk] == rows
+        oversized = [chunk for chunk in chunks if chunk == [rows[1]]]
+        assert len(oversized) == 1
+
 
 class TestRegisterRawData:
     def test_raises_for_unsupported_platform(self, processor_handler):

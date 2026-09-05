@@ -675,6 +675,24 @@ class TestWriteItems:
         writer.put_item.assert_any_call(Item=items[0])
 
 
+class TestDeleteItems:
+    def test_batch_deletes_each_key(self, processor_handler):
+        mock_table = MagicMock()
+        writer = MagicMock()
+        mock_table.batch_writer.return_value.__enter__.return_value = writer
+        with patch.object(processor_handler, "table", mock_table):
+            processor_handler.delete_items("LEAGUE#abc", ["TRANSACTIONS#2024"])
+        writer.delete_item.assert_called_once_with(
+            Key={"PK": "LEAGUE#abc", "SK": "TRANSACTIONS#2024"}
+        )
+
+    def test_empty_sks_is_a_noop(self, processor_handler):
+        mock_table = MagicMock()
+        with patch.object(processor_handler, "table", mock_table):
+            processor_handler.delete_items("LEAGUE#abc", [])
+        mock_table.batch_writer.assert_not_called()
+
+
 def _s3_event(key="raw/canonical-abc/manifest.json", principal="AWS:role/abc"):
     return {
         "Records": [
@@ -933,6 +951,105 @@ class TestLambdaHandlerImpl:
             call.kwargs["schema"].entity_type for call in df_to_items.call_args_list
         }
         assert processor_handler.EntityType.TRANSACTIONS in entity_types
+
+    def test_transactions_bare_keys_deleted_before_chunk_writes(
+        self, processor_handler
+    ):
+        # On an initial onboard every season is processed, so the legacy bare
+        # TRANSACTIONS#{season} item is deleted for each season before its chunks are
+        # written (delete-before-write), preventing a stale bare item from coexisting
+        # with chunks.
+        mock_s3 = MagicMock()
+        mock_s3.get_object.return_value = _manifest_response(
+            {"SLEEPER": ["2023", "2024"]}
+        )
+        fake_queries = {**_FAKE_QUERIES, "TRANSACTIONS": {"SLEEPER": "SELECT 1"}}
+
+        def fake_read(bucket, key, version_id=None):
+            if key.endswith(("players.json", "player_stats.json")):
+                return {}
+            return [{"data_type": "users", "data": []}]
+
+        manager = MagicMock()
+        delete_mock = MagicMock()
+        write_mock = MagicMock()
+        manager.attach_mock(delete_mock, "delete_items")
+        manager.attach_mock(write_mock, "write_items")
+
+        with (
+            patch.multiple(
+                processor_handler,
+                s3_client=mock_s3,
+                get_previous_version_id=MagicMock(return_value=None),
+                read_s3_object=MagicMock(side_effect=fake_read),
+                register_raw_data=MagicMock(
+                    return_value={"transactions": [{"season": "2023"}]}
+                ),
+                dataframe_to_dynamo_items=MagicMock(return_value=[]),
+                delete_items=delete_mock,
+                write_items=write_mock,
+                write_metadata_items=MagicMock(),
+                update_league_count=MagicMock(),
+                QUERIES=fake_queries,
+            ),
+            patch.object(processor_handler.duckdb, "connect", return_value=MagicMock()),
+        ):
+            processor_handler._lambda_handler_impl(_s3_event(), MagicMock())
+
+        # Exactly one delete call, targeting the bare key for every processed season.
+        delete_mock.assert_called_once_with(
+            pk="LEAGUE#canonical-abc",
+            sks=["TRANSACTIONS#2023", "TRANSACTIONS#2024"],
+        )
+        # The delete is immediately followed by a write (the transactions chunk write).
+        call_names = [c[0] for c in manager.mock_calls]
+        delete_index = call_names.index("delete_items")
+        assert call_names[delete_index + 1] == "write_items"
+
+    def test_transactions_delete_targets_only_processed_seasons_on_refresh(
+        self, processor_handler
+    ):
+        # An in-season refresh processes only the last season, so only that season's
+        # bare key is deleted; other seasons' items are left untouched.
+        mock_s3 = MagicMock()
+        mock_s3.get_object.return_value = _manifest_response(
+            {"SLEEPER": ["2023", "2024"]}
+        )
+        fake_queries = {**_FAKE_QUERIES, "TRANSACTIONS": {"SLEEPER": "SELECT 1"}}
+
+        def fake_read(bucket, key, version_id=None):
+            if version_id:
+                return {"SLEEPER": ["2023", "2024"]}  # previous manifest, same seasons
+            if key.endswith(("players.json", "player_stats.json")):
+                return {}
+            return [{"data_type": "users", "data": []}]
+
+        delete_mock = MagicMock()
+
+        with (
+            patch.multiple(
+                processor_handler,
+                s3_client=mock_s3,
+                get_previous_version_id=MagicMock(return_value="v-prev"),
+                read_s3_object=MagicMock(side_effect=fake_read),
+                register_raw_data=MagicMock(
+                    return_value={"transactions": [{"season": "2024"}]}
+                ),
+                dataframe_to_dynamo_items=MagicMock(return_value=[]),
+                delete_items=delete_mock,
+                write_items=MagicMock(),
+                write_metadata_items=MagicMock(),
+                update_league_count=MagicMock(),
+                QUERIES=fake_queries,
+            ),
+            patch.object(processor_handler.duckdb, "connect", return_value=MagicMock()),
+        ):
+            processor_handler._lambda_handler_impl(_s3_event(), MagicMock())
+
+        delete_mock.assert_called_once_with(
+            pk="LEAGUE#canonical-abc",
+            sks=["TRANSACTIONS#2024"],
+        )
 
     def test_espn_never_writes_transactions_schema(self, processor_handler):
         mock_s3 = MagicMock()

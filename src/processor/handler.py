@@ -131,6 +131,11 @@ class KeySchema:
     pk: str
     sk: Callable  # function that builds the sort key from a row
     entity_type: EntityType
+    # When True, a sort key's rows are split across multiple size-bounded items with a
+    # chunk index appended to the SK (`{sk}#{chunk:04d}`) so an arbitrarily large view
+    # (transactions) stays under DynamoDB's 400 KB per-item limit. Off for every other
+    # view, which stays a single item per sort key.
+    chunked: bool = False
 
 
 def compile_espn_bench_stats(roster: dict, starter_ids: list[int]) -> list[dict]:
@@ -1349,6 +1354,53 @@ def register_raw_data(
     return grouped
 
 
+# Per-item payload cap for chunked views. DynamoDB's hard limit is 400 KB (keys +
+# attribute names + values); 300 KB leaves generous headroom for the PK/SK strings,
+# attribute names, and DynamoDB's numeric/string encoding overhead.
+MAX_ITEM_DATA_BYTES = 300 * 1024
+
+
+def _row_size_bytes(row: dict) -> int:
+    """Approximate serialized byte size of a sanitized row.
+
+    ``sanitize_value`` turns floats into ``Decimal``, which the default JSON encoder
+    cannot serialize, so ``default=str`` renders those (and any other exotic value) as
+    a conservative string proxy. The value only needs to be a stable, slightly-generous
+    estimate — the cap already carries headroom.
+    """
+    return len(json.dumps(row, default=str).encode("utf-8"))
+
+
+def split_rows_into_chunks(rows: list[dict]) -> list[list[dict]]:
+    """Pack rows into chunks whose serialized payload stays under ``MAX_ITEM_DATA_BYTES``.
+
+    Rows are kept in order and never dropped or duplicated. Every chunk holds at least
+    one row; a single row larger than the cap becomes its own chunk (DynamoDB then
+    rejects that one row, which is the correct, visible failure rather than an infinite
+    loop). An empty input yields no chunks.
+
+    Args:
+        rows: Sanitized row dicts for a single sort key.
+
+    Returns:
+        A list of row-lists, each destined for one DynamoDB item.
+    """
+    chunks: list[list[dict]] = []
+    current: list[dict] = []
+    current_size = 0
+    for row in rows:
+        size = _row_size_bytes(row)
+        if current and current_size + size > MAX_ITEM_DATA_BYTES:
+            chunks.append(current)
+            current = []
+            current_size = 0
+        current.append(row)
+        current_size += size
+    if current:
+        chunks.append(current)
+    return chunks
+
+
 def dataframe_to_dynamo_items(
     rel: duckdb.DuckDBPyRelation,
     schema: KeySchema,
@@ -1373,13 +1425,26 @@ def dataframe_to_dynamo_items(
 
     items = []
     for sk, group_rows in grouped.items():
-        items.append(
-            {
-                "PK": schema.pk,
-                "SK": sk,
-                "data": group_rows,
-            }
-        )
+        if schema.chunked:
+            # A large sort key (transactions) is split across size-bounded items with a
+            # zero-padded chunk index so lexical SK order matches numeric order and the
+            # begins_with read returns the chunks in order.
+            for index, chunk in enumerate(split_rows_into_chunks(group_rows)):
+                items.append(
+                    {
+                        "PK": schema.pk,
+                        "SK": f"{sk}#{index:04d}",
+                        "data": chunk,
+                    }
+                )
+        else:
+            items.append(
+                {
+                    "PK": schema.pk,
+                    "SK": sk,
+                    "data": group_rows,
+                }
+            )
 
     return items
 
@@ -1398,6 +1463,26 @@ def write_items(
             writer.put_item(Item=item)
 
     logger.info("Wrote %d items to %s", len(items), table.name)
+
+
+def delete_items(pk: str, sks: list[str]) -> None:
+    """
+    Batch-delete items by PK/SK, handling the 25-item limit automatically.
+
+    Deleting a non-existent key is a harmless no-op, so callers may pass keys that
+    may or may not exist.
+
+    Args:
+        pk: The partition key shared by every key to delete.
+        sks: The sort keys to delete under ``pk``.
+    """
+    if not sks:
+        return
+    with table.batch_writer() as writer:
+        for sk in sks:
+            writer.delete_item(Key={"PK": pk, "SK": sk})
+
+    logger.info("Deleted %d items from %s", len(sks), table.name)
 
 
 def write_metadata_items(
@@ -1684,6 +1769,10 @@ def _process_manifest(
             pk=f"LEAGUE#{canonical_league_id}",
             sk=lambda row: f"TRANSACTIONS#{row['season']}",
             entity_type=EntityType.TRANSACTIONS,
+            # A season's transactions are unbounded and can exceed the DynamoDB per-item
+            # size limit, so they are split across chunked TRANSACTIONS#{season}#{chunk}
+            # items (see split_rows_into_chunks / dataframe_to_dynamo_items).
+            chunked=True,
         )
         schemas.append(TRANSACTIONS_SCHEMA)
         platform_specific_schemas.append(TRANSACTIONS_SCHEMA)
@@ -1695,6 +1784,20 @@ def _process_manifest(
         else:
             rel = con.sql(QUERIES[schema.entity_type.value])
         con.register(f"{schema.entity_type.value}_output", rel)
+        if schema.chunked:
+            # Delete any legacy bare {ENTITY}#{season} item (written before chunking)
+            # before writing this run's chunks, so a reprocessed league never holds a
+            # bare item alongside chunk items — the prefix read matches both and would
+            # otherwise double the season's rows. Only the seasons being rewritten in
+            # this run (seasons_to_process) are touched; other seasons' items are left
+            # untouched and keep resolving through the backward-compatible prefix read.
+            delete_items(
+                pk=schema.pk,
+                sks=[
+                    f"{schema.entity_type.value}#{season}"
+                    for season in seasons_to_process
+                ],
+            )
         write_items(
             items=dataframe_to_dynamo_items(rel=rel, schema=schema),
         )

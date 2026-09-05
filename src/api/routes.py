@@ -48,6 +48,7 @@ from helpers import (
     update_league_count,
 )
 from main import (
+    PREFIX_READ_QUERY_TYPES,
     QUERY_TYPE_TO_SK_BASE,
     REFRESH_COOLDOWN_DAYS,
     S3_BUCKET,
@@ -611,6 +612,13 @@ def query_league(
     sk_base = QUERY_TYPE_TO_SK_BASE[base_type]
     sk = f"{sk_base}#{suffix}" if suffix is not None else f"{sk_base}#"
 
+    # A chunked view (transactions) is stored across multiple {BASE}#{season}#{chunk}
+    # items, so even a season-suffixed query must resolve via a begins_with prefix scan
+    # that concatenates the chunks. The prefix (no trailing "#") also matches any legacy
+    # single-key {BASE}#{season} item written before chunking. Every other suffixed view
+    # is a single item read with an exact get_item.
+    use_prefix_query = sk.endswith("#") or base_type in PREFIX_READ_QUERY_TYPES
+
     canonical_league_id = lookup_league(league_id=leagueId, platform=platform)
     metadata = get_league_metadata(canonical_league_id=canonical_league_id)
     require_league_member(
@@ -619,7 +627,7 @@ def query_league(
     pk = f"LEAGUE#{canonical_league_id}"
 
     try:
-        if sk.endswith("#"):
+        if use_prefix_query:
             items: list[Any] = []
             kwargs: dict[str, Any] = {
                 "KeyConditionExpression": Key("PK").eq(pk) & Key("SK").begins_with(sk),
