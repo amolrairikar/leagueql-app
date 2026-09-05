@@ -1052,3 +1052,80 @@ module "sleeper-refresh-lambda-role" {
     managed-by  = "terraform"
   }
 }
+
+module "admin-report-lambda-role" {
+  source           = "../../modules/iam-role"
+  role_name        = "leagueql-${var.environment}-admin-report-role"
+  role_description = "Execution role for the nightly admin onboarding-report lambda."
+  trust_policy_json = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+      }
+    ]
+  })
+  role_policy_json = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "CreateLogGroups"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup"
+        ]
+        Resource = [
+          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/lambda/leagueql-admin-report-${var.environment}-east"
+        ]
+      },
+      {
+        Sid    = "CreateLogEvents"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = [
+          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/lambda/leagueql-admin-report-${var.environment}-east:*"
+        ]
+      },
+      {
+        # Read-only aggregation over METADATA items via the GSI3 all-leagues index.
+        Sid    = "QueryDynamoDB"
+        Effect = "Allow"
+        Action = [
+          "dynamodb:Query"
+        ]
+        Resource = [
+          module.dynamodb.primary_table_arn,
+          "${module.dynamodb.primary_table_arn}/index/GSI3"
+        ]
+      },
+      {
+        # The Discord webhook URL lives as a SecureString SSM parameter (set
+        # out-of-band, never in TF state); the value is fetched by the Lambda at
+        # cold start. Same parameter as the discord-notifier lambda.
+        Sid    = "ReadDiscordWebhookSsmParameter"
+        Effect = "Allow"
+        Action = [
+          "ssm:GetParameter"
+        ]
+        Resource = [
+          "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/discord/webhook_url",
+          "arn:aws:ssm:us-west-2:${var.account_id}:parameter/leagueql/${var.environment}/discord/webhook_url"
+        ]
+      }
+    ]
+  })
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    component   = "monitoring"
+    managed-by  = "terraform"
+  }
+}

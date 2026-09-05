@@ -24,6 +24,7 @@ locals {
   player_metadata_role_arn  = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-sleeper-player-metadata-fetcher-role"
   sleeper_refresh_role_arn  = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-sleeper-league-refresh-role"
   discord_notifier_role_arn = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-discord-notifier-role"
+  admin_report_role_arn     = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-admin-report-role"
 
   # Sleeper player stats refresher runs as a Fargate task (see backend/sleeper-player-stats-refresher). Roles are
   # created in infrastructure/global; ARNs are reconstructed here from their names.
@@ -284,6 +285,69 @@ resource "aws_lambda_permission" "allow_eventbridge_sleeper_refresh" {
   function_name = module.sleeper_refresh_lambda[0].lambda_arn
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.sleeper_refresh_schedule[0].arn
+}
+
+# Nightly admin onboarding report (backend/admin-onboarding-report). Prod-only (the data
+# source and Discord channel are prod-only, matching the discord_notifier) and east-only
+# (scheduled jobs run in a single region). Replaces the pull-based Streamlit admin dashboard.
+module "admin_report_lambda" {
+  source = "../modules/lambda"
+  count  = var.environment == "prod" && local.region == "east" ? 1 : 0
+
+  function_name        = "leagueql-admin-report-${var.environment}"
+  function_description = "Nightly onboarding-health digest posted to the admin Discord channel"
+  role_arn             = local.admin_report_role_arn
+  handler              = "handler.lambda_handler"
+  memory_size          = 256
+  timeout              = 30
+  log_retention        = 7
+  s3_bucket            = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
+  s3_key               = "lambda-code-artifacts/admin_report-lambda.zip"
+
+  environment_variables = {
+    DYNAMODB_TABLE_NAME = "leagueql-table-${var.environment}"
+    ENVIRONMENT         = var.environment
+
+    # The Discord webhook URL is fetched at runtime from SSM by *name* (value never
+    # lands here / in TF state / in CI). Same parameter as the discord_notifier lambda.
+    DISCORD_WEBHOOK_URL_SSM_PARAM = "/leagueql/${var.environment}/discord/webhook_url"
+  }
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    component   = "monitoring"
+    managed-by  = "terraform"
+  }
+}
+
+resource "aws_cloudwatch_event_rule" "admin_report_schedule" {
+  count               = var.environment == "prod" && local.region == "east" ? 1 : 0
+  name                = "admin-report-schedule-${var.environment}-${local.region}"
+  schedule_expression = "cron(0 8 * * ? *)"
+  state               = "ENABLED"
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    component   = "monitoring"
+    managed-by  = "terraform"
+  }
+}
+
+resource "aws_cloudwatch_event_target" "admin_report_target" {
+  count = var.environment == "prod" && local.region == "east" ? 1 : 0
+  rule  = aws_cloudwatch_event_rule.admin_report_schedule[0].name
+  arn   = module.admin_report_lambda[0].lambda_arn
+}
+
+resource "aws_lambda_permission" "allow_eventbridge_admin_report" {
+  count         = var.environment == "prod" && local.region == "east" ? 1 : 0
+  statement_id  = "AllowEventBridgeInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = module.admin_report_lambda[0].lambda_arn
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.admin_report_schedule[0].arn
 }
 
 module "backend_api" {

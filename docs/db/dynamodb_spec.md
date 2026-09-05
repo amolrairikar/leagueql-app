@@ -33,8 +33,9 @@
 | `league_id` | String | Sort key | The league ID for the platform |
 
 ### GSI3: All-leagues index
-Sparse index used to list every onboarded league (e.g. a leagues-overview dashboard) with a
-single `SK = "METADATA"` query, replacing a full-table scan filtered to METADATA. The partition
+Sparse index used to list every onboarded league (e.g. the nightly admin onboarding report,
+`backend/admin-onboarding-report`) with a single `SK = "METADATA"` query, replacing a full-table
+scan filtered to METADATA. The partition
 key is the base-table sort key `SK` (the constant string `METADATA` on these items), and the
 sort key is `onboarded_at`, so results come back ordered by onboard time (use
 `ScanIndexForward=False` for newest-first). Because only METADATA items carry `onboarded_at`,

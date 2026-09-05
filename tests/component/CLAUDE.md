@@ -16,9 +16,10 @@ No AWS credentials are needed — AWS is backed by `moto` (`mock_aws`).
 ## How the harness works (`environment.py`)
 
 - `before_all` starts `mock_aws()`, creates the DynamoDB table (PK/SK + **GSI1**
-  on `canonical_league_id` and **GSI2** on `platform`/`league_id`, matching
-  `infrastructure/modules/dynamodb/main.tf`) and a **versioned** S3 bucket, then
-  loads every Lambda handler + the API.
+  on `canonical_league_id`, **GSI2** on `platform`/`league_id`, and **GSI3** on
+  `SK`/`onboarded_at`, matching `infrastructure/modules/dynamodb/main.tf`) and a
+  **versioned** S3 bucket, seeds the Discord-webhook SSM parameter, then loads
+  every Lambda handler + the API.
 - Modules are imported **after** moto starts, so every module-level `boto3`
   client is moto-backed with no per-module patching.
 - Lambda handlers share bare module names (`utils`, `queries`, `handler`); each
