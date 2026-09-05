@@ -36,9 +36,7 @@ export interface EspnCookies {
 }
 
 export type EspnExtensionErrorReason =
-  | 'not_logged_in'
-  | 'timeout'
-  | 'unavailable';
+  'not_logged_in' | 'timeout' | 'unavailable';
 
 export class EspnExtensionError extends Error {
   readonly reason: EspnExtensionErrorReason;

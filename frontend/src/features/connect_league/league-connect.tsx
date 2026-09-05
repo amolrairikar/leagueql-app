@@ -121,6 +121,10 @@ export default function LeagueConnect() {
   useEffect(() => {
     if (isSubmitting) {
       loadingStartRef.current = Date.now();
+      // Seed the progress message when a submit starts; the interval below drives
+      // subsequent ticks. The effect synchronizes with a timer (an external
+      // system), so seeding state here is intentional.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLoadingMessage("Fetching your league's data");
       loadingIntervalRef.current = setInterval(() => {
         const elapsed = (Date.now() - loadingStartRef.current!) / 1000;

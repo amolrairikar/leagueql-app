@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 
 import { getLeague } from '@/components/api/leagues';
-import type { Platform } from '@/components/api/types';
 import { getLeagueCookies, isDemoMode } from '@/lib/cookie-handler';
 
 export interface OwnershipState {
@@ -31,7 +30,7 @@ export function useIsOwner(): OwnershipState {
   useEffect(() => {
     if (bypass) return;
     let cancelled = false;
-    getLeague(leagueId, platform as Platform)
+    getLeague(leagueId, platform)
       .then((res) => {
         if (!cancelled)
           setState({ loading: false, isOwner: res.data.is_owner === true });

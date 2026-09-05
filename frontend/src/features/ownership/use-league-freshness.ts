@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 
 import { getLeague } from '@/components/api/leagues';
-import type { Platform } from '@/components/api/types';
 import { getLeagueCookies, isDemoMode } from '@/lib/cookie-handler';
 
 // A league's data is considered stale once it has not been updated in more than 7
@@ -49,7 +48,7 @@ export function useLeagueFreshness(): LeagueFreshnessState {
   useEffect(() => {
     if (bypass) return;
     let cancelled = false;
-    getLeague(leagueId, platform as Platform)
+    getLeague(leagueId, platform)
       .then((res) => {
         if (cancelled) return;
         const lastUpdated =
