@@ -36,4 +36,4 @@
 
 ## 7. End-to-end verification
 
-- [ ] 7.1 Onboard/refresh a real ESPN league with current-season activity; confirm `TRANSACTIONS#{season}` items are written (query API returns rows) and the `/transactions` page shows the ESPN nav item plus waiver/free-agent cards.
+- [x] 7.1 Onboard/refresh a real ESPN league with current-season activity; confirm `TRANSACTIONS#{season}` items are written (query API returns rows) and the `/transactions` page shows the ESPN nav item plus waiver/free-agent cards.

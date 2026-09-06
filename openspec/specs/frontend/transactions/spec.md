@@ -16,30 +16,41 @@ The `/transactions` page lists a season's completed transactions — waivers, tr
 - **WHEN** a transaction references a player with no resolved name
 - **THEN** it falls back to `Player {id}` and omits a missing position
 
-### Requirement: Sleeper-only navigation
-The Transactions nav item SHALL appear only for Sleeper leagues and be hidden for ESPN leagues.
+### Requirement: Transactions navigation
+The Transactions nav item SHALL appear for both Sleeper and ESPN leagues.
 
-#### Scenario: Nav gating
+#### Scenario: Nav shown for Sleeper
 - **WHEN** the connected league's platform is `SLEEPER`
-- **THEN** the Transactions sidebar item appears; for ESPN it is hidden
+- **THEN** the Transactions sidebar item appears
+
+#### Scenario: Nav shown for ESPN
+- **WHEN** the connected league's platform is `ESPN`
+- **THEN** the Transactions sidebar item appears
 
 ### Requirement: Season selector and type filter
-The season selector SHALL list all onboarded seasons and default to the latest, and the type
-filter SHALL narrow the wire to Trades / Waivers / Free Agents, defaulting to Trades (there is
-no "All" option).
+The season selector SHALL list all onboarded seasons and default to the latest. The type filter
+SHALL be platform-aware: for Sleeper it offers Trades / Waivers / Free Agents and defaults to
+Trades; for ESPN it offers only Waivers / Free Agents (no Trades, which ESPN does not produce) and
+defaults to Free Agents. There is no "All" option on either platform.
 
 #### Scenario: Select and filter
 - **WHEN** the page loads
-- **THEN** the season selector lists all onboarded seasons defaulting to the latest, and the
-  type filter defaults to Trades and narrows the transaction wire to the selected type
+- **THEN** the season selector lists all onboarded seasons defaulting to the latest, and the type
+  filter defaults to the platform's default type and narrows the transaction wire to the selected
+  type
 
 #### Scenario: Default shows trades
-- **WHEN** the page first renders a season with transactions
-- **THEN** only trade transactions are listed and the Trades filter is the selected option, with
-  no "All" option offered
+- **WHEN** a Sleeper page first renders a season with transactions
+- **THEN** only trade transactions are listed and the Trades filter is the selected option, with no
+  "All" option offered
+
+#### Scenario: ESPN defaults to free agents
+- **WHEN** an ESPN page first renders a season with transactions
+- **THEN** the type filter offers only Waivers / Free Agents, defaults to Free Agents, only
+  free-agent transactions are listed, and no Trades or "All" option is offered
 
 #### Scenario: Narrow to another type
-- **WHEN** the Waivers or Free Agents filter is selected
+- **WHEN** a different available filter (Waivers, Free Agents, or — for Sleeper — Trades) is selected
 - **THEN** the wire narrows to only that type's transactions
 
 ### Requirement: Empty and error states
