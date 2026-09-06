@@ -71,9 +71,10 @@ const navItems = [
   { title: 'Matchup Records', url: '/matchup_records', icon: Zap },
 ];
 
-// Transactions (waivers/trades/free agents) only exist for Sleeper leagues — ESPN
-// exposes no equivalent data — so the nav entry is Sleeper-gated (backend/sleeper-transactions / frontend/transactions).
-const sleeperOnlyNavItems = [
+// Transactions exist for both Sleeper (waivers/trades/free agents, all seasons) and
+// ESPN (current-season waivers/free agents) leagues, so the nav entry shows for both
+// platforms (backend/sleeper-transactions, backend/espn-transactions, frontend/transactions).
+const transactionsNavItems = [
   { title: 'Transactions', url: '/transactions', icon: Repeat },
 ];
 
@@ -99,16 +100,16 @@ export function AppSidebar() {
   // league the user is currently viewing.
   const { leagueId: currentLeagueId, platform: currentPlatform } =
     getLeagueCookies();
-  // Insert the Sleeper-only items right after "Draft Grades" so Transactions sits
-  // among the draft entries rather than at the very bottom of the nav.
+  // Insert the Transactions item right after "Draft Grades" so it sits among the
+  // draft entries rather than at the very bottom of the nav. Shown for all platforms.
   const visibleNavItems = [...navItems];
-  if (currentPlatform === 'SLEEPER') {
+  {
     const draftGradesIdx = visibleNavItems.findIndex(
       (i) => i.url === '/draft_grades',
     );
     const at =
       draftGradesIdx === -1 ? visibleNavItems.length : draftGradesIdx + 1;
-    visibleNavItems.splice(at, 0, ...sleeperOnlyNavItems);
+    visibleNavItems.splice(at, 0, ...transactionsNavItems);
   }
   const refreshLeagueUrl = currentLeagueId
     ? `/connect_league?leagueId=${encodeURIComponent(currentLeagueId)}&platform=${currentPlatform.toLowerCase()}`

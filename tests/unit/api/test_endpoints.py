@@ -471,10 +471,11 @@ class TestOnboardLeagueEndpoint:
         assert active_updates
 
     def test_refresh_returns_429_when_within_cooldown(
-        self, client, mock_table, league_lookup_item, league_metadata_item
+        self, client, mock_table, league_lookup_item, league_metadata_item, monkeypatch
     ):
         from datetime import datetime, timedelta, timezone
 
+        monkeypatch.setenv("ENVIRONMENT", "prod")
         recent_time = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()
         league_metadata_item["last_refresh_at"] = recent_time
         mock_table.get_item.side_effect = [
@@ -487,6 +488,32 @@ class TestOnboardLeagueEndpoint:
         )
         assert response.status_code == 429
         assert "once per week" in response.json()["detail"]
+
+    def test_refresh_bypasses_cooldown_in_dev(
+        self,
+        client,
+        mock_table,
+        mock_lambda_client,
+        league_lookup_item,
+        league_metadata_item,
+        monkeypatch,
+    ):
+        from datetime import datetime, timedelta, timezone
+
+        monkeypatch.setenv("ENVIRONMENT", "dev")
+        recent_time = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()
+        league_metadata_item["last_refresh_at"] = recent_time
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+        ]
+        mock_lambda_client.invoke.return_value = {}
+        response = client.post(
+            "/leagues?requestType=REFRESH",
+            json={"leagueId": "123", "platform": "SLEEPER"},
+        )
+        # In DEV the weekly cooldown is skipped, so a within-window refresh proceeds.
+        assert response.status_code == 201
 
     def test_refresh_proceeds_when_outside_cooldown(
         self,

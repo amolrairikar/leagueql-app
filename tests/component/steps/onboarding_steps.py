@@ -10,7 +10,7 @@ import json
 import uuid
 from unittest.mock import MagicMock, patch
 
-from behave import given, then, when
+from behave import given, step, then, when
 from common_steps import get_item, load_fixture
 
 
@@ -300,6 +300,21 @@ def step_lookup_exists(context, league_id, platform):
     item = get_item(context, f"LEAGUE#{league_id}#PLATFORM#{platform}", "LEAGUE_LOOKUP")
     assert item, "no LEAGUE_LOOKUP"
     assert item["canonical_league_id"] == context.canonical
+
+
+@step("the default caller is a member of the onboarded league")
+def step_make_default_caller_member(context):
+    # ESPN reads are member-gated (backend/league-authorization); the ONBOARD event carries
+    # no caller, so the onboarded league has no owner/member yet. Grant the default
+    # authenticated API user membership so its query reads pass.
+    table = context.ddb_resource.Table(context.table_name)
+    table.update_item(
+        Key={"PK": f"LEAGUE#{context.canonical}", "SK": "METADATA"},
+        UpdateExpression="ADD members :m",
+        ExpressionAttributeValues={
+            ":m": {getattr(context, "default_user", "owner_user")}
+        },
+    )
 
 
 @then('the league has at least one "{sk_prefix}" item')

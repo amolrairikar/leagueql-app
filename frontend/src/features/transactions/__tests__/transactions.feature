@@ -77,6 +77,25 @@ Feature: Transactions (frontend/transactions)
     And there is no trade winner
     And I do not see the message "Failed to load matchups."
 
+  Scenario: ESPN defaults to Free Agents and offers no Trades filter
+    Given ESPN transactions data is available
+    When I open the transactions page for an ESPN league
+    Then I see the received player "FA Add"
+    And there is no "Trades" filter option
+    And there is no "All" filter option
+
+  Scenario: An ESPN waiver shows the claimed player when the Waivers filter is selected
+    Given ESPN transactions data is available
+    When I open the transactions page for an ESPN league
+    And I select the "Waivers" filter
+    Then I see the received player "Waiver Claim"
+
+  Scenario: The ESPN summary table omits the Trades column
+    Given ESPN transactions data is available
+    When I open the transactions page for an ESPN league
+    Then the summary table has no "Trades" column
+    And the summary table has a "Free Agents" column
+
   Scenario: A season with no transactions shows an empty state
     Given the league has no transactions
     When I open the transactions page

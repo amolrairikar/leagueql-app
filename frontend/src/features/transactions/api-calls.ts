@@ -82,9 +82,10 @@ export interface GetTransactionsResponse {
 /**
  * Fetch a season's transactions (waivers, trades, free agents) for a league.
  *
- * Sleeper-only (backend/sleeper-transactions / frontend/transactions). A season with no completed transactions has no
- * TRANSACTIONS item and 404s; that is a legitimate empty result, so a 404 resolves to an
- * empty list. Any other failure propagates so the page can show an inline error.
+ * Works for both Sleeper (all seasons) and ESPN (current season only) leagues
+ * (backend/sleeper-transactions, backend/espn-transactions, frontend/transactions). A season with no
+ * transactions has no TRANSACTIONS item and 404s; that is a legitimate empty result, so a 404
+ * resolves to an empty list. Any other failure propagates so the page can show an inline error.
  */
 export function getTransactions(
   leagueId: string,

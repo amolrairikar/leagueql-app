@@ -1,7 +1,7 @@
 # sleeper-transactions Specification
 
 ## Purpose
-Build a precomputed transactions view for Sleeper leagues — completed waiver claims, trades (players and/or draft picks), free-agent adds/drops, and commissioner moves — with opaque Sleeper player IDs resolved to names/positions and roster IDs resolved to team labels. The processor writes it to DynamoDB and it is read through the query API under `queryType=TRANSACTIONS#{season}`. Sleeper-only: ESPN produces no `TRANSACTIONS` items.
+Build a precomputed transactions view for Sleeper leagues — completed waiver claims, trades (players and/or draft picks), free-agent adds/drops, and commissioner moves — with opaque Sleeper player IDs resolved to names/positions and roster IDs resolved to team labels. The processor writes it to DynamoDB and it is read through the query API under `queryType=TRANSACTIONS#{season}`. This capability covers the Sleeper producer; ESPN transactions are produced by `backend/espn-transactions` into the same `TRANSACTIONS#{season}` items.
 
 ## Requirements
 
@@ -40,15 +40,15 @@ The processor SHALL tolerate unknown players and unresolvable rosters without fa
 - **THEN** it falls back to a `Roster {id}` label
 
 ### Requirement: No item for empty transactions
-A Sleeper league/season with no completed transactions SHALL write no `TRANSACTIONS#{season}` item (of any chunk), and ESPN leagues SHALL never produce one.
+A Sleeper league/season with no completed transactions SHALL write no `TRANSACTIONS#{season}` item (of any chunk). ESPN leagues also produce `TRANSACTIONS` items now (see `backend/espn-transactions`), so this is no longer Sleeper-exclusive.
 
 #### Scenario: No transactions
 - **WHEN** a Sleeper season has no completed transactions
 - **THEN** no `TRANSACTIONS#{season}` item (of any chunk) is written and a query for it returns `404`
 
 #### Scenario: ESPN league
-- **WHEN** an ESPN league is processed
-- **THEN** no `TRANSACTIONS` item is produced
+- **WHEN** an ESPN league's current season has completed (EXECUTED) waiver/free-agent transactions
+- **THEN** it produces `TRANSACTIONS#{season}` items (per `backend/espn-transactions`) and is no longer suppressed
 
 ### Requirement: Serve transactions through the query API
 `GET /leagues/{leagueId}/query?platform=SLEEPER&queryType=TRANSACTIONS#{season}` SHALL return the season's rows, concatenated across every chunk item for that season.

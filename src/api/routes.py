@@ -275,7 +275,9 @@ def onboard_league(
                 detail="A refresh is already in progress for this league",
             )
         last_refresh_at = league_metadata.get("last_refresh_at")
-        if last_refresh_at:
+        # The weekly cooldown is disabled in DEV so the refresh pipeline can be
+        # iterated on without waiting a week between test refreshes.
+        if last_refresh_at and os.environ.get("ENVIRONMENT") != "dev":
             last_refresh_dt = datetime.fromisoformat(last_refresh_at)
             cooldown = timedelta(days=REFRESH_COOLDOWN_DAYS)
             elapsed = datetime.now(timezone.utc) - last_refresh_dt

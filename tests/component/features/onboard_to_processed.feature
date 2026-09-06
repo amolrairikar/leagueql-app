@@ -67,6 +67,30 @@ Feature: Onboard-to-processed pipeline (backend/league-onboarding, backend/data-
     Then the API responds with status 200
     And the query response has 2 row(s)
 
+  Scenario: An ESPN league onboards and builds current-season transactions (backend/espn-transactions)
+    # ESPN current-season EXECUTED waivers/free agents are compiled into TRANSACTIONS#{season}
+    # items and round-trip through the query API, with players/teams resolved.
+    When the onboarder runs an ONBOARD for "ESPN" league "800" with fixture "espn/raw_data_2024.json"
+    Then the onboarder returns status 200
+    And the default caller is a member of the onboarded league
+    When the processor processes the onboarded league
+    Then a JOB_STATUS "COMPLETED" exists for the job
+    And the league has at least one "TRANSACTIONS#2024" item
+    When I GET "/leagues/800/query?platform=ESPN&queryType=TRANSACTIONS#2024"
+    Then the API responds with status 200
+    And the query response has 2 row(s)
+    And a query response row has "type" equal to "free_agent"
+    And a query response row has "type" equal to "waiver"
+
+  Scenario: An ESPN league with no current-season transactions writes no TRANSACTIONS item (backend/espn-transactions)
+    When the onboarder runs an ONBOARD for "ESPN" league "810" with fixture "espn/raw_data_no_transactions_2024.json"
+    Then the onboarder returns status 200
+    And the default caller is a member of the onboarded league
+    When the processor processes the onboarded league
+    Then a JOB_STATUS "COMPLETED" exists for the job
+    When I GET "/leagues/810/query?platform=ESPN&queryType=TRANSACTIONS#2024"
+    Then the API responds with status 404
+
   Scenario: Onboarding a renewed Sleeper season reuses the existing league without a duplicate METADATA (backend/league-onboarding)
     # A Sleeper league renews under a new league ID linked by previous_league_id. Onboarding
     # it must fold into the existing canonical league, registering the new ID's LEAGUE_LOOKUP

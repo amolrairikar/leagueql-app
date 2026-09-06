@@ -19,6 +19,63 @@ const league = {
   seasons: ['2024'],
 };
 
+const espnLeague = {
+  leagueId: '800',
+  platform: 'ESPN' as const,
+  seasons: ['2024'],
+};
+
+// ESPN produces only waiver/free_agent rows (no trades), draft_picks always empty.
+const ESPN_TRANSACTIONS: TransactionItem[] = [
+  {
+    season: '2024',
+    transaction_id: 'e-fa',
+    type: 'free_agent',
+    week: 2,
+    created: 1700000100000,
+    roster_ids: ['1'],
+    teams: [{ roster_id: '1', team_name: 'Team Alice', display_name: 'Alice' }],
+    adds: [
+      {
+        player_id: '111',
+        player_name: 'FA Add',
+        position: 'QB',
+        roster_id: '1',
+      },
+    ],
+    drops: [
+      {
+        player_id: '222',
+        player_name: 'FA Drop',
+        position: 'RB',
+        roster_id: '1',
+      },
+    ],
+    draft_picks: [],
+    waiver_bid: 0,
+  },
+  {
+    season: '2024',
+    transaction_id: 'e-w',
+    type: 'waiver',
+    week: 1,
+    created: 1700000000000,
+    roster_ids: ['2'],
+    teams: [{ roster_id: '2', team_name: 'Team Bob', display_name: 'Bob' }],
+    adds: [
+      {
+        player_id: '333',
+        player_name: 'Waiver Claim',
+        position: 'WR',
+        roster_id: '2',
+      },
+    ],
+    drops: [],
+    draft_picks: [],
+    waiver_bid: 5,
+  },
+];
+
 const TRANSACTIONS: TransactionItem[] = [
   {
     season: '2024',
@@ -575,6 +632,87 @@ defineFeature(feature, (test) => {
     });
     and(/^I do not see the message "(.*)"$/, (msg) => {
       expect(screen.queryByText(msg)).toBeNull();
+    });
+  });
+
+  test('ESPN defaults to Free Agents and offers no Trades filter', ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    given('ESPN transactions data is available', () => {
+      server.use(leagueQuery({ TRANSACTIONS: ESPN_TRANSACTIONS }));
+    });
+    when('I open the transactions page for an ESPN league', async () => {
+      await renderRoute(<Transactions />, {
+        route: '/transactions',
+        league: espnLeague,
+      });
+    });
+    then(/^I see the received player "(.*)"$/, async (name) => {
+      // The Free-Agent default is active, so the free-agent add is shown.
+      expect(
+        (await screen.findAllByText(name, { exact: false })).length,
+      ).toBeGreaterThan(0);
+    });
+    and(/^there is no "(.*)" filter option$/, (label) => {
+      expect(screen.queryByRole('button', { name: label })).toBeNull();
+    });
+    and('there is no "All" filter option', () => {
+      expect(screen.queryByRole('button', { name: 'All' })).toBeNull();
+    });
+  });
+
+  test('An ESPN waiver shows the claimed player when the Waivers filter is selected', ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    given('ESPN transactions data is available', () => {
+      server.use(leagueQuery({ TRANSACTIONS: ESPN_TRANSACTIONS }));
+    });
+    when('I open the transactions page for an ESPN league', async () => {
+      await renderRoute(<Transactions />, {
+        route: '/transactions',
+        league: espnLeague,
+      });
+    });
+    and(/^I select the "(.*)" filter$/, async (label) => {
+      await userEvent.click(screen.getByRole('button', { name: label }));
+    });
+    then(/^I see the received player "(.*)"$/, async (name) => {
+      expect(
+        (await screen.findAllByText(name, { exact: false })).length,
+      ).toBeGreaterThan(0);
+    });
+  });
+
+  test('The ESPN summary table omits the Trades column', ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    given('ESPN transactions data is available', () => {
+      server.use(leagueQuery({ TRANSACTIONS: ESPN_TRANSACTIONS }));
+    });
+    when('I open the transactions page for an ESPN league', async () => {
+      await renderRoute(<Transactions />, {
+        route: '/transactions',
+        league: espnLeague,
+      });
+    });
+    then(/^the summary table has no "(.*)" column$/, async (label) => {
+      // Wait for the summary table to render before asserting the column is absent.
+      await screen.findByRole('columnheader', { name: 'Free Agents' });
+      expect(screen.queryByRole('columnheader', { name: label })).toBeNull();
+    });
+    and(/^the summary table has a "(.*)" column$/, (label) => {
+      expect(
+        screen.getByRole('columnheader', { name: label }),
+      ).toBeInTheDocument();
     });
   });
 

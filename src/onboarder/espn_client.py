@@ -21,6 +21,7 @@ DATA_FETCH_TYPES = [
     "draft_picks",
     "matchups",
     "player_scoring_totals",
+    "transactions",
 ]
 ESPN_PLAYER_FETCH_LIMIT = 1500
 
@@ -60,6 +61,47 @@ def _filter_matchups(
     }
 
 
+def _filter_transactions(
+    data: dict[str, Any], _season: str, _data_type: str
+) -> dict[str, Any]:
+    """
+    Trim ESPN ``mTransactions2`` payload to the completed adds/drops we store.
+
+    Keeps only ``EXECUTED`` waiver claims and free-agent moves (DRAFT, ROSTER
+    lineup swaps, and trade types are dropped) and reduces each record — and each
+    of its ``items`` — to the fields the processor needs, keeping the S3 payload
+    lean the way the other ESPN filters do.
+    """
+    kept = []
+    for txn in data.get("transactions", []):
+        if txn.get("status") != "EXECUTED":
+            continue
+        if txn.get("type") not in ("FREEAGENT", "WAIVER"):
+            continue
+        kept.append(
+            {
+                "id": txn.get("id"),
+                "type": txn.get("type"),
+                "scoringPeriodId": txn.get("scoringPeriodId"),
+                "proposedDate": txn.get("proposedDate"),
+                "processDate": txn.get("processDate"),
+                "bidAmount": txn.get("bidAmount"),
+                "teamId": txn.get("teamId"),
+                "items": [
+                    {
+                        "type": item.get("type"),
+                        "playerId": item.get("playerId"),
+                        "fromTeamId": item.get("fromTeamId"),
+                        "toTeamId": item.get("toTeamId"),
+                    }
+                    for item in (txn.get("items") or [])
+                    if item.get("type") in ("ADD", "DROP")
+                ],
+            }
+        )
+    return {"transactions": kept}
+
+
 def _filter_player_scoring_totals(
     data: dict[str, Any], season: str, data_type: str
 ) -> dict[str, Any]:
@@ -88,6 +130,7 @@ _ESPN_DATA_FILTERS = {
     "settings": _filter_settings,
     "draft_picks": _filter_draft_picks,
     "player_scoring_totals": _filter_player_scoring_totals,
+    "transactions": _filter_transactions,
 }
 
 
@@ -221,6 +264,7 @@ class ESPNClient:
             "draft_picks": {"view": ["mDraftDetail"]},
             "matchups": {"view": ["mBoxscore", "mMatchupScore"]},
             "player_scoring_totals": {"view": ["kona_player_info"]},
+            "transactions": {"view": ["mTransactions2"]},
         }
         if data_type not in param_map:
             raise ValueError(f"Invalid data_type: {data_type}")
@@ -237,9 +281,16 @@ class ESPNClient:
             List of tuples containing the season, data type, and request URL.
         """
         urls = []
+        # Transactions are only fetched for the current (latest) season: ESPN's
+        # mTransactions2 view returns no data for past seasons, so requesting them
+        # would be wasted calls. A single call returns the whole season (no per-week
+        # expansion, unlike matchups).
+        latest_season = max((int(s) for s in self.seasons), default=None)
         for season in self.seasons:
             season_int = int(season)
             for data_type in DATA_FETCH_TYPES:
+                if data_type == "transactions" and season_int != latest_season:
+                    continue
                 if season_int <= V2_CUTOFF:
                     api_base_url = f"https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/leagueHistory/{self.league_id}?seasonId={season}"
                 else:

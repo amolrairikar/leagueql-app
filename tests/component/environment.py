@@ -47,6 +47,10 @@ _ENV = {
     # backend/player-metadata-refresher: player metadata refresher writes the Sleeper players cache here.
     "PLAYER_METADATA_S3_KEY": "player-metadata/sleeper_nfl_players.json",
     "ONBOARDER_LAMBDA_NAME": "onboarder-test",
+    # backend/league-refresh: the weekly cooldown is enforced in every environment
+    # except "dev". Default to a prod-like value so the cooldown scenario is deterministic
+    # regardless of the shell's ENVIRONMENT (the dev bypass is covered by unit tests).
+    "ENVIRONMENT": "prod",
     # backend/admin-onboarding-report: the nightly report resolves the Discord webhook
     # URL from this SSM parameter name at import; a moto SecureString is seeded below.
     "DISCORD_WEBHOOK_URL_SSM_PARAM": "/leagueql/test/discord/webhook_url",

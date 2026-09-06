@@ -72,7 +72,7 @@ export interface LeagueSettingsItem {
   regular_season_weeks: number;
 }
 
-/** A team involved in a transaction, resolved from a Sleeper roster_id (backend/sleeper-transactions / frontend/transactions). */
+/** A team involved in a transaction, resolved from a roster/team id (backend/sleeper-transactions, backend/espn-transactions, frontend/transactions). */
 export interface TransactionTeam {
   roster_id: string;
   team_name: string | null;
@@ -82,7 +82,7 @@ export interface TransactionTeam {
 /** A player added or dropped in a transaction, with name resolved from player metadata. */
 export interface TransactionPlayer {
   player_id: string;
-  /** Null when the player ID is not present in the cached Sleeper player metadata. */
+  /** Null when the player ID is not present in the platform's player metadata. */
   player_name: string | null;
   position: string | null;
   roster_id: string;
@@ -96,7 +96,11 @@ export interface TransactionDraftPick {
   to_roster_id: string | null;
 }
 
-/** A completed Sleeper transaction (waiver, trade, free agent, commissioner). backend/sleeper-transactions / frontend/transactions. */
+/**
+ * A completed transaction. Sleeper: waiver/trade/free_agent/commissioner across all seasons.
+ * ESPN: current-season waiver/free_agent only, with `draft_picks` always empty
+ * (backend/sleeper-transactions, backend/espn-transactions, frontend/transactions).
+ */
 export interface TransactionItem {
   season: string;
   transaction_id: string;

@@ -47,6 +47,86 @@ class TestFilterFunctions:
         result = onboarder_espn_client._filter_draft_picks(data, "2026", "draft_picks")
         assert result == {"draft_picks": []}
 
+    def test_filter_transactions_keeps_executed_freeagent_and_waiver(
+        self, onboarder_espn_client
+    ):
+        data = {
+            "transactions": [
+                {
+                    "id": "fa1",
+                    "type": "FREEAGENT",
+                    "status": "EXECUTED",
+                    "scoringPeriodId": 2,
+                    "proposedDate": 100,
+                    "bidAmount": 0,
+                    "teamId": 9,
+                    "items": [
+                        {
+                            "type": "ADD",
+                            "playerId": 111,
+                            "fromTeamId": 0,
+                            "toTeamId": 9,
+                        },
+                        {
+                            "type": "DROP",
+                            "playerId": 222,
+                            "fromTeamId": 9,
+                            "toTeamId": 0,
+                        },
+                        # A non ADD/DROP item (e.g. a lineup slot change) is dropped.
+                        {"type": "LINEUP", "playerId": 333},
+                    ],
+                },
+                {
+                    "id": "w1",
+                    "type": "WAIVER",
+                    "status": "EXECUTED",
+                    "scoringPeriodId": 1,
+                    "processDate": 200,
+                    "bidAmount": 17,
+                    "teamId": 3,
+                    "items": [{"type": "ADD", "playerId": 444, "toTeamId": 3}],
+                },
+            ]
+        }
+        result = onboarder_espn_client._filter_transactions(
+            data, "2026", "transactions"
+        )
+        kept = result["transactions"]
+        assert [t["id"] for t in kept] == ["fa1", "w1"]
+        # Only ADD/DROP items are retained, trimmed to the needed keys.
+        assert kept[0]["items"] == [
+            {"type": "ADD", "playerId": 111, "fromTeamId": 0, "toTeamId": 9},
+            {"type": "DROP", "playerId": 222, "fromTeamId": 9, "toTeamId": 0},
+        ]
+        assert kept[1]["bidAmount"] == 17
+
+    def test_filter_transactions_drops_draft_roster_trade_and_pending(
+        self, onboarder_espn_client
+    ):
+        data = {
+            "transactions": [
+                {"id": "d1", "type": "DRAFT", "status": "EXECUTED", "items": []},
+                {"id": "r1", "type": "ROSTER", "status": "EXECUTED", "items": []},
+                {
+                    "id": "tp1",
+                    "type": "TRADE_PROPOSAL",
+                    "status": "PENDING",
+                    "items": [],
+                },
+                {
+                    "id": "fa_pending",
+                    "type": "FREEAGENT",
+                    "status": "PENDING",
+                    "items": [],
+                },
+            ]
+        }
+        result = onboarder_espn_client._filter_transactions(
+            data, "2026", "transactions"
+        )
+        assert result == {"transactions": []}
+
     def test_filter_matchups(self, onboarder_espn_client):
         data = {
             "schedule": [
@@ -273,6 +353,11 @@ class TestESPNClientConstructRequestUrl:
         url = client._construct_request_url(self._base, "player_scoring_totals")
         assert "kona_player_info" in url
 
+    def test_transactions_url(self, onboarder_espn_client):
+        client = self._get_client(onboarder_espn_client)
+        url = client._construct_request_url(self._base, "transactions")
+        assert "mTransactions2" in url
+
     def test_invalid_data_type_raises(self, onboarder_espn_client):
         client = self._get_client(onboarder_espn_client)
         with pytest.raises(ValueError, match="Invalid data_type"):
@@ -320,6 +405,25 @@ class TestESPNClientBuildAllRequestUrls:
         )
         urls = [u[2] for u in client.request_urls]
         assert any("leagueHistory" in url for url in urls)
+
+    def test_transactions_fetched_for_latest_season_only(self, onboarder_espn_client):
+        # A multi-season onboard: transactions are requested exactly once, for the
+        # latest season only (past seasons return no transaction data on this endpoint).
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {
+            "status": {"previousSeasons": [2022, 2023]},
+            "draftDetail": {"drafted": True},
+        }
+        mock_resp.raise_for_status = MagicMock()
+        with patch("requests.get", return_value=mock_resp):
+            client = onboarder_espn_client.ESPNClient(
+                league_id="123", latest_season="2024"
+            )
+        txn_urls = [u for u in client.request_urls if u[1] == "transactions"]
+        assert len(txn_urls) == 1
+        season, _data_type, url = txn_urls[0]
+        assert season == "2024"
+        assert "seasons/2024" in url and "mTransactions2" in url
 
 
 class TestESPNClientGetSeasonsList:

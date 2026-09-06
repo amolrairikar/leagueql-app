@@ -607,10 +607,17 @@ QUERIES = {
         """,
     },
     "TRANSACTIONS": {
-        # Sleeper only — ESPN exposes no transaction data (backend/sleeper-transactions). Player/roster
-        # resolution already happened in Python (compile_sleeper_transactions), so this
-        # is a passthrough; rows are ordered newest-first within each season.
+        # Player/team resolution already happened in Python (compile_sleeper_transactions /
+        # compile_espn_transactions), so these are passthroughs; rows are ordered
+        # newest-first within each season.
         "SLEEPER": """
+        SELECT *
+        FROM transactions
+        ORDER BY season DESC, created DESC
+        """,
+        # ESPN stores current-season EXECUTED waivers/free agents only, with draft_picks
+        # always empty (backend/espn-transactions).
+        "ESPN": """
         SELECT *
         FROM transactions
         ORDER BY season DESC, created DESC
