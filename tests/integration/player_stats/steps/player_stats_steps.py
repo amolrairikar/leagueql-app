@@ -11,11 +11,18 @@ MAX_PLAYERS = 100
 
 
 def _most_recent_completed_season() -> str:
-    # The NFL regular season runs Sep–Jan. Before September the most recent
-    # completed season is the previous calendar year; otherwise it is the
-    # current year.
+    # An NFL season labeled year Y runs Sep Y through the Super Bowl in early
+    # Feb Y+1, so it is only *complete* — and guaranteed to have a full set of
+    # regular-season stats on Sleeper — from roughly March Y+1 onward. Rolling
+    # to the current calendar year in September (an in-progress season) is wrong:
+    # in early September the new season has played no games yet, so its
+    # regular-season stats are empty and the refresh writes zero players,
+    # failing the non-empty assertion below.
+    #   Mar–Dec: the most recent completed season is the previous calendar year.
+    #   Jan–Feb: the previous year's season is still in progress / just ending,
+    #            so the most recent completed season is two years back.
     today = datetime.datetime.now(tz=datetime.timezone.utc).date()
-    return str(today.year if today.month >= 9 else today.year - 1)
+    return str(today.year - 1 if today.month >= 3 else today.year - 2)
 
 
 def _production_cache_fingerprint(context) -> tuple | None:
