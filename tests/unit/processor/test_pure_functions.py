@@ -1508,30 +1508,6 @@ class TestLambdaHandlerFailure:
         assert kwargs["failure_code"] == "PROCESSING"
 
 
-class TestUpdateLeagueCount:
-    def test_increments_count(self, processor_handler):
-        mock_ddb = MagicMock()
-        with patch.object(processor_handler, "ddb_client", mock_ddb):
-            processor_handler.update_league_count(1)
-        mock_ddb.update_item.assert_called_once_with(
-            TableName=processor_handler.table.name,
-            Key={"PK": {"S": "APP#STATS"}, "SK": {"S": "LEAGUE_COUNT"}},
-            UpdateExpression="ADD league_count :delta",
-            ExpressionAttributeValues={":delta": {"N": "1"}},
-        )
-
-    def test_decrements_count(self, processor_handler):
-        mock_ddb = MagicMock()
-        with patch.object(processor_handler, "ddb_client", mock_ddb):
-            processor_handler.update_league_count(-1)
-        mock_ddb.update_item.assert_called_once_with(
-            TableName=processor_handler.table.name,
-            Key={"PK": {"S": "APP#STATS"}, "SK": {"S": "LEAGUE_COUNT"}},
-            UpdateExpression="ADD league_count :delta",
-            ExpressionAttributeValues={":delta": {"N": "-1"}},
-        )
-
-
 def _draft_pick(player_id, team_id, season, bid, overall_pick, position_slot=2):
     """Build a single ESPN draft_picks row with all columns the query reads."""
     return {

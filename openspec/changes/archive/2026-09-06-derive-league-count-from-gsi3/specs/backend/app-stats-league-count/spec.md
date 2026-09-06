@@ -1,12 +1,4 @@
-# app-stats-league-count Specification
-
-## Purpose
-Serve a global count of how many leagues have been onboarded to LeagueQL. The count is derived
-hourly from the league `METADATA` items (a GSI3 `SK="METADATA"` `COUNT` query) and published to a
-Cloudflare KV store; there is no separately maintained counter item. The public landing page reads
-this count (via `api.leagueql.com/counts`) as social proof.
-
-## Requirements
+## ADDED Requirements
 
 ### Requirement: Derive the league count
 The league count SHALL be derived as the number of league `METADATA` items, computed by querying
@@ -25,6 +17,8 @@ result pages, and published to the counts KV store on the existing hourly cadenc
 - **WHEN** a league is onboarded or deleted
 - **THEN** no increment/decrement is written to an `APP#STATS`/`LEAGUE_COUNT` item (that item is retired)
 
+## MODIFIED Requirements
+
 ### Requirement: Refresh and migrate do not change the count
 Refresh and migration SHALL leave the count unchanged (same canonical league, one `METADATA` item).
 
@@ -32,13 +26,11 @@ Refresh and migration SHALL leave the count unchanged (same canonical league, on
 - **WHEN** a league is refreshed or migrated
 - **THEN** the derived count is unchanged, because the canonical league still has exactly one `METADATA` item
 
-### Requirement: Serve the count to the landing page
-The counts endpoint SHALL return the current value, and its CORS preflight SHALL permit W3C trace-context headers without edge-caching the preflight as the GET body.
+## REMOVED Requirements
 
-#### Scenario: Counts value returned
-- **WHEN** the landing page fetches the counts endpoint
-- **THEN** it returns the current league count value
-
-#### Scenario: Preflight permits trace headers
-- **WHEN** an `OPTIONS` preflight to `/counts` arrives carrying `traceparent`/`tracestate`
-- **THEN** it returns `204` with `Access-Control-Allow-Headers` permitting those headers, and the preflight response is not edge-cached as the `GET` body
+### Requirement: Maintain the league count
+**Reason**: Replaced by a derived count computed from the `METADATA` items in GSI3, which is
+self-healing and cannot drift. The maintained atomic counter and its `APP#STATS`/`LEAGUE_COUNT`
+item are retired.
+**Migration**: None required. The counts sync now derives the value from `METADATA` items instead
+of reading the counter; the retired item can be deleted or left to expire unused.

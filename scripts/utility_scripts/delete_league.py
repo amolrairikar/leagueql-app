@@ -1,19 +1,19 @@
 """
-delete_test_league.py
+delete_league.py
 
 Deletes all DynamoDB items and S3 files for a given Sleeper or ESPN league.
 Deletes directly from DynamoDB and S3 by canonical league ID, bypassing the
 owner-gated delete API (this is an admin utility, not an authenticated caller).
 
 Usage:
-    pipenv run python scripts/utility_scripts/delete_test_league.py --league-id 1234567890 --platform sleeper
-    pipenv run python scripts/utility_scripts/delete_test_league.py --league-id 1234567890 --platform espn
+    pipenv run python scripts/utility_scripts/delete_league.py --league-id 1234567890 --platform sleeper
+    pipenv run python scripts/utility_scripts/delete_league.py --league-id 1234567890 --platform espn
 
     # Target prod instead of dev (defaults to dev):
-    pipenv run python scripts/utility_scripts/delete_test_league.py --league-id 1234567890 --platform sleeper --env prod
+    pipenv run python scripts/utility_scripts/delete_league.py --league-id 1234567890 --platform sleeper --env prod
 
     # --league-id falls back to the TEST_SLEEPER_LEAGUE_ID environment variable:
-    pipenv run python scripts/utility_scripts/delete_test_league.py --platform sleeper
+    pipenv run python scripts/utility_scripts/delete_league.py --platform sleeper
 """
 
 import argparse
@@ -72,7 +72,6 @@ if __name__ == "__main__":
         Platform,
         delete_all_league_items,
         lookup_league,
-        update_league_count,
     )
 
     platform = Platform(args.platform)
@@ -90,7 +89,8 @@ if __name__ == "__main__":
 
     # Delete straight from DynamoDB and S3 — no owner-gated API path. Deletes every
     # DynamoDB item for the canonical league ID, then every S3 object under its
-    # raw-api-data/ prefix, then decrements the public league counter.
+    # raw-api-data/ prefix. The public league count is derived hourly from the
+    # surviving METADATA items (the sync-counts worker), so no counter update here.
     delete_all_league_items(canonical_league_id=canonical_league_id)
 
     s3_prefix = f"raw-api-data/{canonical_league_id}/"
@@ -107,8 +107,6 @@ if __name__ == "__main__":
             Delete={"Objects": delete_keys, "Quiet": True},
         )
         deleted_objects += len(delete_keys)
-
-    update_league_count(delta=-1)
 
     print(
         f"Successfully deleted {platform.value} league {args.league_id} "

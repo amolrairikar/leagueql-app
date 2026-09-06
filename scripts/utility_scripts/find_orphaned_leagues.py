@@ -45,9 +45,9 @@ Safety
 ------
 Dry-run by default — it only reports. ``--execute`` deletes, and before deleting
 each orphan it re-checks GSI1 to confirm no LEAGUE_LOOKUP points at it (so a league
-that became live between the scan and the delete is never touched). By default it
-also decrements ``APP#STATS/LEAGUE_COUNT`` by one per deleted orphan (the duplicate
-onboard double-counted it); pass ``--no-fix-league-count`` to skip that.
+that became live between the scan and the delete is never touched). The landing-page
+league count is derived hourly from the surviving METADATA items (the sync-counts
+worker), so deleting an orphan needs no separate count adjustment.
 
 Environment & names
 -------------------
@@ -307,15 +307,6 @@ def delete_s3_prefix(s3, bucket: str, keys: list[str]) -> None:
         )
 
 
-def decrement_league_count(table) -> None:
-    """Decrements ``APP#STATS/LEAGUE_COUNT`` by one (reverses the duplicate's count)."""
-    table.update_item(
-        Key={"PK": "APP#STATS", "SK": "LEAGUE_COUNT"},
-        UpdateExpression="ADD league_count :d",
-        ExpressionAttributeValues={":d": -1},
-    )
-
-
 def parse_args(argv=None):
     p = argparse.ArgumentParser(
         description=(
@@ -357,12 +348,6 @@ def parse_args(argv=None):
         "--include-unmatched",
         action="store_true",
         help="Also delete UNMATCHED orphans (no twin found). Use with care.",
-    )
-    p.add_argument(
-        "--fix-league-count",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Decrement APP#STATS/LEAGUE_COUNT per deleted orphan (default: enabled).",
     )
     p.add_argument(
         "--execute",
@@ -523,8 +508,6 @@ def main(argv=None):
         )
         delete_dynamo_items(table, plan["dynamo_keys"])
         delete_s3_prefix(s3, args.bucket, plan["s3_keys"])
-        if args.fix_league_count:
-            decrement_league_count(table)
         deleted += 1
 
     logger.info("Done: %d orphan(s) deleted.", deleted)

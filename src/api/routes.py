@@ -45,7 +45,6 @@ from helpers import (
     require_league_member,
     require_league_owner,
     set_active_job,
-    update_league_count,
 )
 from main import (
     PREFIX_READ_QUERY_TYPES,
@@ -573,7 +572,6 @@ def delete_league(
 
         logger.info("Deleted raw API data for league from S3")
 
-        update_league_count(delta=-1)
         return APIResponse(
             detail="Successfully deleted league",
         )

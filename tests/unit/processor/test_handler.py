@@ -818,7 +818,6 @@ class TestLambdaHandlerImpl:
         mock_s3.get_object.return_value = _manifest_response({"ESPN": ["2024"]})
         grouped = {"league_name_by_season": {"2024": "My League"}}
         write_meta = MagicMock()
-        update_count = MagicMock()
         with (
             patch.multiple(
                 processor_handler,
@@ -831,13 +830,11 @@ class TestLambdaHandlerImpl:
                 dataframe_to_dynamo_items=MagicMock(return_value=[]),
                 write_items=MagicMock(),
                 write_metadata_items=write_meta,
-                update_league_count=update_count,
                 QUERIES=_FAKE_QUERIES,
             ),
             patch.object(processor_handler.duckdb, "connect", return_value=MagicMock()),
         ):
             processor_handler._lambda_handler_impl(_s3_event(), MagicMock())
-        update_count.assert_called_once_with(delta=1)
         # league_name extracted from the most recent season and passed through.
         assert write_meta.call_args[1]["league_name"] == "My League"
         assert write_meta.call_args[1]["refresh"] is False
@@ -873,7 +870,6 @@ class TestLambdaHandlerImpl:
                 dataframe_to_dynamo_items=MagicMock(return_value=[]),
                 write_items=write_items,
                 write_metadata_items=MagicMock(),
-                update_league_count=MagicMock(),
                 QUERIES=_FAKE_QUERIES,
             ),
             patch.object(processor_handler.duckdb, "connect", return_value=MagicMock()),
@@ -897,7 +893,6 @@ class TestLambdaHandlerImpl:
         mock_s3 = MagicMock()
         mock_s3.get_object.return_value = _manifest_response({"SLEEPER": ["2024"]})
         write_meta = MagicMock()
-        update_count = MagicMock()
 
         def fake_read(bucket, key, version_id=None):
             if version_id:
@@ -920,14 +915,12 @@ class TestLambdaHandlerImpl:
                 dataframe_to_dynamo_items=MagicMock(return_value=[]),
                 write_items=MagicMock(),
                 write_metadata_items=write_meta,
-                update_league_count=update_count,
                 QUERIES=_FAKE_QUERIES,
             ),
             patch.object(processor_handler.duckdb, "connect", return_value=MagicMock()),
         ):
             processor_handler._lambda_handler_impl(_s3_event(), MagicMock())
-        # Refresh: count is not incremented and refresh flag is set.
-        update_count.assert_not_called()
+        # Refresh sets the refresh flag on the metadata write.
         assert write_meta.call_args[1]["refresh"] is True
 
     def test_reprocess_all_processes_every_season_and_skips_previous_manifest(
@@ -955,7 +948,6 @@ class TestLambdaHandlerImpl:
                 dataframe_to_dynamo_items=MagicMock(return_value=[]),
                 write_items=MagicMock(),
                 write_metadata_items=MagicMock(),
-                update_league_count=MagicMock(),
                 QUERIES=_FAKE_QUERIES,
             ),
             patch.object(processor_handler.duckdb, "connect", return_value=MagicMock()),
@@ -994,7 +986,6 @@ class TestLambdaHandlerImpl:
                 dataframe_to_dynamo_items=df_to_items,
                 write_items=MagicMock(),
                 write_metadata_items=MagicMock(),
-                update_league_count=MagicMock(),
                 QUERIES=fake_queries,
             ),
             patch.object(processor_handler.duckdb, "connect", return_value=MagicMock()),
@@ -1043,7 +1034,6 @@ class TestLambdaHandlerImpl:
                 delete_items=delete_mock,
                 write_items=write_mock,
                 write_metadata_items=MagicMock(),
-                update_league_count=MagicMock(),
                 QUERIES=fake_queries,
             ),
             patch.object(processor_handler.duckdb, "connect", return_value=MagicMock()),
@@ -1093,7 +1083,6 @@ class TestLambdaHandlerImpl:
                 delete_items=delete_mock,
                 write_items=MagicMock(),
                 write_metadata_items=MagicMock(),
-                update_league_count=MagicMock(),
                 QUERIES=fake_queries,
             ),
             patch.object(processor_handler.duckdb, "connect", return_value=MagicMock()),
@@ -1126,7 +1115,6 @@ class TestLambdaHandlerImpl:
                 dataframe_to_dynamo_items=df_to_items,
                 write_items=MagicMock(),
                 write_metadata_items=MagicMock(),
-                update_league_count=MagicMock(),
                 QUERIES=fake_queries,
             ),
             patch.object(processor_handler.duckdb, "connect", return_value=MagicMock()),
@@ -1155,7 +1143,6 @@ class TestLambdaHandlerImpl:
                 dataframe_to_dynamo_items=df_to_items,
                 write_items=MagicMock(),
                 write_metadata_items=MagicMock(),
-                update_league_count=MagicMock(),
                 QUERIES=_FAKE_QUERIES,
             ),
             patch.object(processor_handler.duckdb, "connect", return_value=MagicMock()),
@@ -1190,7 +1177,6 @@ class TestLambdaHandlerImpl:
                 dataframe_to_dynamo_items=MagicMock(return_value=[]),
                 write_items=MagicMock(),
                 write_metadata_items=MagicMock(),
-                update_league_count=MagicMock(),
                 QUERIES=_FAKE_QUERIES,
             ),
             patch.object(processor_handler.duckdb, "connect", return_value=MagicMock()),
@@ -1282,7 +1268,6 @@ class TestLambdaHandlerImpl:
                 dataframe_to_dynamo_items=MagicMock(return_value=[]),
                 write_items=MagicMock(),
                 write_metadata_items=write_meta,
-                update_league_count=MagicMock(),
                 QUERIES=_FAKE_QUERIES,
             ),
             patch.object(processor_handler.duckdb, "connect", return_value=MagicMock()),

@@ -17,14 +17,6 @@ def _iso(days):
     return (datetime.now(timezone.utc) + timedelta(days=days)).isoformat()
 
 
-@given("the LEAGUE_COUNT starts at {count:d}")
-def step_seed_count(context, count):
-    put_item(
-        context,
-        {"PK": "APP#STATS", "SK": "LEAGUE_COUNT", "league_count": count},
-    )
-
-
 @given('league "{canonical}" has a "{sk}" view with {count:d} row(s)')
 def step_seed_view(context, canonical, sk, count):
     put_item(

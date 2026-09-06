@@ -237,7 +237,6 @@ from helpers import (  # noqa: F401
     require_league_member,
     require_league_owner,
     set_active_job,
-    update_league_count,
 )
 
 # ``delete_league`` is re-exported because external scripts/integration tests

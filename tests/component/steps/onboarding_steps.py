@@ -344,13 +344,6 @@ def step_exact_count(context, count, sk_prefix):
     )
 
 
-@then("the LEAGUE_COUNT is {count:d}")
-def step_league_count(context, count):
-    item = get_item(context, "APP#STATS", "LEAGUE_COUNT")
-    actual = int(item["league_count"]) if item else 0
-    assert actual == count, f"LEAGUE_COUNT was {actual}"
-
-
 @then('the standings show "{team_name}" as champion')
 def step_champion(context, team_name):
     item = get_item(context, f"LEAGUE#{context.canonical}", "STANDINGS#2024")

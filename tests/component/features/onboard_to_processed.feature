@@ -20,7 +20,6 @@ Feature: Onboard-to-processed pipeline (backend/league-onboarding, backend/data-
     And the league has at least one "DRAFT#2024" item
     And the league has at least one "TRANSACTIONS#2024" item
     And the standings show "Team Alice" as champion
-    And the LEAGUE_COUNT is 1
     # backend/sleeper-transactions: only the two completed transactions are stored (the failed waiver is dropped).
     When I GET "/leagues/100/query?platform=SLEEPER&queryType=TRANSACTIONS#2024"
     Then the API responds with status 200
