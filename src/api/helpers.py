@@ -435,14 +435,6 @@ def is_job_in_progress(metadata: dict) -> bool:
     return bool(job) and job.get("status") == "IN_PROGRESS"
 
 
-def update_league_count(delta: int) -> None:
-    main.table.update_item(
-        Key={"PK": "APP#STATS", "SK": "LEAGUE_COUNT"},
-        UpdateExpression="ADD league_count :delta",
-        ExpressionAttributeValues={":delta": Decimal(str(delta))},
-    )
-
-
 def require_league_owner(
     canonical_league_id: str, clerk_user_id: str, metadata: dict | None = None
 ) -> None:

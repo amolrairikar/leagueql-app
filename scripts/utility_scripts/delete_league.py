@@ -72,7 +72,6 @@ if __name__ == "__main__":
         Platform,
         delete_all_league_items,
         lookup_league,
-        update_league_count,
     )
 
     platform = Platform(args.platform)
@@ -90,7 +89,8 @@ if __name__ == "__main__":
 
     # Delete straight from DynamoDB and S3 — no owner-gated API path. Deletes every
     # DynamoDB item for the canonical league ID, then every S3 object under its
-    # raw-api-data/ prefix, then decrements the public league counter.
+    # raw-api-data/ prefix. The public league count is derived hourly from the
+    # surviving METADATA items (the sync-counts worker), so no counter update here.
     delete_all_league_items(canonical_league_id=canonical_league_id)
 
     s3_prefix = f"raw-api-data/{canonical_league_id}/"
@@ -107,8 +107,6 @@ if __name__ == "__main__":
             Delete={"Objects": delete_keys, "Quiet": True},
         )
         deleted_objects += len(delete_keys)
-
-    update_league_count(delta=-1)
 
     print(
         f"Successfully deleted {platform.value} league {args.league_id} "

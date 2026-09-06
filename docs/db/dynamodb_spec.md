@@ -54,30 +54,14 @@ stays sparse. Projection is `INCLUDE` of the dashboard display fields (`platform
 ## Items
 
 Most items share the same partition key format `LEAGUE#{leagueId}`, with the sort key
-determining the item type. The exceptions are LEAGUE_COUNT (`APP#STATS`) and JOB_STATUS
-(`JOB#{correlation_id}`), which are keyed independently of any single league.
+determining the item type. The exception is JOB_STATUS (`JOB#{correlation_id}`), which is keyed
+independently of any single league.
 
-<details>
-<summary><b>LEAGUE_COUNT</b></summary>
-
-Counter representing the total number of leagues onboarded to the app. Incremented after the
-metadata record is updated.
-
-| Attribute | Type | Required | Description |
-|---|---|---|---|
-| `PK` | String | Yes | `APP#STATS` |
-| `SK` | String | Yes | `LEAGUE_COUNT` |
-| `league_count` | Integer | Yes | The number of leagues onboarded |
-
-**Example:**
-```json
-{
-  "PK": "APP#STATS",
-  "SK": "LEAGUE_COUNT",
-  "league_count": 10
-}
-```
-</details>
+> **Landing-page league count:** there is no stored counter item. The count shown on the landing
+> page is derived hourly by the `sync-counts` Cloudflare worker, which queries GSI3 for
+> `SK = "METADATA"` (`Select=COUNT`, paginated) and writes the total to Cloudflare KV. Because
+> GSI3 is sparse over METADATA items, the count is always the current number of onboarded leagues
+> and cannot drift.
 
 <details>
 <summary><b>LEAGUE_LOOKUP</b></summary>

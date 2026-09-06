@@ -801,20 +801,6 @@ class TestDeleteLeagueEndpoint:
         # pass 2 verifies clean (PK + GSI1 = 2 calls).
         assert mock_table.query.call_count == 5
 
-    def test_decrements_league_count_on_successful_delete(
-        self, client, mock_table, mock_s3_client, league_lookup_item
-    ):
-        from decimal import Decimal
-
-        self._setup_delete_mocks(mock_table, league_lookup_item, mock_s3_client)
-        response = client.delete("/leagues/123?platform=SLEEPER")
-        assert response.status_code == 200
-        mock_table.update_item.assert_called_once_with(
-            Key={"PK": "APP#STATS", "SK": "LEAGUE_COUNT"},
-            UpdateExpression="ADD league_count :delta",
-            ExpressionAttributeValues={":delta": Decimal(-1)},
-        )
-
     def test_client_error_during_delete_returns_500(
         self, client, mock_table, league_lookup_item
     ):
