@@ -278,12 +278,13 @@ function TeamPanel({
     <span className="text-muted-foreground font-normal">—</span>
   ) : undefined;
 
-  // For a waiver / free-agent move with both an add and a drop, the net pickup value is the ROS
-  // points the acquired player(s) scored minus the ROS points the released player(s) scored — a
-  // positive net means the pickup outscored what was let go. Trades use per-side totals + a winner
-  // banner instead, and a pure add/drop needs no comparison, so both are excluded (null).
+  // For a waiver / free-agent move, the net pickup value is the ROS points the acquired player(s)
+  // scored minus the ROS points the released player(s) scored — a positive net means the pickup
+  // outscored what was let go. It is shown on every waiver / free-agent move for a consistent
+  // footer: a pure add resolves to the added total (nothing dropped), a pure drop to the negative
+  // of the dropped total (nothing added). Trades use per-side totals + a winner banner instead.
   const net =
-    showRos && !isTrade && adds.length > 0 && drops.length > 0
+    showRos && !isTrade && !empty
       ? Math.round(
           (adds.reduce(
             (sum, p) => sum + rosPointsFor(p.player_id, tradeWeek, weekly),
@@ -320,6 +321,14 @@ function TeamPanel({
           <span className="ml-auto shrink-0 inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
             <Trophy className="w-3 h-3" />
             Won
+          </span>
+        )}
+        {/* Waivers / free agents label the right-aligned points column so the numbers read as
+            rest-of-season totals; trades convey that through their per-side total footer instead.
+            Placed in the header row so it aligns vertically with the owner name/icon. */}
+        {showRos && !isTrade && !empty && (
+          <span className="ml-auto shrink-0 text-[10px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">
+            Rest of season points
           </span>
         )}
       </div>
@@ -518,9 +527,6 @@ function TransactionCard({
               : `${teamLabel(txn, rosterIds[winnerIndex])} won by +${Math.abs(
                   totals[0] - totals[1],
                 ).toFixed(2)} pts`}
-          </span>
-          <span className="text-[10.5px] text-muted-foreground">
-            Week {txn.week} → end of playoffs · every game each player scored
           </span>
         </div>
       )}

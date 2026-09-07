@@ -771,13 +771,18 @@ defineFeature(feature, (test) => {
     and(/^I see the net pickup value "(.*)"$/, async (value) => {
       expect(await screen.findByText(value)).toBeInTheDocument();
     });
+    and(/^I see the rest-of-season note "(.*)"$/, async (note) => {
+      expect(
+        (await screen.findAllByText(note, { exact: false })).length,
+      ).toBeGreaterThan(0);
+    });
     // Pickup Hero's week-2 (pre-move) 100 points must be excluded; 160.00 would mean it wasn't.
     and(/^I do not see the points "(.*)"$/, (pts) => {
       expect(screen.queryByText(pts)).toBeNull();
     });
   });
 
-  test("A pure free-agent add shows only the added player's points and no net", ({
+  test("A pure free-agent add shows the added player's points and its net pickup value", ({
     given,
     when,
     then,
@@ -800,12 +805,13 @@ defineFeature(feature, (test) => {
     then(/^I see the points "(.*)"$/, async (pts) => {
       expect((await screen.findAllByText(pts)).length).toBeGreaterThan(0);
     });
-    and('there is no net pickup value', () => {
-      expect(screen.queryByText('Net pickup value')).toBeNull();
+    // A pure add's net is just the added total (nothing dropped).
+    and(/^I see the net pickup value "(.*)"$/, async (value) => {
+      expect(await screen.findByText(value)).toBeInTheDocument();
     });
   });
 
-  test("A pure free-agent drop shows only the dropped player's points and no net", ({
+  test("A pure free-agent drop shows the dropped player's points and its net pickup value", ({
     given,
     when,
     then,
@@ -828,8 +834,9 @@ defineFeature(feature, (test) => {
     then(/^I see the points "(.*)"$/, async (pts) => {
       expect((await screen.findAllByText(pts)).length).toBeGreaterThan(0);
     });
-    and('there is no net pickup value', () => {
-      expect(screen.queryByText('Net pickup value')).toBeNull();
+    // A pure drop's net is the negative of the dropped total (nothing added).
+    and(/^I see the net pickup value "(.*)"$/, async (value) => {
+      expect(await screen.findByText(value)).toBeInTheDocument();
     });
   });
 
