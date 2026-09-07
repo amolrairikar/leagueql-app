@@ -32,14 +32,26 @@ export function InviteLinkDialog({
 }) {
   const { leagueId, platform } = getLeagueCookies();
   const [loading, setLoading] = useState(false);
-  const [link, setLink] = useState<string | null>(null);
+  const [generated, setGenerated] = useState<{
+    leagueId: string;
+    url: string;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [justGenerated, setJustGenerated] = useState(false);
 
-  function reset() {
-    setLink(null);
+  // The plaintext link is only returned once (the server keeps just its hash), so
+  // it is remembered in memory and re-shown when the dialog is reopened rather
+  // than forcing a regenerate. The sidebar dialog stays mounted across league
+  // switches, so it is scoped to the league it was minted for — a link for a
+  // previously viewed league must never leak into another league's dialog.
+  const link = generated?.leagueId === leagueId ? generated.url : null;
+
+  // Cleared on close; the remembered link is intentionally kept.
+  function clearTransient() {
     setError(null);
     setCopied(false);
+    setJustGenerated(false);
   }
 
   function handleCopy(value: string) {
@@ -52,10 +64,17 @@ export function InviteLinkDialog({
   async function handleGenerate() {
     setLoading(true);
     setError(null);
+    setCopied(false);
+    setJustGenerated(false);
     try {
       const res = await createInviteToken(leagueId, platform);
       const params = new URLSearchParams({ platform, invite: res.data.token });
-      setLink(`${window.location.origin}/join/${leagueId}?${params}`);
+      setGenerated({
+        leagueId,
+        url: `${window.location.origin}/join/${leagueId}?${params}`,
+      });
+      setJustGenerated(true);
+      setTimeout(() => setJustGenerated(false), 3000);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : 'Failed to create invite link.',
@@ -70,7 +89,7 @@ export function InviteLinkDialog({
       open={open}
       onOpenChange={(next) => {
         onOpenChange(next);
-        if (!next) reset();
+        if (!next) clearTransient();
       }}
     >
       <DialogContent>
@@ -104,22 +123,32 @@ export function InviteLinkDialog({
             </Button>
           </div>
         ) : null}
+        {justGenerated && (
+          <p
+            role="status"
+            className="flex items-center gap-1.5 text-sm font-medium text-green-600 dark:text-green-400"
+          >
+            <Check className="size-4 shrink-0" />
+            New link created. Copy it and share it with your leaguemates.
+          </p>
+        )}
         {error && <ErrorAlert message={error} />}
         <DialogFooter>
-          {!link && (
-            <Button
-              className="cursor-pointer"
-              disabled={loading}
-              onClick={() => void handleGenerate()}
-            >
-              {loading && <Spinner className="size-4" />}
-              Create invite link
-            </Button>
-          )}
+          <Button
+            className="cursor-pointer"
+            disabled={loading}
+            onClick={() => void handleGenerate()}
+          >
+            {loading && <Spinner className="size-4" />}
+            {link ? 'Create new link' : 'Create invite link'}
+          </Button>
           <Button
             variant="outline"
             className="cursor-pointer"
-            onClick={() => onOpenChange(false)}
+            onClick={() => {
+              clearTransient();
+              onOpenChange(false);
+            }}
           >
             {link ? 'Done' : 'Cancel'}
           </Button>
