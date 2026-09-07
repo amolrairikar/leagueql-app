@@ -27,7 +27,7 @@ Feature: Public pages render (frontend/landing-page, frontend/instructions-docs,
 
   Scenario: The docs page renders
     When I open the docs page
-    Then I see "Refresh League"
+    Then I see "Refresh League (ESPN only)"
 
   Scenario: The docs page no longer shows the FAQ
     When I open the docs page

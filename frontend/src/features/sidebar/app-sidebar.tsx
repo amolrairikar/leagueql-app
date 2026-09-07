@@ -226,21 +226,26 @@ export function AppSidebar() {
                     )}
                     {isOwner && (
                       <>
-                        <SidebarMenuItem>
-                          <SidebarMenuButton
-                            asChild
-                            tooltip="Refresh League"
-                            className="cursor-pointer"
-                          >
-                            <Link
-                              to={refreshLeagueUrl}
-                              onClick={closeMobileSidebar}
+                        {/* Refresh is ESPN-only: Sleeper leagues refresh
+                            automatically (backend/scheduled-sleeper-auto-refresh),
+                            so there is nothing to refresh manually. */}
+                        {currentPlatform === 'ESPN' && (
+                          <SidebarMenuItem>
+                            <SidebarMenuButton
+                              asChild
+                              tooltip="Refresh League"
+                              className="cursor-pointer"
                             >
-                              <RefreshCw />
-                              <span>Refresh League</span>
-                            </Link>
-                          </SidebarMenuButton>
-                        </SidebarMenuItem>
+                              <Link
+                                to={refreshLeagueUrl}
+                                onClick={closeMobileSidebar}
+                              >
+                                <RefreshCw />
+                                <span>Refresh League</span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        )}
                         <SidebarMenuItem>
                           <SidebarMenuButton
                             asChild
