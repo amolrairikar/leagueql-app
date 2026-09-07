@@ -12,14 +12,22 @@ const feature = loadFeature(
   'src/features/sidebar/__tests__/ownership-gating.feature',
 );
 
-const league = {
+const espnLeague = {
+  leagueId: '100',
+  platform: 'ESPN' as const,
+  seasons: ['2024'],
+};
+
+const sleeperLeague = {
   leagueId: '100',
   platform: 'SLEEPER' as const,
   seasons: ['2024'],
 };
 
 defineFeature(feature, (test) => {
-  async function renderSidebar() {
+  async function renderSidebar(
+    league: typeof espnLeague | typeof sleeperLeague,
+  ) {
     await renderRoute(
       <SidebarProvider>
         <AppSidebar />
@@ -28,16 +36,16 @@ defineFeature(feature, (test) => {
     );
   }
 
-  test('The owner sees the owner-only actions', ({
+  test('The ESPN owner sees the owner-only actions', ({
     given,
     when,
     then,
     and,
   }) => {
-    given('I am the owner of the current league', () => {
+    given('I am the owner of the current ESPN league', () => {
       server.use(leagueMetadata({ is_owner: true }));
     });
-    when('I render the sidebar', renderSidebar);
+    when('I render the sidebar', () => renderSidebar(espnLeague));
     then(/^I see the "(.*)" action$/, async (label) => {
       expect(await screen.findByText(label)).toBeInTheDocument();
     });
@@ -53,10 +61,10 @@ defineFeature(feature, (test) => {
   });
 
   test('A non-owner sees no owner actions', ({ given, when, then, and }) => {
-    given('I am not the owner of the current league', () => {
+    given('I am not the owner of the current ESPN league', () => {
       server.use(leagueMetadata({ is_owner: false }));
     });
-    when('I render the sidebar', renderSidebar);
+    when('I render the sidebar', () => renderSidebar(espnLeague));
     then(/^I see the "(.*)" action$/, async (label) => {
       expect(await screen.findByText(label)).toBeInTheDocument();
     });
@@ -65,6 +73,27 @@ defineFeature(feature, (test) => {
     });
     and(/^I do not see the "(.*)" action$/, (label) => {
       expect(screen.queryByText(label)).not.toBeInTheDocument();
+    });
+    and(/^I do not see the "(.*)" action$/, (label) => {
+      expect(screen.queryByText(label)).not.toBeInTheDocument();
+    });
+  });
+
+  test('A Sleeper owner does not see Refresh League', ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    given('I am the owner of the current Sleeper league', () => {
+      server.use(leagueMetadata({ is_owner: true }));
+    });
+    when('I render the sidebar', () => renderSidebar(sleeperLeague));
+    then(/^I see the "(.*)" action$/, async (label) => {
+      expect(await screen.findByText(label)).toBeInTheDocument();
+    });
+    and(/^I see the "(.*)" action$/, async (label) => {
+      expect(await screen.findByText(label)).toBeInTheDocument();
     });
     and(/^I do not see the "(.*)" action$/, (label) => {
       expect(screen.queryByText(label)).not.toBeInTheDocument();

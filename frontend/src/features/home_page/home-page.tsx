@@ -455,6 +455,7 @@ function AllTimeStandingsTable({
             checked={showPlayoffs}
             onCheckedChange={setShowPlayoffs}
             aria-label="Toggle between regular season and playoff standings"
+            className="cursor-pointer"
           />
           <span
             className={`text-[11px] font-medium ${

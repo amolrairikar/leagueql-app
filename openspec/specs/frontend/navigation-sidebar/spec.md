@@ -13,11 +13,15 @@ The sidebar SHALL link to all ten analytics pages and route to them correctly, w
 - **THEN** it links to Home, Standings, Matchups, Playoff Bracket, Manager Comparison, Manager History, Draft Recap, Draft Grades, Player Records, and Matchup Records, each routing correctly, with the header wordmark linking home and the theme toggle present
 
 ### Requirement: Refresh the current league
-The sidebar SHALL expose a refresh action pre-filled and locked to the current league and surface the backend cooldown/up-to-date/in-progress responses.
+The sidebar SHALL expose a refresh action, shown only for ESPN leagues, pre-filled and locked to the current league and surfacing the backend cooldown/up-to-date/in-progress responses.
 
 #### Scenario: Sidebar refresh
-- **WHEN** the user triggers the sidebar refresh
+- **WHEN** an ESPN league owner triggers the sidebar refresh
 - **THEN** the form is pre-filled and locked to the currently-viewed league, and `429`/`409` cooldown/up-to-date/in-progress responses are surfaced
+
+#### Scenario: No refresh for Sleeper
+- **WHEN** the sidebar renders for a Sleeper league
+- **THEN** the Refresh League action is not shown (Sleeper leagues refresh automatically), even for the owner
 
 ### Requirement: Responsive layout with reachable account menu
 The layout SHALL be responsive (sidebar collapses/toggles on mobile), and the account menu (sign out) SHALL be reachable on both desktop (sidebar footer) and mobile (header), never inside the modal sidebar sheet.
@@ -42,8 +46,8 @@ The demo banner SHALL appear in demo mode, and the in-app layout SHALL NOT rende
 - **THEN** the marketing footer (About / Privacy / GitHub) is not shown (it appears only on public pages)
 
 ### Requirement: Owner-gated sidebar actions
-Owner-only actions SHALL be gated on `is_owner`, with non-owners seeing the alternate actions.
+Owner-only actions SHALL be gated on `is_owner`, with non-owners seeing the alternate actions, and the ESPN-only actions (Refresh League, Invite Leaguemates) additionally gated on the league being an ESPN league.
 
 #### Scenario: Owner vs non-owner actions
 - **WHEN** the sidebar renders for a league
-- **THEN** Refresh, Migrate, Transfer Ownership, and Delete are shown only when `is_owner` is true, and non-owners see View Another League and Claim Ownership instead
+- **THEN** Migrate, Transfer Ownership, and Delete are shown only when `is_owner` is true, Refresh League and Invite Leaguemates are shown only when `is_owner` is true and the league is an ESPN league, and non-owners see View Another League and Claim Ownership instead

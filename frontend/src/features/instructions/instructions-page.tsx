@@ -424,7 +424,7 @@ export default function InstructionsPage() {
                   management actions in the sidebar:
                 </p>
                 <ul className="list-disc pl-6 space-y-2 text-muted-foreground leading-relaxed mb-3">
-                  <li>Refresh League</li>
+                  <li>Refresh League (ESPN only)</li>
                   <li>Migrate League</li>
                   <li>Transfer Ownership</li>
                   <li>Invite Leaguemates (ESPN only)</li>
