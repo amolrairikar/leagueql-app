@@ -113,6 +113,9 @@ defineFeature(feature, (test) => {
     then(/^I see "(.*)"$/, async (text) => {
       expect((await screen.findAllByText(text)).length).toBeGreaterThan(0);
     });
+    and(/^I see "(.*)"$/, async (text) => {
+      expect((await screen.findAllByText(text)).length).toBeGreaterThan(0);
+    });
   });
 
   test('The docs page renders', ({ when, then }) => {

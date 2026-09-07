@@ -19,7 +19,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { onboardLeague } from '@/features/connect_league/api-calls';
-import { JoinLeagueDialog } from '@/features/connect_league/join-league-dialog';
 import { pollForCompletion } from '@/features/connect_league/poll';
 import {
   FEATURES,
@@ -126,7 +125,6 @@ export default function LeagueQLLanding() {
   const [loadingMessage, setLoadingMessage] = useState('');
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<ReactNode>(null);
-  const [joinLeagueId, setJoinLeagueId] = useState<string | null>(null);
   const [leagueCount, setLeagueCount] = useState<number | null>(null);
   const loadingStartRef = useRef<number | null>(null);
   const loadingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
@@ -224,9 +222,13 @@ export default function LeagueQLLanding() {
         );
       } else if (platform === 'ESPN' && status === 403) {
         // Already onboarded but the caller isn't a member of this private ESPN
-        // league yet — open the Join League dialog to verify membership rather
-        // than the (confusing) onboard form (backend/league-authorization / frontend/ownership-transfer).
-        setJoinLeagueId(leagueId.trim());
+        // league yet. Membership now comes from an owner-shared invite link, so
+        // point them there rather than the (confusing) onboard form
+        // (backend/league-authorization / frontend/ownership-transfer).
+        setError(
+          'This ESPN league is private. Ask the league owner to share their ' +
+            'invite link with you, then open that link to join.',
+        );
       } else if (platform === 'SLEEPER' && status === 404) {
         try {
           const onboardResult = await onboardLeague('ONBOARD', {
@@ -443,14 +445,6 @@ export default function LeagueQLLanding() {
           />
         </DialogContent>
       </Dialog>
-
-      <JoinLeagueDialog
-        open={joinLeagueId !== null}
-        onOpenChange={(next) => {
-          if (!next) setJoinLeagueId(null);
-        }}
-        leagueId={joinLeagueId ?? ''}
-      />
 
       {/* PRODUCT SHOWCASE */}
       <section className="relative z-10 px-6 pt-4 pb-8">

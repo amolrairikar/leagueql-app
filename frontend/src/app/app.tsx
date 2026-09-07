@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/sidebar';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import ChangelogPage from '@/features/changelog/changelog-page';
+import JoinInvitePage from '@/features/connect_league/join-invite-page';
 import LeagueConnect from '@/features/connect_league/league-connect';
 import DraftGrades from '@/features/draft_grades/draft-grades';
 import DraftRecap from '@/features/draft_recap/draft-recap';
@@ -153,6 +154,15 @@ function App() {
                   <LeagueConnect />
                 </div>
               </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/join/:leagueId"
+            element={
+              <>
+                <Header />
+                <JoinInvitePage />
+              </>
             }
           />
           <Route

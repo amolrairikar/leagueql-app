@@ -124,6 +124,10 @@ class ClaimOwnershipPayload(BaseModel):
     token: str = Field(max_length=512)
 
 
+class AcceptInvitePayload(BaseModel):
+    token: str = Field(max_length=512)
+
+
 class ManagerMappingEntry(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

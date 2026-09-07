@@ -351,49 +351,42 @@ defineFeature(feature, (test) => {
     });
   });
 
-  test('Connecting to an ESPN league I am not yet a member of verifies membership', ({
+  test('Connecting to an ESPN league I am not a member of directs me to an invite link', ({
     given,
     when,
     then,
     and,
   }) => {
-    let verifyCalled = false;
-    given('the ESPN league is onboarded but I am not yet a member', () => {
-      let getCalls = 0;
+    let mutated = false;
+    given('the ESPN league is onboarded but I am not a member', () => {
       server.use(
-        http.get(`${API}/leagues/:id`, () => {
-          getCalls += 1;
-          // First read (existence check) is a member-gated 403; after verifying,
-          // the post-join read succeeds.
-          if (getCalls === 1) {
-            return HttpResponse.json(
-              { detail: 'Not a member of this league' },
-              { status: 403 },
-            );
-          }
-          return HttpResponse.json({
-            detail: 'Found league',
-            data: {
-              seasons: ['2024'],
-              league_name: 'L',
-              is_owner: false,
-            },
-          });
+        // The read is member-gated (403) and there is no cookie/invite self-serve
+        // path from the connect form — the caller must use an owner's invite link.
+        http.get(`${API}/leagues/:id`, () =>
+          HttpResponse.json(
+            { detail: 'Not a member of this league' },
+            { status: 403 },
+          ),
+        ),
+        http.post(`${API}/leagues`, () => {
+          mutated = true;
+          return HttpResponse.json({ detail: 'x' }, { status: 201 });
         }),
-        http.post(`${API}/leagues/:id/verify-membership`, () => {
-          verifyCalled = true;
-          return HttpResponse.json({ detail: 'Membership verified' });
+        http.post(`${API}/leagues/:id/accept-invite`, () => {
+          mutated = true;
+          return HttpResponse.json({ detail: 'x' });
         }),
       );
     });
     when(/^I connect ESPN league "(.*)"$/, async (leagueId) => {
       await connectEspnFlow(leagueId);
     });
-    then('I am routed to the home page', () => {
-      expect(screen.getByText('HOME PAGE')).toBeInTheDocument();
+    then(/^I see a failure message "(.*)"$/, (message) => {
+      expect(screen.getByText(new RegExp(message))).toBeInTheDocument();
     });
-    and('membership verification was requested', () => {
-      expect(verifyCalled).toBe(true);
+    and('no onboard, refresh, or membership request was made', () => {
+      expect(mutated).toBe(false);
+      expect(screen.queryByText('HOME PAGE')).not.toBeInTheDocument();
     });
   });
 });

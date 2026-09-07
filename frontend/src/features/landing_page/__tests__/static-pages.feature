@@ -17,12 +17,13 @@ Feature: Public pages render (frontend/landing-page, frontend/instructions-docs,
   Scenario: The landing page FAQ starts collapsed
     When I open the landing page
     Then I see "Why do I need to provide my ESPN cookies?"
-    And I do not see "ESPN leagues are private and require logging in to ESPN to view. The SWID and ESPN S2 cookies provide the authentication required to fetch data. These cookies are not stored."
+    And I do not see "ESPN leagues are private and require logging in to ESPN to view. The SWID and ESPN S2 cookies provide the authentication required to fetch data. These cookies are not stored. To find your ESPN cookies:"
 
   Scenario: Expanding a landing page FAQ question reveals its answer
     When I open the landing page
     And I expand the FAQ question "Why do I need to provide my ESPN cookies?"
-    Then I see "ESPN leagues are private and require logging in to ESPN to view. The SWID and ESPN S2 cookies provide the authentication required to fetch data. These cookies are not stored."
+    Then I see "ESPN leagues are private and require logging in to ESPN to view. The SWID and ESPN S2 cookies provide the authentication required to fetch data. These cookies are not stored. To find your ESPN cookies:"
+    And I see "Find SWID and espn_s2 and copy their values"
 
   Scenario: The docs page renders
     When I open the docs page

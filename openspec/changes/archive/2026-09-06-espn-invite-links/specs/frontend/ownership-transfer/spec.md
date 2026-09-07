@@ -1,9 +1,4 @@
-# ownership-transfer Specification
-
-## Purpose
-Surface league ownership in the UI: gate owner-only sidebar actions to the owner, let owners share an invite link and direct non-members to one, and provide the ownership transfer/claim flow. Owner state comes from the current league's `is_owner`, and mutating call sites surface a `403` as an owner-only/membership message inline.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Gate owner-only actions
 The sidebar SHALL show Refresh / Migrate / Transfer Ownership / Invite Leaguemates / Delete only when the caller is the owner; non-owners SHALL see View Another League and Claim Ownership, with owner actions hidden until `getLeague` resolves.
@@ -15,6 +10,8 @@ The sidebar SHALL show Refresh / Migrate / Transfer Ownership / Invite Leaguemat
 #### Scenario: Owner state loading and failure
 - **WHEN** `getLeague` has not resolved, or fails, or the app is in demo/no-league
 - **THEN** owner-only actions stay hidden until it resolves (no flash), a failed request resolves to non-owner, and demo/no-league bypasses gating
+
+## ADDED Requirements
 
 ### Requirement: Owner shares an ESPN invite link
 An owner SHALL be able to mint a reusable invite link for an ESPN league and copy it to share with leaguemates.
@@ -41,20 +38,8 @@ An ESPN league returning `403` for a non-member SHALL show a message directing t
 - **WHEN** `getLeague` returns `403` for an ESPN league
 - **THEN** the `MembershipGuard` shows a backdrop explaining the league is private and that the caller needs an invite link from the owner to join, with no cookie-entry form
 
-### Requirement: Transfer and claim ownership
-An owner SHALL be able to mint a one-time transfer token, and a recipient SHALL be able to redeem it, reloading league state on success.
+## REMOVED Requirements
 
-#### Scenario: Mint token
-- **WHEN** the owner opens the Transfer Ownership dialog
-- **THEN** a one-time token is minted and copyable, and closing the dialog clears it
-
-#### Scenario: Claim ownership
-- **WHEN** a recipient redeems a valid token via the Claim Ownership dialog
-- **THEN** the API cache is cleared and league state reloads so the new owner immediately sees owner actions
-
-### Requirement: Inline 403 messaging
-A `403` on a mutating endpoint SHALL render a clear owner-only message inline (via `toResult` + `<ErrorAlert>`), with no global error banner.
-
-#### Scenario: Owner-only 403
-- **WHEN** a mutating call returns `403`
-- **THEN** an inline owner-only/membership message is shown rather than a generic error
+### Requirement: Verify ESPN membership for non-members
+**Reason**: Replaced by the invite-link flow; leaguemates no longer submit ESPN cookies to join.
+**Migration**: A non-member joins by opening an owner-shared invite link (the `/join/:leagueId` redemption page). The cookie-entry Join League dialog and the frontend `verifyMembership` call are removed.
