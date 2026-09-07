@@ -278,6 +278,25 @@ function TeamPanel({
     <span className="text-muted-foreground font-normal">—</span>
   ) : undefined;
 
+  // For a waiver / free-agent move with both an add and a drop, the net pickup value is the ROS
+  // points the acquired player(s) scored minus the ROS points the released player(s) scored — a
+  // positive net means the pickup outscored what was let go. Trades use per-side totals + a winner
+  // banner instead, and a pure add/drop needs no comparison, so both are excluded (null).
+  const net =
+    showRos && !isTrade && adds.length > 0 && drops.length > 0
+      ? Math.round(
+          (adds.reduce(
+            (sum, p) => sum + rosPointsFor(p.player_id, tradeWeek, weekly),
+            0,
+          ) -
+            drops.reduce(
+              (sum, p) => sum + rosPointsFor(p.player_id, tradeWeek, weekly),
+              0,
+            )) *
+            100,
+        ) / 100
+      : null;
+
   return (
     <div
       className={cn(
@@ -324,7 +343,15 @@ function TeamPanel({
           </MoveRow>
         ))}
         {drops.map((p) => (
-          <MoveRow key={`drop-${p.player_id}`} direction="drop">
+          <MoveRow
+            key={`drop-${p.player_id}`}
+            direction="drop"
+            points={
+              showRos
+                ? rosPointsFor(p.player_id, tradeWeek, weekly).toFixed(2)
+                : undefined
+            }
+          >
             {playerLabel(p)}
           </MoveRow>
         ))}
@@ -351,6 +378,27 @@ function TeamPanel({
             )}
           >
             {sideTotal.toFixed(2)}
+          </span>
+        </div>
+      )}
+      {net != null && (
+        <div className="mt-2.5 pt-2 border-t border-border/50 flex items-baseline justify-between gap-2">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">
+            Net pickup value
+          </span>
+          <span
+            className={cn(
+              'text-[15px] font-semibold tabular-nums',
+              net > 0
+                ? 'text-emerald-600 dark:text-emerald-400'
+                : net < 0
+                  ? 'text-red-600 dark:text-red-400'
+                  : 'text-foreground',
+            )}
+          >
+            {net === 0
+              ? 'Even'
+              : `${net > 0 ? '+' : '-'}${Math.abs(net).toFixed(2)} pts`}
           </span>
         </div>
       )}
@@ -391,14 +439,19 @@ function TransactionCard({
   const isTrade = txn.type === 'trade';
   const rosterIds = involvedRosterIds(txn);
 
-  // Rest-of-season points only apply to a two-team trade, and only once the season's matchup
-  // box scores have loaded. Totals drive both the per-side footers and the winner comparison.
+  // Two-team-trade rest-of-season totals drive the per-side footers and the winner comparison, and
+  // only once the season's matchup box scores have loaded.
   const showRos = isTrade && rosterIds.length === 2 && weekly != null;
   const totals = showRos
     ? rosterIds.map((rid) => sideTotal(txn, rid, weekly))
     : null;
   const winnerIndex =
     totals && totals[0] !== totals[1] ? (totals[0] > totals[1] ? 0 : 1) : null;
+
+  // Panels receive the weekly box scores for two-team trades (side totals + winner, above) and for
+  // every non-trade move (waiver / free agent), where the panel shows per-player ROS points and a
+  // net pickup value. Multi-team (>2 roster) trades stay unchanged (no ROS).
+  const panelWeekly = weekly != null && (showRos || !isTrade) ? weekly : null;
 
   const panel = (rosterId: string, index: number) => (
     <TeamPanel
@@ -407,7 +460,7 @@ function TransactionCard({
       rosterId={rosterId}
       isTrade={isTrade}
       visual={visuals.get(rosterId)}
-      weekly={showRos ? weekly : null}
+      weekly={panelWeekly}
       sideTotal={totals ? totals[index] : null}
       isWinner={winnerIndex === index}
     />

@@ -77,6 +77,37 @@ Feature: Transactions (frontend/transactions)
     And there is no trade winner
     And I do not see the message "Failed to load matchups."
 
+  Scenario: A free-agent add-and-drop shows each player's points and the net pickup value
+    Given a free-agent add-and-drop with matchup box scores is available
+    When I open the transactions page
+    And I select the "Free Agents" filter
+    Then I see the points "60.00"
+    And I see the points "15.00"
+    And I see the net pickup value "+45.00 pts"
+    And I do not see the points "160.00"
+
+  Scenario: A pure free-agent add shows only the added player's points and no net
+    Given a pure free-agent add with matchup box scores is available
+    When I open the transactions page
+    And I select the "Free Agents" filter
+    Then I see the points "20.00"
+    And there is no net pickup value
+
+  Scenario: A pure free-agent drop shows only the dropped player's points and no net
+    Given a pure free-agent drop with matchup box scores is available
+    When I open the transactions page
+    And I select the "Free Agents" filter
+    Then I see the points "7.00"
+    And there is no net pickup value
+
+  Scenario: A free-agent move renders without points when box scores are unavailable
+    Given a free-agent add-and-drop with no matchup box scores is available
+    When I open the transactions page
+    And I select the "Free Agents" filter
+    Then I see the received player "Pickup Hero"
+    And there is no net pickup value
+    And I do not see the message "Failed to load matchups."
+
   Scenario: ESPN defaults to Free Agents and offers no Trades filter
     Given ESPN transactions data is available
     When I open the transactions page for an ESPN league
