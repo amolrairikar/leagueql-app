@@ -324,6 +324,110 @@ const ROS_MATCHUPS_TIE: MatchupItem[] = [
   ]),
 ];
 
+// A week-3 free-agent move for Alice (roster 1): add "Pickup Hero" (id 20), drop "Cut Loose"
+// (id 21). Used by the waiver/free-agent rest-of-season scenarios.
+const ROS_FA_ADD_DROP: TransactionItem[] = [
+  {
+    season: '2024',
+    transaction_id: 'fa-ad',
+    type: 'free_agent',
+    week: 3,
+    created: 1700000000000,
+    roster_ids: ['1'],
+    teams: [{ roster_id: '1', team_name: 'Team Alice', display_name: 'Alice' }],
+    adds: [
+      {
+        player_id: '20',
+        player_name: 'Pickup Hero',
+        position: 'WR',
+        roster_id: '1',
+      },
+    ],
+    drops: [
+      {
+        player_id: '21',
+        player_name: 'Cut Loose',
+        position: 'RB',
+        roster_id: '1',
+      },
+    ],
+    draft_picks: [],
+    waiver_bid: null,
+  },
+];
+
+// Pickup Hero (id 20) scores 100 in week 2 (before the move, excluded), then 30 + 30 = 60.00.
+// Cut Loose (id 21) scores 5 + 10 = 15.00. Net pickup value = 60.00 − 15.00 = +45.00.
+const ROS_FA_ADD_DROP_MATCHUPS: MatchupItem[] = [
+  mkMatchup(2, [{ id: 20, pts: 100 }]),
+  mkMatchup(3, [
+    { id: 20, pts: 30 },
+    { id: 21, pts: 5 },
+  ]),
+  mkMatchup(4, [
+    { id: 20, pts: 30 },
+    { id: 21, pts: 10 },
+  ]),
+];
+
+// A week-3 pure free-agent add for Alice: "Lone Add" (id 22), no drop → 12 + 8 = 20.00, no net.
+const ROS_FA_PURE_ADD: TransactionItem[] = [
+  {
+    season: '2024',
+    transaction_id: 'fa-add',
+    type: 'free_agent',
+    week: 3,
+    created: 1700000000000,
+    roster_ids: ['1'],
+    teams: [{ roster_id: '1', team_name: 'Team Alice', display_name: 'Alice' }],
+    adds: [
+      {
+        player_id: '22',
+        player_name: 'Lone Add',
+        position: 'TE',
+        roster_id: '1',
+      },
+    ],
+    drops: [],
+    draft_picks: [],
+    waiver_bid: null,
+  },
+];
+
+const ROS_FA_PURE_ADD_MATCHUPS: MatchupItem[] = [
+  mkMatchup(3, [{ id: 22, pts: 12 }]),
+  mkMatchup(4, [{ id: 22, pts: 8 }]),
+];
+
+// A week-3 pure free-agent drop for Alice: "Lone Drop" (id 23), no add → 3 + 4 = 7.00, no net.
+const ROS_FA_PURE_DROP: TransactionItem[] = [
+  {
+    season: '2024',
+    transaction_id: 'fa-drop',
+    type: 'free_agent',
+    week: 3,
+    created: 1700000000000,
+    roster_ids: ['1'],
+    teams: [{ roster_id: '1', team_name: 'Team Alice', display_name: 'Alice' }],
+    adds: [],
+    drops: [
+      {
+        player_id: '23',
+        player_name: 'Lone Drop',
+        position: 'RB',
+        roster_id: '1',
+      },
+    ],
+    draft_picks: [],
+    waiver_bid: null,
+  },
+];
+
+const ROS_FA_PURE_DROP_MATCHUPS: MatchupItem[] = [
+  mkMatchup(3, [{ id: 23, pts: 3 }]),
+  mkMatchup(4, [{ id: 23, pts: 4 }]),
+];
+
 defineFeature(feature, (test) => {
   test('Trades are shown by default with no All option', ({
     given,
@@ -629,6 +733,139 @@ defineFeature(feature, (test) => {
     and('there is no trade winner', () => {
       expect(screen.queryByText(/won by/)).toBeNull();
       expect(screen.queryByText(/Even/)).toBeNull();
+    });
+    and(/^I do not see the message "(.*)"$/, (msg) => {
+      expect(screen.queryByText(msg)).toBeNull();
+    });
+  });
+
+  test("A free-agent add-and-drop shows each player's points and the net pickup value", ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    given(
+      'a free-agent add-and-drop with matchup box scores is available',
+      () => {
+        server.use(
+          leagueQuery({
+            TRANSACTIONS: ROS_FA_ADD_DROP,
+            MATCHUPS: ROS_FA_ADD_DROP_MATCHUPS,
+          }),
+        );
+      },
+    );
+    when('I open the transactions page', async () => {
+      await renderRoute(<Transactions />, { route: '/transactions', league });
+    });
+    and(/^I select the "(.*)" filter$/, async (label) => {
+      await userEvent.click(screen.getByRole('button', { name: label }));
+    });
+    then(/^I see the points "(.*)"$/, async (pts) => {
+      expect((await screen.findAllByText(pts)).length).toBeGreaterThan(0);
+    });
+    and(/^I see the points "(.*)"$/, async (pts) => {
+      expect((await screen.findAllByText(pts)).length).toBeGreaterThan(0);
+    });
+    and(/^I see the net pickup value "(.*)"$/, async (value) => {
+      expect(await screen.findByText(value)).toBeInTheDocument();
+    });
+    and(/^I see the rest-of-season note "(.*)"$/, async (note) => {
+      expect(
+        (await screen.findAllByText(note, { exact: false })).length,
+      ).toBeGreaterThan(0);
+    });
+    // Pickup Hero's week-2 (pre-move) 100 points must be excluded; 160.00 would mean it wasn't.
+    and(/^I do not see the points "(.*)"$/, (pts) => {
+      expect(screen.queryByText(pts)).toBeNull();
+    });
+  });
+
+  test("A pure free-agent add shows the added player's points and its net pickup value", ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    given('a pure free-agent add with matchup box scores is available', () => {
+      server.use(
+        leagueQuery({
+          TRANSACTIONS: ROS_FA_PURE_ADD,
+          MATCHUPS: ROS_FA_PURE_ADD_MATCHUPS,
+        }),
+      );
+    });
+    when('I open the transactions page', async () => {
+      await renderRoute(<Transactions />, { route: '/transactions', league });
+    });
+    and(/^I select the "(.*)" filter$/, async (label) => {
+      await userEvent.click(screen.getByRole('button', { name: label }));
+    });
+    then(/^I see the points "(.*)"$/, async (pts) => {
+      expect((await screen.findAllByText(pts)).length).toBeGreaterThan(0);
+    });
+    // A pure add's net is just the added total (nothing dropped).
+    and(/^I see the net pickup value "(.*)"$/, async (value) => {
+      expect(await screen.findByText(value)).toBeInTheDocument();
+    });
+  });
+
+  test("A pure free-agent drop shows the dropped player's points and its net pickup value", ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    given('a pure free-agent drop with matchup box scores is available', () => {
+      server.use(
+        leagueQuery({
+          TRANSACTIONS: ROS_FA_PURE_DROP,
+          MATCHUPS: ROS_FA_PURE_DROP_MATCHUPS,
+        }),
+      );
+    });
+    when('I open the transactions page', async () => {
+      await renderRoute(<Transactions />, { route: '/transactions', league });
+    });
+    and(/^I select the "(.*)" filter$/, async (label) => {
+      await userEvent.click(screen.getByRole('button', { name: label }));
+    });
+    then(/^I see the points "(.*)"$/, async (pts) => {
+      expect((await screen.findAllByText(pts)).length).toBeGreaterThan(0);
+    });
+    // A pure drop's net is the negative of the dropped total (nothing added).
+    and(/^I see the net pickup value "(.*)"$/, async (value) => {
+      expect(await screen.findByText(value)).toBeInTheDocument();
+    });
+  });
+
+  test('A free-agent move renders without points when box scores are unavailable', ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    given(
+      'a free-agent add-and-drop with no matchup box scores is available',
+      () => {
+        // No MATCHUPS key → the matchups query 404s, degrading silently to no points.
+        server.use(leagueQuery({ TRANSACTIONS: ROS_FA_ADD_DROP }));
+      },
+    );
+    when('I open the transactions page', async () => {
+      await renderRoute(<Transactions />, { route: '/transactions', league });
+    });
+    and(/^I select the "(.*)" filter$/, async (label) => {
+      await userEvent.click(screen.getByRole('button', { name: label }));
+    });
+    then(/^I see the received player "(.*)"$/, async (name) => {
+      expect(
+        (await screen.findAllByText(name, { exact: false })).length,
+      ).toBeGreaterThan(0);
+    });
+    and('there is no net pickup value', () => {
+      expect(screen.queryByText('Net pickup value')).toBeNull();
     });
     and(/^I do not see the message "(.*)"$/, (msg) => {
       expect(screen.queryByText(msg)).toBeNull();
