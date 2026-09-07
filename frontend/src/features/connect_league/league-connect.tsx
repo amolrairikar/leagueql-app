@@ -9,7 +9,7 @@ import {
 } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 
-import { getLeague, verifyMembership } from '@/components/api/leagues';
+import { getLeague } from '@/components/api/leagues';
 import { Spinner } from '@/components/spinner';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -176,24 +176,15 @@ export default function LeagueConnect() {
         data.platform === 'espn'
       ) {
         // The ESPN league is already onboarded but the caller isn't a member yet
-        // (ESPN reads are member-gated — backend/league-authorization). Verify their cookies
-        // grant access (which adds them to the league's members), then open it —
-        // no onboard/refresh needed (and refresh is owner-only anyway).
-        try {
-          await verifyMembership(data.leagueId, apiPlatform, {
-            swid: data.swid,
-            s2: data.espnS2,
-          });
-        } catch {
-          // ESPN rejected the cookies (403) or the proxy failed — surface inline.
-          setFailureReason(null);
-          setPollStatus('failed');
-          return;
-        }
-        const leagueData = await getLeague(data.leagueId, apiPlatform);
-        setLeagueCookies(data.leagueId, apiPlatform, leagueData.data.seasons);
-        clearEspnCookies();
-        void navigate('/home');
+        // (ESPN reads are member-gated — backend/league-authorization). Membership
+        // now comes from an owner-shared invite link, so direct them there rather
+        // than onboarding/refreshing (refresh is owner-only anyway).
+        setFailureReason(
+          'This ESPN league is already on LeagueQL and is private. Ask the ' +
+            'league owner to share their invite link with you, then open that ' +
+            'link to join.',
+        );
+        setPollStatus('failed');
         return;
       } else {
         // A non-404 lookup failure (network / 5xx) isn't an "onboard vs refresh"

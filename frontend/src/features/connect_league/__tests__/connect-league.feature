@@ -48,8 +48,8 @@ Feature: Connect league onboarding flow (frontend/connect-league)
     Then I am routed to the home page
     And no onboard or refresh request was made
 
-  Scenario: Connecting to an ESPN league I am not yet a member of verifies membership
-    Given the ESPN league is onboarded but I am not yet a member
+  Scenario: Connecting to an ESPN league I am not a member of directs me to an invite link
+    Given the ESPN league is onboarded but I am not a member
     When I connect ESPN league "100"
-    Then I am routed to the home page
-    And membership verification was requested
+    Then I see a failure message "Ask the league owner to share their invite link"
+    And no onboard, refresh, or membership request was made

@@ -17,6 +17,19 @@ export interface ChangelogRelease {
 // Newest release first.
 export const CHANGELOG: ChangelogRelease[] = [
   {
+    version: '1.6.0',
+    date: 'September 6, 2026',
+    sections: [
+      {
+        title: 'Added',
+        items: [
+          'Transactions page support for ESPN leagues: waivers, free-agent moves, and trades now appear for ESPN alongside Sleeper.',
+          'Share a private ESPN league with your leaguemates using an invite link. Owners create a link from Invite Leaguemates in the sidebar; anyone who opens it and signs in can view the league.',
+        ],
+      },
+    ],
+  },
+  {
     version: '1.5.0',
     date: 'August 27, 2026',
     sections: [

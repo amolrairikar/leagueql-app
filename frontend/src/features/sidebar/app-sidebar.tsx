@@ -17,6 +17,7 @@ import {
   Trophy,
   Trash2,
   UserRoundCog,
+  UserRoundPlus,
   Users,
   Zap,
 } from 'lucide-react';
@@ -47,6 +48,7 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar';
 import { ClaimOwnershipDialog } from '@/features/ownership/claim-ownership-dialog';
+import { InviteLinkDialog } from '@/features/ownership/invite-link-dialog';
 import { TransferOwnershipDialog } from '@/features/ownership/transfer-ownership-dialog';
 import { useIsOwner } from '@/features/ownership/use-is-owner';
 import { deleteLeague } from '@/features/sidebar/api-calls';
@@ -90,6 +92,7 @@ export function AppSidebar() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
+  const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
   const [claimDialogOpen, setClaimDialogOpen] = useState(false);
 
   const { isOwner } = useIsOwner();
@@ -266,6 +269,21 @@ export function AppSidebar() {
                             <span>Transfer Ownership</span>
                           </SidebarMenuButton>
                         </SidebarMenuItem>
+                        {currentPlatform === 'ESPN' && (
+                          <SidebarMenuItem>
+                            <SidebarMenuButton
+                              tooltip="Invite Leaguemates"
+                              className="cursor-pointer"
+                              onClick={() => {
+                                closeMobileSidebar();
+                                setInviteDialogOpen(true);
+                              }}
+                            >
+                              <UserRoundPlus />
+                              <span>Invite Leaguemates</span>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        )}
                         <SidebarMenuItem>
                           <Dialog
                             open={dialogOpen}
@@ -349,6 +367,10 @@ export function AppSidebar() {
       <TransferOwnershipDialog
         open={transferDialogOpen}
         onOpenChange={setTransferDialogOpen}
+      />
+      <InviteLinkDialog
+        open={inviteDialogOpen}
+        onOpenChange={setInviteDialogOpen}
       />
       <ClaimOwnershipDialog
         open={claimDialogOpen}

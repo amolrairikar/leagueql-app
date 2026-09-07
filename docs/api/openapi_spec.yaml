@@ -398,16 +398,77 @@ paths:
         uri: "arn:aws:apigateway:${aws_region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations"
         payloadFormatVersion: "2.0"   # use 2.0 for HTTP API (v2)
 
-  /leagues/{leagueId}/verify-membership:
+  /leagues/{leagueId}/invite-token:
     post:
-      summary: Verify ESPN league membership
+      summary: Mint an ESPN invite token
       description: >
-        Verifies the caller's ESPN league membership (backend/league-authorization). The caller's ESPN
-        cookies (filled by the Chrome extension) are proxied against the league;
-        on success the caller is added to the league's members and may read the
-        league. ESPN leagues only — Sleeper returns 400. ESPN-rejected cookies
-        return 403.
-      operationId: verifyMembership
+        Owner-only (backend/league-authorization). Mints a reusable invite token
+        for an ESPN league, returning the plaintext token once; only its sha256
+        hash is stored (no expiry). The owner shares the resulting link; anyone who
+        redeems it via accept-invite becomes a member without ESPN cookies. Minting
+        a new token overwrites the stored hash, invalidating any prior link. ESPN
+        leagues only — Sleeper returns 400.
+      operationId: createInviteToken
+      parameters:
+        - name: leagueId
+          in: path
+          required: true
+          description: The ESPN league ID
+          schema:
+            type: string
+            pattern: '^\d+$'
+            example: "12345678"
+        - name: platform
+          in: query
+          required: true
+          description: The platform the league is on (must be ESPN)
+          schema:
+            type: string
+            enum: [ESPN, SLEEPER]
+            example: "ESPN"
+      responses:
+        "200":
+          description: Invite link created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/APIResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          token:
+                            type: string
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/LeagueNotFoundError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      security:
+        - ClerkJWT: []
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        httpMethod: POST
+        uri: "arn:aws:apigateway:${aws_region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations"
+        payloadFormatVersion: "2.0"
+
+  /leagues/{leagueId}/accept-invite:
+    post:
+      summary: Redeem an ESPN invite token
+      description: >
+        Adds the authenticated caller to the ESPN league's members when the
+        submitted token matches the stored hash (backend/league-authorization) —
+        no ESPN cookies required. The token is reusable (the stored hash is not
+        consumed). Returns 404 (no outstanding link), 403 (token mismatch), or 400
+        (Sleeper league).
+      operationId: acceptInvite
       parameters:
         - name: leagueId
           in: path
@@ -430,7 +491,12 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/EspnMembersRequest"
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+                  description: The plaintext invite token from the owner's link.
       responses:
         "200":
           $ref: "#/components/responses/LeagueFoundResponse"
@@ -444,8 +510,6 @@ paths:
           $ref: "#/components/responses/LeagueNotFoundError"
         "500":
           $ref: "#/components/responses/InternalError"
-        "502":
-          $ref: "#/components/responses/BadGatewayError"
       security:
         - ClerkJWT: []
       x-amazon-apigateway-integration:

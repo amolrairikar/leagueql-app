@@ -65,7 +65,7 @@ CTAs SHALL route to sign in / connect league (or into the app for signed-in user
 - **THEN** Docs resolves to `/docs` and Changelog to the in-app `/changelog` page
 
 ### Requirement: Inline connect routing by existence check
-The inline connect form SHALL resolve the league via `getLeague` and route by outcome, opening the Join League dialog on an ESPN `403`.
+The inline connect form SHALL resolve the league via `getLeague` and route by outcome, surfacing invite-link guidance on an ESPN `403`.
 
 #### Scenario: Sleeper not onboarded
 - **WHEN** the inline form resolves a Sleeper league to `404`
@@ -77,7 +77,7 @@ The inline connect form SHALL resolve the league via `getLeague` and route by ou
 
 #### Scenario: ESPN member gate
 - **WHEN** the inline form resolves an ESPN league to `403` (onboarded but caller not a member)
-- **THEN** it opens the Join League (membership verification) dialog in place
+- **THEN** it surfaces an inline message directing the caller to an owner's invite link, without prompting for ESPN cookies
 
 #### Scenario: Other failure
 - **WHEN** the existence check fails for another reason

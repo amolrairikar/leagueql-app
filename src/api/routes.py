@@ -51,6 +51,7 @@ from main import (
     QUERY_TYPE_TO_SK_BASE,
     REFRESH_COOLDOWN_DAYS,
     S3_BUCKET,
+    AcceptInvitePayload,
     APIResponse,
     ClaimOwnershipPayload,
     EspnMembersPayload,
@@ -371,7 +372,8 @@ def get_espn_members(
     path/query — preventing parameter injection / path traversal against the ESPN host.
 
     Owner-gated (backend/league-authorization): this is the owner's onboarding/migration
-    manager-mapping tool. Non-owner league-mates join via ``verify-membership``.
+    manager-mapping tool. Non-owner league-mates join via an owner's invite link
+    (``accept-invite``).
     """
     canonical_league_id = lookup_league(league_id=leagueId, platform=platform)
     metadata = get_league_metadata(canonical_league_id=canonical_league_id)
@@ -799,75 +801,96 @@ def claim_ownership(
     return APIResponse(detail="Ownership claimed")
 
 
-@router.post("/leagues/{leagueId}/verify-membership", status_code=status.HTTP_200_OK)
-def verify_membership(
+@router.post("/leagues/{leagueId}/invite-token", status_code=status.HTTP_200_OK)
+def create_invite_token(
     leagueId: Annotated[
         str, Path(description="The ID of the fantasy league", pattern=r"^\d+$")
     ],
     platform: Annotated[Platform, Query(description="The platform the league is on")],
-    payload: EspnMembersPayload,
     clerk_user_id: Annotated[str, Depends(get_authenticated_user)],
 ) -> APIResponse:
-    """Verify ESPN league membership via the caller's cookies (backend/league-authorization).
+    """Mint a reusable ESPN invite token (owner-gated, backend/league-authorization).
 
-    The Chrome extension fills the caller's ``espn_s2``/``SWID``; the backend
-    proxies an authenticated read of this exact ESPN league with those cookies.
-    A success means the cookies grant access to the league, so the caller's Clerk
-    user ID is added to ``members`` (idempotent) and they may read the league.
-    Cookies ESPN rejects (401/403) leave the caller unauthorized (403).
+    The owner shares the resulting link with leaguemates; anyone who opens it and
+    redeems it via ``accept-invite`` is added to ``members`` without needing their
+    own ESPN cookies. Only the plaintext token is returned (to the owner, once);
+    only its sha256 hash is stored on METADATA. The token has no expiry and is
+    reusable — minting a new one overwrites the stored hash, invalidating any
+    previously shared link (revoke-by-regenerate).
 
-    Only applies to ESPN leagues — Sleeper reads are open, so verification is a
-    400. ``leagueId`` (digits) and the derived season are interpolated into the
-    upstream ESPN URL, keeping attacker-controlled characters out of it.
+    Only applies to ESPN leagues — Sleeper reads are open, so no invite is needed
+    and the request is a 400.
     """
     if platform != Platform.ESPN:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Membership verification only applies to ESPN leagues",
+            detail="Invite links only apply to ESPN leagues",
         )
 
     canonical_league_id = lookup_league(league_id=leagueId, platform=platform)
-    seasons = get_league_seasons(canonical_league_id=canonical_league_id)
-    season = max(seasons)
+    metadata = get_league_metadata(canonical_league_id=canonical_league_id)
+    require_league_owner(canonical_league_id, clerk_user_id, metadata=metadata)
 
-    espn_url = (
-        f"https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl"
-        f"/seasons/{season}/segments/0/leagues/{leagueId}?view=mTeam"
-    )
+    token = secrets.token_urlsafe(32)
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
     try:
-        espn_response = http_requests.get(
-            espn_url,
-            cookies={"SWID": payload.swid, "espn_s2": payload.s2},
-            timeout=10,
+        main.table.update_item(
+            Key={"PK": f"LEAGUE#{canonical_league_id}", "SK": "METADATA"},
+            UpdateExpression="SET invite_token_hash = :h",
+            ExpressionAttributeValues={":h": token_hash},
         )
-        espn_response.raise_for_status()
-    except http_requests.exceptions.HTTPError as e:
-        status_code = getattr(e.response, "status_code", None)
-        if status_code in (
-            status.HTTP_401_UNAUTHORIZED,
-            status.HTTP_403_FORBIDDEN,
-        ):
-            logger.info(
-                "ESPN rejected membership cookies for league %s", canonical_league_id
-            )
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Could not verify ESPN league membership",
-            )
-        logger.error("ESPN API error verifying membership: %s", e)
+    except botocore.exceptions.ClientError as e:
+        logger.error("Failed to store invite token for %s: %s", canonical_league_id, e)
         raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Failed to verify ESPN league membership",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create invite link",
         )
-    except http_requests.exceptions.RequestException as e:
-        logger.error("Request error verifying ESPN membership: %s", e)
+
+    return APIResponse(detail="Invite link created", data={"token": token})
+
+
+@router.post("/leagues/{leagueId}/accept-invite", status_code=status.HTTP_200_OK)
+def accept_invite(
+    leagueId: Annotated[
+        str, Path(description="The ID of the fantasy league", pattern=r"^\d+$")
+    ],
+    platform: Annotated[Platform, Query(description="The platform the league is on")],
+    payload: AcceptInvitePayload,
+    clerk_user_id: Annotated[str, Depends(get_authenticated_user)],
+) -> APIResponse:
+    """Redeem an ESPN invite token to join a league (backend/league-authorization).
+
+    A signed-in caller submits the token from the owner's invite link; when its
+    sha256 hash matches the league's stored ``invite_token_hash`` the caller is
+    added to ``members`` (idempotent) and may read the league — no ESPN cookies
+    required. The token is reusable: the stored hash is left intact so other
+    leaguemates can redeem the same link. The compare is constant-time.
+
+    Only applies to ESPN leagues — Sleeper reads are open, so redemption is a 400.
+    """
+    if platform != Platform.ESPN:
         raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Failed to reach ESPN API",
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invite links only apply to ESPN leagues",
+        )
+
+    canonical_league_id = lookup_league(league_id=leagueId, platform=platform)
+    metadata = get_league_metadata(canonical_league_id=canonical_league_id)
+
+    stored_hash = metadata.get("invite_token_hash")
+    if not stored_hash:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No invite link outstanding for this league",
+        )
+
+    token_hash = hashlib.sha256(payload.token.encode()).hexdigest()
+    if not hmac.compare_digest(token_hash, stored_hash):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid invite link",
         )
 
     add_league_member(canonical_league_id, clerk_user_id)
-    logger.info(
-        "Verified ESPN membership; added user to league %s", canonical_league_id
-    )
-    return APIResponse(detail="Membership verified")
+    logger.info("Redeemed invite link; added user to league %s", canonical_league_id)
+    return APIResponse(detail="Invite accepted")

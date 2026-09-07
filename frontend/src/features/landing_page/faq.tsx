@@ -18,10 +18,7 @@ interface FaqItem {
 const FAQ_ITEMS: FaqItem[] = [
   {
     q: 'Why do I need to provide my ESPN cookies?',
-    a: 'ESPN leagues are private and require logging in to ESPN to view. The SWID and ESPN S2 cookies provide the authentication required to fetch data. These cookies are not stored.',
-  },
-  {
-    q: 'Where do I find my ESPN cookies?',
+    a: 'ESPN leagues are private and require logging in to ESPN to view. The SWID and ESPN S2 cookies provide the authentication required to fetch data. These cookies are not stored. To find your ESPN cookies:',
     steps: [
       'Open your browser and go to fantasy.espn.com',
       'Log in to your account',
@@ -32,19 +29,20 @@ const FAQ_ITEMS: FaqItem[] = [
     note: 'With the LeagueQL ESPN Cookie Helper Chrome extension installed, you can skip these steps: just log into ESPN, then click "Autofill from ESPN" on the onboarding form.',
   },
   {
-    q: 'The connection timed out. What happened?',
+    q: 'An error occurred while connecting my league. What do I do?',
     a: (
       <>
-        If the page shows a timeout error, try again once as there may be an
-        issue with the ESPN or Sleeper servers. If the issue persists, file a
-        bug report with{' '}
+        If you encounter an error while connecting your league, try again once
+        as there may be an issue with the ESPN or Sleeper servers. If the issue
+        persists, file a bug report with{' '}
         <a
           href="mailto:support@leagueql.com"
           className="text-primary underline underline-offset-2 hover:text-primary/80"
         >
           support@leagueql.com
         </a>{' '}
-        and provide a screenshot + details so it can be investigated.
+        and provide a screenshot and your league information so it can be
+        investigated.
       </>
     ),
   },
@@ -85,13 +83,20 @@ const FAQ_ITEMS: FaqItem[] = [
     ),
   },
   {
-    q: 'My leaguemate onboarded our ESPN league. How do I view it?',
+    q: 'My leaguemate onboarded our league. How do I view it?',
     a: (
-      <>
-        Enter the league ID and click <Kbd>Connect</Kbd>, then use the{' '}
-        <Kbd>Verify membership</Kbd> prompt to confirm your ESPN cookies grant
-        you access. Once verified the dashboard unlocks.
-      </>
+      <ul className="list-disc space-y-1 pl-6">
+        <li>
+          <span className="font-medium">Sleeper:</span> just enter the league ID
+          and click <Kbd>Connect</Kbd>.
+        </li>
+        <li>
+          <span className="font-medium">ESPN:</span> ask the leaguemate who
+          connected the league to create an invite link using{' '}
+          <Kbd>Invite Leaguemates</Kbd> in the sidebar and send it to you, you
+          can open the app using that link.
+        </li>
+      </ul>
     ),
   },
 ];
@@ -105,7 +110,9 @@ export function Faq() {
     >
       {FAQ_ITEMS.map((item, i) => (
         <AccordionItem key={item.q} value={`faq-${i}`}>
-          <AccordionTrigger>{item.q}</AccordionTrigger>
+          <AccordionTrigger className="cursor-pointer">
+            {item.q}
+          </AccordionTrigger>
           <AccordionContent>
             {item.a}
             {item.steps && (

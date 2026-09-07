@@ -2,7 +2,6 @@ import { Info, TriangleAlert } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import espnOnboardFormScreenshot from '@/assets/espn-onboard-form-screenshot.png';
-import espnVerifyMembershipScreenshot from '@/assets/espn-verify-membership-screenshot.png';
 import { Kbd } from '@/components/ui/kbd';
 import { ESPN_EXTENSION_URL } from '@/lib/espn-extension';
 
@@ -297,7 +296,8 @@ export default function InstructionsPage() {
                 <p className="text-muted-foreground leading-relaxed mb-4">
                   If the league has already been onboarded, you are taken
                   straight to your dashboard (or, if you are not yet a member of
-                  the private league, prompted to verify your membership; see{' '}
+                  the private league, told how to join it with an invite link
+                  from the owner; see{' '}
                   <SectionLink id="joining-an-espn-league">
                     Joining an ESPN League
                   </SectionLink>{' '}
@@ -417,9 +417,7 @@ export default function InstructionsPage() {
               </div>
 
               <div>
-                <SubHeading id="ownership-and-access">
-                  League Ownership
-                </SubHeading>
+                <SubHeading id="league-ownership">League Ownership</SubHeading>
                 <p className="text-muted-foreground leading-relaxed mb-3">
                   The first person to connect a league becomes its owner in
                   LeagueQL. Only the owner sees and can use the league&apos;s
@@ -429,6 +427,7 @@ export default function InstructionsPage() {
                   <li>Refresh League</li>
                   <li>Migrate League</li>
                   <li>Transfer Ownership</li>
+                  <li>Invite Leaguemates (ESPN only)</li>
                   <li>Delete League</li>
                 </ul>
                 <p className="text-muted-foreground leading-relaxed mb-8">
@@ -443,38 +442,37 @@ export default function InstructionsPage() {
                     </SubSubHeading>
                     <p className="text-muted-foreground leading-relaxed mb-3">
                       Because ESPN league data is private, leaguemates other
-                      than the owner must prove they belong to the league before
-                      they can view it. When you connect for the first time to
-                      an onboarded ESPN league, you will see a{' '}
-                      <strong className="text-foreground">
-                        Verify your ESPN league membership
-                      </strong>{' '}
-                      prompt instead of the dashboard.
+                      than the owner join through an invite link the owner
+                      shares.
                     </p>
-                    <img
-                      src={espnVerifyMembershipScreenshot}
-                      alt="The Join league dialog prompting for SWID and ESPN S2 cookies to verify ESPN league membership"
-                      className="mb-4 w-full rounded-md border border-border"
-                    />
-                    <p>
-                      Enter your SWID and ESPN S2 cookies or use the LeagueQL
-                      ESPN Cookie Helper{' '}
+                    <ul className="list-disc pl-6 space-y-2 text-muted-foreground leading-relaxed mb-3">
+                      <li>
+                        <strong className="text-foreground">Owner:</strong> open
+                        the league in LeagueQL, click{' '}
+                        <Kbd>Invite Leaguemates</Kbd> in the sidebar, then{' '}
+                        <Kbd>Create invite link</Kbd>. Copy the link and share
+                        it with your leaguemates.
+                      </li>
+                      <li>
+                        <strong className="text-foreground">Leaguemate:</strong>{' '}
+                        open the link the owner sent and sign into LeagueQL. You
+                        are added to the league as a member and the dashboard
+                        unlocks immediately.
+                      </li>
+                    </ul>
+                    <Callout variant="warning">
+                      Anyone with the link can view the league, so share it only
+                      with your leaguemates. The link stays valid until the
+                      owner creates a new one, which revokes the previous link.
+                      If a league&apos;s owner cannot be contacted, contact{' '}
                       <a
-                        href={ESPN_EXTENSION_URL}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                        href="mailto:support@leagueql.com"
                         className="text-primary underline underline-offset-2 hover:text-primary/80"
                       >
-                        extension
-                      </a>{' '}
-                      to verify your membership. If your cookies are valid, you
-                      are added to the league as a member and the dashboard
-                      unlocks immediately. If not, you will see
-                      <Kbd>
-                        We couldn&apos;t confirm you&apos;re in this ESPN
-                        league.
-                      </Kbd>
-                    </p>
+                        support@leagueql.com
+                      </a>
+                      .
+                    </Callout>
                     <br></br>
                   </div>
 

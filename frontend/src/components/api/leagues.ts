@@ -75,23 +75,48 @@ export function getAllMatchups(
   return queryLeague<MatchupItem>(leagueId, platform, 'MATCHUPS#');
 }
 
+export interface InviteTokenResponse {
+  detail: string;
+  data: { token: string };
+}
+
 /**
- * Verify the caller's ESPN league membership (backend/league-authorization / frontend/ownership-transfer).
+ * Mint a reusable ESPN invite token for the league (owner-only,
+ * backend/league-authorization / frontend/ownership-transfer).
  *
- * Sends the caller's ESPN cookies (filled by the Chrome extension) to the
- * backend, which proxies an authenticated read of the league. On success the
- * caller is added to the league's members and may read the league. ESPN-rejected
- * cookies resolve to a `403` `ApiError`.
+ * The owner shares the resulting link; a leaguemate who opens it and redeems the
+ * token via {@link acceptInvite} is added to the league's members without needing
+ * their own ESPN cookies. Only the plaintext token is returned (once); minting a
+ * new one revokes any previously shared link.
  */
-export function verifyMembership(
+export function createInviteToken(
   leagueId: string,
   platform: Platform,
-  cookies: { swid: string; s2: string },
+): Promise<InviteTokenResponse> {
+  const params = new URLSearchParams({ platform });
+  return apiClient.post<InviteTokenResponse>(
+    `/leagues/${leagueId}/invite-token?${params}`,
+    {},
+  );
+}
+
+/**
+ * Redeem an ESPN invite token to join a league (backend/league-authorization /
+ * frontend/ownership-transfer).
+ *
+ * On success the caller is added to the league's members and may read the league —
+ * no ESPN cookies required. A missing/revoked link resolves to a `404`, and a
+ * token mismatch to a `403`, `ApiError`.
+ */
+export function acceptInvite(
+  leagueId: string,
+  platform: Platform,
+  token: string,
 ): Promise<{ detail: string }> {
   const params = new URLSearchParams({ platform });
   return apiClient.post<{ detail: string }>(
-    `/leagues/${leagueId}/verify-membership?${params}`,
-    cookies,
+    `/leagues/${leagueId}/accept-invite?${params}`,
+    { token },
   );
 }
 

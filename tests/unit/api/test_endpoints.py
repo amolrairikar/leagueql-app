@@ -1803,78 +1803,134 @@ class TestClaimOwnershipEndpoint:
         assert response.status_code == 500
 
 
-class TestVerifyMembershipEndpoint:
-    _PAYLOAD: ClassVar = {"swid": "{abc}", "s2": "s2-token"}
+class TestInviteTokenEndpoint:
+    def test_owner_mints_token(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+        ]
+        mock_table.update_item.return_value = {}
+        response = client.post("/leagues/123/invite-token?platform=ESPN")
+        assert response.status_code == 200
+        assert response.json()["data"]["token"]
+        kwargs = mock_table.update_item.call_args.kwargs
+        assert "invite_token_hash" in kwargs["UpdateExpression"]
 
-    def _seasons_query(self, mock_table):
-        mock_table.query.return_value = {
-            "Items": [{"seasons": {"2023", "2024"}, "canonical_league_id": "x"}]
+    def test_non_espn_returns_400(self, client, mock_table):
+        response = client.post("/leagues/123/invite-token?platform=SLEEPER")
+        assert response.status_code == 400
+        mock_table.get_item.assert_not_called()
+
+    def test_non_owner_returns_403(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+        ]
+        _as_user("intruder")
+        response = client.post("/leagues/123/invite-token?platform=ESPN")
+        assert response.status_code == 403
+
+    def test_update_failure_returns_500(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+        ]
+        mock_table.update_item.side_effect = botocore.exceptions.ClientError(
+            {"Error": {"Code": "InternalError", "Message": "x"}}, "UpdateItem"
+        )
+        response = client.post("/leagues/123/invite-token?platform=ESPN")
+        assert response.status_code == 500
+
+
+class TestAcceptInviteEndpoint:
+    def _meta_with_invite(self, token):
+        import hashlib
+
+        return {
+            "PK": "LEAGUE#canonical-abc",
+            "SK": "METADATA",
+            "owner_user_id": "user_1",
+            "invite_token_hash": hashlib.sha256(token.encode()).hexdigest(),
         }
 
-    def test_non_espn_returns_400(self, client, mock_table, league_lookup_item):
-        mock_table.get_item.return_value = {"Item": league_lookup_item}
+    def test_non_espn_returns_400(self, client, mock_table):
         response = client.post(
-            "/leagues/123/verify-membership?platform=SLEEPER", json=self._PAYLOAD
+            "/leagues/123/accept-invite?platform=SLEEPER", json={"token": "tok"}
         )
         assert response.status_code == 400
+        mock_table.get_item.assert_not_called()
 
-    def test_valid_cookies_add_member(self, client, mock_table, league_lookup_item):
-        mock_table.get_item.return_value = {"Item": league_lookup_item}
-        self._seasons_query(mock_table)
+    def test_happy_path_adds_member(self, client, mock_table, league_lookup_item):
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": self._meta_with_invite("tok")},
+        ]
         mock_table.update_item.return_value = {}
-        espn_resp = MagicMock()
-        espn_resp.raise_for_status = MagicMock()
         _as_user("user_2")
-        with patch("main.http_requests.get", return_value=espn_resp):
-            response = client.post(
-                "/leagues/123/verify-membership?platform=ESPN", json=self._PAYLOAD
-            )
+        response = client.post(
+            "/leagues/123/accept-invite?platform=ESPN", json={"token": "tok"}
+        )
         assert response.status_code == 200
         kwargs = mock_table.update_item.call_args.kwargs
         assert "ADD members" in kwargs["UpdateExpression"]
         assert kwargs["ExpressionAttributeValues"][":m"] == {"user_2"}
+        # Reusable: the invite hash is left intact (not consumed on redemption).
+        assert "REMOVE" not in kwargs["UpdateExpression"]
+        assert "invite_token_hash" not in kwargs["UpdateExpression"]
 
-    def test_rejected_cookies_return_403(self, client, mock_table, league_lookup_item):
-        import requests
+    def test_reusable_second_redeem(self, client, mock_table, league_lookup_item):
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": self._meta_with_invite("tok")},
+        ]
+        mock_table.update_item.return_value = {}
+        _as_user("user_3")
+        response = client.post(
+            "/leagues/123/accept-invite?platform=ESPN", json={"token": "tok"}
+        )
+        assert response.status_code == 200
+        assert mock_table.update_item.call_args.kwargs["ExpressionAttributeValues"][
+            ":m"
+        ] == {"user_3"}
 
-        mock_table.get_item.return_value = {"Item": league_lookup_item}
-        self._seasons_query(mock_table)
-        espn_resp = MagicMock()
-        err = requests.exceptions.HTTPError("401")
-        err.response = MagicMock(status_code=401)
-        espn_resp.raise_for_status.side_effect = err
-        with patch("main.http_requests.get", return_value=espn_resp):
-            response = client.post(
-                "/leagues/123/verify-membership?platform=ESPN", json=self._PAYLOAD
-            )
+    def test_no_token_returns_404(self, client, mock_table, league_lookup_item):
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": {"PK": "LEAGUE#canonical-abc", "SK": "METADATA"}},
+        ]
+        response = client.post(
+            "/leagues/123/accept-invite?platform=ESPN", json={"token": "tok"}
+        )
+        assert response.status_code == 404
+
+    def test_mismatched_token_returns_403(self, client, mock_table, league_lookup_item):
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": self._meta_with_invite("real")},
+        ]
+        response = client.post(
+            "/leagues/123/accept-invite?platform=ESPN", json={"token": "wrong"}
+        )
         assert response.status_code == 403
         mock_table.update_item.assert_not_called()
 
-    def test_other_http_error_returns_502(self, client, mock_table, league_lookup_item):
-        import requests
-
-        mock_table.get_item.return_value = {"Item": league_lookup_item}
-        self._seasons_query(mock_table)
-        espn_resp = MagicMock()
-        err = requests.exceptions.HTTPError("500")
-        err.response = MagicMock(status_code=500)
-        espn_resp.raise_for_status.side_effect = err
-        with patch("main.http_requests.get", return_value=espn_resp):
-            response = client.post(
-                "/leagues/123/verify-membership?platform=ESPN", json=self._PAYLOAD
-            )
-        assert response.status_code == 502
-
-    def test_request_error_returns_502(self, client, mock_table, league_lookup_item):
-        import requests
-
-        mock_table.get_item.return_value = {"Item": league_lookup_item}
-        self._seasons_query(mock_table)
-        with patch(
-            "main.http_requests.get",
-            side_effect=requests.exceptions.ConnectionError("boom"),
-        ):
-            response = client.post(
-                "/leagues/123/verify-membership?platform=ESPN", json=self._PAYLOAD
-            )
-        assert response.status_code == 502
+    def test_add_member_failure_returns_500(
+        self, client, mock_table, league_lookup_item
+    ):
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": self._meta_with_invite("tok")},
+        ]
+        mock_table.update_item.side_effect = botocore.exceptions.ClientError(
+            {"Error": {"Code": "InternalError", "Message": "x"}}, "UpdateItem"
+        )
+        response = client.post(
+            "/leagues/123/accept-invite?platform=ESPN", json={"token": "tok"}
+        )
+        assert response.status_code == 500
