@@ -47,8 +47,39 @@ class TestDigest:
         fields = _fields(embed)
         assert fields["Total onboarded"] == "3"
         assert fields[f"Active ({handler.ACTIVE_DAYS}d)"] == "2"
+        assert fields["Stale (1y)"] == "0"  # all onboarded/refreshed within the year
         assert fields["ESPN / SLEEPER"] == "1 / 2"
         assert "Last 24h: **2**" in fields["New onboards"]
+
+    def test_reports_stale_count(self, handler, mock_table, mock_post):
+        from datetime import timedelta
+
+        now = handler.datetime.now(handler.timezone.utc)
+        recent = now.isoformat()
+        long_ago = (now - timedelta(days=400)).isoformat()  # >1 year -> stale
+        mock_table.query.return_value = {
+            "Items": [
+                # Onboarded long ago, refreshed recently -> not stale.
+                {
+                    "platform": "SLEEPER",
+                    "onboarded_at": long_ago,
+                    "last_refresh_at": recent,
+                },
+                # Refreshed over a year ago -> stale.
+                {
+                    "platform": "ESPN",
+                    "onboarded_at": long_ago,
+                    "last_refresh_at": long_ago,
+                },
+                # Never refreshed, onboarded over a year ago -> stale via fallback.
+                {"platform": "ESPN", "onboarded_at": long_ago},
+            ]
+        }
+
+        handler.lambda_handler({}, None)
+
+        fields = _fields(_posted_embed(mock_post))
+        assert fields["Stale (1y)"] == "2"
 
     def test_empty_table_posts_zeroes(self, handler, mock_table, mock_post):
         mock_table.query.return_value = {"Items": []}

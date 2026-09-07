@@ -117,6 +117,61 @@ class TestCountActive:
         assert agg.count_active(items, now, days=30) == 1
 
 
+# ---- count_stale --------------------------------------------------------------
+
+
+class TestCountStale:
+    def test_empty(self, agg):
+        assert agg.count_stale([], datetime.now(timezone.utc)) == 0
+
+    def test_stale_via_old_last_refresh(self, agg):
+        now = _dt("2024-02-01T00:00:00Z")
+        items = [{"last_refresh_at": "2022-01-01T00:00:00Z"}]  # ~2 years ago
+        assert agg.count_stale(items, now) == 1
+
+    def test_fresh_via_recent_last_refresh(self, agg):
+        now = _dt("2024-02-01T00:00:00Z")
+        items = [{"last_refresh_at": "2024-01-15T00:00:00Z"}]  # ~2 weeks ago
+        assert agg.count_stale(items, now) == 0
+
+    def test_falls_back_to_onboarded_at_when_never_refreshed(self, agg):
+        now = _dt("2024-02-01T00:00:00Z")
+        items = [{"onboarded_at": "2022-06-01T00:00:00Z"}]  # >1y ago, no refresh
+        assert agg.count_stale(items, now) == 1
+
+    def test_recent_refresh_overrides_old_onboarded(self, agg):
+        now = _dt("2024-02-01T00:00:00Z")
+        # Onboarded over a year ago but refreshed recently -> not stale.
+        items = [
+            {
+                "onboarded_at": "2022-01-01T00:00:00Z",
+                "last_refresh_at": "2024-01-20T00:00:00Z",
+            }
+        ]
+        assert agg.count_stale(items, now) == 0
+
+    def test_boundary_is_exclusive(self, agg):
+        now = _dt("2024-02-01T00:00:00Z")
+        # Exactly 365 days before `now` (2023 is not a leap year) -> not stale
+        # (reference == cutoff, and the boundary is exclusive).
+        items = [{"last_refresh_at": "2023-02-01T00:00:00Z"}]
+        assert agg.count_stale(items, now) == 0
+
+    def test_missing_or_unparseable_both_excluded(self, agg):
+        now = _dt("2024-02-01T00:00:00Z")
+        items = [
+            {},  # no timestamps
+            {"last_refresh_at": "bad", "onboarded_at": "also-bad"},  # unparseable
+        ]
+        assert agg.count_stale(items, now) == 0
+
+    def test_custom_days(self, agg):
+        now = _dt("2024-02-01T00:00:00Z")
+        items = [{"last_refresh_at": "2023-11-01T00:00:00Z"}]  # ~92 days ago
+        assert agg.count_stale(items, now, days=365) == 0
+        assert agg.count_stale(items, now, days=30) == 1
+
+
 # ---- platform_counts ----------------------------------------------------------
 
 

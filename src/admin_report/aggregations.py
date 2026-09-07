@@ -11,6 +11,8 @@ dicts). The relevant attributes are:
   * ``onboarded_at``      — ISO 8601 (UTC) onboard timestamp (GSI3 sort key)
   * ``last_accessed_at``  — ISO 8601 (UTC) last-opened timestamp; absent on older leagues
                             and any never opened since the field shipped
+  * ``last_refresh_at``   — ISO 8601 (UTC) most-recent-refresh timestamp; absent until a league's
+                            first successful refresh
 
 See ``docs/db/dynamodb_spec.md`` (METADATA item + GSI3). This is a pandas-free port of the
 former ``scripts/admin_dashboard/aggregations.py`` so it stays light in a Lambda.
@@ -19,6 +21,8 @@ former ``scripts/admin_dashboard/aggregations.py`` so it stays light in a Lambda
 from datetime import datetime, timedelta, timezone
 
 _DEFAULT_ACTIVE_DAYS = 14
+# A league is stale when it has not been refreshed in over this many days.
+_DEFAULT_STALE_DAYS = 365
 _PLATFORMS = ("ESPN", "SLEEPER")
 # New-onboard windows reported in the digest, in days.
 _NEW_ONBOARD_WINDOWS = {"24h": 1, "7d": 7, "30d": 30}
@@ -70,6 +74,28 @@ def count_active(
     for item in items:
         accessed = parse_timestamp(item.get("last_accessed_at"))
         if accessed is not None and accessed >= cutoff:
+            count += 1
+    return count
+
+
+def count_stale(
+    items: list[dict], now: datetime, days: int = _DEFAULT_STALE_DAYS
+) -> int:
+    """Count leagues not refreshed within the last ``days`` days.
+
+    Staleness is measured from ``last_refresh_at``, falling back to ``onboarded_at`` when a
+    league has never been refreshed. A league is stale when that reference timestamp is
+    *strictly* older than ``now - days`` (the boundary is exclusive: a reference timestamp
+    exactly ``days`` old is not stale). A league with neither a parseable ``last_refresh_at``
+    nor a parseable ``onboarded_at`` is not counted.
+    """
+    cutoff = now - timedelta(days=days)
+    count = 0
+    for item in items:
+        reference = parse_timestamp(item.get("last_refresh_at")) or parse_timestamp(
+            item.get("onboarded_at")
+        )
+        if reference is not None and reference < cutoff:
             count += 1
     return count
 

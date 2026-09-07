@@ -8,7 +8,8 @@ pull-based Streamlit admin dashboard (``scripts/admin_dashboard/``) with a push-
 nightly summary.
 
 The digest reports total leagues onboarded, active leagues (accessed in the last 14
-days), the ESPN-vs-SLEEPER split, and new onboards in the last 24h / 7d / 30d.
+days), stale leagues (not refreshed in the last year), the ESPN-vs-SLEEPER split, and
+new onboards in the last 24h / 7d / 30d.
 
 The webhook URL is a SecureString SSM parameter fetched at cold start by *name* (the
 value never lands in a Lambda env var / TF state / CI), via ``common.secrets`` — the
@@ -21,7 +22,13 @@ import os
 from datetime import datetime, timezone
 
 import boto3
-from aggregations import count_active, count_total, new_onboards, platform_counts
+from aggregations import (
+    count_active,
+    count_stale,
+    count_total,
+    new_onboards,
+    platform_counts,
+)
 from boto3.dynamodb.conditions import Key
 
 from common.http import build_retry_session
@@ -30,6 +37,7 @@ from common.secrets import get_secret_from_env_param
 
 GSI3_INDEX_NAME = "GSI3"
 ACTIVE_DAYS = 14
+STALE_DAYS = 365
 
 # Green "healthy digest" embed, distinct from the red alert embeds in discord_notifier.
 _COLOR_GREEN = 0x2ECC71
@@ -63,6 +71,7 @@ def _build_embed(items: list[dict], now: datetime) -> dict:
     """Build the Discord embed summarizing onboarding health for ``items``."""
     total = count_total(items)
     active = count_active(items, now, days=ACTIVE_DAYS)
+    stale = count_stale(items, now, days=STALE_DAYS)
     platforms = platform_counts(items)
     recent = new_onboards(items, now)
     return {
@@ -77,6 +86,11 @@ def _build_embed(items: list[dict], now: datetime) -> dict:
             {
                 "name": f"Active ({ACTIVE_DAYS}d)",
                 "value": f"{active:,}",
+                "inline": True,
+            },
+            {
+                "name": "Stale (1y)",
+                "value": f"{stale:,}",
                 "inline": True,
             },
             {

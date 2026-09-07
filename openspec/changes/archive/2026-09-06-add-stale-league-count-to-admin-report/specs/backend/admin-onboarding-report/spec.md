@@ -1,11 +1,4 @@
-# admin-onboarding-report Specification
-
-## Purpose
-Scheduled backend job that periodically aggregates onboarding-health metrics from the DynamoDB
-METADATA items and pushes a formatted digest to an admin Discord channel, so onboarding trends are
-surfaced automatically instead of only through a manually-run dashboard.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Nightly onboarding-health digest
 The job SHALL run on a nightly schedule, query the GSI3 all-leagues index for every METADATA item
@@ -69,24 +62,3 @@ new-onboard windows.
 #### Scenario: Unparseable onboarded_at is excluded
 - **WHEN** a league's `onboarded_at` is missing or not a parseable timestamp
 - **THEN** it is excluded from the total onboarded count and from every new-onboard window
-
-### Requirement: Failure surfaces without re-alerting
-The job SHALL raise on a DynamoDB-query failure, on a non-success Discord webhook response, or when
-the webhook is not configured, so the error is recorded in its own execution/error metrics; it
-SHALL NOT publish the failure to the shared alert notification topic.
-
-#### Scenario: DynamoDB query fails
-- **WHEN** the GSI3 query raises an error
-- **THEN** the run raises (posting no digest) so the failure is recorded in its own error metrics
-
-#### Scenario: Discord webhook returns an error
-- **WHEN** the Discord webhook responds with a non-success status
-- **THEN** the run raises so the failure is recorded in its own error metrics
-
-#### Scenario: Webhook not configured
-- **WHEN** the Discord webhook URL is not configured
-- **THEN** the run raises rather than silently completing
-
-#### Scenario: Failure is not re-published to the alert topic
-- **WHEN** the run fails for any reason
-- **THEN** it does not publish the failure to the shared alert notification topic (avoiding an alert loop)
