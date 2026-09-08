@@ -75,8 +75,8 @@ reflect the new behavior.
   `npx vitest run <path>` (or `npm run test`) from `frontend/`.
 - **Backend component tests** live under [`tests/component/`](tests/component/CLAUDE.md) as
   Behave Gherkin pairs — `features/*.feature` + `steps/*.py` — exercising a whole component (the
-  FastAPI app, the Stripe webhook, the onboarder→processor chain, …) with every **external**
-  dependency (the platform API, Stripe, Lambda) mocked but real DynamoDB/S3 behavior via `moto`.
+  FastAPI app, the onboarder→processor chain, …) with every **external**
+  dependency (the platform API, Lambda) mocked but real DynamoDB/S3 behavior via `moto`.
   When you add or change an endpoint/handler's behavior or how components interact across a
   DynamoDB/S3 boundary, add or update the matching scenario + steps. Run with
   `pipenv run behave tests/component`.
