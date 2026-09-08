@@ -1,9 +1,7 @@
-# yahoo-oauth Specification
-
 ## Purpose
 Add Yahoo Fantasy Sports as a third onboarding platform, which requires OAuth 2.0. This capability covers the authorization-code handshake (with PKCE), the server-side code→token exchange, encrypted token persistence keyed per Clerk user, and automatic access-token refresh — guaranteeing a valid Yahoo access token is available to the onboarder's Yahoo client. The client secret never leaves the backend.
 
-## Requirements
+## ADDED Requirements
 
 ### Requirement: Start the authorization flow
 `GET /auth/yahoo/authorize` (Clerk-authenticated) SHALL return a Yahoo consent URL carrying the OAuth + PKCE parameters and bind a single-use `state` to the caller.
