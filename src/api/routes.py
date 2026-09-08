@@ -472,16 +472,12 @@ def migrate_league(
     now_iso = datetime.now(timezone.utc).isoformat()
 
     try:
-        main.table.put_item(
-            Item={
-                "PK": f"LEAGUE#{payload.newPlatformLeagueId}#PLATFORM#{payload.newPlatform.value}",
-                "SK": "LEAGUE_LOOKUP",
-                "canonical_league_id": canonical_league_id,
-                "platform": payload.newPlatform.value,
-                "league_id": payload.newPlatformLeagueId,
-            }
-        )
-
+        # The destination LEAGUE_LOOKUP is intentionally NOT written here. It is
+        # written by the onboarder only after it successfully fetches the
+        # destination-platform league (backend/league-migration), so a failed or
+        # unauthorized migration can't squat on / deny onboarding of a
+        # destination league ID the caller doesn't actually control. Writing it
+        # up front (before the onboarder validates access) was the SEC-01 gap.
         main.table.put_item(
             Item={
                 "PK": f"LEAGUE#{canonical_league_id}",

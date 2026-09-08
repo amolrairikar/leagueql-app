@@ -151,6 +151,37 @@ def step_onboard_http_error(context):
     _run_onboarder(context, "ESPN", "555", "ONBOARD", {"season": "2024"})
 
 
+@when(
+    'the onboarder fails a MIGRATE destination fetch for league "{league_id}" '
+    'canonical "{canonical}"'
+)
+def step_migrate_http_error(context, league_id, canonical):
+    # SEC-01: a MIGRATE whose destination fetch fails must leave no destination
+    # LEAGUE_LOOKUP behind — the onboarder writes it only on a successful fetch.
+    import requests
+
+    def _boom(self, **kwargs):
+        client = MagicMock()
+        client.get_seasons.return_value = ["2024"]
+        resp = MagicMock(status_code=401)
+        error = requests.exceptions.HTTPError("401 Unauthorized")
+        error.response = resp
+
+        async def _fetch_all():
+            raise error
+
+        client.fetch_all.side_effect = _fetch_all
+        return client
+
+    patcher = patch.object(
+        context.onboarding_service_mod.OnboardingService, "_build_client", _boom
+    )
+    patcher.start()
+    context._patches.append(patcher)
+    context.canonical = canonical
+    _run_onboarder(context, "ESPN", league_id, "MIGRATE", {"season": "2024"})
+
+
 @when("the onboarder runs an ONBOARD for an ESPN league that has not drafted")
 def step_onboard_espn_not_drafted(context):
     # A brand-new ESPN league whose only season has not drafted: ESPNClient excludes
