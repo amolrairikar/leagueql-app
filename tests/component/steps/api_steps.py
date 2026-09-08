@@ -162,14 +162,10 @@ def step_no_migration_item(context, canonical):
     assert not resp["Items"], "unexpected PLATFORM_MIGRATION item written"
 
 
-@then(
-    'a LEAGUE_LOOKUP record was written for league "{league_id}" platform '
-    '"{platform}" with canonical "{canonical}"'
-)
-def step_lookup_written(context, league_id, platform, canonical):
+@then('no LEAGUE_LOOKUP record exists for league "{league_id}" platform "{platform}"')
+def step_lookup_not_written(context, league_id, platform):
     item = get_item(context, f"LEAGUE#{league_id}#PLATFORM#{platform}", "LEAGUE_LOOKUP")
-    assert item, "LEAGUE_LOOKUP not written"
-    assert item.get("canonical_league_id") == canonical, item
+    assert not item, "unexpected LEAGUE_LOOKUP written by the API"
 
 
 @then("the onboarder Lambda was invoked")

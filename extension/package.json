@@ -1,7 +1,7 @@
 {
   "name": "leagueql-espn-extension",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "description": "Chrome extension that auto-fills ESPN SWID and espn_s2 cookies for LeagueQL app.",
   "scripts": {

@@ -172,6 +172,15 @@ Feature: Onboard-to-processed pipeline (backend/league-onboarding, backend/data-
     And the JOB_STATUS failure_code is "ESPN_AUTH"
     And no METADATA item exists for the onboarded league
 
+  Scenario: A failed MIGRATE destination fetch writes no destination LEAGUE_LOOKUP (SEC-01)
+    # The destination LEAGUE_LOOKUP is written by the onboarder only after a successful
+    # destination fetch, so a migration whose fetch fails leaves the destination league
+    # ID unclaimed and still onboardable by its legitimate owner.
+    When the onboarder fails a MIGRATE destination fetch for league "888" canonical "canon-mig"
+    Then the onboarder returns status 502
+    And a JOB_STATUS "FAILED" exists for the job
+    And no LEAGUE_LOOKUP record exists for league "888" platform "ESPN"
+
   Scenario: A brand-new undrafted ESPN league fails NOT_STARTED and writes no data (backend/league-onboarding)
     # ESPNClient excludes a not-yet-drafted latest season; a league whose only season
     # hasn't drafted resolves to no seasons, so ONBOARD is a NOT_STARTED user error with

@@ -1,15 +1,17 @@
 Feature: League migration API (backend/league-migration)
-  POST /leagues/{id}/migrate records the destination lookup + manager mapping and
-  triggers the onboarder, preserving all-time history under one canonical league.
+  POST /leagues/{id}/migrate records the manager mapping and triggers the onboarder,
+  preserving all-time history under one canonical league. The destination LEAGUE_LOOKUP
+  is written by the onboarder only after it successfully fetches the destination league
+  (SEC-01), so the API itself never writes it up front.
 
   Background:
     Given a LEAGUE_LOOKUP exists for league "100" platform "SLEEPER" canonical "canon-1"
 
-  Scenario: Migration writes mapping records and triggers the onboarder
+  Scenario: Migration records the mapping and triggers the onboarder without writing the destination lookup
     When I POST a migration of league "100" from "SLEEPER" to "ESPN" league "777"
     Then the API responds with status 202
     And a PLATFORM_MIGRATION item exists for league "canon-1"
-    And a LEAGUE_LOOKUP record was written for league "777" platform "ESPN" with canonical "canon-1"
+    And no LEAGUE_LOOKUP record exists for league "777" platform "ESPN"
     And the onboarder Lambda was invoked
 
   Scenario: Migrating to an already-onboarded destination returns 409

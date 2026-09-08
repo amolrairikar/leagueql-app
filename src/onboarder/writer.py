@@ -193,11 +193,19 @@ def write_league_records(
 
         if request_type == "MIGRATE":
             # Job status now lives in the JOB_STATUS item (keyed by correlation_id),
-            # so the only METADATA write needed here is none — just the lookup.
+            # so the only write needed here is the destination LEAGUE_LOOKUP — and
+            # this is the ONLY place it is written (the API no longer writes it up
+            # front, backend/league-migration / SEC-01), so it becomes durable only
+            # after a successful destination fetch. The conditional guard
+            # (attribute_not_exists) makes the claim single-winner: if another
+            # operation registered this destination between the API's
+            # already-onboarded check and now, this Put fails rather than
+            # overwriting the existing mapping.
             transact_items = [
                 {
                     "Put": {
                         "TableName": table_name,
+                        "ConditionExpression": "attribute_not_exists(PK)",
                         "Item": {
                             "PK": {"S": f"LEAGUE#{league_id}#PLATFORM#{platform}"},
                             "SK": {"S": "LEAGUE_LOOKUP"},
@@ -293,7 +301,22 @@ def write_league_records(
         logger.error("Environment variable 'DYNAMODB_TABLE_NAME' not set!")
         raise
     except botocore.exceptions.ClientError as e:
-        logger.error(
-            "Error occurred while writing onboarding job status to DynamoDB: %s", e
-        )
+        # A cancelled transaction on MIGRATE means the destination LEAGUE_LOOKUP's
+        # attribute_not_exists guard fired — another operation already claimed this
+        # destination league ID. Log it distinctly; the handler records the job
+        # FAILED rather than overwriting the existing mapping.
+        if (
+            request_type == "MIGRATE"
+            and e.response.get("Error", {}).get("Code")
+            == "TransactionCanceledException"
+        ):
+            logger.error(
+                "Destination league %s on %s is already claimed; not overwriting existing LEAGUE_LOOKUP",
+                league_id,
+                platform,
+            )
+        else:
+            logger.error(
+                "Error occurred while writing onboarding job status to DynamoDB: %s", e
+            )
         raise

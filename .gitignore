@@ -11,6 +11,9 @@ terraform.tfplan
 # Bundled Chrome extension
 extension/*.zip
 
+# Node dependencies (per-package installs, e.g. workers/*/node_modules)
+node_modules/
+
 # Python files
 __pycache__
 .env

@@ -1172,6 +1172,31 @@ class TestMigrateLeagueEndpoint:
         ]
         assert active_updates
 
+    def test_does_not_write_destination_lookup(
+        self,
+        client,
+        mock_table,
+        mock_lambda_client,
+        league_lookup_item,
+        league_metadata_item,
+    ):
+        # SEC-01: the API must NOT write the destination LEAGUE_LOOKUP up front —
+        # the onboarder writes it only after a successful destination fetch, so a
+        # failed/unauthorized migration can't squat on a destination league ID.
+        self._setup_success_mocks(
+            mock_table, mock_lambda_client, league_lookup_item, league_metadata_item
+        )
+        response = client.post(
+            "/leagues/123/migrate?platform=SLEEPER", json=self._PAYLOAD
+        )
+        assert response.status_code == 202
+        lookup_puts = [
+            c
+            for c in mock_table.put_item.call_args_list
+            if str(c.kwargs["Item"]["SK"]) == "LEAGUE_LOOKUP"
+        ]
+        assert not lookup_puts, "API must not write the destination LEAGUE_LOOKUP"
+
     def test_returns_409_when_job_in_progress(
         self,
         client,

@@ -204,6 +204,33 @@ class TestWriteLeagueRecords:
         items = mock_ddb.transact_write_items.call_args[1]["TransactItems"]
         assert len(items) == 1
         assert items[0]["Put"]["Item"]["SK"] == {"S": "LEAGUE_LOOKUP"}
+        # The destination lookup is single-winner: the conditional guard prevents
+        # overwriting a mapping another operation may have registered (SEC-01).
+        assert items[0]["Put"]["ConditionExpression"] == "attribute_not_exists(PK)"
+
+    def test_migrate_conditional_failure_propagates(
+        self, onboarder_writer, monkeypatch
+    ):
+        # A cancelled MIGRATE transaction (the attribute_not_exists guard fired —
+        # the destination was already claimed) is logged distinctly and re-raised
+        # so the handler records the job FAILED instead of overwriting the mapping.
+        monkeypatch.setenv("DYNAMODB_TABLE_NAME", "test-table")
+        mock_ddb = MagicMock()
+        mock_ddb.transact_write_items.side_effect = botocore.exceptions.ClientError(
+            {"Error": {"Code": "TransactionCanceledException", "Message": "cancelled"}},
+            "TransactWriteItems",
+        )
+        with (
+            patch.object(onboarder_writer, "_dynamodb", mock_ddb),
+            pytest.raises(botocore.exceptions.ClientError),
+        ):
+            onboarder_writer.write_league_records(
+                league_id="777",
+                platform="ESPN",
+                canonical_league_id="canonical-abc",
+                seasons=["2024"],
+                request_type="MIGRATE",
+            )
 
     def test_refresh_existing_season_uses_update(self, onboarder_writer, monkeypatch):
         # REFRESH now writes only the LEAGUE_LOOKUP item (status moved to
