@@ -1,9 +1,7 @@
-# connect-yahoo-league Specification
-
 ## Purpose
 Add Yahoo as a selectable platform in the Connect League flow. Because Yahoo requires OAuth 2.0, onboarding a Yahoo league is a two-step experience: the user first links their Yahoo account (OAuth consent), then selects/enters the Yahoo league to onboard. The OAuth handshake and token storage are backend-owned; this capability covers the UI. No Yahoo tokens ever reach the browser.
 
-## Requirements
+## ADDED Requirements
 
 ### Requirement: Gate onboarding on account linking
 Selecting platform Yahoo while unlinked SHALL show a "Connect your Yahoo account" CTA in place of the ESPN cookie fields and disable onboard submit until linked.
