@@ -435,7 +435,7 @@ jobs:
       - name: Run ESPN integration tests
         env:
           TEST_ESPN_LEAGUE_ID: ${{ secrets.TEST_ESPN_LEAGUE_ID }}
-          TEST_ESPN_SEASON: "2025"
+          TEST_ESPN_SEASON: "2018"
           ESPN_S2_SSM_PARAM: /leagueql/${{ env.ENVIRONMENT }}/espn/s2
           ESPN_SWID_SSM_PARAM: /leagueql/${{ env.ENVIRONMENT }}/espn/swid
           AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
