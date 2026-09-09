@@ -18,19 +18,22 @@ committed, so this change implements the **account-linking increment**.
 
 ## Decisions
 
-- **Simple client_secret flow, no PKCE.** Yahoo's authorization-code flow with
-  `Authorization: Basic base64(client_id:client_secret)` is used directly (matching Yahoo's
-  documented `/request_auth` → `/get_token` steps). PKCE was in the original draft spec but
-  is dropped: the client secret already lives server-side and the callback is server-owned,
-  so PKCE adds no protection here. `scope` is left at the app default configured on the Yahoo
-  app.
+- **Authorization-code flow with PKCE (S256) + client_secret Basic auth.** Yahoo **requires
+  PKCE** on the authorize request — without a `code_challenge` it rejects the request with
+  `invalid_request: invalid code challenge or method`. So authorize sends a `code_challenge`
+  (`code_challenge_method=S256`) and the token exchange sends the matching `code_verifier`,
+  alongside the `Authorization: Basic base64(client_id:client_secret)` header (a confidential
+  client may combine both). The `code_verifier` is stored server-side with the OAuth state and
+  never reaches the browser. (An earlier iteration dropped PKCE based on Yahoo's docs, but the
+  live API rejected it.) `scope` is left at the app default configured on the Yahoo app.
 - **Two new routes on the existing API Lambda.** `GET /leagues/yahoo/oauth/authorize` (Clerk-authed)
   and `GET /leagues/yahoo/oauth/callback` (**public** — Yahoo redirects the browser here with no Clerk
   JWT, like `/health`). Declared in `docs/api/openapi_spec.yaml`; the callback omits the
   `security:` block.
 - **Single-use `state` in DynamoDB with TTL.** Authorize mints a random `state`, stores
   `PK=OAUTH_STATE#{state}, SK=YAHOO` with the caller's Clerk user id, the pending `leagueId`,
-  and a `ttl` (~10 min). Callback consumes (get + delete) and validates it. This survives the
+  the PKCE `code_verifier`, and a `ttl` (~10 min). Callback consumes (get + delete) and
+  validates it, using the stored `code_verifier` for the token exchange. This survives the
   stateless authorize→callback redirect across Lambda invocations.
 - **Encrypted per-user token item.** `PK=USER#{clerk_user_id}, SK=YAHOO_OAUTH` holds the
   KMS-encrypted access + refresh tokens (base64 ciphertext), `expires_at` (epoch), and
@@ -52,8 +55,8 @@ committed, so this change implements the **account-linking increment**.
 
 ## Risks / Trade-offs
 
-- **No PKCE:** acceptable given the confidential-client model (server-side secret, server-side
-  callback). Revisit if the flow ever moves to a public client.
+- **PKCE state storage:** the `code_verifier` must survive the authorize→callback redirect, so
+  it lives in the `OAUTH_STATE` item (short TTL, single-use) rather than a cookie/session.
 - **"Coming soon" onboard:** the linked-but-unonboardable state is intentional for this
   increment; the frontend renders it as a neutral notice, not a failure.
 

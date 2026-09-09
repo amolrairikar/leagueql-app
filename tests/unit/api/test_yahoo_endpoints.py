@@ -8,7 +8,10 @@ import pytest
 class TestYahooAuthorizeEndpoint:
     def test_returns_consent_url(self, client, mock_table):
         with (
-            patch("yahoo_oauth.create_oauth_state", return_value="state-1") as mk_state,
+            patch(
+                "yahoo_oauth.create_oauth_state",
+                return_value=("state-1", "challenge-1"),
+            ) as mk_state,
             patch(
                 "yahoo_oauth.build_authorize_url",
                 return_value="https://api.login.yahoo.com/oauth2/request_auth?x=1",
@@ -23,7 +26,7 @@ class TestYahooAuthorizeEndpoint:
             == "https://api.login.yahoo.com/oauth2/request_auth?x=1"
         )
         mk_state.assert_called_once_with("user_1", "45.l.678")
-        mk_url.assert_called_once_with("state-1")
+        mk_url.assert_called_once_with("state-1", "challenge-1")
 
     def test_requires_league_id(self, client):
         response = client.get("/leagues/yahoo/oauth/authorize")
@@ -48,7 +51,11 @@ class TestYahooCallbackEndpoint:
         with (
             patch(
                 "yahoo_oauth.consume_oauth_state",
-                return_value={"clerk_user_id": "user_1", "league_id": "45.l.678"},
+                return_value={
+                    "clerk_user_id": "user_1",
+                    "league_id": "45.l.678",
+                    "code_verifier": "verifier-1",
+                },
             ),
             patch(
                 "yahoo_oauth.exchange_code_for_tokens",
@@ -97,7 +104,11 @@ class TestYahooCallbackEndpoint:
         with (
             patch(
                 "yahoo_oauth.consume_oauth_state",
-                return_value={"clerk_user_id": "user_1", "league_id": "x"},
+                return_value={
+                    "clerk_user_id": "user_1",
+                    "league_id": "x",
+                    "code_verifier": "verifier-1",
+                },
             ),
             patch(
                 "yahoo_oauth.exchange_code_for_tokens",

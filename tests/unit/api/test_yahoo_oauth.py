@@ -47,17 +47,34 @@ def mock_credentials():
 
 class TestCreateOauthState:
     def test_persists_item_and_returns_state(self, yahoo, mock_table):
-        state = yahoo.create_oauth_state("user_1", "45.l.678")
+        state, code_challenge = yahoo.create_oauth_state("user_1", "45.l.678")
 
         assert isinstance(state, str) and state
+        assert isinstance(code_challenge, str) and code_challenge
         item = mock_table.put_item.call_args.kwargs["Item"]
         assert item["PK"] == f"OAUTH_STATE#{state}"
         assert item["SK"] == "YAHOO"
         assert item["clerk_user_id"] == "user_1"
         assert item["league_id"] == "45.l.678"
+        # The PKCE verifier is stored server-side (its S256 hash is the returned challenge).
+        assert item["code_verifier"]
+        assert item["code_verifier"] != code_challenge
         # TTL and expiry are set roughly OAUTH_STATE_TTL_SECONDS into the future.
         assert item["ttl"] == item["expires_at"]
         assert item["expires_at"] > int(time.time())
+
+    def test_pkce_challenge_is_s256_of_verifier(self, yahoo, mock_table):
+        import base64
+        import hashlib
+
+        _, code_challenge = yahoo.create_oauth_state("user_1", "x")
+        verifier = mock_table.put_item.call_args.kwargs["Item"]["code_verifier"]
+        expected = (
+            base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest())
+            .decode()
+            .rstrip("=")
+        )
+        assert code_challenge == expected
 
 
 class TestConsumeOauthState:
@@ -66,13 +83,18 @@ class TestConsumeOauthState:
             "Item": {
                 "clerk_user_id": "user_1",
                 "league_id": "45.l.678",
+                "code_verifier": "verifier-abc",
                 "expires_at": int(time.time()) + 300,
             }
         }
 
         result = yahoo.consume_oauth_state("abc")
 
-        assert result == {"clerk_user_id": "user_1", "league_id": "45.l.678"}
+        assert result == {
+            "clerk_user_id": "user_1",
+            "league_id": "45.l.678",
+            "code_verifier": "verifier-abc",
+        }
         mock_table.delete_item.assert_called_once_with(
             Key={"PK": "OAUTH_STATE#abc", "SK": "YAHOO"}
         )
@@ -115,19 +137,22 @@ class TestConsumeOauthState:
         assert yahoo.consume_oauth_state("abc") == {
             "clerk_user_id": "user_1",
             "league_id": "x",
+            "code_verifier": "",
         }
 
 
 class TestBuildAuthorizeUrl:
     def test_contains_oauth_params(self, yahoo):
         with patch("main.YAHOO_REDIRECT_URI", "https://api.example.com/cb"):
-            url = yahoo.build_authorize_url("state-xyz")
+            url = yahoo.build_authorize_url("state-xyz", "challenge-abc")
 
         assert url.startswith("https://api.login.yahoo.com/oauth2/request_auth?")
         assert "client_id=client-id" in url
         assert "response_type=code" in url
         assert "state=state-xyz" in url
         assert "redirect_uri=https%3A%2F%2Fapi.example.com%2Fcb" in url
+        assert "code_challenge=challenge-abc" in url
+        assert "code_challenge_method=S256" in url
 
 
 class TestExchangeCodeForTokens:
@@ -136,13 +161,14 @@ class TestExchangeCodeForTokens:
             **{"json.return_value": {"access_token": "at", "refresh_token": "rt"}}
         )
         with patch("main.YAHOO_REDIRECT_URI", "https://api.example.com/cb"):
-            result = yahoo.exchange_code_for_tokens("the-code")
+            result = yahoo.exchange_code_for_tokens("the-code", "verifier-xyz")
 
         assert result == {"access_token": "at", "refresh_token": "rt"}
         args, kwargs = mock_http.post.call_args
         assert args[0] == "https://api.login.yahoo.com/oauth2/get_token"
         assert kwargs["data"]["grant_type"] == "authorization_code"
         assert kwargs["data"]["code"] == "the-code"
+        assert kwargs["data"]["code_verifier"] == "verifier-xyz"
         assert kwargs["headers"]["Authorization"].startswith("Basic ")
 
     def test_raises_on_http_error(self, yahoo, mock_http):
@@ -150,7 +176,7 @@ class TestExchangeCodeForTokens:
         resp.raise_for_status.side_effect = RuntimeError("boom")
         mock_http.post.return_value = resp
         with pytest.raises(RuntimeError):
-            yahoo.exchange_code_for_tokens("bad")
+            yahoo.exchange_code_for_tokens("bad", "verifier")
 
 
 class TestRefreshTokens:

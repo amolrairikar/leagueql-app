@@ -17,6 +17,7 @@ refresh tokens are KMS-encrypted at rest and never returned to the browser.
 """
 
 import base64
+import hashlib
 import secrets
 import time
 from typing import Any
@@ -63,6 +64,20 @@ def _client_credentials() -> tuple[str, str]:
     return client_id, client_secret
 
 
+def _generate_pkce() -> tuple[str, str]:
+    """Return an ``(code_verifier, code_challenge)`` PKCE pair (RFC 7636, S256).
+
+    Yahoo requires PKCE on the authorization request: the authorize URL carries the
+    ``code_challenge`` (S256 of the verifier) and the token exchange sends the matching
+    ``code_verifier``. The verifier is stored server-side with the OAuth state, never in the
+    browser.
+    """
+    verifier = secrets.token_urlsafe(64)  # ~86 chars of RFC 7636 unreserved alphabet
+    digest = hashlib.sha256(verifier.encode("ascii")).digest()
+    challenge = base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
+    return verifier, challenge
+
+
 def _basic_auth_header() -> str:
     """Build the ``Authorization: Basic base64(client_id:client_secret)`` header value."""
     client_id, client_secret = _client_credentials()
@@ -70,20 +85,23 @@ def _basic_auth_header() -> str:
     return "Basic " + base64.b64encode(raw).decode()
 
 
-def create_oauth_state(clerk_user_id: str, league_id: str) -> str:
-    """Mint a single-use ``state`` bound to the caller and persist it with a TTL.
+def create_oauth_state(clerk_user_id: str, league_id: str) -> tuple[str, str]:
+    """Mint a single-use ``state`` + PKCE pair, bound to the caller and persisted with a TTL.
 
-    Stores ``PK=OAUTH_STATE#{state}, SK=YAHOO`` carrying the caller's Clerk user id and the
-    pending ``league_id`` so the callback can validate the caller and resume onboarding.
+    Stores ``PK=OAUTH_STATE#{state}, SK=YAHOO`` carrying the caller's Clerk user id, the
+    pending ``league_id``, and the PKCE ``code_verifier`` so the callback can validate the
+    caller, resume onboarding, and complete the token exchange.
 
     Args:
         clerk_user_id: The authenticated caller the state is bound to.
         league_id: The Yahoo league id to resume onboarding for after the callback.
 
     Returns:
-        The opaque ``state`` string to embed in the Yahoo consent URL.
+        ``(state, code_challenge)`` — the ``state`` and PKCE ``code_challenge`` to embed in
+        the Yahoo consent URL.
     """
     state = secrets.token_urlsafe(32)
+    code_verifier, code_challenge = _generate_pkce()
     now = int(time.time())
     main.table.put_item(
         Item={
@@ -91,12 +109,13 @@ def create_oauth_state(clerk_user_id: str, league_id: str) -> str:
             "SK": "YAHOO",
             "clerk_user_id": clerk_user_id,
             "league_id": league_id,
+            "code_verifier": code_verifier,
             "created_at": now,
             "expires_at": now + OAUTH_STATE_TTL_SECONDS,
             "ttl": now + OAUTH_STATE_TTL_SECONDS,
         }
     )
-    return state
+    return state, code_challenge
 
 
 def consume_oauth_state(state: str) -> dict[str, Any] | None:
@@ -109,8 +128,8 @@ def consume_oauth_state(state: str) -> dict[str, Any] | None:
         state: The ``state`` echoed back by Yahoo on the callback.
 
     Returns:
-        ``{"clerk_user_id", "league_id"}`` on success, or ``None`` when the state is missing,
-        expired, or already consumed.
+        ``{"clerk_user_id", "league_id", "code_verifier"}`` on success, or ``None`` when the
+        state is missing, expired, or already consumed.
     """
     if not state:
         return None
@@ -133,13 +152,15 @@ def consume_oauth_state(state: str) -> dict[str, Any] | None:
     return {
         "clerk_user_id": item.get("clerk_user_id"),
         "league_id": item.get("league_id", ""),
+        "code_verifier": item.get("code_verifier", ""),
     }
 
 
-def build_authorize_url(state: str) -> str:
-    """Build the Yahoo consent URL for the given ``state``.
+def build_authorize_url(state: str, code_challenge: str) -> str:
+    """Build the Yahoo consent URL for the given ``state`` and PKCE ``code_challenge``.
 
-    Uses the client id from SSM, the registered ``redirect_uri``, and ``response_type=code``.
+    Uses the client id from SSM, the registered ``redirect_uri``, ``response_type=code``, and
+    the PKCE ``code_challenge`` (``code_challenge_method=S256``) Yahoo requires.
     """
     client_id, _ = _client_credentials()
     params = {
@@ -147,15 +168,18 @@ def build_authorize_url(state: str) -> str:
         "redirect_uri": main.YAHOO_REDIRECT_URI,
         "response_type": "code",
         "state": state,
+        "code_challenge": code_challenge,
+        "code_challenge_method": "S256",
     }
     return f"{YAHOO_AUTHORIZE_URL}?{urlencode(params)}"
 
 
-def exchange_code_for_tokens(code: str) -> dict[str, Any]:
+def exchange_code_for_tokens(code: str, code_verifier: str) -> dict[str, Any]:
     """Exchange an authorization ``code`` for Yahoo access + refresh tokens.
 
     POSTs ``grant_type=authorization_code`` to ``/get_token`` with the matching
-    ``redirect_uri`` and an ``Authorization: Basic base64(client_id:client_secret)`` header.
+    ``redirect_uri``, the PKCE ``code_verifier``, and an
+    ``Authorization: Basic base64(client_id:client_secret)`` header.
 
     Raises:
         requests.HTTPError / RequestException: on a Yahoo 4xx/5xx or network failure.
@@ -166,6 +190,7 @@ def exchange_code_for_tokens(code: str) -> dict[str, Any]:
             "grant_type": "authorization_code",
             "redirect_uri": main.YAHOO_REDIRECT_URI,
             "code": code,
+            "code_verifier": code_verifier,
         },
         headers={
             "Authorization": _basic_auth_header(),

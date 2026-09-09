@@ -928,8 +928,8 @@ def yahoo_authorize(
     persists it with a short TTL, and returns the Yahoo consent URL. The frontend performs a
     full-page redirect to that URL; the client secret never leaves the backend.
     """
-    state = yahoo_oauth.create_oauth_state(clerk_user_id, leagueId)
-    authorize_url = yahoo_oauth.build_authorize_url(state)
+    state, code_challenge = yahoo_oauth.create_oauth_state(clerk_user_id, leagueId)
+    authorize_url = yahoo_oauth.build_authorize_url(state, code_challenge)
     return APIResponse(
         detail="Yahoo authorization URL generated",
         data={"authorize_url": authorize_url},
@@ -974,7 +974,9 @@ def yahoo_callback(
         return _redirect(linked=False)
 
     try:
-        token_response = yahoo_oauth.exchange_code_for_tokens(code)
+        token_response = yahoo_oauth.exchange_code_for_tokens(
+            code, state_payload["code_verifier"]
+        )
         yahoo_oauth.store_tokens(state_payload["clerk_user_id"], token_response)
     except Exception as e:  # noqa: BLE001  any exchange/storage failure → declined marker
         logger.error("Yahoo code exchange failed: %s", type(e).__name__)

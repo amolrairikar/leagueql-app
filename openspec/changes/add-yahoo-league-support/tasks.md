@@ -10,7 +10,8 @@
 
 ## 2. Spec updates for the linking increment (this step)
 
-- [x] 2.1 Drop PKCE from `backend/yahoo-oauth`; adopt the client_secret + Basic auth flow.
+- [x] 2.1 Use PKCE (S256) + client_secret Basic auth in `backend/yahoo-oauth` (Yahoo requires
+  PKCE — an earlier no-PKCE iteration was rejected by the live API).
 - [x] 2.2 Change `frontend/connect-yahoo-league` to the enter-league→Connect→OAuth UX with a
   `/connect_league` return target.
 - [x] 2.3 Scope this increment to OAuth linking only (no Yahoo data client); linked onboard

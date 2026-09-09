@@ -38,7 +38,7 @@ linked Yahoo onboard surfaces a neutral "coming soon" signal until then.
 ## Capabilities
 
 ### New Capabilities
-- `backend/yahoo-oauth`: OAuth 2.0 authorize/callback (client_secret, no PKCE), encrypted
+- `backend/yahoo-oauth`: OAuth 2.0 authorize/callback (PKCE S256 + client_secret Basic auth), encrypted
   per-user token persistence, transparent refresh, and the "link Yahoo first" onboarding gate.
 - `frontend/connect-yahoo-league`: Yahoo as a selectable Connect-League platform with the
   enter-league→Connect→OAuth round-trip, re-link/coming-soon states, and demo-mode handling.

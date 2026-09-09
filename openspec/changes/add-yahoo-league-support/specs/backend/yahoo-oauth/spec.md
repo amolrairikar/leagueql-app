@@ -4,11 +4,11 @@ Add Yahoo Fantasy Sports as a third onboarding platform, which requires OAuth 2.
 ## ADDED Requirements
 
 ### Requirement: Start the authorization flow
-`GET /leagues/yahoo/oauth/authorize` (Clerk-authenticated) SHALL return a Yahoo consent URL carrying the OAuth parameters and bind a single-use `state` to the caller, carrying the pending league id so the flow can resume after the callback.
+`GET /leagues/yahoo/oauth/authorize` (Clerk-authenticated) SHALL return a Yahoo consent URL carrying the OAuth + PKCE parameters and bind a single-use `state` to the caller, carrying the pending league id so the flow can resume after the callback.
 
 #### Scenario: Authorize URL
 - **WHEN** an authenticated caller hits `GET /leagues/yahoo/oauth/authorize` with a `leagueId`
-- **THEN** it returns a `.../oauth2/request_auth` URL carrying `client_id`, the registered `redirect_uri`, `response_type=code`, and a single-use `state` bound to the caller (and to the pending `leagueId`), persisted server-side with a short TTL
+- **THEN** it returns a `.../oauth2/request_auth` URL carrying `client_id`, the registered `redirect_uri`, `response_type=code`, a PKCE `code_challenge` with `code_challenge_method=S256` (Yahoo requires PKCE), and a single-use `state` bound to the caller (and to the pending `leagueId`), with the PKCE `code_verifier` persisted server-side with a short TTL
 
 #### Scenario: Unauthenticated caller
 - **WHEN** an unauthenticated caller hits the authorize endpoint
@@ -19,7 +19,7 @@ Add Yahoo Fantasy Sports as a third onboarding platform, which requires OAuth 2.
 
 #### Scenario: Successful callback
 - **WHEN** Yahoo redirects to the callback with a valid `state` and `code`
-- **THEN** the backend validates and consumes the single-use `state`, `POST`s `.../oauth2/get_token` with `grant_type=authorization_code`, the matching `redirect_uri`, and an `Authorization: Basic base64(client_id:client_secret)` header, persists an encrypted `YAHOO_OAUTH` item keyed to the caller, and `302`-redirects to `/connect_league?platform=YAHOO&yahooLinked=1` carrying the pending `leagueId`
+- **THEN** the backend validates and consumes the single-use `state`, `POST`s `.../oauth2/get_token` with `grant_type=authorization_code`, the matching `redirect_uri`, the stored PKCE `code_verifier`, and an `Authorization: Basic base64(client_id:client_secret)` header, persists an encrypted `YAHOO_OAUTH` item keyed to the caller, and `302`-redirects to `/connect_league?platform=YAHOO&yahooLinked=1` carrying the pending `leagueId`
 
 #### Scenario: Invalid state
 - **WHEN** `state` is missing, expired, already consumed, or mismatched

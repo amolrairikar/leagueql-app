@@ -797,6 +797,7 @@ rejects any state past `expires_at`. A ~10-minute `ttl` reaps unused states.
 | `SK` | String | Yes | `YAHOO` |
 | `clerk_user_id` | String | Yes | The authenticated caller the state is bound to |
 | `league_id` | String | Yes | The Yahoo league id to resume onboarding for after the callback |
+| `code_verifier` | String | Yes | PKCE `code_verifier` (Yahoo requires PKCE); the callback sends it in the token exchange. Never leaves the backend |
 | `created_at` | Number | Yes | Unix epoch seconds the state was minted |
 | `expires_at` | Number | Yes | Unix epoch seconds after which the state is invalid (checked on read) |
 | `ttl` | Number | Yes | Unix epoch seconds after which DynamoDB TTL reaps the item (~10min) |
@@ -808,6 +809,7 @@ rejects any state past `expires_at`. A ~10-minute `ttl` reaps unused states.
   "SK": "YAHOO",
   "clerk_user_id": "user_2abc123",
   "league_id": "45.l.678",
+  "code_verifier": "dBjftJeZ4CVP...urlsafe-43-128-chars...",
   "created_at": 1725235200,
   "expires_at": 1725235800,
   "ttl": 1725235800
