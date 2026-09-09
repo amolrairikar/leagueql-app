@@ -198,6 +198,15 @@ def exchange_code_for_tokens(code: str, code_verifier: str) -> dict[str, Any]:
         },
         timeout=10,
     )
+    if not response.ok:
+        # An error response carries {"error", "error_description"} (no tokens), so logging it
+        # is safe and makes redirect_uri / client_secret / PKCE failures diagnosable. A
+        # *successful* body holds tokens and is never logged.
+        logger.error(
+            "Yahoo token exchange rejected: status=%s body=%s",
+            response.status_code,
+            response.text[:500],
+        )
     response.raise_for_status()
     return response.json()
 

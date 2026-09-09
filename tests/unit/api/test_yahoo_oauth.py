@@ -172,7 +172,7 @@ class TestExchangeCodeForTokens:
         assert kwargs["headers"]["Authorization"].startswith("Basic ")
 
     def test_raises_on_http_error(self, yahoo, mock_http):
-        resp = MagicMock()
+        resp = MagicMock(ok=False, status_code=400, text='{"error":"invalid_grant"}')
         resp.raise_for_status.side_effect = RuntimeError("boom")
         mock_http.post.return_value = resp
         with pytest.raises(RuntimeError):
