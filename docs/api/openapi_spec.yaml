@@ -91,7 +91,7 @@ paths:
       description: >
         Public — no Clerk authorizer (backend/yahoo-oauth). Yahoo redirects the browser here
         with no JWT after the user authorizes. Validates and single-use-consumes the state,
-        exchanges the code for tokens (Basic auth), stores an encrypted per-user token item,
+        exchanges the code for tokens (PKCE public client, no secret), stores an encrypted per-user token item,
         and 302-redirects to the frontend /connect_league page with a linked/declined marker.
       operationId: yahooCallback
       parameters:

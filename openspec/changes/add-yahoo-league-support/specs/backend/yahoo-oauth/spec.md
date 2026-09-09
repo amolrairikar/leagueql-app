@@ -15,11 +15,11 @@ Add Yahoo Fantasy Sports as a third onboarding platform, which requires OAuth 2.
 - **THEN** it returns `401`
 
 ### Requirement: Handle the OAuth callback
-`GET /leagues/yahoo/oauth/callback` (public — Yahoo redirects the browser here with no Clerk JWT) SHALL validate `state`, exchange the code for tokens using Basic auth, persist an encrypted token item, and redirect to the fixed frontend `/connect_league` path.
+`GET /leagues/yahoo/oauth/callback` (public — Yahoo redirects the browser here with no Clerk JWT) SHALL validate `state`, exchange the code for tokens as a PKCE public client (no client_secret), persist an encrypted token item, and redirect to the fixed frontend `/connect_league` path.
 
 #### Scenario: Successful callback
 - **WHEN** Yahoo redirects to the callback with a valid `state` and `code`
-- **THEN** the backend validates and consumes the single-use `state`, `POST`s `.../oauth2/get_token` with `grant_type=authorization_code`, the matching `redirect_uri`, the stored PKCE `code_verifier`, and an `Authorization: Basic base64(client_id:client_secret)` header, persists an encrypted `YAHOO_OAUTH` item keyed to the caller, and `302`-redirects to `/connect_league?platform=YAHOO&yahooLinked=1` carrying the pending `leagueId`
+- **THEN** the backend validates and consumes the single-use `state`, `POST`s `.../oauth2/get_token` with `grant_type=authorization_code`, `client_id`, the matching `redirect_uri`, and the stored PKCE `code_verifier` (no client_secret — Yahoo rejects a secret alongside PKCE), persists an encrypted `YAHOO_OAUTH` item keyed to the caller, and `302`-redirects to `/connect_league?platform=YAHOO&yahooLinked=1` carrying the pending `leagueId`
 
 #### Scenario: Invalid state
 - **WHEN** `state` is missing, expired, already consumed, or mismatched
@@ -41,7 +41,7 @@ The refresh path SHALL mint a fresh access token from the stored refresh token o
 - **THEN** the operation fails with a `YAHOO_AUTH` code the onboarding/refresh flows report to the frontend as a re-link prompt
 
 ### Requirement: Protect tokens and secrets
-Access/refresh tokens SHALL be encrypted at rest (KMS) and never logged, and `client_id`/`client_secret` SHALL be read from SecureString SSM parameters, never present in env vars/Terraform state/CI.
+Access/refresh tokens SHALL be encrypted at rest (KMS) and never logged, and the `client_id` SHALL be read from a SecureString SSM parameter, never present in env vars/Terraform state/CI. The app is a PKCE public client, so no client_secret is stored or sent.
 
 #### Scenario: Tokens encrypted
 - **WHEN** tokens are persisted
@@ -49,7 +49,7 @@ Access/refresh tokens SHALL be encrypted at rest (KMS) and never logged, and `cl
 
 #### Scenario: Secrets from SSM
 - **WHEN** the callback/refresh needs the Yahoo credentials
-- **THEN** `client_id`/`client_secret` are read from SecureString SSM parameters via `src/common/secrets.py`, absent from Lambda env vars
+- **THEN** the `client_id` is read from a SecureString SSM parameter via `src/common/secrets.py`, absent from Lambda env vars (no client_secret exists — PKCE public client)
 
 ### Requirement: Require a linked account before Yahoo onboarding
 `POST /leagues` for `YAHOO` without a valid linked token SHALL return a "link Yahoo first" signal, and the `Platform` enum SHALL accept `YAHOO` case-insensitively. Yahoo reads are member-gated like ESPN.

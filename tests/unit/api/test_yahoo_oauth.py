@@ -34,13 +34,10 @@ def mock_http():
 
 @pytest.fixture(autouse=True)
 def mock_credentials():
-    """Stub the SSM-backed client credentials so no secret lookup runs."""
+    """Stub the SSM-backed client id (PKCE public client — no client_secret)."""
     with patch(
         "yahoo_oauth.get_secret_from_env_param",
-        side_effect=lambda name: {
-            "YAHOO_CLIENT_ID_SSM_PARAM": "client-id",
-            "YAHOO_CLIENT_SECRET_SSM_PARAM": "client-secret",
-        }[name],
+        side_effect=lambda name: {"YAHOO_CLIENT_ID_SSM_PARAM": "client-id"}[name],
     ) as mock:
         yield mock
 
@@ -169,7 +166,10 @@ class TestExchangeCodeForTokens:
         assert kwargs["data"]["grant_type"] == "authorization_code"
         assert kwargs["data"]["code"] == "the-code"
         assert kwargs["data"]["code_verifier"] == "verifier-xyz"
-        assert kwargs["headers"]["Authorization"].startswith("Basic ")
+        # PKCE public client: client_id in the body, no client_secret / Basic auth header.
+        assert kwargs["data"]["client_id"] == "client-id"
+        assert "Authorization" not in kwargs["headers"]
+        assert "client_secret" not in kwargs["data"]
 
     def test_raises_on_http_error(self, yahoo, mock_http):
         resp = MagicMock(ok=False, status_code=400, text='{"error":"invalid_grant"}')

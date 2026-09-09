@@ -11,9 +11,10 @@ Implements the authorization-code handshake against Yahoo's login endpoints:
 
 AWS clients (``main.table``, ``main.kms_client``) and the HTTP module
 (``main.http_requests``) are reached through ``main`` at call time so test patches on
-``main.*`` take effect here. Yahoo ``client_id``/``client_secret`` are read from
-SecureString SSM parameters (whose *names* live in env vars) and never logged. Access and
-refresh tokens are KMS-encrypted at rest and never returned to the browser.
+``main.*`` take effect here. The Yahoo app is a **PKCE public client**: the ``client_id`` is
+read from a SecureString SSM parameter (whose *name* lives in an env var) and no
+``client_secret`` is used — Yahoo rejects a secret sent alongside a PKCE ``code_challenge``.
+Access and refresh tokens are KMS-encrypted at rest and never returned to the browser.
 """
 
 import base64
@@ -53,15 +54,14 @@ class YahooReauthRequired(Exception):
     """
 
 
-def _client_credentials() -> tuple[str, str]:
-    """Return ``(client_id, client_secret)`` from SecureString SSM parameters.
+def _client_id() -> str:
+    """Return the Yahoo Consumer Key (``client_id``) from its SecureString SSM parameter.
 
-    Only the parameter *names* are in env vars; the secret values never enter the Lambda
-    environment, Terraform state, or logs.
+    Only the parameter *name* is in an env var; the value never enters the Lambda environment,
+    Terraform state, or logs. This app is a PKCE public client, so no client_secret is used —
+    Yahoo rejects a secret alongside a PKCE ``code_challenge``.
     """
-    client_id = get_secret_from_env_param("YAHOO_CLIENT_ID_SSM_PARAM")
-    client_secret = get_secret_from_env_param("YAHOO_CLIENT_SECRET_SSM_PARAM")
-    return client_id, client_secret
+    return get_secret_from_env_param("YAHOO_CLIENT_ID_SSM_PARAM")
 
 
 def _generate_pkce() -> tuple[str, str]:
@@ -76,13 +76,6 @@ def _generate_pkce() -> tuple[str, str]:
     digest = hashlib.sha256(verifier.encode("ascii")).digest()
     challenge = base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
     return verifier, challenge
-
-
-def _basic_auth_header() -> str:
-    """Build the ``Authorization: Basic base64(client_id:client_secret)`` header value."""
-    client_id, client_secret = _client_credentials()
-    raw = f"{client_id}:{client_secret}".encode()
-    return "Basic " + base64.b64encode(raw).decode()
 
 
 def create_oauth_state(clerk_user_id: str, league_id: str) -> tuple[str, str]:
@@ -162,9 +155,8 @@ def build_authorize_url(state: str, code_challenge: str) -> str:
     Uses the client id from SSM, the registered ``redirect_uri``, ``response_type=code``, and
     the PKCE ``code_challenge`` (``code_challenge_method=S256``) Yahoo requires.
     """
-    client_id, _ = _client_credentials()
     params = {
-        "client_id": client_id,
+        "client_id": _client_id(),
         "redirect_uri": main.YAHOO_REDIRECT_URI,
         "response_type": "code",
         "state": state,
@@ -177,9 +169,9 @@ def build_authorize_url(state: str, code_challenge: str) -> str:
 def exchange_code_for_tokens(code: str, code_verifier: str) -> dict[str, Any]:
     """Exchange an authorization ``code`` for Yahoo access + refresh tokens.
 
-    POSTs ``grant_type=authorization_code`` to ``/get_token`` with the matching
-    ``redirect_uri``, the PKCE ``code_verifier``, and an
-    ``Authorization: Basic base64(client_id:client_secret)`` header.
+    POSTs ``grant_type=authorization_code`` to ``/get_token`` as a PKCE public client:
+    ``client_id`` in the body, the matching ``redirect_uri`` and PKCE ``code_verifier``, and
+    no client_secret (Yahoo rejects a secret alongside PKCE).
 
     Raises:
         requests.HTTPError / RequestException: on a Yahoo 4xx/5xx or network failure.
@@ -187,15 +179,13 @@ def exchange_code_for_tokens(code: str, code_verifier: str) -> dict[str, Any]:
     response = main.http_requests.post(
         YAHOO_TOKEN_URL,
         data={
+            "client_id": _client_id(),
             "grant_type": "authorization_code",
             "redirect_uri": main.YAHOO_REDIRECT_URI,
             "code": code,
             "code_verifier": code_verifier,
         },
-        headers={
-            "Authorization": _basic_auth_header(),
-            "Content-Type": "application/x-www-form-urlencoded",
-        },
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
         timeout=10,
     )
     if not response.ok:
@@ -221,14 +211,12 @@ def refresh_tokens(refresh_token: str) -> dict[str, Any]:
     response = main.http_requests.post(
         YAHOO_TOKEN_URL,
         data={
+            "client_id": _client_id(),
             "grant_type": "refresh_token",
             "redirect_uri": main.YAHOO_REDIRECT_URI,
             "refresh_token": refresh_token,
         },
-        headers={
-            "Authorization": _basic_auth_header(),
-            "Content-Type": "application/x-www-form-urlencoded",
-        },
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
         timeout=10,
     )
     if response.status_code == 400 and "invalid_grant" in response.text:

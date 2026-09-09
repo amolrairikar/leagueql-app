@@ -641,18 +641,17 @@ module "api-lambda-role" {
         ]
       },
       {
-        # backend/yahoo-oauth: Yahoo client_id/client_secret are SecureString SSM parameters
-        # (set out-of-band, never in TF state). Grant read on both regions' copies.
-        Sid    = "ReadYahooCredentialsSsmParameters"
+        # backend/yahoo-oauth: the Yahoo Consumer Key (client_id) is a SecureString SSM
+        # parameter (set out-of-band, never in TF state). The app is a PKCE public client, so
+        # no client_secret is needed. Grant read on both regions' copies.
+        Sid    = "ReadYahooClientIdSsmParameter"
         Effect = "Allow"
         Action = [
           "ssm:GetParameter"
         ]
         Resource = [
           "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/yahoo/client_id",
-          "arn:aws:ssm:us-west-2:${var.account_id}:parameter/leagueql/${var.environment}/yahoo/client_id",
-          "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/yahoo/client_secret",
-          "arn:aws:ssm:us-west-2:${var.account_id}:parameter/leagueql/${var.environment}/yahoo/client_secret"
+          "arn:aws:ssm:us-west-2:${var.account_id}:parameter/leagueql/${var.environment}/yahoo/client_id"
         ]
       },
       {

@@ -18,14 +18,15 @@ committed, so this change implements the **account-linking increment**.
 
 ## Decisions
 
-- **Authorization-code flow with PKCE (S256) + client_secret Basic auth.** Yahoo **requires
-  PKCE** on the authorize request — without a `code_challenge` it rejects the request with
-  `invalid_request: invalid code challenge or method`. So authorize sends a `code_challenge`
-  (`code_challenge_method=S256`) and the token exchange sends the matching `code_verifier`,
-  alongside the `Authorization: Basic base64(client_id:client_secret)` header (a confidential
-  client may combine both). The `code_verifier` is stored server-side with the OAuth state and
-  never reaches the browser. (An earlier iteration dropped PKCE based on Yahoo's docs, but the
-  live API rejected it.) `scope` is left at the app default configured on the Yahoo app.
+- **Authorization-code flow with PKCE (S256), as a public client (no client_secret).** Yahoo
+  **requires PKCE** on the authorize request — without a `code_challenge` it rejects with
+  `invalid_request: invalid code challenge or method` — **and** rejects a `client_secret` sent
+  alongside PKCE with `INVALID_INPUT: client secret not required`. So authorize sends a
+  `code_challenge` (`code_challenge_method=S256`), and the token exchange sends `client_id` +
+  the matching `code_verifier` in the body with **no** `Authorization: Basic` header and no
+  client_secret. The `code_verifier` is stored server-side with the OAuth state and never
+  reaches the browser. (Two earlier iterations — no PKCE, then PKCE + Basic-auth secret — were
+  each rejected by the live API before this.) `scope` is left at the app default.
 - **Two new routes on the existing API Lambda.** `GET /leagues/yahoo/oauth/authorize` (Clerk-authed)
   and `GET /leagues/yahoo/oauth/callback` (**public** — Yahoo redirects the browser here with no Clerk
   JWT, like `/health`). Declared in `docs/api/openapi_spec.yaml`; the callback omits the
@@ -45,9 +46,9 @@ committed, so this change implements the **account-linking increment**.
 - **Onboarding gate.** `POST /leagues` for `YAHOO` checks for a valid linked token: unlinked
   → `YAHOO_AUTH` "link Yahoo first" signal; linked → neutral "coming soon" signal (no
   onboarder invocation this increment). `Platform` enum gains `YAHOO` (case-insensitive).
-- **Secrets from SSM.** `client_id`/`client_secret` read from SecureString SSM parameters
-  (`/leagueql/{env}/yahoo/client_id`, `/leagueql/{env}/yahoo/client_secret`) via
-  `common/secrets.py`; only the parameter *names* are in env vars.
+- **client_id from SSM.** The Yahoo Consumer Key (`client_id`) is read from a SecureString SSM
+  parameter (`/leagueql/{env}/yahoo/client_id`) via `common/secrets.py`; only the parameter
+  *name* is in an env var. No client_secret is used (PKCE public client).
 - **Frontend.** Landing-page Connect for Yahoo calls authorize and full-page-redirects. The
   `/connect_league` page is the fixed return target: `yahooLinked=1` → "connected" +
   resume onboard (shows the "coming soon" notice); `yahooLinked=0` → inline retry alert.

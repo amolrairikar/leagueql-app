@@ -55,11 +55,11 @@ _ENV = {
     # backend/admin-onboarding-report: the nightly report resolves the Discord webhook
     # URL from this SSM parameter name at import; a moto SecureString is seeded below.
     "DISCORD_WEBHOOK_URL_SSM_PARAM": "/leagueql/test/discord/webhook_url",
-    # backend/yahoo-oauth: the API resolves Yahoo client_id/secret from these SSM
-    # parameter names (SecureStrings seeded below); the redirect/return URLs and KMS key
-    # id are set in ``before_all`` (the key id is only known after the moto key is created).
+    # backend/yahoo-oauth: the API resolves the Yahoo client_id (a PKCE public client — no
+    # client_secret) from this SSM parameter name (a SecureString seeded below); the
+    # redirect/return URLs and KMS key id are set in ``before_all`` (the key id is only known
+    # after the moto key is created).
     "YAHOO_CLIENT_ID_SSM_PARAM": "/leagueql/test/yahoo/client_id",
-    "YAHOO_CLIENT_SECRET_SSM_PARAM": "/leagueql/test/yahoo/client_secret",
     "YAHOO_REDIRECT_URI": "https://api.test/leagues/yahoo/oauth/callback",
     "YAHOO_CONNECT_RETURN_URL": "https://app.test/connect_league",
     "AWS_DEFAULT_REGION": REGION,
@@ -283,11 +283,6 @@ def before_all(context):
     ssm.put_parameter(
         Name=_ENV["YAHOO_CLIENT_ID_SSM_PARAM"],
         Value="test-client-id",
-        Type="SecureString",
-    )
-    ssm.put_parameter(
-        Name=_ENV["YAHOO_CLIENT_SECRET_SSM_PARAM"],
-        Value="test-client-secret",
         Type="SecureString",
     )
     kms_key = boto3.client("kms", region_name=REGION).create_key()

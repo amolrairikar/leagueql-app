@@ -10,8 +10,9 @@
 
 ## 2. Spec updates for the linking increment (this step)
 
-- [x] 2.1 Use PKCE (S256) + client_secret Basic auth in `backend/yahoo-oauth` (Yahoo requires
-  PKCE — an earlier no-PKCE iteration was rejected by the live API).
+- [x] 2.1 Use PKCE (S256) as a public client in `backend/yahoo-oauth` — no client_secret.
+  Yahoo requires PKCE (rejected the no-PKCE iteration) and rejects a client_secret sent
+  alongside PKCE ("client secret not required"), so `client_id` goes in the token-request body.
 - [x] 2.2 Change `frontend/connect-yahoo-league` to the enter-league→Connect→OAuth UX with a
   `/connect_league` return target.
 - [x] 2.3 Scope this increment to OAuth linking only (no Yahoo data client); linked onboard
@@ -25,12 +26,13 @@
   `request_auth` consent URL (`client_id` from SSM, registered `redirect_uri`,
   `response_type=code`).
 - [x] 3.3 `GET /leagues/yahoo/oauth/callback` (public): validate + consume `state`, exchange the code
-  at `/get_token` with `Authorization: Basic base64(id:secret)`, persist a KMS-encrypted
-  `YAHOO_OAUTH` item keyed by Clerk user, `302` to `/connect_league?platform=YAHOO&yahooLinked=1&leagueId=…`;
-  `access_denied`/failure/invalid-state → `302` with `yahooLinked=0`, no partial write.
+  at `/get_token` as a PKCE public client (`client_id` + `code_verifier` in the body, no
+  secret), persist a KMS-encrypted `YAHOO_OAUTH` item keyed by Clerk user, `302` to
+  `/connect_league?platform=YAHOO&yahooLinked=1&leagueId=…`; `access_denied`/failure/invalid-state
+  → `302` with `yahooLinked=0`, no partial write.
 - [x] 3.4 Transparent refresh (`grant_type=refresh_token`) on expiry skew; `invalid_grant` →
-  `YahooReauthRequired` (`YAHOO_AUTH` re-link signal). `client_id`/`client_secret` from
-  SecureString SSM via `src/common/secrets.py`.
+  `YahooReauthRequired` (`YAHOO_AUTH` re-link signal). `client_id` from SecureString SSM via
+  `src/common/secrets.py`.
 - [x] 3.5 Gate `POST /leagues` for Yahoo: unlinked → 403 "link first"; linked →
   `YAHOO_COMING_SOON` signal.
 - [x] 3.6 Backend unit (`test_yahoo_oauth.py`, `test_yahoo_endpoints.py`, enum) + component
