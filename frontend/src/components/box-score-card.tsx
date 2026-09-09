@@ -4,6 +4,7 @@ import { TeamAvatar } from '@/components/team-avatar';
 import { LineupEfficiencyChip } from '@/features/lineup_efficiency/lineup-efficiency-chip';
 import type { PlayerStat } from '@/features/matchups/api-calls';
 import { UI_COLORS } from '@/lib/color-constants';
+import type { Platform } from '@/lib/cookie-handler';
 import { FANTASY_POSITION_ORDER } from '@/lib/position-constants';
 
 export type { PlayerStat };
@@ -28,7 +29,7 @@ export function BoxScoreCard({
 }: {
   left: BoxScoreSide;
   right: BoxScoreSide;
-  platform: 'ESPN' | 'SLEEPER';
+  platform: Platform;
   season: string;
   onClose?: () => void;
 }) {

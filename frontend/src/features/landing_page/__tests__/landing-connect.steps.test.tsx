@@ -1,12 +1,13 @@
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { defineFeature, loadFeature } from 'jest-cucumber';
+import { http, HttpResponse } from 'msw';
 import { Route, Routes } from 'react-router-dom';
-import { expect } from 'vitest';
+import { afterEach, expect, vi } from 'vitest';
 
 import LeagueQLLanding from '../landing-page';
 
-import { leagueMetadataError, server } from '@/test/msw/server';
+import { API, leagueMetadataError, server } from '@/test/msw/server';
 import { renderRoute } from '@/test/render';
 
 const feature = loadFeature(
@@ -44,6 +45,100 @@ defineFeature(feature, (test) => {
 
     then(/^I see invite-link guidance "(.*)"$/, async (message) => {
       expect(await screen.findByText(new RegExp(message))).toBeInTheDocument();
+    });
+  });
+
+  test('The connect form offers Yahoo as a selectable platform', ({
+    given,
+    when,
+    then,
+  }) => {
+    given('the landing connect form is open', async () => {
+      window.history.pushState({}, '', '/?connect=true');
+      await renderRoute(
+        <Routes>
+          <Route path="/" element={<LeagueQLLanding />} />
+        </Routes>,
+        { route: '/' },
+      );
+    });
+
+    when('I open the platform dropdown', async () => {
+      // The platform Select trigger is the only combobox on the connect form.
+      await userEvent.click(await screen.findByRole('combobox'));
+    });
+
+    then('Yahoo is offered as a selectable platform', async () => {
+      expect(
+        await screen.findByRole('option', { name: 'Yahoo' }),
+      ).toBeInTheDocument();
+    });
+  });
+
+  test('Connecting a Yahoo league starts the OAuth flow', ({
+    given,
+    when,
+    then,
+  }) => {
+    // jsdom's window.location.href is non-configurable and navigation is unimplemented,
+    // so swap window.location for a URL (settable href, real search) to observe the
+    // full-page redirect. Restored after each test.
+    const originalLocation = window.location;
+    afterEach(() => {
+      Object.defineProperty(window, 'location', {
+        configurable: true,
+        value: originalLocation,
+      });
+    });
+
+    let authorizeLeagueId: string | null = null;
+
+    given('the Yahoo authorize endpoint returns a consent URL', () => {
+      server.use(
+        http.get(`${API}/auth/yahoo/authorize`, ({ request }) => {
+          authorizeLeagueId = new URL(request.url).searchParams.get('leagueId');
+          return HttpResponse.json({
+            detail: 'ok',
+            data: { authorize_url: 'https://consent.yahoo.test/authorize?x=1' },
+          });
+        }),
+      );
+      Object.defineProperty(window, 'location', {
+        configurable: true,
+        value: new URL('http://localhost/?connect=true'),
+      });
+    });
+
+    when(
+      /^I connect a Yahoo league "(.*)" from the landing page$/,
+      async (leagueId) => {
+        await renderRoute(
+          <Routes>
+            <Route path="/" element={<LeagueQLLanding />} />
+          </Routes>,
+          { route: '/' },
+        );
+        await userEvent.click(await screen.findByRole('combobox'));
+        await userEvent.click(
+          await screen.findByRole('option', { name: 'Yahoo' }),
+        );
+        await userEvent.type(
+          screen.getByPlaceholderText('League ID'),
+          leagueId,
+        );
+        await userEvent.click(
+          screen.getByRole('button', { name: /^connect$/i }),
+        );
+      },
+    );
+
+    then('the Yahoo authorization is requested for that league', async () => {
+      await vi.waitFor(() => {
+        expect(authorizeLeagueId).toBe('45.l.678');
+        expect(window.location.href).toBe(
+          'https://consent.yahoo.test/authorize?x=1',
+        );
+      });
     });
   });
 });

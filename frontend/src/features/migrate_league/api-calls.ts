@@ -27,7 +27,7 @@ export interface ManagerMappingEntry {
 
 export interface MigrateRequest {
   newPlatformLeagueId: string;
-  newPlatform: 'ESPN' | 'SLEEPER';
+  newPlatform: Platform;
   season?: string;
   s2?: string;
   swid?: string;

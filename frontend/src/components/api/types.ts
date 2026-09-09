@@ -1,4 +1,4 @@
-export type Platform = 'ESPN' | 'SLEEPER';
+export type Platform = 'ESPN' | 'SLEEPER' | 'YAHOO';
 
 export interface PlayerStat {
   player_id: number;

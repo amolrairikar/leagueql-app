@@ -184,7 +184,7 @@ class TestGetLeagueEndpoint:
         assert response.status_code == 422
 
     def test_invalid_platform(self, client):
-        response = client.get("/leagues/123?platform=YAHOO")
+        response = client.get("/leagues/123?platform=MYFANTASY")
         assert response.status_code == 422
 
     def test_cache_control_header(
@@ -672,7 +672,7 @@ class TestOnboardLeagueEndpoint:
         mock_table.get_item.return_value = {}
         response = client.post(
             "/leagues",
-            json={"leagueId": "123", "platform": "YAHOO"},
+            json={"leagueId": "123", "platform": "MYFANTASY"},
         )
         assert response.status_code == 500
 

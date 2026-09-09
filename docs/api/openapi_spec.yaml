@@ -56,6 +56,69 @@ paths:
         uri: "arn:aws:apigateway:${aws_region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations"
         payloadFormatVersion: "2.0"
 
+  /auth/yahoo/authorize:
+    get:
+      summary: Start the Yahoo OAuth link
+      description: >
+        Clerk-authenticated (backend/yahoo-oauth). Mints a single-use state bound to the
+        caller (carrying the pending leagueId) and returns the Yahoo consent URL the SPA
+        full-page-redirects to. The client secret never leaves the backend.
+      operationId: yahooAuthorize
+      parameters:
+        - name: leagueId
+          in: query
+          required: true
+          description: The Yahoo league id to resume onboarding for after the callback
+          schema:
+            type: string
+            maxLength: 100
+      responses:
+        "200":
+          description: Yahoo consent URL generated
+        "401":
+          description: Unauthenticated
+      security:
+        - ClerkJWT: []
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        httpMethod: POST
+        uri: "arn:aws:apigateway:${aws_region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations"
+        payloadFormatVersion: "2.0"
+
+  /auth/yahoo/callback:
+    get:
+      summary: Yahoo OAuth callback
+      description: >
+        Public — no Clerk authorizer (backend/yahoo-oauth). Yahoo redirects the browser here
+        with no JWT after the user authorizes. Validates and single-use-consumes the state,
+        exchanges the code for tokens (Basic auth), stores an encrypted per-user token item,
+        and 302-redirects to the frontend /connect_league page with a linked/declined marker.
+      operationId: yahooCallback
+      parameters:
+        - name: code
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: error
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "302":
+          description: Redirect to the frontend connect page with a linked/declined marker
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        httpMethod: POST
+        uri: "arn:aws:apigateway:${aws_region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations"
+        payloadFormatVersion: "2.0"
+
   /leagues/{leagueId}:
     get:
       summary: Get league metadata
