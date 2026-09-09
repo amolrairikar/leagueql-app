@@ -158,6 +158,19 @@ module "api_lambda" {
     # the flag values are edited in the SSM console (runtime toggle, no redeploy). With
     # this unset, all flags default off.
     FEATURE_FLAGS_SSM_PARAM = "/leagueql/${var.environment}/feature-flags"
+
+    # Yahoo OAuth (backend/yahoo-oauth). The Yahoo app is a PKCE public client, so only the
+    # client_id is needed (no client_secret) — it's fetched at runtime from a SecureString SSM
+    # parameter by *name* (value never lands here / in TF state / CI). The redirect_uri MUST
+    # exactly match the callback registered in the Yahoo developer app; the return URL is the
+    # fixed frontend /connect_league page the callback 302s back to. Tokens are KMS-encrypted
+    # with a single key (see the global stack); the client is pinned to that key's region so
+    # both regional API Lambdas share one key.
+    YAHOO_CLIENT_ID_SSM_PARAM = "/leagueql/${var.environment}/yahoo/client_id"
+    YAHOO_KMS_KEY_ID          = "arn:aws:kms:us-east-1:${local.account_id}:alias/leagueql-yahoo-token-${var.environment}"
+    YAHOO_KMS_REGION          = "us-east-1"
+    YAHOO_REDIRECT_URI        = var.yahoo_redirect_uri
+    YAHOO_CONNECT_RETURN_URL  = var.yahoo_connect_return_url
   }
 
   tags = {

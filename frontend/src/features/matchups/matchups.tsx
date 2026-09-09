@@ -14,7 +14,7 @@ import SeasonSelect from '@/features/season_select/season-select';
 import WeeklyAwards from '@/features/weekly_awards/weekly-awards';
 import { avatarColor } from '@/lib/color-constants';
 import { MATCHUP_STATUS_COLORS } from '@/lib/color-constants';
-import { getLeagueCookies } from '@/lib/cookie-handler';
+import { getLeagueCookies, type Platform } from '@/lib/cookie-handler';
 import { type Result, toResult } from '@/lib/result';
 
 interface TeamSide {
@@ -255,7 +255,7 @@ function BoxScoreView({
 }: {
   matchup: ProcessedMatchup;
   onClose: () => void;
-  platform: 'ESPN' | 'SLEEPER';
+  platform: Platform;
   season: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -348,7 +348,7 @@ function MatchupsContent({
   onWeekChange: (week: number) => void;
   selectedMatchup: number | null;
   onMatchupSelect: (idx: number | null) => void;
-  platform: 'ESPN' | 'SLEEPER';
+  platform: Platform;
   season: string;
 }) {
   const result = use(promise);

@@ -54,12 +54,19 @@ const POLL_INTERVAL_MS = 1000;
 const POLL_TIMEOUT_MS = 150000;
 const MAX_CONSECUTIVE_ERRORS = 3;
 
+// Display labels for each platform (the enum values are upper-cased).
+const PLATFORM_LABELS: Record<Platform, string> = {
+  ESPN: 'ESPN',
+  SLEEPER: 'Sleeper',
+  YAHOO: 'Yahoo',
+};
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type WizardStep = 1 | 2 | 3 | 4 | 5;
 
 interface NewPlatformInfo {
-  newPlatform: 'ESPN' | 'SLEEPER';
+  newPlatform: Platform;
   newPlatformLeagueId: string;
   season?: string;
   s2?: string;
@@ -199,13 +206,13 @@ function Step2({
   onNext: (info: NewPlatformInfo, users: NewPlatformUser[]) => void;
   onBack: () => void;
 }) {
-  const availablePlatforms = (['ESPN', 'SLEEPER'] as const).filter(
+  const availablePlatforms = (['ESPN', 'SLEEPER', 'YAHOO'] as const).filter(
     (p) => p !== currentPlatform,
   );
 
-  const [destinationPlatform, setDestinationPlatform] = useState<
-    'ESPN' | 'SLEEPER'
-  >(availablePlatforms[0]);
+  const [destinationPlatform, setDestinationPlatform] = useState<Platform>(
+    availablePlatforms[0],
+  );
   const [newPlatformLeagueId, setNewPlatformLeagueId] = useState('');
   const [season, setSeason] = useState('');
   const [seasonError, setSeasonError] = useState<string | null>(null);
@@ -218,7 +225,7 @@ function Step2({
   const [autofilling, setAutofilling] = useState(false);
   const [autofillError, setAutofillError] = useState<string | null>(null);
 
-  function handlePlatformChange(value: 'ESPN' | 'SLEEPER') {
+  function handlePlatformChange(value: Platform) {
     setDestinationPlatform(value);
     setNewPlatformLeagueId('');
     setSeason('');
@@ -320,7 +327,7 @@ function Step2({
         <Label htmlFor="destination-platform">Migrating to</Label>
         <Select
           value={destinationPlatform}
-          onValueChange={(v) => handlePlatformChange(v as 'ESPN' | 'SLEEPER')}
+          onValueChange={(v) => handlePlatformChange(v as Platform)}
         >
           <SelectTrigger id="destination-platform" className="w-full">
             <SelectValue />
@@ -328,27 +335,26 @@ function Step2({
           <SelectContent>
             {availablePlatforms.map((p) => (
               <SelectItem key={p} value={p}>
-                {p === 'ESPN' ? 'ESPN' : 'Sleeper'}
+                {PLATFORM_LABELS[p]}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
         <p className="text-[12px] text-muted-foreground">
-          Enter your new {destinationPlatform === 'ESPN' ? 'ESPN' : 'Sleeper'}{' '}
-          league details.
+          Enter your new {PLATFORM_LABELS[destinationPlatform]} league details.
         </p>
       </div>
 
       <div className="flex flex-col gap-2">
         <Label htmlFor="new-league-id">
-          {destinationPlatform === 'ESPN' ? 'ESPN' : 'Sleeper'} League ID
+          {PLATFORM_LABELS[destinationPlatform]} League ID
         </Label>
         <Input
           id="new-league-id"
           name="migrate-new-league-id"
           type="text"
           autoComplete="on"
-          placeholder={`Enter your ${destinationPlatform === 'ESPN' ? 'ESPN' : 'Sleeper'} league ID`}
+          placeholder={`Enter your ${PLATFORM_LABELS[destinationPlatform]} league ID`}
           value={newPlatformLeagueId}
           onChange={(e) => setNewPlatformLeagueId(e.target.value)}
         />
@@ -514,7 +520,7 @@ function Step3({
 }: {
   currentManagers: TeamEntry[];
   newPlatformUsers: NewPlatformUser[];
-  newPlatform: 'ESPN' | 'SLEEPER';
+  newPlatform: Platform;
   onNext: (mapping: ManagerMappingEntry[]) => void;
   onBack: () => void;
 }) {
@@ -567,15 +573,15 @@ function Step3({
       <div>
         <p className="text-[13px] font-medium mb-1">Map managers</p>
         <p className="text-[12px] text-muted-foreground">
-          Match each current manager to their{' '}
-          {newPlatform === 'ESPN' ? 'ESPN' : 'Sleeper'} account. Leave managers
-          who left the league as &quot;Not returning&quot;.
+          Match each current manager to their {PLATFORM_LABELS[newPlatform]}{' '}
+          account. Leave managers who left the league as &quot;Not
+          returning&quot;.
         </p>
       </div>
 
       <div className="grid grid-cols-2 gap-3 text-[11px] font-medium uppercase tracking-wide text-muted-foreground px-1">
         <span>Current manager</span>
-        <span>{newPlatform === 'ESPN' ? 'ESPN' : 'Sleeper'} account</span>
+        <span>{PLATFORM_LABELS[newPlatform]} account</span>
       </div>
 
       <div className="flex flex-col gap-2 overflow-y-auto max-h-64 pr-1">
@@ -662,7 +668,7 @@ function Step4({
   onBack,
 }: {
   currentSeasons: string[];
-  newPlatform: 'ESPN' | 'SLEEPER';
+  newPlatform: Platform;
   newPlatformLeagueId: string;
   newSeason?: string;
   totalManagers: number;

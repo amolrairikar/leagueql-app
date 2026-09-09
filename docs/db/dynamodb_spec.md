@@ -8,7 +8,7 @@
 | Billing mode | On-demand (pay-per-request) |
 | Primary key | `PK` (String) + `SK` (String) |
 | GSIs | `GSI1` - Get all league IDs for a canonical league ID; `GSI2` - Look up a league by platform and league ID; `GSI3` - List all onboarded leagues (sparse index over METADATA items) |
-| TTL | Enabled on the `ttl` attribute (Unix epoch seconds). Only JOB_STATUS items set it, so old onboard/refresh/migrate jobs are reaped ~24h after their last write; items without a `ttl` attribute never expire |
+| TTL | Enabled on the `ttl` attribute (Unix epoch seconds). JOB_STATUS items set it (~24h, reaping old onboard/refresh/migrate jobs) and OAUTH_STATE items set it (~10min, reaping unused Yahoo OAuth states); items without a `ttl` attribute never expire |
 
 ---
 
@@ -745,6 +745,74 @@ job's item.
   "failure_reason": "We couldn't find that league on ESPN. Please confirm the league ID is correct.",
   "league_id": "123456789",
   "platform": "ESPN"
+}
+```
+</details>
+
+<details>
+<summary><b>YAHOO_OAUTH</b></summary>
+
+Per-user Yahoo OAuth link (backend/yahoo-oauth). Written by `GET /leagues/yahoo/oauth/callback` after a
+successful code→token exchange and refreshed on `grant_type=refresh_token`. Keyed by the
+Clerk user id (not a league), so onboarding gates and the future Yahoo data client can find a
+caller's tokens. Access and refresh tokens are **KMS-encrypted** (base64 ciphertext); the
+plaintext never appears in logs, traces, API responses, or Terraform state. No TTL — the link
+persists until the user re-links or revokes access.
+
+| Attribute | Type | Required | Description |
+|---|---|---|---|
+| `PK` | String | Yes | `USER#{clerk_user_id}` |
+| `SK` | String | Yes | `YAHOO_OAUTH` |
+| `access_token` | String | Yes | KMS-encrypted (base64) Yahoo access token (1-hour lifetime) |
+| `refresh_token` | String | Yes | KMS-encrypted (base64) Yahoo refresh token (long-lived; may rotate on refresh) |
+| `token_type` | String | Yes | Yahoo token type, e.g. `bearer` |
+| `expires_at` | Number | Yes | Unix epoch seconds when the access token expires; the code refreshes within a skew before this |
+| `updated_at` | Number | Yes | Unix epoch seconds of the most recent write |
+
+**Example:**
+```json
+{
+  "PK": "USER#user_2abc123",
+  "SK": "YAHOO_OAUTH",
+  "access_token": "AQID...base64-kms-ciphertext...",
+  "refresh_token": "AQID...base64-kms-ciphertext...",
+  "token_type": "bearer",
+  "expires_at": 1725238800,
+  "updated_at": 1725235200
+}
+```
+</details>
+
+<details>
+<summary><b>OAUTH_STATE</b></summary>
+
+Single-use Yahoo OAuth `state` (backend/yahoo-oauth). Written by `GET /leagues/yahoo/oauth/authorize`
+to bind the consent flow to the caller and carry the pending `league_id` across the stateless
+authorize→callback redirect. `GET /leagues/yahoo/oauth/callback` reads it, deletes it (single-use), and
+rejects any state past `expires_at`. A ~10-minute `ttl` reaps unused states.
+
+| Attribute | Type | Required | Description |
+|---|---|---|---|
+| `PK` | String | Yes | `OAUTH_STATE#{state}` (`state` is a URL-safe random token) |
+| `SK` | String | Yes | `YAHOO` |
+| `clerk_user_id` | String | Yes | The authenticated caller the state is bound to |
+| `league_id` | String | Yes | The Yahoo league id to resume onboarding for after the callback |
+| `code_verifier` | String | Yes | PKCE `code_verifier` (Yahoo requires PKCE); the callback sends it in the token exchange. Never leaves the backend |
+| `created_at` | Number | Yes | Unix epoch seconds the state was minted |
+| `expires_at` | Number | Yes | Unix epoch seconds after which the state is invalid (checked on read) |
+| `ttl` | Number | Yes | Unix epoch seconds after which DynamoDB TTL reaps the item (~10min) |
+
+**Example:**
+```json
+{
+  "PK": "OAUTH_STATE#Rk9v3nS2...urlsafe...",
+  "SK": "YAHOO",
+  "clerk_user_id": "user_2abc123",
+  "league_id": "45.l.678",
+  "code_verifier": "dBjftJeZ4CVP...urlsafe-43-128-chars...",
+  "created_at": 1725235200,
+  "expires_at": 1725235800,
+  "ttl": 1725235800
 }
 ```
 </details>

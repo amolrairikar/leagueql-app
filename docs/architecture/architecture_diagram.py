@@ -24,6 +24,7 @@ from diagrams.aws.integration import (
 )
 from diagrams.aws.management import SystemsManagerParameterStore
 from diagrams.aws.network import APIGateway
+from diagrams.aws.security import KeyManagementService
 from diagrams.aws.storage import S3
 from diagrams.generic.blank import Blank
 from diagrams.generic.storage import Storage
@@ -62,6 +63,7 @@ with Diagram(
         clerk = Auth0("Clerk\n(auth)")
         espn = Client("ESPN API")
         sleeper = Client("Sleeper API")
+        yahoo = Client("Yahoo API\n(OAuth 2.0)")
         # Text-only node (no vendor icon) for the OTEL / Better Stack observability backend.
         betterstack = Blank("OTEL\nBetter Stack (traces + RUM)")
 
@@ -95,9 +97,10 @@ with Diagram(
         sns = SimpleNotificationServiceSns("SNS\n(alerts)")
 
         with Cluster("Data stores"):
-            ddb = Dynamodb("DynamoDB\n(views, job status,\ncounts)")
+            ddb = Dynamodb("DynamoDB\n(views, job status,\ncounts, Yahoo tokens)")
             s3 = S3("S3\n(raw API payloads)")
             ssm = SystemsManagerParameterStore("SSM\n(flags + secrets)")
+            kms = KeyManagementService("KMS\n(Yahoo token key)")
 
     discord = Discord("Discord\n(ops alerts)")
 
@@ -136,6 +139,13 @@ with Diagram(
     # and posts to the same Discord channel as the alert notifier (webhook URL from SSM).
     admin_report >> Edge(label="query GSI3\n(METADATA)") >> ddb
     admin_report >> Edge(label="webhook URL from SSM") >> discord
+
+    # ── Yahoo OAuth link (backend/yahoo-oauth) ────────────────────────────────
+    # The API Lambda runs the OAuth handshake (authorize/callback), reads the Yahoo
+    # client credentials from SSM, encrypts the per-user tokens with KMS, and stores the
+    # ciphertext in DynamoDB. No Yahoo token ever reaches the browser.
+    api >> Edge(label="OAuth 2.0\n(authorize/callback)") >> yahoo
+    api >> Edge(label="encrypt/decrypt\ntokens") >> kms
 
     # ── Alerting & config ─────────────────────────────────────────────────────
     sns >> discord_fn >> Edge(label="webhook URL from SSM") >> discord

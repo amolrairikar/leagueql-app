@@ -21,6 +21,7 @@ no per-module patching.
 """
 
 import importlib.util
+import os
 import sys
 import types
 from pathlib import Path
@@ -54,6 +55,13 @@ _ENV = {
     # backend/admin-onboarding-report: the nightly report resolves the Discord webhook
     # URL from this SSM parameter name at import; a moto SecureString is seeded below.
     "DISCORD_WEBHOOK_URL_SSM_PARAM": "/leagueql/test/discord/webhook_url",
+    # backend/yahoo-oauth: the API resolves the Yahoo client_id (a PKCE public client — no
+    # client_secret) from this SSM parameter name (a SecureString seeded below); the
+    # redirect/return URLs and KMS key id are set in ``before_all`` (the key id is only known
+    # after the moto key is created).
+    "YAHOO_CLIENT_ID_SSM_PARAM": "/leagueql/test/yahoo/client_id",
+    "YAHOO_REDIRECT_URI": "https://api.test/leagues/yahoo/oauth/callback",
+    "YAHOO_CONNECT_RETURN_URL": "https://app.test/connect_league",
     "AWS_DEFAULT_REGION": REGION,
     "AWS_ACCESS_KEY_ID": "testing",
     "AWS_SECRET_ACCESS_KEY": "testing",
@@ -256,8 +264,6 @@ def before_all(context):
     _stub_newrelic()
     for key, value in _ENV.items():
         # Always set (not setdefault) so a stray real value can't leak in.
-        import os
-
         os.environ[key] = value
 
     context._moto = mock_aws()
@@ -265,11 +271,22 @@ def before_all(context):
     _create_table()
     _create_bucket()
     # backend/admin-onboarding-report resolves its Discord webhook from SSM at import.
-    boto3.client("ssm", region_name=REGION).put_parameter(
+    ssm = boto3.client("ssm", region_name=REGION)
+    ssm.put_parameter(
         Name=_ENV["DISCORD_WEBHOOK_URL_SSM_PARAM"],
         Value="https://discord.test/webhook",
         Type="SecureString",
     )
+    # backend/yahoo-oauth: seed the Yahoo client credentials and create a KMS key for
+    # token encryption. The key id is only known after creation, so set the env var here
+    # (before ``_load_handlers`` imports ``main``, which reads YAHOO_KMS_KEY_ID at import).
+    ssm.put_parameter(
+        Name=_ENV["YAHOO_CLIENT_ID_SSM_PARAM"],
+        Value="test-client-id",
+        Type="SecureString",
+    )
+    kms_key = boto3.client("kms", region_name=REGION).create_key()
+    os.environ["YAHOO_KMS_KEY_ID"] = kms_key["KeyMetadata"]["KeyId"]
 
     context.region = REGION
     context.table_name = TABLE_NAME

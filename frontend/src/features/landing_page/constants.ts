@@ -21,6 +21,7 @@ import matchupsScreenshot from '@/assets/matchups-screenshot.png';
 import playerRecordsScreenshot from '@/assets/player-records-screenshot.png';
 import sleeperLogo from '@/assets/sleeper-logo.svg';
 import standingsScreenshot from '@/assets/standings-screenshot.png';
+import yahooLogo from '@/assets/yahoo-logo.svg';
 import type {
   NavLinkItem,
   Slide,
@@ -37,6 +38,7 @@ export const NAV_LINKS: NavLinkItem[] = [
 export const PLATFORMS: Platform[] = [
   { name: 'ESPN', logo: espnLogo },
   { name: 'Sleeper', logo: sleeperLogo },
+  { name: 'Yahoo', logo: yahooLogo },
 ];
 
 export const SLIDES: Slide[] = [

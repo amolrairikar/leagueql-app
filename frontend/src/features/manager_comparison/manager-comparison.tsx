@@ -15,7 +15,7 @@ import {
   type MatchupItem,
 } from '@/features/manager_comparison/api-calls';
 import { avatarColor } from '@/lib/color-constants';
-import { getLeagueCookies } from '@/lib/cookie-handler';
+import { getLeagueCookies, type Platform } from '@/lib/cookie-handler';
 import { isUnplayedMatchup } from '@/lib/matchups';
 import { initials, pct } from '@/lib/utils';
 
@@ -413,7 +413,7 @@ function ManagerBoxScoreView({
   game: GameLog;
   left: Manager;
   right: Manager;
-  platform: 'ESPN' | 'SLEEPER';
+  platform: Platform;
   onClose: () => void;
 }) {
   const m = game.matchupItem;
@@ -463,7 +463,7 @@ function ManagerComparisonInner({
     matchups: MatchupItem[];
     migrationMapping: Map<string, string>;
   }>;
-  platform: 'ESPN' | 'SLEEPER';
+  platform: Platform;
 }) {
   const { matchups, migrationMapping } = use(matchupsPromise);
   const managers = useMemo(

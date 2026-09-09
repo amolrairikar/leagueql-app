@@ -13,10 +13,12 @@ import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Annotated, Any
+from urllib.parse import urlencode
 
 import botocore.exceptions
 import main
 import requests as http_requests
+import yahoo_oauth
 from boto3.dynamodb.conditions import Key
 from fastapi import (
     APIRouter,
@@ -28,6 +30,7 @@ from fastapi import (
     Response,
     status,
 )
+from fastapi.responses import RedirectResponse
 from helpers import (
     _is_conditional_check_failure,
     add_league_member,
@@ -231,6 +234,23 @@ def onboard_league(
     correlation_id = str(uuid.uuid4())
     correlation_id_var.set(correlation_id)
     platform = Platform(payload.platform)
+
+    if platform == Platform.YAHOO:
+        # Yahoo onboarding is gated on a linked OAuth token (backend/yahoo-oauth). This
+        # increment ships linking only: a linked caller gets a neutral "coming soon"
+        # signal (the Yahoo Fantasy data client is a later increment); an unlinked caller
+        # gets the YAHOO_AUTH "link first" signal the frontend routes to the OAuth step.
+        if not yahoo_oauth.has_valid_link(clerk_user_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Link your Yahoo account first",
+            )
+        response.status_code = status.HTTP_200_OK
+        return APIResponse(
+            detail="Your Yahoo account is linked. Yahoo league onboarding is coming soon.",
+            data={"code": "YAHOO_COMING_SOON"},
+        )
+
     canonical_league_id = None
 
     try:
@@ -890,3 +910,77 @@ def accept_invite(
     add_league_member(canonical_league_id, clerk_user_id)
     logger.info("Redeemed invite link; added user to league %s", canonical_league_id)
     return APIResponse(detail="Invite accepted")
+
+
+@router.get("/leagues/yahoo/oauth/authorize", status_code=status.HTTP_200_OK)
+def yahoo_authorize(
+    clerk_user_id: Annotated[str, Depends(get_authenticated_user)],
+    leagueId: Annotated[
+        str,
+        Query(
+            description="The Yahoo league id to resume onboarding for", max_length=100
+        ),
+    ],
+) -> APIResponse:
+    """Start the Yahoo OAuth link (backend/yahoo-oauth).
+
+    Mints a single-use ``state`` bound to the caller (carrying the pending ``leagueId``),
+    persists it with a short TTL, and returns the Yahoo consent URL. The frontend performs a
+    full-page redirect to that URL; the client secret never leaves the backend.
+    """
+    state, code_challenge = yahoo_oauth.create_oauth_state(clerk_user_id, leagueId)
+    authorize_url = yahoo_oauth.build_authorize_url(state, code_challenge)
+    return APIResponse(
+        detail="Yahoo authorization URL generated",
+        data={"authorize_url": authorize_url},
+    )
+
+
+@router.get("/leagues/yahoo/oauth/callback")
+def yahoo_callback(
+    code: Annotated[str | None, Query()] = None,
+    state: Annotated[str | None, Query()] = None,
+    error: Annotated[str | None, Query()] = None,
+) -> RedirectResponse:
+    """Handle Yahoo's OAuth redirect (backend/yahoo-oauth).
+
+    Public route — Yahoo redirects the browser here with no Clerk JWT. Validates and
+    single-use-consumes ``state``, exchanges the ``code`` for tokens, persists an encrypted
+    ``YAHOO_OAUTH`` item, and 302s back to the frontend ``/connect_league`` page with a
+    linked/declined marker. A declined/invalid/failed link writes no token item and never
+    reflects an external redirect target.
+    """
+    return_base = main.YAHOO_CONNECT_RETURN_URL
+
+    def _redirect(linked: bool, league_id: str = "") -> RedirectResponse:
+        params: dict[str, str] = {
+            "platform": "YAHOO",
+            "yahooLinked": "1" if linked else "0",
+        }
+        if linked and league_id:
+            params["leagueId"] = league_id
+        return RedirectResponse(
+            url=f"{return_base}?{urlencode(params)}",
+            status_code=status.HTTP_302_FOUND,
+        )
+
+    if error or not code or not state:
+        logger.info("Yahoo callback declined or missing params (error=%s)", error)
+        return _redirect(linked=False)
+
+    state_payload = yahoo_oauth.consume_oauth_state(state)
+    if state_payload is None:
+        logger.warning("Yahoo callback with invalid/expired state")
+        return _redirect(linked=False)
+
+    try:
+        token_response = yahoo_oauth.exchange_code_for_tokens(
+            code, state_payload["code_verifier"]
+        )
+        yahoo_oauth.store_tokens(state_payload["clerk_user_id"], token_response)
+    except Exception as e:  # noqa: BLE001  any exchange/storage failure → declined marker
+        logger.error("Yahoo code exchange failed: %s", type(e).__name__)
+        return _redirect(linked=False)
+
+    logger.info("Yahoo account linked for user")
+    return _redirect(linked=True, league_id=state_payload["league_id"])

@@ -18,7 +18,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { onboardLeague } from '@/features/connect_league/api-calls';
+import {
+  getYahooAuthorizeUrl,
+  onboardLeague,
+} from '@/features/connect_league/api-calls';
 import { pollForCompletion } from '@/features/connect_league/poll';
 import {
   FEATURES,
@@ -32,6 +35,8 @@ import { ApiError } from '@/lib/api-client';
 import {
   clearAllLeagueCookies,
   isDemoMode,
+  isPlatform,
+  type Platform,
   setDemoMode,
   setLeagueCookies,
 } from '@/lib/cookie-handler';
@@ -119,7 +124,7 @@ export default function LeagueQLLanding() {
   const navigate = useNavigate();
   const [authOpen, setAuthOpen] = useState(false);
   const [showConnectForm, setShowConnectForm] = useState(false);
-  const [platform, setPlatform] = useState<'ESPN' | 'SLEEPER'>('ESPN');
+  const [platform, setPlatform] = useState<Platform>('ESPN');
   const [leagueId, setLeagueId] = useState('');
   const [loading, setLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
@@ -208,6 +213,20 @@ export default function LeagueQLLanding() {
 
     setLoading(true);
     setError(null);
+
+    if (platform === 'YAHOO') {
+      // Yahoo requires an OAuth link (backend/yahoo-oauth): hand off to Yahoo's consent
+      // screen, carrying the league id so the callback resumes onboarding on return. The
+      // full-page redirect leaves this page, so `loading` stays until navigation.
+      try {
+        const { data } = await getYahooAuthorizeUrl(leagueId.trim());
+        window.location.href = data.authorize_url;
+      } catch {
+        setError('Could not start Yahoo sign-in. Please try again.');
+        setLoading(false);
+      }
+      return;
+    }
 
     try {
       const leagueData = await getLeague(leagueId.trim(), platform);
@@ -383,7 +402,7 @@ export default function LeagueQLLanding() {
               <Select
                 value={platform}
                 onValueChange={(v) => {
-                  if (v === 'ESPN' || v === 'SLEEPER') setPlatform(v);
+                  if (isPlatform(v)) setPlatform(v);
                 }}
               >
                 <SelectTrigger className="w-36 shrink-0">
@@ -392,6 +411,7 @@ export default function LeagueQLLanding() {
                 <SelectContent>
                   <SelectItem value="ESPN">ESPN</SelectItem>
                   <SelectItem value="SLEEPER">Sleeper</SelectItem>
+                  <SelectItem value="YAHOO">Yahoo</SelectItem>
                 </SelectContent>
               </Select>
               <Input

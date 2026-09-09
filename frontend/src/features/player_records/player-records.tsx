@@ -15,7 +15,7 @@ import {
 } from '@/features/player_records/api-calls';
 import { avatarColor } from '@/lib/color-constants';
 import { POSITION_COLORS, UI_COLORS } from '@/lib/color-constants';
-import { getLeagueCookies } from '@/lib/cookie-handler';
+import { getLeagueCookies, type Platform } from '@/lib/cookie-handler';
 import { isUnplayedMatchup } from '@/lib/matchups';
 import { POS_NORMALIZE } from '@/lib/position-constants';
 import { type Result, toResult } from '@/lib/result';
@@ -223,7 +223,7 @@ function BoxScoreView({
   matchup: MatchupItem;
   colorMap: Map<string, string>;
   onClose: () => void;
-  platform: 'ESPN' | 'SLEEPER';
+  platform: Platform;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -305,7 +305,7 @@ function PlayerRecordsContent({
   platform,
 }: {
   promise: Promise<Result<MatchupItem[]>>;
-  platform: 'ESPN' | 'SLEEPER';
+  platform: Platform;
 }) {
   const result = use(promise);
 

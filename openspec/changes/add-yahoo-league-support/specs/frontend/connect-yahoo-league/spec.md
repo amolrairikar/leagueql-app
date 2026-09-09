@@ -1,53 +1,46 @@
 ## Purpose
-Add Yahoo as a selectable platform in the Connect League flow. Because Yahoo requires OAuth 2.0, onboarding a Yahoo league is a two-step experience: the user first links their Yahoo account (OAuth consent), then selects/enters the Yahoo league to onboard. The OAuth handshake and token storage are backend-owned; this capability covers the UI. No Yahoo tokens ever reach the browser.
+Add Yahoo as a selectable platform in the Connect League flow. Because Yahoo requires OAuth 2.0, onboarding a Yahoo league routes through an account-link redirect: the user picks Yahoo, enters their league id, and clicks Connect; the app hands off to Yahoo's consent screen and, on return, resumes onboarding. The OAuth handshake and token storage are backend-owned; this capability covers the UI. No Yahoo tokens ever reach the browser. This increment ships the linking round-trip; actual Yahoo league onboarding surfaces a "coming soon" state until the data client lands.
 
 ## ADDED Requirements
 
-### Requirement: Gate onboarding on account linking
-Selecting platform Yahoo while unlinked SHALL show a "Connect your Yahoo account" CTA in place of the ESPN cookie fields and disable onboard submit until linked.
+### Requirement: Offer Yahoo as a connect platform
+The Connect-League platform selector SHALL offer Yahoo alongside ESPN and Sleeper, with a league-id field (no ESPN cookie fields).
 
-#### Scenario: Unlinked Yahoo
-- **WHEN** the user picks Yahoo and has no active link
-- **THEN** the form shows a "Connect your Yahoo account" CTA instead of the ESPN cookie fields and disables onboard submit until linked
+#### Scenario: Yahoo selected
+- **WHEN** the user picks Yahoo in the platform selector
+- **THEN** the form shows the league-id field and a Connect button, and no ESPN cookie fields
 
-### Requirement: Start the OAuth link
-The CTA SHALL call `GET /auth/yahoo/authorize` and navigate the browser (full-page redirect) to the returned Yahoo consent URL.
+### Requirement: Start the OAuth link on Connect
+Clicking Connect with Yahoo selected SHALL call `GET /leagues/yahoo/oauth/authorize` with the entered league id and navigate the browser (full-page redirect) to the returned Yahoo consent URL.
 
 #### Scenario: Begin consent
-- **WHEN** the user clicks the connect-account CTA
-- **THEN** the form calls `GET /auth/yahoo/authorize` and navigates the browser to the returned Yahoo consent URL
+- **WHEN** the user selects Yahoo, enters a league id, and clicks Connect
+- **THEN** the form calls `GET /leagues/yahoo/oauth/authorize?leagueId=<id>` and navigates the browser to the returned Yahoo consent URL
 
 ### Requirement: Handle the OAuth return
-Returning to `/connect_league?platform=YAHOO&yahooLinked=1` SHALL show the linked state, reveal league selection, and strip the marker params; a declined/failed link SHALL show an inline retry alert.
+Returning to `/connect_league?platform=YAHOO&yahooLinked=1` SHALL show the linked state and resume onboarding for the carried league id; a declined/failed link SHALL show an inline retry alert.
 
 #### Scenario: Linked return
-- **WHEN** the browser returns with `platform=YAHOO&yahooLinked=1`
-- **THEN** the form restores to Yahoo, shows the "Yahoo account connected" state, advances to league selection, and strips the marker params from the URL
+- **WHEN** the browser returns to `/connect_league` with `platform=YAHOO&yahooLinked=1` and a `leagueId`
+- **THEN** the page shows a "Yahoo account connected" state and resumes onboarding for that league id via `POST /leagues` with `platform=YAHOO`
 
 #### Scenario: Declined or failed
-- **WHEN** the callback returns a declined/failed marker
+- **WHEN** the return carries `yahooLinked=0`
 - **THEN** an inline retry alert ("Yahoo linking was cancelled or failed — try again") is shown with a retry CTA (no global banner, no hard error page)
 
-### Requirement: Select and onboard a Yahoo league
-Once linked, the user SHALL select a Yahoo league (a dropdown of their leagues, with a manual league-key fallback) and onboard via `POST /leagues?requestType=ONBOARD` with `platform=YAHOO`, then poll to completion like the standard connect flow.
+### Requirement: Surface onboarding and re-link states
+Onboarding a linked Yahoo league SHALL surface the backend signals: a "coming soon" notice while the data client is unshipped, and a "Reconnect your Yahoo account" prompt on a `YAHOO_AUTH` re-link signal.
 
-#### Scenario: League selection
-- **WHEN** the account is linked
-- **THEN** the user selects a league from a dropdown of their Yahoo leagues (falling back to a manual league-key field if the listing is unavailable), showing an empty-state when the account has no eligible leagues
-
-#### Scenario: Onboard and poll
-- **WHEN** a Yahoo league is submitted
-- **THEN** it onboards via `POST /leagues` with `platform=YAHOO`, polls `GET /jobs/{jobId}` through slow (~120s) jobs showing in-progress/success/failure with the backend `failure_reason`, clears the API cache, and routes into the app on success
-
-### Requirement: Reconnect on re-link signal
-A backend `YAHOO_AUTH` re-link signal SHALL surface a "Reconnect your Yahoo account" prompt that restarts the OAuth step.
+#### Scenario: Coming soon
+- **WHEN** a linked Yahoo league is submitted and the backend returns the "coming soon" signal
+- **THEN** the UI shows a neutral "Yahoo onboarding is coming soon" notice, not an error
 
 #### Scenario: Expired/revoked link
-- **WHEN** onboarding/refresh (or a leagues listing) returns the `YAHOO_AUTH` re-link signal
+- **WHEN** onboarding returns the `YAHOO_AUTH` re-link signal
 - **THEN** the UI shows a "Reconnect your Yahoo account" prompt that restarts the OAuth step rather than a generic failure
 
 ### Requirement: Keep tokens out of the browser and respect demo mode
-Yahoo access/refresh tokens SHALL never appear in the frontend, and connecting (and the OAuth redirect) SHALL be disabled/redirected in demo mode. Ownership handling matches the standard connect flow.
+Yahoo access/refresh tokens SHALL never appear in the frontend, and connecting (and the OAuth redirect) SHALL be disabled/redirected in demo mode.
 
 #### Scenario: No tokens in browser
 - **WHEN** the Yahoo flow runs
