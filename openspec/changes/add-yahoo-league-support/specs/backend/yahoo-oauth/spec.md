@@ -4,10 +4,10 @@ Add Yahoo Fantasy Sports as a third onboarding platform, which requires OAuth 2.
 ## ADDED Requirements
 
 ### Requirement: Start the authorization flow
-`GET /auth/yahoo/authorize` (Clerk-authenticated) SHALL return a Yahoo consent URL carrying the OAuth parameters and bind a single-use `state` to the caller, carrying the pending league id so the flow can resume after the callback.
+`GET /leagues/yahoo/oauth/authorize` (Clerk-authenticated) SHALL return a Yahoo consent URL carrying the OAuth parameters and bind a single-use `state` to the caller, carrying the pending league id so the flow can resume after the callback.
 
 #### Scenario: Authorize URL
-- **WHEN** an authenticated caller hits `GET /auth/yahoo/authorize` with a `leagueId`
+- **WHEN** an authenticated caller hits `GET /leagues/yahoo/oauth/authorize` with a `leagueId`
 - **THEN** it returns a `.../oauth2/request_auth` URL carrying `client_id`, the registered `redirect_uri`, `response_type=code`, and a single-use `state` bound to the caller (and to the pending `leagueId`), persisted server-side with a short TTL
 
 #### Scenario: Unauthenticated caller
@@ -15,7 +15,7 @@ Add Yahoo Fantasy Sports as a third onboarding platform, which requires OAuth 2.
 - **THEN** it returns `401`
 
 ### Requirement: Handle the OAuth callback
-`GET /auth/yahoo/callback` (public — Yahoo redirects the browser here with no Clerk JWT) SHALL validate `state`, exchange the code for tokens using Basic auth, persist an encrypted token item, and redirect to the fixed frontend `/connect_league` path.
+`GET /leagues/yahoo/oauth/callback` (public — Yahoo redirects the browser here with no Clerk JWT) SHALL validate `state`, exchange the code for tokens using Basic auth, persist an encrypted token item, and redirect to the fixed frontend `/connect_league` path.
 
 #### Scenario: Successful callback
 - **WHEN** Yahoo redirects to the callback with a valid `state` and `code`

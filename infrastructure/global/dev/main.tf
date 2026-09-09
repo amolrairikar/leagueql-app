@@ -43,6 +43,30 @@ module "dynamodb" {
   }
 }
 
+# backend/yahoo-oauth: a single KMS key (us-east-1) encrypting the per-user Yahoo OAuth
+# token items at rest. Both regional API Lambdas target this one key (pinned via the
+# YAHOO_KMS_REGION env var) so a token encrypted in either region is decryptable from the
+# other. The alias gives the Lambda a stable KeyId across key rotation/rebuild.
+resource "aws_kms_key" "yahoo_tokens" {
+  provider                = aws.primary
+  description             = "Encrypts Yahoo OAuth access/refresh tokens at rest (leagueql ${var.environment})"
+  enable_key_rotation     = true
+  deletion_window_in_days = 30
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    component   = "yahoo-oauth"
+    managed-by  = "terraform"
+  }
+}
+
+resource "aws_kms_alias" "yahoo_tokens" {
+  provider      = aws.primary
+  name          = "alias/leagueql-yahoo-token-${var.environment}"
+  target_key_id = aws_kms_key.yahoo_tokens.key_id
+}
+
 module "s3-replication-role" {
   source           = "../../modules/iam-role"
   role_name        = "leagueql-s3-${var.environment}-replication-role"
@@ -571,6 +595,34 @@ module "api-lambda-role" {
         Resource = [
           "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/feature-flags",
           "arn:aws:ssm:us-west-2:${var.account_id}:parameter/leagueql/${var.environment}/feature-flags"
+        ]
+      },
+      {
+        # backend/yahoo-oauth: Yahoo client_id/client_secret are SecureString SSM parameters
+        # (set out-of-band, never in TF state). Grant read on both regions' copies.
+        Sid    = "ReadYahooCredentialsSsmParameters"
+        Effect = "Allow"
+        Action = [
+          "ssm:GetParameter"
+        ]
+        Resource = [
+          "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/yahoo/client_id",
+          "arn:aws:ssm:us-west-2:${var.account_id}:parameter/leagueql/${var.environment}/yahoo/client_id",
+          "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/yahoo/client_secret",
+          "arn:aws:ssm:us-west-2:${var.account_id}:parameter/leagueql/${var.environment}/yahoo/client_secret"
+        ]
+      },
+      {
+        # backend/yahoo-oauth: encrypt/decrypt the per-user Yahoo token items with the single
+        # us-east-1 KMS key both regional Lambdas target (via YAHOO_KMS_REGION).
+        Sid    = "EncryptDecryptYahooTokens"
+        Effect = "Allow"
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt"
+        ]
+        Resource = [
+          aws_kms_key.yahoo_tokens.arn
         ]
       }
     ]

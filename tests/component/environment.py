@@ -60,7 +60,7 @@ _ENV = {
     # id are set in ``before_all`` (the key id is only known after the moto key is created).
     "YAHOO_CLIENT_ID_SSM_PARAM": "/leagueql/test/yahoo/client_id",
     "YAHOO_CLIENT_SECRET_SSM_PARAM": "/leagueql/test/yahoo/client_secret",
-    "YAHOO_REDIRECT_URI": "https://api.test/auth/yahoo/callback",
+    "YAHOO_REDIRECT_URI": "https://api.test/leagues/yahoo/oauth/callback",
     "YAHOO_CONNECT_RETURN_URL": "https://app.test/connect_league",
     "AWS_DEFAULT_REGION": REGION,
     "AWS_ACCESS_KEY_ID": "testing",

@@ -24,8 +24,8 @@ committed, so this change implements the **account-linking increment**.
   is dropped: the client secret already lives server-side and the callback is server-owned,
   so PKCE adds no protection here. `scope` is left at the app default configured on the Yahoo
   app.
-- **Two new routes on the existing API Lambda.** `GET /auth/yahoo/authorize` (Clerk-authed)
-  and `GET /auth/yahoo/callback` (**public** — Yahoo redirects the browser here with no Clerk
+- **Two new routes on the existing API Lambda.** `GET /leagues/yahoo/oauth/authorize` (Clerk-authed)
+  and `GET /leagues/yahoo/oauth/callback` (**public** — Yahoo redirects the browser here with no Clerk
   JWT, like `/health`). Declared in `docs/api/openapi_spec.yaml`; the callback omits the
   `security:` block.
 - **Single-use `state` in DynamoDB with TTL.** Authorize mints a random `state`, stores

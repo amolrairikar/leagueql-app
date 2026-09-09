@@ -9,7 +9,9 @@ from common_steps import get_item
 
 @when('I start the Yahoo authorization for league "{league_id}"')
 def step_start_authorize(context, league_id):
-    context.response = context.api.get(f"/auth/yahoo/authorize?leagueId={league_id}")
+    context.response = context.api.get(
+        f"/leagues/yahoo/oauth/authorize?leagueId={league_id}"
+    )
     # Stash the minted state so the callback step can echo it back like Yahoo would.
     authorize_url = context.response.json()["data"]["authorize_url"]
     context.yahoo_state = parse_qs(urlparse(authorize_url).query)["state"][0]
@@ -33,7 +35,7 @@ def step_callback_valid(context):
     patcher.start()
     context._patches.append(patcher)
     context.response = context.api.get(
-        f"/auth/yahoo/callback?code=the-code&state={context.yahoo_state}",
+        f"/leagues/yahoo/oauth/callback?code=the-code&state={context.yahoo_state}",
         follow_redirects=False,
     )
 
@@ -41,7 +43,8 @@ def step_callback_valid(context):
 @when('Yahoo redirects back to the callback with code "{code}" and state "{state}"')
 def step_callback_with_state(context, code, state):
     context.response = context.api.get(
-        f"/auth/yahoo/callback?code={code}&state={state}", follow_redirects=False
+        f"/leagues/yahoo/oauth/callback?code={code}&state={state}",
+        follow_redirects=False,
     )
 
 

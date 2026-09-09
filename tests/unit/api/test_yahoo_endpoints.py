@@ -14,7 +14,7 @@ class TestYahooAuthorizeEndpoint:
                 return_value="https://api.login.yahoo.com/oauth2/request_auth?x=1",
             ) as mk_url,
         ):
-            response = client.get("/auth/yahoo/authorize?leagueId=45.l.678")
+            response = client.get("/leagues/yahoo/oauth/authorize?leagueId=45.l.678")
 
         assert response.status_code == 200
         body = response.json()
@@ -26,7 +26,7 @@ class TestYahooAuthorizeEndpoint:
         mk_url.assert_called_once_with("state-1")
 
     def test_requires_league_id(self, client):
-        response = client.get("/auth/yahoo/authorize")
+        response = client.get("/leagues/yahoo/oauth/authorize")
         assert response.status_code == 422
 
     def test_unauthenticated_returns_401(self, client):
@@ -35,7 +35,7 @@ class TestYahooAuthorizeEndpoint:
 
         main.app.dependency_overrides.pop(routes.get_authenticated_user, None)
         try:
-            response = client.get("/auth/yahoo/authorize?leagueId=1")
+            response = client.get("/leagues/yahoo/oauth/authorize?leagueId=1")
         finally:
             main.app.dependency_overrides[routes.get_authenticated_user] = lambda: (
                 "user_1"
@@ -57,7 +57,8 @@ class TestYahooCallbackEndpoint:
             patch("yahoo_oauth.store_tokens") as mk_store,
         ):
             response = client.get(
-                "/auth/yahoo/callback?code=abc&state=s1", follow_redirects=False
+                "/leagues/yahoo/oauth/callback?code=abc&state=s1",
+                follow_redirects=False,
             )
 
         assert response.status_code == 302
@@ -69,7 +70,7 @@ class TestYahooCallbackEndpoint:
 
     def test_declined_error_redirects_not_linked(self, client):
         response = client.get(
-            "/auth/yahoo/callback?error=access_denied&state=s1",
+            "/leagues/yahoo/oauth/callback?error=access_denied&state=s1",
             follow_redirects=False,
         )
         assert response.status_code == 302
@@ -77,14 +78,17 @@ class TestYahooCallbackEndpoint:
 
     @pytest.mark.parametrize("query", ["state=s1", "code=abc"])
     def test_missing_code_or_state_redirects_not_linked(self, client, query):
-        response = client.get(f"/auth/yahoo/callback?{query}", follow_redirects=False)
+        response = client.get(
+            f"/leagues/yahoo/oauth/callback?{query}", follow_redirects=False
+        )
         assert response.status_code == 302
         assert "yahooLinked=0" in response.headers["location"]
 
     def test_invalid_state_redirects_not_linked(self, client):
         with patch("yahoo_oauth.consume_oauth_state", return_value=None):
             response = client.get(
-                "/auth/yahoo/callback?code=abc&state=bad", follow_redirects=False
+                "/leagues/yahoo/oauth/callback?code=abc&state=bad",
+                follow_redirects=False,
             )
         assert response.status_code == 302
         assert "yahooLinked=0" in response.headers["location"]
@@ -102,7 +106,8 @@ class TestYahooCallbackEndpoint:
             patch("yahoo_oauth.store_tokens") as mk_store,
         ):
             response = client.get(
-                "/auth/yahoo/callback?code=abc&state=s1", follow_redirects=False
+                "/leagues/yahoo/oauth/callback?code=abc&state=s1",
+                follow_redirects=False,
             )
         assert response.status_code == 302
         assert "yahooLinked=0" in response.headers["location"]

@@ -55,7 +55,7 @@ export function getYahooAuthorizeUrl(
   const params = new URLSearchParams({ leagueId });
   // skipCache: this mints a single-use state server-side, so it must never be deduped.
   return apiClient.get<YahooAuthorizeResponse>(
-    `/auth/yahoo/authorize?${params}`,
+    `/leagues/yahoo/oauth/authorize?${params}`,
     undefined,
     { skipCache: true },
   );

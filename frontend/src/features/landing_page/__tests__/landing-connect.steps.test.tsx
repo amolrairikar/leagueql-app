@@ -95,7 +95,7 @@ defineFeature(feature, (test) => {
 
     given('the Yahoo authorize endpoint returns a consent URL', () => {
       server.use(
-        http.get(`${API}/auth/yahoo/authorize`, ({ request }) => {
+        http.get(`${API}/leagues/yahoo/oauth/authorize`, ({ request }) => {
           authorizeLeagueId = new URL(request.url).searchParams.get('leagueId');
           return HttpResponse.json({
             detail: 'ok',

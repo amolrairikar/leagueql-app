@@ -19,11 +19,11 @@
 ## 3. Backend — Yahoo OAuth
 
 - [x] 3.1 Add `YAHOO` to the `Platform` enum (case-insensitive).
-- [x] 3.2 `GET /auth/yahoo/authorize` (Clerk-authed): mint a single-use `state` bound to the
+- [x] 3.2 `GET /leagues/yahoo/oauth/authorize` (Clerk-authed): mint a single-use `state` bound to the
   caller + pending `leagueId`, persist a TTL'd `OAUTH_STATE#{state}` item, return the
   `request_auth` consent URL (`client_id` from SSM, registered `redirect_uri`,
   `response_type=code`).
-- [x] 3.3 `GET /auth/yahoo/callback` (public): validate + consume `state`, exchange the code
+- [x] 3.3 `GET /leagues/yahoo/oauth/callback` (public): validate + consume `state`, exchange the code
   at `/get_token` with `Authorization: Basic base64(id:secret)`, persist a KMS-encrypted
   `YAHOO_OAUTH` item keyed by Clerk user, `302` to `/connect_league?platform=YAHOO&yahooLinked=1&leagueId=…`;
   `access_denied`/failure/invalid-state → `302` with `yahooLinked=0`, no partial write.
@@ -38,7 +38,7 @@
 ## 4. Frontend — Connect Yahoo league
 
 - [x] 4.1 Add Yahoo to the landing-page platform selector.
-- [x] 4.2 Connect with Yahoo → call `GET /auth/yahoo/authorize?leagueId=…`, full-page redirect.
+- [x] 4.2 Connect with Yahoo → call `GET /leagues/yahoo/oauth/authorize?leagueId=…`, full-page redirect.
 - [x] 4.3 `/connect_league` return (`YahooConnectReturn`): `yahooLinked=1` → connected state +
   resume onboard (renders the "coming soon" notice); `yahooLinked=0` → inline retry alert;
   403 → reconnect prompt; disabled in demo mode.
@@ -47,8 +47,9 @@
 ## 5. Infra / docs
 
 - [x] 5.1 Add the two API-GW routes to `docs/api/openapi_spec.yaml` (callback public).
-- [x] 5.2 Terraform: single KMS key (global) + IAM for SSM/KMS on the API role, env vars (SSM
-  param names, KMS key/region, redirect + return URLs) on the API Lambda.
+- [x] 5.2 Terraform: single KMS key + IAM for SSM/KMS on the API role in **both** global
+  stacks (dev + prod); API Lambda env vars (SSM param names, KMS key/region) plus
+  `yahoo_redirect_uri`/`yahoo_connect_return_url` regional vars (prod defaults; dev overrides).
 - [x] 5.3 Update `docs/db/dynamodb_spec.md` (`YAHOO_OAUTH` + `OAUTH_STATE` items) and the
   architecture diagram (KMS + Yahoo integration); regenerated the PNG.
 

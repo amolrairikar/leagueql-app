@@ -229,7 +229,7 @@ kms_client = boto3.client(
 # Yahoo developer app exactly; the return URL is the fixed frontend /connect_league
 # path the callback 302s back to. Both are Terraform-driven per environment.
 YAHOO_REDIRECT_URI = os.environ.get(
-    "YAHOO_REDIRECT_URI", "https://api.leagueql.com/auth/yahoo/callback"
+    "YAHOO_REDIRECT_URI", "https://api.leagueql.com/leagues/yahoo/oauth/callback"
 )
 YAHOO_CONNECT_RETURN_URL = os.environ.get(
     "YAHOO_CONNECT_RETURN_URL", "https://leagueql.app/connect_league"

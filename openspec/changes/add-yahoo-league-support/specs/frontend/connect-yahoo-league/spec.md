@@ -11,11 +11,11 @@ The Connect-League platform selector SHALL offer Yahoo alongside ESPN and Sleepe
 - **THEN** the form shows the league-id field and a Connect button, and no ESPN cookie fields
 
 ### Requirement: Start the OAuth link on Connect
-Clicking Connect with Yahoo selected SHALL call `GET /auth/yahoo/authorize` with the entered league id and navigate the browser (full-page redirect) to the returned Yahoo consent URL.
+Clicking Connect with Yahoo selected SHALL call `GET /leagues/yahoo/oauth/authorize` with the entered league id and navigate the browser (full-page redirect) to the returned Yahoo consent URL.
 
 #### Scenario: Begin consent
 - **WHEN** the user selects Yahoo, enters a league id, and clicks Connect
-- **THEN** the form calls `GET /auth/yahoo/authorize?leagueId=<id>` and navigates the browser to the returned Yahoo consent URL
+- **THEN** the form calls `GET /leagues/yahoo/oauth/authorize?leagueId=<id>` and navigates the browser to the returned Yahoo consent URL
 
 ### Requirement: Handle the OAuth return
 Returning to `/connect_league?platform=YAHOO&yahooLinked=1` SHALL show the linked state and resume onboarding for the carried league id; a declined/failed link SHALL show an inline retry alert.

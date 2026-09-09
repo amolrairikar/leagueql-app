@@ -56,7 +56,7 @@ paths:
         uri: "arn:aws:apigateway:${aws_region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations"
         payloadFormatVersion: "2.0"
 
-  /auth/yahoo/authorize:
+  /leagues/yahoo/oauth/authorize:
     get:
       summary: Start the Yahoo OAuth link
       description: >
@@ -85,7 +85,7 @@ paths:
         uri: "arn:aws:apigateway:${aws_region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations"
         payloadFormatVersion: "2.0"
 
-  /auth/yahoo/callback:
+  /leagues/yahoo/oauth/callback:
     get:
       summary: Yahoo OAuth callback
       description: >

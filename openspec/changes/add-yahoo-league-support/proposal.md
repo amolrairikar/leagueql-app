@@ -22,7 +22,7 @@ linked Yahoo onboard surfaces a neutral "coming soon" signal until then.
 ## What Changes
 
 - Add the `Platform` enum value `YAHOO` (case-insensitive).
-- Add `GET /auth/yahoo/authorize` (Clerk-authed) and `GET /auth/yahoo/callback` (public) to
+- Add `GET /leagues/yahoo/oauth/authorize` (Clerk-authed) and `GET /leagues/yahoo/oauth/callback` (public) to
   the API Lambda; declare both in `docs/api/openapi_spec.yaml` (callback omits `security:`).
 - Store a single-use `state` (with pending `leagueId`) in a TTL'd DynamoDB item; store an
   encrypted per-user `YAHOO_OAUTH` token item (KMS); refresh transparently.

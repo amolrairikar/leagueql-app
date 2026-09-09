@@ -752,7 +752,7 @@ job's item.
 <details>
 <summary><b>YAHOO_OAUTH</b></summary>
 
-Per-user Yahoo OAuth link (backend/yahoo-oauth). Written by `GET /auth/yahoo/callback` after a
+Per-user Yahoo OAuth link (backend/yahoo-oauth). Written by `GET /leagues/yahoo/oauth/callback` after a
 successful code→token exchange and refreshed on `grant_type=refresh_token`. Keyed by the
 Clerk user id (not a league), so onboarding gates and the future Yahoo data client can find a
 caller's tokens. Access and refresh tokens are **KMS-encrypted** (base64 ciphertext); the
@@ -786,9 +786,9 @@ persists until the user re-links or revokes access.
 <details>
 <summary><b>OAUTH_STATE</b></summary>
 
-Single-use Yahoo OAuth `state` (backend/yahoo-oauth). Written by `GET /auth/yahoo/authorize`
+Single-use Yahoo OAuth `state` (backend/yahoo-oauth). Written by `GET /leagues/yahoo/oauth/authorize`
 to bind the consent flow to the caller and carry the pending `league_id` across the stateless
-authorize→callback redirect. `GET /auth/yahoo/callback` reads it, deletes it (single-use), and
+authorize→callback redirect. `GET /leagues/yahoo/oauth/callback` reads it, deletes it (single-use), and
 rejects any state past `expires_at`. A ~10-minute `ttl` reaps unused states.
 
 | Attribute | Type | Required | Description |

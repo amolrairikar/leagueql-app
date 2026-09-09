@@ -169,8 +169,8 @@ module "api_lambda" {
     YAHOO_CLIENT_SECRET_SSM_PARAM = "/leagueql/${var.environment}/yahoo/client_secret"
     YAHOO_KMS_KEY_ID              = "arn:aws:kms:us-east-1:${local.account_id}:alias/leagueql-yahoo-token-${var.environment}"
     YAHOO_KMS_REGION              = "us-east-1"
-    YAHOO_REDIRECT_URI            = "https://api.leagueql.com/auth/yahoo/callback"
-    YAHOO_CONNECT_RETURN_URL      = "https://leagueql.app/connect_league"
+    YAHOO_REDIRECT_URI            = var.yahoo_redirect_uri
+    YAHOO_CONNECT_RETURN_URL      = var.yahoo_connect_return_url
   }
 
   tags = {

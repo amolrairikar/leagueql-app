@@ -912,7 +912,7 @@ def accept_invite(
     return APIResponse(detail="Invite accepted")
 
 
-@router.get("/auth/yahoo/authorize", status_code=status.HTTP_200_OK)
+@router.get("/leagues/yahoo/oauth/authorize", status_code=status.HTTP_200_OK)
 def yahoo_authorize(
     clerk_user_id: Annotated[str, Depends(get_authenticated_user)],
     leagueId: Annotated[
@@ -936,7 +936,7 @@ def yahoo_authorize(
     )
 
 
-@router.get("/auth/yahoo/callback")
+@router.get("/leagues/yahoo/oauth/callback")
 def yahoo_callback(
     code: Annotated[str | None, Query()] = None,
     state: Annotated[str | None, Query()] = None,
