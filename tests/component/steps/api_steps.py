@@ -6,11 +6,27 @@ DynamoDB/S3; ESPN HTTP is patched where a route reaches out.
 
 import json
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 from behave import given, then, when
 from boto3.dynamodb.conditions import Key
 from common_steps import get_item, put_item
+
+
+def _seed_matchup_week(context, canonical, season, week, *, played):
+    # A played week stores real scores; an unplayed week (ESPN pre-stores the whole
+    # season schedule) stores a 0-0 row. The refresh up-to-date guard must judge
+    # "current" against the latest *played* week only (backend/league-refresh).
+    score = Decimal("118.0") if played else Decimal(0)
+    put_item(
+        context,
+        {
+            "PK": f"LEAGUE#{canonical}",
+            "SK": f"MATCHUPS#{season}#WEEK#{int(week):02d}",
+            "data": [{"team_a_score": score, "team_b_score": score}],
+        },
+    )
 
 
 def _iso(days):
@@ -93,6 +109,30 @@ def step_post_refresh(context, league_id, platform):
         "/leagues?requestType=REFRESH",
         json={"leagueId": league_id, "platform": platform},
     )
+
+
+@given('the current NFL state is season "{season}" week "{week}"')
+def step_patch_api_nfl_state(context, season, week):
+    # Patch the API's NFL-state fetch (routes imports get_nfl_state by name) so the
+    # refresh up-to-date guard runs against a known season/week without real HTTP.
+    import routes
+
+    state = {"season_type": "regular", "season": season, "week": week}
+    patcher = patch.object(routes, "get_nfl_state", MagicMock(return_value=state))
+    patcher.start()
+    context._patches.append(patcher)
+
+
+@given('league "{canonical}" has a played matchup for season "{season}" week "{week}"')
+def step_seed_played_matchup(context, canonical, season, week):
+    _seed_matchup_week(context, canonical, season, week, played=True)
+
+
+@given(
+    'league "{canonical}" has an unplayed matchup for season "{season}" week "{week}"'
+)
+def step_seed_unplayed_matchup(context, canonical, season, week):
+    _seed_matchup_week(context, canonical, season, week, played=False)
 
 
 @when(

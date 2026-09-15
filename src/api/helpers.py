@@ -136,42 +136,78 @@ def get_nfl_state() -> dict | None:
         return None
 
 
+def _week_is_played(week_data: Any) -> bool:
+    """
+    Return whether a stored matchup week has an actual played result.
+
+    A week counts as played when any of its matchup rows has a positive score.
+    ESPN pre-stores the entire season's schedule, so future, unplayed weeks are
+    persisted as 0-0 rows (winner "TIE"); those are not played. A genuinely played
+    fantasy matchup always has a positive score, so a score-based check is
+    unambiguous (unlike ``winner``, which is "TIE" for a 0-0 unplayed week) and
+    works for both ESPN and Sleeper.
+
+    Args:
+        week_data: The ``data`` list stored on a MATCHUPS# item (list of matchup
+            rows, each with ``team_a_score`` / ``team_b_score``).
+
+    Returns:
+        True if any matchup row in the week has a positive score, else False.
+    """
+    for row in week_data or []:
+        if (row.get("team_a_score") or 0) > 0 or (row.get("team_b_score") or 0) > 0:
+            return True
+    return False
+
+
 def get_latest_stored_matchup(canonical_league_id: str) -> tuple[int, int] | None:
     """
-    Finds the most recent stored matchup for a league.
+    Finds the most recent *played* stored matchup week for a league.
 
     Matchups are keyed SK=MATCHUPS#{season}#WEEK#{week:02d}. Because season is
     4-digit and week is zero-padded, the lexicographically-largest MATCHUPS# SK
-    is the latest stored season/week.
+    is the latest stored season/week — but that is not necessarily the latest
+    *played* week. ESPN stores the whole season's schedule up front, so future,
+    unplayed weeks are persisted as 0-0 rows; taking the max SK would make an
+    in-season ESPN league look permanently up to date. We therefore walk MATCHUPS#
+    items newest-first (descending SK == descending season/week) and return the
+    first week with an actual played result. Sleeper only ever stores played weeks,
+    so its latest played week equals its latest stored week.
 
     Args:
         canonical_league_id: The canonical league ID.
 
     Returns:
-        A (season, week) tuple for the most recent stored matchup, or None if
-        the league has no matchups stored.
+        A (season, week) tuple for the most recent *played* stored matchup, or None
+        if the league has no played matchups stored.
     """
+    query_kwargs: dict[str, Any] = {
+        "KeyConditionExpression": Key("PK").eq(f"LEAGUE#{canonical_league_id}")
+        & Key("SK").begins_with("MATCHUPS#"),
+        "ScanIndexForward": False,
+        # "data" is a DynamoDB reserved word, so alias it in the projection.
+        "ProjectionExpression": "SK, #data",
+        "ExpressionAttributeNames": {"#data": "data"},
+    }
     try:
-        response = main.table.query(
-            KeyConditionExpression=Key("PK").eq(f"LEAGUE#{canonical_league_id}")
-            & Key("SK").begins_with("MATCHUPS#"),
-            ScanIndexForward=False,
-            Limit=1,
-            ProjectionExpression="SK",
-        )
+        while True:
+            response = main.table.query(**query_kwargs)
+            for item in response.get("Items", []):
+                if not _week_is_played(item.get("data")):
+                    continue
+                # SK format: MATCHUPS#{season}#WEEK#{week}
+                _, season, _, week = item["SK"].split("#")
+                return int(season), int(week)
+            last_key = response.get("LastEvaluatedKey")
+            if not last_key:
+                return None
+            query_kwargs["ExclusiveStartKey"] = last_key
     except botocore.exceptions.ClientError as e:
         logger.error("Boto error occurred: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve league data",
         )
-
-    items = response.get("Items", [])
-    if not items:
-        return None
-    # SK format: MATCHUPS#{season}#WEEK#{week}
-    _, season, _, week = items[0]["SK"].split("#")
-    return int(season), int(week)
 
 
 def get_league_seasons(canonical_league_id: str) -> list[str]:

@@ -545,8 +545,15 @@ class TestOnboardLeagueEndpoint:
             {"Item": league_lookup_item},
             {"Item": league_metadata_item},
         ]
-        # Default state is 2025 week 10; stored matchup is also 2025 week 10.
-        mock_table.query.return_value = {"Items": [{"SK": "MATCHUPS#2025#WEEK#10"}]}
+        # Default state is 2025 week 10; latest played matchup is also 2025 week 10.
+        mock_table.query.return_value = {
+            "Items": [
+                {
+                    "SK": "MATCHUPS#2025#WEEK#10",
+                    "data": [{"team_a_score": 118.0, "team_b_score": 102.0}],
+                }
+            ]
+        }
         response = client.post(
             "/leagues?requestType=REFRESH",
             json={"leagueId": "123", "platform": "SLEEPER"},
@@ -561,7 +568,14 @@ class TestOnboardLeagueEndpoint:
             {"Item": league_lookup_item},
             {"Item": league_metadata_item},
         ]
-        mock_table.query.return_value = {"Items": [{"SK": "MATCHUPS#2025#WEEK#11"}]}
+        mock_table.query.return_value = {
+            "Items": [
+                {
+                    "SK": "MATCHUPS#2025#WEEK#11",
+                    "data": [{"team_a_score": 118.0, "team_b_score": 102.0}],
+                }
+            ]
+        }
         response = client.post(
             "/leagues?requestType=REFRESH",
             json={"leagueId": "123", "platform": "SLEEPER"},
@@ -606,6 +620,46 @@ class TestOnboardLeagueEndpoint:
         response = client.post(
             "/leagues?requestType=REFRESH",
             json={"leagueId": "123", "platform": "SLEEPER"},
+        )
+        assert response.status_code == 201
+        mock_lambda_client.invoke.assert_called_once()
+
+    def test_refresh_allowed_when_only_unplayed_later_weeks_stored(
+        self,
+        client,
+        mock_table,
+        mock_lambda_client,
+        league_lookup_item,
+        league_metadata_item,
+    ):
+        # An ESPN league pre-stores the full-season schedule, so weeks after the
+        # latest played one exist as 0-0 rows. Default state is 2025 week 10; the
+        # latest *played* week (09) is behind state, so the refresh must proceed
+        # even though weeks 11 and 18 are already stored.
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+        ]
+        mock_table.query.return_value = {
+            "Items": [
+                {
+                    "SK": "MATCHUPS#2025#WEEK#18",
+                    "data": [{"team_a_score": 0.0, "team_b_score": 0.0}],
+                },
+                {
+                    "SK": "MATCHUPS#2025#WEEK#11",
+                    "data": [{"team_a_score": 0.0, "team_b_score": 0.0}],
+                },
+                {
+                    "SK": "MATCHUPS#2025#WEEK#09",
+                    "data": [{"team_a_score": 121.0, "team_b_score": 108.0}],
+                },
+            ]
+        }
+        mock_lambda_client.invoke.return_value = {}
+        response = client.post(
+            "/leagues?requestType=REFRESH",
+            json={"leagueId": "123", "platform": "ESPN"},
         )
         assert response.status_code == 201
         mock_lambda_client.invoke.assert_called_once()
@@ -1385,17 +1439,104 @@ class TestGetNflState:
 
 
 class TestGetLatestStoredMatchup:
-    def test_parses_latest_season_and_week(self, mock_table):
+    def test_returns_max_week_when_all_played(self, mock_table):
+        # A fully-played league returns its latest stored week (Sleeper behavior,
+        # unchanged). The second row in the week exercises the multi-row scan: the
+        # first row is 0-0 and the played row follows it.
         import main
 
-        mock_table.query.return_value = {"Items": [{"SK": "MATCHUPS#2025#WEEK#07"}]}
+        mock_table.query.return_value = {
+            "Items": [
+                {
+                    "SK": "MATCHUPS#2025#WEEK#07",
+                    "data": [
+                        {"team_a_score": 0.0, "team_b_score": 0.0},
+                        {"team_a_score": 120.5, "team_b_score": 98.0},
+                    ],
+                },
+            ]
+        }
         assert main.get_latest_stored_matchup("canonical-abc") == (2025, 7)
+
+    def test_skips_unplayed_future_weeks(self, mock_table):
+        # ESPN pre-stores the full-season schedule, so weeks 03 and 18 are stored
+        # as 0-0 rows. The guard must fall back to the latest *played* week (02).
+        # Week 02 is scored only on team_b to exercise that branch.
+        import main
+
+        mock_table.query.return_value = {
+            "Items": [
+                {
+                    "SK": "MATCHUPS#2025#WEEK#18",
+                    "data": [{"team_a_score": 0.0, "team_b_score": 0.0}],
+                },
+                {
+                    "SK": "MATCHUPS#2025#WEEK#03",
+                    "data": [{"team_a_score": 0.0, "team_b_score": 0.0}],
+                },
+                {
+                    "SK": "MATCHUPS#2025#WEEK#02",
+                    "data": [{"team_a_score": 0.0, "team_b_score": 95.0}],
+                },
+                {
+                    "SK": "MATCHUPS#2025#WEEK#01",
+                    "data": [{"team_a_score": 100.0, "team_b_score": 88.0}],
+                },
+            ]
+        }
+        assert main.get_latest_stored_matchup("canonical-abc") == (2025, 2)
+
+    def test_returns_none_when_all_unplayed(self, mock_table):
+        # Only unplayed weeks stored (0-0 or null scores) -> None, so the guard
+        # does not block and the refresh proceeds.
+        import main
+
+        mock_table.query.return_value = {
+            "Items": [
+                {
+                    "SK": "MATCHUPS#2025#WEEK#02",
+                    "data": [{"team_a_score": 0.0, "team_b_score": 0.0}],
+                },
+                {
+                    "SK": "MATCHUPS#2025#WEEK#01",
+                    "data": [{"team_a_score": None, "team_b_score": None}],
+                },
+            ]
+        }
+        assert main.get_latest_stored_matchup("canonical-abc") is None
 
     def test_returns_none_when_no_matchups(self, mock_table):
         import main
 
         mock_table.query.return_value = {"Items": []}
         assert main.get_latest_stored_matchup("canonical-abc") is None
+
+    def test_paginates_to_find_played_week(self, mock_table):
+        # The first page holds only an unplayed week and a LastEvaluatedKey; the
+        # played week is on the second page reached via ExclusiveStartKey.
+        import main
+
+        mock_table.query.side_effect = [
+            {
+                "Items": [
+                    {
+                        "SK": "MATCHUPS#2025#WEEK#18",
+                        "data": [{"team_a_score": 0.0, "team_b_score": 0.0}],
+                    }
+                ],
+                "LastEvaluatedKey": {"PK": "LEAGUE#canonical-abc", "SK": "cursor"},
+            },
+            {
+                "Items": [
+                    {
+                        "SK": "MATCHUPS#2025#WEEK#09",
+                        "data": [{"team_a_score": 130.0, "team_b_score": 121.0}],
+                    }
+                ]
+            },
+        ]
+        assert main.get_latest_stored_matchup("canonical-abc") == (2025, 9)
+        assert mock_table.query.call_count == 2
 
     def test_raises_500_on_client_error(self, mock_table):
         import main
