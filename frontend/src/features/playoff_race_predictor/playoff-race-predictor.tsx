@@ -261,7 +261,7 @@ function WeekStepper({
             >
               <span
                 className={cn(
-                  'text-[13px] font-semibold',
+                  'text-[13px] font-semibold whitespace-nowrap',
                   i === active ? 'text-primary' : 'text-foreground',
                 )}
               >
