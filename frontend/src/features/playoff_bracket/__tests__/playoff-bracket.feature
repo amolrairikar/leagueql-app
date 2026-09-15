@@ -17,6 +17,11 @@ Feature: Playoff bracket (frontend/playoff-bracket)
     When I open the playoff bracket page
     Then I see "Playoff Picture"
 
+  Scenario: A no-data 404 for the bracket query shows the predictor, not the raw error
+    Given the latest season is in progress and the bracket query returns a no-data 404
+    When I open the playoff bracket page
+    Then I see "Playoff Picture"
+
   Scenario: A season with no bracket shows an empty state
     Given the selected season has no playoff bracket
     When I open the playoff bracket page
