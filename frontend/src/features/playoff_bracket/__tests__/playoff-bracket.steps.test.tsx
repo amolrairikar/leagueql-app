@@ -208,6 +208,92 @@ defineFeature(feature, (test) => {
     });
   });
 
+  test('A seeded-but-unplayed null bracket shows the predictor, not blank columns', ({
+    given,
+    when,
+    then,
+  }) => {
+    given(
+      'the latest season is in progress and the bracket query returns only null-result round-1 matches',
+      () => {
+        // Same in-progress matchup shape as the empty-bracket case, but the bracket
+        // query returns round-1 matches with every winner/loser/position null (the
+        // early-season Sleeper "null bracket"). It must be treated as no bracket.
+        const played = { team_a_score: 100, team_b_score: 90 };
+        const unplayed = { team_a_score: 0, team_b_score: 0 };
+        const base = {
+          team_a_id: 't1',
+          team_a_display_name: 'alice',
+          team_a_team_name: 'Team alice',
+          team_a_team_logo: null,
+          team_a_starters: [],
+          team_a_bench: [],
+          team_a_primary_owner_id: 'p1',
+          team_a_secondary_owner_id: null,
+          team_b_id: 't2',
+          team_b_display_name: 'bob',
+          team_b_team_name: 'Team bob',
+          team_b_team_logo: null,
+          team_b_starters: [],
+          team_b_bench: [],
+          team_b_primary_owner_id: 'p2',
+          team_b_secondary_owner_id: null,
+          playoff_tier_type: 'NONE',
+          playoff_round: null,
+          winner: 't1',
+          loser: 't2',
+          season: '2024',
+        };
+        const nullMatch = {
+          match_id: 1,
+          round: 1,
+          team_1_id: 't1',
+          team_1_display_name: 'alice',
+          team_1_team_name: 'Team alice',
+          team_1_team_logo: null,
+          team_2_id: 't2',
+          team_2_display_name: 'bob',
+          team_2_team_name: 'Team bob',
+          team_2_team_logo: null,
+          winner: null,
+          loser: null,
+          position: null,
+          team_1_from: null,
+          team_2_from: null,
+          season: '2024',
+        };
+        server.use(
+          leagueQuery({
+            PLAYOFF_BRACKET: [nullMatch],
+            MATCHUPS: [
+              { ...base, ...played, week: '1' },
+              { ...base, ...unplayed, week: '2' },
+            ],
+            WEEKLY_STANDINGS: [],
+            LEAGUE_SETTINGS: [
+              {
+                season: '2024',
+                num_playoff_teams: 2,
+                num_playoff_teams_assumed: false,
+                playoff_week_start: 3,
+                regular_season_weeks: 2,
+              },
+            ],
+          }),
+        );
+      },
+    );
+    when('I open the playoff bracket page', async () => {
+      await renderRoute(<PlayoffBracket />, {
+        route: '/playoff_bracket',
+        league: LEAGUE,
+      });
+    });
+    then(/^I see "(.*)"$/, async (text) => {
+      expect((await screen.findAllByText(text)).length).toBeGreaterThan(0);
+    });
+  });
+
   test('A season with no bracket shows an empty state', ({
     given,
     when,

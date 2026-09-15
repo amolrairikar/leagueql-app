@@ -23,6 +23,16 @@ const MATCHUPS_WITH_UNPLAYED: MatchupItem[] = [
   },
 ];
 
+// An in-progress season: ESPN reports `rankCalculatedFinal` (→ `final_rank`) as 0
+// until the season is finalized, and no manager is champion yet. Each team's finish
+// must fall back to its current standings position (wins, then points-for) — Alice
+// (1-0) sits 1st, Bob (0-1) 2nd — never "0th" from ordinal(0).
+const IN_PROGRESS_STANDINGS = STANDINGS.map((s) => ({
+  ...s,
+  final_rank: 0,
+  champion: 'No',
+}));
+
 const feature = loadFeature(
   'src/features/manager_history/__tests__/manager-history.feature',
 );
@@ -76,6 +86,36 @@ defineFeature(feature, (test) => {
         expect(within(dialog).getByText(/130\.0.120\.0/)).toBeInTheDocument();
         // The unplayed 0-0 week has no score cell (0.0–0.0) in the schedule.
         expect(within(dialog).queryByText(/0\.0.0\.0/)).toBeNull();
+      },
+    );
+  });
+
+  test('An in-progress season shows the current standings position, not rank 0', ({
+    given,
+    when,
+    then,
+  }) => {
+    given(
+      'manager history data for an in-progress season with final_rank 0',
+      () => {
+        server.use(
+          leagueQuery({ SEASON_STANDINGS: IN_PROGRESS_STANDINGS, MATCHUPS }),
+        );
+      },
+    );
+    when('I open the manager history page', async () => {
+      await renderRoute(<ManagerHistory />, {
+        route: '/manager_history',
+        league: LEAGUE,
+      });
+    });
+    then(
+      'the season card shows the current standings finish "1st" and never "0th"',
+      async () => {
+        // Default manager Alice (1-0) leads the in-progress season → 1st, derived
+        // from the standings; final_rank 0 must never render as "0th".
+        expect((await screen.findAllByText('1st')).length).toBeGreaterThan(0);
+        expect(screen.queryByText(/0th/)).toBeNull();
       },
     );
   });

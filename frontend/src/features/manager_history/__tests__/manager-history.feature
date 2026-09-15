@@ -13,6 +13,11 @@ Feature: Manager history (frontend/manager-history)
     And I open the 2024 season schedule
     Then the schedule shows the played game but not the unplayed 0-0 game
 
+  Scenario: An in-progress season shows the current standings position, not rank 0
+    Given manager history data for an in-progress season with final_rank 0
+    When I open the manager history page
+    Then the season card shows the current standings finish "1st" and never "0th"
+
   Scenario: A failed load surfaces an inline error
     Given the manager history data fails to load
     When I open the manager history page

@@ -22,6 +22,11 @@ Feature: Playoff bracket (frontend/playoff-bracket)
     When I open the playoff bracket page
     Then I see "Playoff Picture"
 
+  Scenario: A seeded-but-unplayed null bracket shows the predictor, not blank columns
+    Given the latest season is in progress and the bracket query returns only null-result round-1 matches
+    When I open the playoff bracket page
+    Then I see "Playoff Picture"
+
   Scenario: A season with no bracket shows an empty state
     Given the selected season has no playoff bracket
     When I open the playoff bracket page
