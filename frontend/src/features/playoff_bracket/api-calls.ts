@@ -1,5 +1,6 @@
 import { queryLeague } from '@/components/api/leagues';
 import type { Platform, MatchupItem } from '@/components/api/types';
+import { ApiError } from '@/lib/api-client';
 
 export type Matchup = MatchupItem;
 
@@ -48,11 +49,21 @@ export function getPlayoffBracket(
   platform: Platform,
   season: string,
 ): Promise<GetPlayoffBracketResponse> {
+  // The backend 404s "no data" when no PLAYOFF_BRACKET#{season} item exists yet
+  // (playoffs haven't started). That's an empty bracket, not a load error, so we
+  // resolve it to no matches — letting the page hand off to the playoff-race
+  // predictor. Any other error (e.g. 5xx) still rejects. Mirrors the tolerated-404
+  // pattern in components/api/leagues.ts (getMigrationMapping).
   return queryLeague<BracketMatch>(
     leagueId,
     platform,
     `PLAYOFF_BRACKET#${season}`,
-  );
+  ).catch((err: unknown) => {
+    if (err instanceof ApiError && err.status === 404) {
+      return { data: [] as BracketMatch[] };
+    }
+    throw err;
+  });
 }
 
 export function getMatchups(
