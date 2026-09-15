@@ -1090,7 +1090,7 @@ module "sleeper-refresh-lambda-role" {
           "lambda:InvokeFunction"
         ]
         Resource = [
-          "arn:aws:lambda:us-east-1:${var.account_id}:function:leagueql-onboarder-${var.environment}-east"
+          "arn:aws:lambda:us-east-1:${var.account_id}:function:leagueql-onboarder-${var.environment}"
         ]
       }
     ]
