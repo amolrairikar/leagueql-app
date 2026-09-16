@@ -480,7 +480,16 @@ function BracketContent({
   const { matches, matchups, recordMap, championshipWeek, maxRound } =
     result.data;
 
-  if (matches.length === 0) {
+  // A bracket with no decided result and no final placement is a seeded-but-
+  // unplayed "null bracket" (e.g. an early-season Sleeper league where only
+  // round-1 matchups carry concrete teams, so the processor drops the null-team
+  // championship/later rounds). It has no championship or semifinals to draw, so
+  // treat it the same as an empty bracket rather than rendering blank columns.
+  const hasRenderableBracket = matches.some(
+    (m) => m.winner !== null || m.position !== null,
+  );
+
+  if (!hasRenderableBracket) {
     // While the latest season's regular season is still in progress there is no
     // bracket yet — offer the interactive predictor instead of a dead empty state.
     // The predictor self-gates (renders the empty message if the season isn't
