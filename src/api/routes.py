@@ -235,20 +235,14 @@ def onboard_league(
     correlation_id_var.set(correlation_id)
     platform = Platform(payload.platform)
 
-    if platform == Platform.YAHOO:
-        # Yahoo onboarding is gated on a linked OAuth token (backend/yahoo-oauth). This
-        # increment ships linking only: a linked caller gets a neutral "coming soon"
-        # signal (the Yahoo Fantasy data client is a later increment); an unlinked caller
-        # gets the YAHOO_AUTH "link first" signal the frontend routes to the OAuth step.
-        if not yahoo_oauth.has_valid_link(clerk_user_id):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Link your Yahoo account first",
-            )
-        response.status_code = status.HTTP_200_OK
-        return APIResponse(
-            detail="Your Yahoo account is linked. Yahoo league onboarding is coming soon.",
-            data={"code": "YAHOO_COMING_SOON"},
+    if platform == Platform.YAHOO and not yahoo_oauth.has_valid_link(clerk_user_id):
+        # Yahoo onboarding/refresh is gated on a linked OAuth token (backend/yahoo-oauth):
+        # an unlinked caller gets the "link first" signal the frontend routes to the OAuth
+        # step. A linked caller falls through to the normal onboard/refresh path below — the
+        # onboarder resolves the Yahoo access token from the owner's Clerk id (no s2/swid).
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Link your Yahoo account first",
         )
 
     canonical_league_id = None

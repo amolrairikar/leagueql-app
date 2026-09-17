@@ -30,28 +30,42 @@ from main import logger
 
 from common.secrets import get_secret_from_env_param
 
+# The token engine (encrypt/refresh/store/get_valid_access_token) lives in a shared module
+# so the onboarder Lambda can reuse it. These names are re-exported to preserve this module's
+# public surface (backend/yahoo-oauth); the callback/authorize handshake below stays here.
+from common.yahoo_tokens import (
+    TOKEN_EXPIRY_SKEW_SECONDS,  # noqa: F401 — re-exported public surface
+    YAHOO_TOKEN_URL,
+    YahooReauthRequired,  # noqa: F401 — re-exported public surface
+    YahooTokenClient,
+)
+
 YAHOO_AUTHORIZE_URL = "https://api.login.yahoo.com/oauth2/request_auth"
-YAHOO_TOKEN_URL = "https://api.login.yahoo.com/oauth2/get_token"  # noqa: S105  URL, not a secret
 
 # Single-use state lives ~10 minutes — long enough for a user to complete the Yahoo
 # consent screen, short enough to bound replay. The DynamoDB TTL reaps expired items;
 # the code also rejects any state past its stored ``expires_at`` on read.
 OAUTH_STATE_TTL_SECONDS = 600
 
-# Refresh the access token when it is within this many seconds of its 1-hour expiry,
-# so a data call never races the boundary.
-TOKEN_EXPIRY_SKEW_SECONDS = 120
-
 # The onboarding gate reports this code so the frontend routes to the OAuth (re)link step
 # rather than showing a generic failure.
 YAHOO_AUTH_CODE = "YAHOO_AUTH"
 
 
-class YahooReauthRequired(Exception):
-    """The stored Yahoo link is missing or its refresh token was revoked.
+def _token_client() -> YahooTokenClient:
+    """Build the shared token engine from ``main.*`` AWS clients at call time.
 
-    Surfaced to the onboarding/refresh flows as the ``YAHOO_AUTH`` re-link signal.
+    Reading ``main.*`` here (rather than at import) keeps test patches on ``main.table`` /
+    ``main.kms_client`` / ``main.http_requests`` effective for the delegating helpers below.
     """
+    return YahooTokenClient(
+        table=main.table,
+        kms_client=main.kms_client,
+        kms_key_id=main.YAHOO_KMS_KEY_ID,
+        http_requests=main.http_requests,
+        redirect_uri=main.YAHOO_REDIRECT_URI,
+        client_id_provider=_client_id,
+    )
 
 
 def _client_id() -> str:
@@ -201,101 +215,45 @@ def exchange_code_for_tokens(code: str, code_verifier: str) -> dict[str, Any]:
     return response.json()
 
 
-def refresh_tokens(refresh_token: str) -> dict[str, Any]:
-    """Mint a fresh access token from a stored ``refresh_token``.
+# The following delegate to the shared token engine (common/yahoo_tokens.py). They are kept
+# as module-level names so this module's public surface (and its callers/tests) is unchanged;
+# each builds the engine from ``main.*`` at call time via ``_token_client()``.
 
-    Raises:
-        YahooReauthRequired: when Yahoo returns ``invalid_grant`` (revoked refresh token).
-        requests.RequestException: on other network failures.
-    """
-    response = main.http_requests.post(
-        YAHOO_TOKEN_URL,
-        data={
-            "client_id": _client_id(),
-            "grant_type": "refresh_token",
-            "redirect_uri": main.YAHOO_REDIRECT_URI,
-            "refresh_token": refresh_token,
-        },
-        headers={"Content-Type": "application/x-www-form-urlencoded"},
-        timeout=10,
-    )
-    if response.status_code == 400 and "invalid_grant" in response.text:
-        raise YahooReauthRequired("Yahoo refresh token was revoked")
-    response.raise_for_status()
-    return response.json()
+
+def refresh_tokens(refresh_token: str) -> dict[str, Any]:
+    """Mint a fresh access token from a stored ``refresh_token`` (see YahooTokenClient)."""
+    return _token_client().refresh_tokens(refresh_token)
 
 
 def _encrypt(plaintext: str) -> str:
     """KMS-encrypt a token value, returning base64 ciphertext for DynamoDB storage."""
-    result = main.kms_client.encrypt(
-        KeyId=main.YAHOO_KMS_KEY_ID, Plaintext=plaintext.encode()
-    )
-    return base64.b64encode(result["CiphertextBlob"]).decode()
+    return _token_client().encrypt(plaintext)
 
 
 def _decrypt(ciphertext_b64: str) -> str:
     """KMS-decrypt base64 ciphertext back to the plaintext token value."""
-    blob = base64.b64decode(ciphertext_b64)
-    result = main.kms_client.decrypt(KeyId=main.YAHOO_KMS_KEY_ID, CiphertextBlob=blob)
-    return result["Plaintext"].decode()
+    return _token_client().decrypt(ciphertext_b64)
 
 
 def store_tokens(clerk_user_id: str, token_response: dict[str, Any]) -> None:
-    """Persist an encrypted per-user ``YAHOO_OAUTH`` token item.
-
-    Access and refresh tokens are KMS-encrypted; ``expires_at`` is computed from Yahoo's
-    ``expires_in`` (1-hour lifetime). Item key: ``PK=USER#{clerk_user_id}, SK=YAHOO_OAUTH``.
-    """
-    now = int(time.time())
-    expires_in = int(token_response.get("expires_in", 3600))
-    main.table.put_item(
-        Item={
-            "PK": f"USER#{clerk_user_id}",
-            "SK": "YAHOO_OAUTH",
-            "access_token": _encrypt(token_response["access_token"]),
-            "refresh_token": _encrypt(token_response["refresh_token"]),
-            "token_type": token_response.get("token_type", "bearer"),
-            "expires_at": now + expires_in,
-            "updated_at": now,
-        }
-    )
+    """Persist an encrypted per-user ``YAHOO_OAUTH`` token item (see YahooTokenClient)."""
+    _token_client().store_tokens(clerk_user_id, token_response)
 
 
 def _get_token_item(clerk_user_id: str) -> dict[str, Any] | None:
     """Read the raw (still-encrypted) ``YAHOO_OAUTH`` item for a user, or ``None``."""
-    try:
-        response = main.table.get_item(
-            Key={"PK": f"USER#{clerk_user_id}", "SK": "YAHOO_OAUTH"}
-        )
-    except botocore.exceptions.ClientError as e:
-        logger.error("Failed to read Yahoo token item: %s", e)
-        return None
-    return response.get("Item")
+    return _token_client().get_token_item(clerk_user_id)
 
 
 def has_valid_link(clerk_user_id: str) -> bool:
-    """Return whether the caller has a stored Yahoo link (the onboarding gate).
-
-    A stored item means the account is linked; a revoked refresh token only surfaces later,
-    at data-fetch time, as the ``YAHOO_AUTH`` re-link signal.
-    """
-    return _get_token_item(clerk_user_id) is not None
+    """Return whether the caller has a stored Yahoo link (the onboarding gate)."""
+    return _token_client().has_valid_link(clerk_user_id)
 
 
 def get_valid_access_token(clerk_user_id: str) -> str:
     """Return a currently-valid Yahoo access token for the caller, refreshing if needed.
 
-    Refreshes proactively when within the expiry skew (not only on a 401). Used by the
-    future Yahoo data client.
-
     Raises:
         YahooReauthRequired: when no link exists or the refresh token was revoked.
     """
-    item = _get_token_item(clerk_user_id)
-    if item is None:
-        raise YahooReauthRequired("No Yahoo link for user")
-    if int(item["expires_at"]) - TOKEN_EXPIRY_SKEW_SECONDS > int(time.time()):
-        return _decrypt(item["access_token"])
-    refreshed = refresh_tokens(_decrypt(item["refresh_token"]))
-    store_tokens(clerk_user_id, refreshed)
-    return refreshed["access_token"]
+    return _token_client().get_valid_access_token(clerk_user_id)

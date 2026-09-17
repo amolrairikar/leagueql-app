@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { getLeague } from '@/components/api/leagues';
 import { Spinner } from '@/components/spinner';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -9,12 +10,16 @@ import {
   getYahooAuthorizeUrl,
   onboardYahooLeague,
 } from '@/features/connect_league/api-calls';
-import { ApiError } from '@/lib/api-client';
-import { isDemoMode } from '@/lib/cookie-handler';
+import { pollForCompletion } from '@/features/connect_league/poll';
+import { ApiError, clearApiCache } from '@/lib/api-client';
+import { isDemoMode, setLeagueCookies } from '@/lib/cookie-handler';
+
+// The backend re-link signal (backend/yahoo-oauth): a job that fails because the owner's
+// Yahoo token was revoked mid-onboard carries this code so we prompt a reconnect.
+const YAHOO_AUTH_CODE = 'YAHOO_AUTH';
 
 type YahooState =
-  | 'linking' // resolving the onboard after a successful link
-  | 'coming_soon' // linked, but the Yahoo data client is not shipped yet
+  | 'linking' // resolving the onboard + polling after a successful link
   | 'reconnect' // the link was lost/expired — restart OAuth
   | 'declined' // the user cancelled or the link failed
   | 'error'; // an unexpected failure
@@ -24,9 +29,10 @@ type YahooState =
  *
  * Yahoo redirects the browser back to the `/connect_league` page with a platform=YAHOO
  * query param and a yahooLinked flag (1 on success, 0 on decline/failure).
- * On a successful link this resumes onboarding for the carried league id (which currently
- * surfaces a "coming soon" notice while the Yahoo data client is unshipped); a declined or
- * lost link shows a retry / reconnect prompt. No Yahoo tokens ever touch the browser.
+ * On a successful link this resumes onboarding for the carried league id and polls the job to
+ * completion (the same flow as ESPN/Sleeper), navigating home on success; a declined link, a
+ * lost link, or a `YAHOO_AUTH` job failure shows a retry / reconnect prompt. No Yahoo tokens
+ * ever touch the browser.
  */
 export default function YahooConnectReturn({
   linked,
@@ -49,20 +55,29 @@ export default function YahooConnectReturn({
     void (async () => {
       try {
         const result = await onboardYahooLeague(leagueId);
-        if (result.data?.code === 'YAHOO_COMING_SOON') {
-          setState('coming_soon');
-        } else {
-          setState('error');
+        const pollResult = await pollForCompletion(result.data.correlation_id);
+        if (pollResult.status === 'failed') {
+          // A revoked/expired Yahoo token surfaces as a FAILED job with YAHOO_AUTH —
+          // prompt a reconnect rather than a generic failure (backend/yahoo-oauth).
+          setState(
+            pollResult.failureCode === YAHOO_AUTH_CODE ? 'reconnect' : 'error',
+          );
+          return;
         }
+        // Onboarding wrote new precomputed views; drop cached reads before re-reading.
+        clearApiCache();
+        const leagueData = await getLeague(leagueId, 'YAHOO');
+        setLeagueCookies(leagueId, 'YAHOO', leagueData.data.seasons);
+        void navigate('/home');
       } catch (err) {
-        // 403 means the backend has no valid link for this caller (revoked/expired) —
-        // prompt a reconnect rather than a generic failure (backend/yahoo-oauth).
+        // 403 at submit means the backend has no valid link for this caller
+        // (revoked/expired) — prompt a reconnect (backend/yahoo-oauth).
         setState(
           err instanceof ApiError && err.status === 403 ? 'reconnect' : 'error',
         );
       }
     })();
-  }, [linked, leagueId]);
+  }, [linked, leagueId, navigate]);
 
   const restartOauth = async () => {
     // Demo mode never links a real account (frontend/demo-mode); bounce home instead.
@@ -99,18 +114,8 @@ export default function YahooConnectReturn({
             {state === 'linking' && (
               <div className="flex items-center justify-center gap-2 py-4 text-muted-foreground">
                 <Spinner />
-                Finishing up your Yahoo connection
+                Onboarding your Yahoo league — this can take a moment
               </div>
-            )}
-
-            {state === 'coming_soon' && (
-              <Alert>
-                <AlertTitle>Yahoo account connected</AlertTitle>
-                <AlertDescription>
-                  Your Yahoo account is linked. Yahoo league onboarding is
-                  coming soon — we&apos;ll email you when it&apos;s ready.
-                </AlertDescription>
-              </Alert>
             )}
 
             {state === 'declined' && (

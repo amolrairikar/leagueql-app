@@ -91,6 +91,7 @@ with Diagram(
             sleeper_refresh = Lambda("Sleeper refresh\n(weekly)")
             player_meta = Lambda("Player metadata\nrefresher")
             stats_task = Fargate("Sleeper stats\nrefresher (Fargate)")
+            yahoo_stats_task = Fargate("Yahoo player-data\nrefresher (Fargate)")
             admin_report = Lambda("Admin onboarding\nreport (nightly, prod)")
 
         discord_fn = Lambda("Discord notifier\nLambda")
@@ -119,7 +120,9 @@ with Diagram(
     api >> ASYNC >> onboarder
     api >> DATA >> ddb  # job status, metadata reads/writes
     onboarder >> Edge(label="poison") >> dlq
-    onboarder >> Edge(label="fetch seasons") >> [espn, sleeper]
+    onboarder >> Edge(label="fetch seasons") >> [espn, sleeper, yahoo]
+    # Yahoo onboarding decrypts the owner's stored token to authenticate the fetch.
+    onboarder >> Edge(label="decrypt Yahoo token") >> kms
     onboarder >> Edge(label="raw payloads +\nmanifest.json") >> s3
     (
         s3
@@ -129,12 +132,27 @@ with Diagram(
     processor >> Edge(label="precomputed views") >> ddb
 
     # ── Scheduled jobs ────────────────────────────────────────────────────────
-    evb >> SCHED >> [sleeper_refresh, player_meta, stats_task, admin_report]
+    (
+        evb
+        >> SCHED
+        >> [
+            sleeper_refresh,
+            player_meta,
+            stats_task,
+            yahoo_stats_task,
+            admin_report,
+        ]
+    )
     sleeper_refresh >> ASYNC >> onboarder
     # Player metadata + Sleeper stats land in S3; the processor reads both prefixes
     # (alongside the raw payloads) when building precomputed views.
     player_meta >> Edge(label="player metadata\nJSON") >> s3
     stats_task >> Edge(label="player stats\nJSON") >> s3
+    # The Yahoo player-data task uses a service Yahoo credential (decrypted via KMS) to fetch
+    # player metadata + season scoring, writing both caches the processor reads.
+    yahoo_stats_task >> Edge(label="fetch players\n+ stats") >> yahoo
+    yahoo_stats_task >> Edge(label="decrypt service token") >> kms
+    yahoo_stats_task >> Edge(label="player metadata +\nstats JSON") >> s3
     # Nightly onboarding-health digest: reads the METADATA all-leagues index (GSI3)
     # and posts to the same Discord channel as the alert notifier (webhook URL from SSM).
     admin_report >> Edge(label="query GSI3\n(METADATA)") >> ddb

@@ -300,6 +300,32 @@ module "onboarding-lambda-role" {
         Resource = [
           "arn:aws:sqs:us-east-1:${var.account_id}:leagueql-onboarder-dlq-${var.environment}"
         ]
+      },
+      {
+        # backend/league-onboarding (Yahoo): the onboarder reads the Yahoo Consumer Key
+        # (client_id) SecureString to refresh the onboarding owner's token.
+        Sid    = "ReadYahooClientIdSsmParameter"
+        Effect = "Allow"
+        Action = [
+          "ssm:GetParameter"
+        ]
+        Resource = [
+          "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/yahoo/client_id",
+          "arn:aws:ssm:us-west-2:${var.account_id}:parameter/leagueql/${var.environment}/yahoo/client_id"
+        ]
+      },
+      {
+        # backend/league-onboarding (Yahoo): decrypt the owner's stored Yahoo token (and
+        # re-encrypt on refresh) with the single us-east-1 KMS key (via YAHOO_KMS_REGION).
+        Sid    = "EncryptDecryptYahooTokens"
+        Effect = "Allow"
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt"
+        ]
+        Resource = [
+          aws_kms_key.yahoo_tokens.arn
+        ]
       }
     ]
   })
@@ -1006,6 +1032,244 @@ module "sleeper-stats-events-role" {
         Resource = [
           module.sleeper-player-stats-refresher-task-role.role_arn,
           module.sleeper-stats-task-exec-role.role_arn
+        ]
+      }
+    ]
+  })
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    component   = "data-processing"
+    managed-by  = "terraform"
+  }
+}
+
+# --- Yahoo player-data refresher (backend/yahoo-player-stats-refresher) ---
+resource "aws_ecr_repository" "yahoo_player_stats_refresher" {
+  provider             = aws.primary
+  name                 = "leagueql-yahoo-player-stats-refresher-${var.environment}"
+  image_tag_mutability = "MUTABLE"
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    component   = "data-processing"
+    managed-by  = "terraform"
+  }
+}
+
+resource "aws_ecr_lifecycle_policy" "yahoo_player_stats_refresher" {
+  provider   = aws.primary
+  repository = aws_ecr_repository.yahoo_player_stats_refresher.name
+
+  policy = jsonencode({
+    rules = [
+      {
+        rulePriority = 1
+        description  = "Keep only the last 10 images"
+        selection = {
+          tagStatus   = "any"
+          countType   = "imageCountMoreThan"
+          countNumber = 10
+        }
+        action = {
+          type = "expire"
+        }
+      }
+    ]
+  })
+}
+
+# Task role — the container's runtime identity: it reads/writes the Yahoo player-data caches
+# and obtains/refreshes the service account's Yahoo token (DynamoDB item + KMS + SSM client id).
+module "yahoo-player-stats-refresher-task-role" {
+  source           = "../../modules/iam-role"
+  role_name        = "leagueql-${var.environment}-yahoo-player-stats-refresher-task-role"
+  role_description = "Task role for Yahoo player-data refresher Fargate task."
+  trust_policy_json = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ecs-tasks.amazonaws.com"
+        }
+      }
+    ]
+  })
+  role_policy_json = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        # So a GetObject on a not-yet-existing cache returns 404 NoSuchKey (fresh-start
+        # bootstrap) rather than 403 AccessDenied.
+        Sid    = "ListBucket"
+        Effect = "Allow"
+        Action = [
+          "s3:ListBucket"
+        ]
+        Resource = [
+          local.primary_bucket_arn
+        ]
+      },
+      {
+        # This task produces both the Yahoo metadata and stats caches.
+        Sid    = "ReadWritePlayerCaches"
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject"
+        ]
+        Resource = [
+          "${local.primary_bucket_arn}/player-metadata/yahoo_nfl_players.json",
+          "${local.primary_bucket_arn}/player-stats/yahoo_nfl_player_stats.json",
+          "${local.primary_bucket_arn}/player-stats/test_yahoo*.json"
+        ]
+      },
+      {
+        # Read the service account's stored Yahoo token and re-store it on refresh.
+        Sid    = "ReadWriteYahooToken"
+        Effect = "Allow"
+        Action = [
+          "dynamodb:GetItem",
+          "dynamodb:PutItem"
+        ]
+        Resource = [
+          module.dynamodb.primary_table_arn
+        ]
+      },
+      {
+        Sid    = "ReadYahooClientIdSsmParameter"
+        Effect = "Allow"
+        Action = [
+          "ssm:GetParameter"
+        ]
+        Resource = [
+          "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/yahoo/client_id",
+          "arn:aws:ssm:us-west-2:${var.account_id}:parameter/leagueql/${var.environment}/yahoo/client_id"
+        ]
+      },
+      {
+        Sid    = "EncryptDecryptYahooTokens"
+        Effect = "Allow"
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt"
+        ]
+        Resource = [
+          aws_kms_key.yahoo_tokens.arn
+        ]
+      }
+    ]
+  })
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    component   = "data-processing"
+    managed-by  = "terraform"
+  }
+}
+
+# Execution role — used by the ECS agent to pull the image and ship logs.
+module "yahoo-stats-task-exec-role" {
+  source           = "../../modules/iam-role"
+  role_name        = "leagueql-${var.environment}-yahoo-stats-task-exec-role"
+  role_description = "Execution role for the Yahoo player-data refresher Fargate task."
+  trust_policy_json = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ecs-tasks.amazonaws.com"
+        }
+      }
+    ]
+  })
+  role_policy_json = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "ECRAuthToken"
+        Effect   = "Allow"
+        Action   = ["ecr:GetAuthorizationToken"]
+        Resource = "*"
+      },
+      {
+        Sid    = "ECRPull"
+        Effect = "Allow"
+        Action = [
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:BatchGetImage"
+        ]
+        Resource = [
+          aws_ecr_repository.yahoo_player_stats_refresher.arn
+        ]
+      },
+      {
+        Sid    = "WriteTaskLogs"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = [
+          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/ecs/leagueql-yahoo-player-stats-refresher-${var.environment}:*"
+        ]
+      }
+    ]
+  })
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    component   = "data-processing"
+    managed-by  = "terraform"
+  }
+}
+
+# Invoke role assumed by the CloudWatch Events rule to launch the scheduled task.
+module "yahoo-stats-events-role" {
+  source           = "../../modules/iam-role"
+  role_name        = "leagueql-${var.environment}-yahoo-stats-events-role"
+  role_description = "Role assumed by EventBridge to run the Yahoo player-data refresher task."
+  trust_policy_json = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "events.amazonaws.com"
+        }
+      }
+    ]
+  })
+  role_policy_json = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "RunTask"
+        Effect   = "Allow"
+        Action   = ["ecs:RunTask"]
+        Resource = ["arn:aws:ecs:us-east-1:${var.account_id}:task-definition/leagueql-yahoo-player-stats-refresher-${var.environment}:*"]
+      },
+      {
+        Sid    = "PassTaskRoles"
+        Effect = "Allow"
+        Action = ["iam:PassRole"]
+        Resource = [
+          module.yahoo-player-stats-refresher-task-role.role_arn,
+          module.yahoo-stats-task-exec-role.role_arn
         ]
       }
     ]

@@ -125,7 +125,7 @@ the league will not appear as onboarded and a retry will re-run the full onboard
 |---|---|---|---|
 | `PK` | String | Yes | `LEAGUE#{league_id}` |
 | `SK` | String | Yes | `METADATA` |
-| `platform` | String | Yes | Platform the league belongs to. Enum: `ESPN`, `SLEEPER` |
+| `platform` | String | Yes | Platform the league belongs to. Enum: `ESPN`, `SLEEPER`, `YAHOO` |
 | `onboarded_at` | String | Yes | ISO 8601 timestamp of when the league was onboarded |
 | `last_refresh_at` | String | No | ISO 8601 timestamp of when the most recent refresh completed successfully. Used to enforce the per-league weekly refresh cooldown (a manual refresh is rejected with `429` while this is less than 7 days old). |
 | `last_accessed_at` | String | No | ISO 8601 (UTC) timestamp of when a member last opened the league via `GET /leagues/{leagueId}` (backend/league-access-tracking). Written at most once per hour (app-side throttle); absent on older items and on leagues never opened since the field shipped. Used to identify stale leagues for future pruning/archival. |
@@ -136,8 +136,8 @@ the league will not appear as onboarded and a retry will re-run the full onboard
 | `transfer_token_hash` | String | No | sha256 of an outstanding ownership-transfer token (backend/league-authorization). Plaintext is never stored; set by `POST /leagues/{id}/transfer-token` and removed when redeemed. |
 | `transfer_token_expires_at` | String | No | ISO 8601 (UTC) expiry of the outstanding transfer token (backend/league-authorization). |
 | `active_job_id` | String | No | Concurrency-guard pointer to the league's most recently started in-flight job. Holds the `correlation_id` of the current onboard/refresh/migrate; the API dereferences it to the `JOB#{correlation_id}` / `JOB_STATUS` item and rejects a duplicate request only while that job is `IN_PROGRESS`. Written best-effort on job start; stale pointers self-heal because the JOB_STATUS item carries a 24h TTL. |
-| `active_platform` | String | No | Current platform the league is served from after an ESPN → Sleeper migration. Set to the destination platform when a migration is initiated; before any migration `platform` is authoritative. Enum: `ESPN`, `SLEEPER`. |
-| `migrated_from` | String | No | Source platform recorded when a league is migrated to a new platform (e.g. `ESPN` when migrating ESPN → Sleeper). Enum: `ESPN`, `SLEEPER`. |
+| `active_platform` | String | No | Current platform the league is served from after an ESPN → Sleeper migration. Set to the destination platform when a migration is initiated; before any migration `platform` is authoritative. Enum: `ESPN`, `SLEEPER`, `YAHOO`. |
+| `migrated_from` | String | No | Source platform recorded when a league is migrated to a new platform (e.g. `ESPN` when migrating ESPN → Sleeper). Enum: `ESPN`, `SLEEPER`, `YAHOO`. |
 | `migrated_at` | String | No | ISO 8601 (UTC) timestamp of when a platform migration was initiated (set together with `active_platform` and `migrated_from`). |
 
 **Example:**
@@ -728,7 +728,7 @@ job's item.
 | `failure_code` | String | No | Machine-readable failure classification, only set on `FAILED`. Enum: `INVALID_INPUT`, `ESPN_AUTH`, `NOT_FOUND`, `NOT_STARTED`, `UPSTREAM`, `PROCESSING`, `INTERNAL` |
 | `failure_reason` | String | No | User-facing failure message derived from `failure_code`. Never contains raw exception detail, credentials, or stack traces |
 | `league_id` | String | No | Platform league ID, recorded for observability when known |
-| `platform` | String | No | Platform the job targets (observability). Enum: `ESPN`, `SLEEPER` |
+| `platform` | String | No | Platform the job targets (observability). Enum: `ESPN`, `SLEEPER`, `YAHOO` |
 | `canonical_league_id` | String | No | Canonical league ID, recorded for observability when known |
 
 **Example:**

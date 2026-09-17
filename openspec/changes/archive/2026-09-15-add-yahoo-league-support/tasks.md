@@ -60,12 +60,12 @@
 
 - [x] 6.1 `openspec validate` green; ruff/eslint/prettier/terraform-fmt clean; backend unit
   (804) + component (63) + frontend (278) tests pass.
-- [ ] 6.2 Apply → archive once the data-client increment also lands (or archive the linking
-  capability if the team prefers incremental archival).
+- [x] 6.2 Archive the linking capability incrementally; the data-client increment is tracked
+  separately in the `add-yahoo-data-client` change.
 
 ## 7. Follow-ups (next increment)
 
-- [ ] 7.1 Yahoo Fantasy **data client** in the onboarder (leagues/teams/matchups/draft/
-  transactions + transforms), replacing the "coming soon" gate.
-- [ ] 7.2 Revisit cross-region KMS for `get_valid_access_token` decryption (this increment
-  pins one us-east-1 key; only encryption + existence checks run today).
+- [x] 7.1 **Superseded** — the Yahoo Fantasy data client (onboarder client + transforms,
+  replacing the "coming soon" gate) is now owned by the `add-yahoo-data-client` change.
+- [x] 7.2 **Superseded** — cross-region KMS for `get_valid_access_token` decryption is now
+  handled in the `add-yahoo-data-client` change (shared token module + onboarder IAM).

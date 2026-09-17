@@ -142,7 +142,7 @@ paths:
           description: The name of the platform the fantasy football league is on
           schema:
             type: string
-            enum: [ESPN, SLEEPER]
+            enum: [ESPN, SLEEPER, YAHOO]
             example: "ESPN"
       responses:
         "200":
@@ -182,7 +182,7 @@ paths:
           description: The name of the platform the fantasy football league is on
           schema:
             type: string
-            enum: [ESPN, SLEEPER]
+            enum: [ESPN, SLEEPER, YAHOO]
             example: "ESPN"
       responses:
         "200":
@@ -269,7 +269,7 @@ paths:
           description: The name of the platform the fantasy football league is on
           schema:
             type: string
-            enum: [ESPN, SLEEPER]
+            enum: [ESPN, SLEEPER, YAHOO]
             example: "ESPN"
         - name: queryType
           in: query
@@ -336,7 +336,7 @@ paths:
           description: The current platform the league is on
           schema:
             type: string
-            enum: [ESPN, SLEEPER]
+            enum: [ESPN, SLEEPER, YAHOO]
             example: "SLEEPER"
         - name: espnLeagueId
           in: query
@@ -402,7 +402,7 @@ paths:
           description: The current platform the league is on
           schema:
             type: string
-            enum: [ESPN, SLEEPER]
+            enum: [ESPN, SLEEPER, YAHOO]
             example: "SLEEPER"
       requestBody:
         required: true
@@ -487,7 +487,7 @@ paths:
           description: The platform the league is on (must be ESPN)
           schema:
             type: string
-            enum: [ESPN, SLEEPER]
+            enum: [ESPN, SLEEPER, YAHOO]
             example: "ESPN"
       responses:
         "200":
@@ -547,7 +547,7 @@ paths:
           description: The platform the league is on (must be ESPN)
           schema:
             type: string
-            enum: [ESPN, SLEEPER]
+            enum: [ESPN, SLEEPER, YAHOO]
             example: "ESPN"
       requestBody:
         required: true
@@ -604,7 +604,7 @@ paths:
           description: The platform the league is on
           schema:
             type: string
-            enum: [ESPN, SLEEPER]
+            enum: [ESPN, SLEEPER, YAHOO]
             example: "SLEEPER"
       responses:
         "200":
@@ -663,7 +663,7 @@ paths:
           description: The platform the league is on
           schema:
             type: string
-            enum: [ESPN, SLEEPER]
+            enum: [ESPN, SLEEPER, YAHOO]
             example: "SLEEPER"
       requestBody:
         required: true
@@ -788,7 +788,7 @@ components:
           example: "12345678"
         platform:
           type: string
-          enum: [ESPN, SLEEPER]
+          enum: [ESPN, SLEEPER, YAHOO]
           description: The fantasy platform this league belongs to
           example: "ESPN"
         season:
@@ -853,7 +853,7 @@ components:
           example: "87654321"
         newPlatform:
           type: string
-          enum: [ESPN, SLEEPER]
+          enum: [ESPN, SLEEPER, YAHOO]
           description: The destination platform
           example: "ESPN"
         season:
@@ -1058,7 +1058,7 @@ components:
             $ref: "#/components/schemas/ErrorResponse"
           example:
             error: "Unprocessable entity"
-            message: "platform must be one of: ESPN, SLEEPER"
+            message: "platform must be one of: ESPN, SLEEPER, YAHOO"
 
     ConflictError:
       description: Conflict — operation already in progress or league already onboarded

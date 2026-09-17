@@ -195,11 +195,13 @@ jobs:
           # tag only changes when a file inside changes; the task definition is then
           # re-registered only when the image content actually changes.
           TAG="$( { git rev-parse "HEAD:src/sleeper_player_stats_refresher"; \
+                    git rev-parse "HEAD:src/yahoo_player_stats_refresher"; \
                     git rev-parse "HEAD:src/common"; } | sha256sum | cut -c1-12 )"
           REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com"
           echo "image_tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "registry=$REGISTRY" >> "$GITHUB_OUTPUT"
           echo "sleeper_repo=leagueql-sleeper-player-stats-refresher-${ENVIRONMENT}" >> "$GITHUB_OUTPUT"
+          echo "yahoo_repo=leagueql-yahoo-player-stats-refresher-${ENVIRONMENT}" >> "$GITHUB_OUTPUT"
 
       - name: Build and push Fargate images
         env:
@@ -227,6 +229,7 @@ jobs:
             docker push "$image:latest"
           }
           build_push "${{ steps.meta.outputs.sleeper_repo }}" "${{ steps.meta.outputs.image_tag }}" "src/sleeper_player_stats_refresher/Dockerfile"
+          build_push "${{ steps.meta.outputs.yahoo_repo }}" "${{ steps.meta.outputs.image_tag }}" "src/yahoo_player_stats_refresher/Dockerfile"
 
   deploy-lambda-artifacts:
     name: Deploy Lambda Artifacts - ${{ needs.set-env.outputs.environment }}
@@ -348,7 +351,9 @@ jobs:
             -var="clerk_issuer_url=${{ env.CLERK_ISSUER_URL }}" \
             -var="clerk_jwt_audience=${{ secrets.CLERK_JWT_AUDIENCE }}" \
             -var="yahoo_redirect_uri=${{ env.YAHOO_REDIRECT_URI }}" \
-            -var="yahoo_connect_return_url=${{ env.YAHOO_CONNECT_RETURN_URL }}"
+            -var="yahoo_connect_return_url=${{ env.YAHOO_CONNECT_RETURN_URL }}" \
+            -var="yahoo_service_user_id=${{ secrets.YAHOO_SERVICE_USER_ID }}" \
+            -var="yahoo_service_league_key=${{ secrets.YAHOO_SERVICE_LEAGUE_KEY }}"
 
   # run-sleeper-onboarding-integration-tests:
   #   name: Run Sleeper Onboarding Integration Tests

@@ -134,10 +134,26 @@ class TestYahooOnboardGate:
         assert response.status_code == 403
         assert "Link your Yahoo account first" in response.json()["detail"]
 
-    def test_linked_returns_coming_soon(self, client):
+    def test_linked_new_league_invokes_onboarder(
+        self, client, mock_table, mock_lambda_client
+    ):
+        # A linked caller falls through to the normal onboard path: a not-yet-onboarded
+        # league triggers the onboarder Lambda (no s2/swid; the onboarder resolves the token).
+        mock_table.get_item.return_value = {}
+        mock_lambda_client.invoke.return_value = {}
         with patch("yahoo_oauth.has_valid_link", return_value=True):
             response = client.post(
-                "/leagues", json={"leagueId": "45.l.678", "platform": "YAHOO"}
+                "/leagues", json={"leagueId": "678", "platform": "YAHOO"}
             )
-        assert response.status_code == 200
-        assert response.json()["data"]["code"] == "YAHOO_COMING_SOON"
+        assert response.status_code == 201
+        assert response.json()["data"]["correlation_id"]
+        mock_lambda_client.invoke.assert_called_once()
+
+    def test_refresh_unlinked_returns_403(self, client):
+        with patch("yahoo_oauth.has_valid_link", return_value=False):
+            response = client.post(
+                "/leagues?requestType=REFRESH",
+                json={"leagueId": "678", "platform": "YAHOO"},
+            )
+        assert response.status_code == 403
+        assert "Link your Yahoo account first" in response.json()["detail"]

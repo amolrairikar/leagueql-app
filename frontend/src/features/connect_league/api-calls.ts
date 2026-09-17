@@ -61,22 +61,14 @@ export function getYahooAuthorizeUrl(
   );
 }
 
-export interface YahooOnboardResponse {
-  detail: string;
-  // This increment ships OAuth linking only: a linked Yahoo onboard returns a
-  // `YAHOO_COMING_SOON` code rather than a correlation_id (the data client is a follow-up).
-  data: { code?: string } | null;
-}
-
 /**
- * Onboard a linked Yahoo league. Returns the "coming soon" signal while the Yahoo Fantasy
- * data client is unshipped; a 403 means the link was lost and the user must reconnect.
+ * Onboard a linked Yahoo league. Returns a `correlation_id` the caller polls to completion
+ * (the same async flow as ESPN/Sleeper); a 403 means the link was lost and the user must
+ * reconnect. No Yahoo tokens ever reach the browser.
  */
-export function onboardYahooLeague(
-  leagueId: string,
-): Promise<YahooOnboardResponse> {
+export function onboardYahooLeague(leagueId: string): Promise<OnboardResponse> {
   const params = new URLSearchParams({ requestType: 'ONBOARD' });
-  return apiClient.post<YahooOnboardResponse>(`/leagues?${params}`, {
+  return apiClient.post<OnboardResponse>(`/leagues?${params}`, {
     leagueId,
     platform: 'YAHOO',
   });

@@ -189,6 +189,9 @@ def _load_handlers(context) -> None:
     sys.modules["sleeper_client"] = _load_module(
         "onboarder.sleeper_client", _SRC / "onboarder" / "sleeper_client.py"
     )
+    sys.modules["yahoo_client"] = _load_module(
+        "onboarder.yahoo_client", _SRC / "onboarder" / "yahoo_client.py"
+    )
     onboarding_service = _load_module(
         "onboarding_service", _SRC / "onboarder" / "onboarding_service.py"
     )
