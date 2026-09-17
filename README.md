@@ -1,5 +1,5 @@
 # LeagueQL
-[LeagueQL](https://leagueql.com/) is an app that helps fantasy football managers analyze their ESPN or Sleeper leagues. The app fetches data from the respective fantasy platform's API and transforms it into insights such as all-time records, year-to-year manager trends, best draft picks, and more.
+[LeagueQL](https://leagueql.com/) is an app that helps fantasy football managers analyze their ESPN, Sleeper, or Yahoo leagues. The app fetches data from the respective fantasy platform's API and transforms it into insights such as all-time records, year-to-year manager trends, best draft picks, and more.
 
 # Tech Stack
 - Backend: Python (FastAPI framework)

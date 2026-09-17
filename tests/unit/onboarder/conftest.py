@@ -27,6 +27,7 @@ def _bootstrap_onboarder():
             "writer",
             "espn_client",
             "sleeper_client",
+            "yahoo_client",
             "onboarding_service",
             "handler",
         ]
@@ -48,6 +49,7 @@ def _bootstrap_onboarder():
             "writer",
             "espn_client",
             "sleeper_client",
+            "yahoo_client",
             "onboarding_service",
         ]:
             mod = _load_module(f"onboarder.{bare}", _SRC / f"{bare}.py")
@@ -84,6 +86,11 @@ def onboarder_espn_client():
 @pytest.fixture(scope="session")
 def onboarder_sleeper_client():
     return sys.modules["onboarder.sleeper_client"]
+
+
+@pytest.fixture(scope="session")
+def onboarder_yahoo_client():
+    return sys.modules["onboarder.yahoo_client"]
 
 
 @pytest.fixture(scope="session")

@@ -33,6 +33,37 @@ Feature: Onboard-to-processed pipeline (backend/league-onboarding, backend/data-
     And a query response row has "playoff_week_start" equal to "17"
     And a query response row has "regular_season_weeks" equal to "16"
 
+  Scenario: A Yahoo league onboards end to end and builds every view (backend/league-onboarding, backend/data-processing-pipeline, backend/yahoo-transactions)
+    Given Yahoo player metadata and stats are cached in S3
+    When the onboarder runs an ONBOARD for "YAHOO" league "431" with fixture "yahoo/raw_data_2024.json"
+    Then the onboarder returns status 200
+    And a LEAGUE_LOOKUP exists for onboarded league "431" platform "YAHOO"
+    And a METADATA item exists for the onboarded league
+    When the processor processes the onboarded league
+    Then a JOB_STATUS "COMPLETED" exists for the job
+    And the league has at least one "TEAMS#2024" item
+    And the league has at least one "MATCHUPS#2024" item
+    And the league has at least one "STANDINGS#2024" item
+    And the league has at least one "WEEKLY_STANDINGS#2024" item
+    And the league has at least one "PLAYOFF_BRACKET#2024" item
+    And the league has at least one "DRAFT#2024" item
+    And the league has at least one "TRANSACTIONS#2024" item
+    # backend/league-authorization: Yahoo reads are confidential (OAuth-gated), so only members
+    # may query — the onboarding owner is a member.
+    And the default caller is a member of the onboarded league
+    # backend/data-processing-pipeline: Yahoo settings -> LEAGUE_SETTINGS (num_playoff_teams=4,
+    # playoff_start_week=15 -> regular_season_weeks=14).
+    When I GET "/leagues/431/query?platform=YAHOO&queryType=LEAGUE_SETTINGS#2024"
+    Then the API responds with status 200
+    And the query response has 1 row(s)
+    And a query response row has "num_playoff_teams" equal to "4"
+    And a query response row has "playoff_week_start" equal to "15"
+    And a query response row has "regular_season_weeks" equal to "14"
+    # backend/yahoo-transactions: the completed add/drop is stored (as a waiver — faab_bid present).
+    When I GET "/leagues/431/query?platform=YAHOO&queryType=TRANSACTIONS#2024"
+    Then the API responds with status 200
+    And the query response has 1 row(s)
+
   Scenario: A large transactions season is chunked across items and round-trips through the query API (backend/sleeper-transactions)
     # backend/sleeper-transactions: a season with more transactions than fit in one DynamoDB
     # item is split across TRANSACTIONS#{season}#{chunk} items. A tiny per-item cap forces the

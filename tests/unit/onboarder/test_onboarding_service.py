@@ -55,9 +55,74 @@ class TestOnboardingServiceInit:
         with pytest.raises(ValueError, match="Unsupported platform"):
             onboarder_onboarding_service.OnboardingService(
                 league_id="123",
-                platform="YAHOO",
+                platform="MYFANTASY",
                 request_type="ONBOARD",
                 latest_season="2024",
+            )
+
+    def test_yahoo_init_success(self, onboarder_onboarding_service):
+        payload = {
+            "fantasy_content": {
+                "users": {
+                    "0": {
+                        "user": [
+                            {},
+                            {
+                                "games": {
+                                    "0": {
+                                        "game": [
+                                            {"game_key": "461", "game_code": "nfl"},
+                                            {
+                                                "leagues": {
+                                                    "0": {
+                                                        "league": [
+                                                            {
+                                                                "league_key": "461.l.100",
+                                                                "league_id": "100",
+                                                                "season": "2025",
+                                                                "start_week": "1",
+                                                                "end_week": "17",
+                                                                "current_week": "3",
+                                                            }
+                                                        ]
+                                                    },
+                                                    "count": 1,
+                                                }
+                                            },
+                                        ]
+                                    },
+                                    "count": 1,
+                                }
+                            },
+                        ]
+                    },
+                    "count": 1,
+                }
+            }
+        }
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = payload
+        with (
+            patch("requests.get", return_value=mock_resp),
+            patch("common.yahoo_tokens.from_env") as mock_from_env,
+        ):
+            mock_from_env.return_value.get_valid_access_token.return_value = "tok"
+            svc = onboarder_onboarding_service.OnboardingService(
+                league_id="100",
+                platform="YAHOO",
+                request_type="ONBOARD",
+                owner_user_id="user_1",
+            )
+        assert svc.platform == "YAHOO"
+        assert svc.client.get_seasons() == ["2025"]
+
+    def test_yahoo_missing_owner_raises_value_error(self, onboarder_onboarding_service):
+        with pytest.raises(ValueError, match="Owner user id"):
+            onboarder_onboarding_service.OnboardingService(
+                league_id="100",
+                platform="YAHOO",
+                request_type="ONBOARD",
             )
 
     def test_canonical_league_id_generated_when_not_provided(

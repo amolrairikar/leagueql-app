@@ -33,6 +33,13 @@ locals {
   sleeper_stats_events_role_arn    = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-sleeper-stats-events-role"
   sleeper_stats_image              = "${local.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com/leagueql-sleeper-player-stats-refresher-${var.environment}:${var.image_tag}"
 
+  # Yahoo player-data refresher runs as a Fargate task (see backend/yahoo-player-stats-refresher).
+  # Roles are created in infrastructure/global; ARNs are reconstructed here from their names.
+  yahoo_stats_task_role_arn      = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-yahoo-player-stats-refresher-task-role"
+  yahoo_stats_task_exec_role_arn = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-yahoo-stats-task-exec-role"
+  yahoo_stats_events_role_arn    = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-yahoo-stats-events-role"
+  yahoo_stats_image              = "${local.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com/leagueql-yahoo-player-stats-refresher-${var.environment}:${var.image_tag}"
+
   # Browser origins allowed by CORS. Production trusts only the live site; dev
   # additionally trusts the local Vite dev server. Shared by the API Gateway CORS
   # config and the API Lambda (FastAPI middleware) so the two never diverge — in
@@ -55,10 +62,12 @@ module "onboarder_lambda" {
   role_arn             = local.onboarder_role_arn
   handler              = "handler.lambda_handler"
   memory_size          = 2048
-  timeout              = 30
-  log_retention        = 7
-  s3_bucket            = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
-  s3_key               = "lambda-code-artifacts/onboarder-lambda.zip"
+  # Yahoo full-history onboards make many per-week scoreboard/roster calls, so the onboarder
+  # needs more than the 30s ESPN/Sleeper used; 300s stays well under Lambda's 900s max.
+  timeout       = 300
+  log_retention = 7
+  s3_bucket     = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
+  s3_key        = "lambda-code-artifacts/onboarder-lambda.zip"
 
   environment_variables = {
     DYNAMODB_TABLE_NAME = "leagueql-table-${var.environment}"
@@ -72,6 +81,14 @@ module "onboarder_lambda" {
     ENVIRONMENT                        = var.environment
     OTEL_EXPORTER_TOKEN_SSM_PARAM      = "/leagueql/${var.environment}/betterstack/source_token"
     OTEL_EXPORTER_OTLP_TRACES_ENDPOINT = local.betterstack_otlp_traces_endpoint
+
+    # Yahoo data client (backend/league-onboarding): the onboarder obtains/refreshes the
+    # onboarding owner's Yahoo token via the shared token engine. KMS is pinned to the key's
+    # region for cross-region decrypt; the client id is read from SSM by name at runtime.
+    YAHOO_CLIENT_ID_SSM_PARAM = "/leagueql/${var.environment}/yahoo/client_id"
+    YAHOO_KMS_KEY_ID          = "arn:aws:kms:us-east-1:${local.account_id}:alias/leagueql-yahoo-token-${var.environment}"
+    YAHOO_KMS_REGION          = "us-east-1"
+    YAHOO_REDIRECT_URI        = var.yahoo_redirect_uri
   }
 
   tags = {
@@ -158,6 +175,19 @@ module "api_lambda" {
     # the flag values are edited in the SSM console (runtime toggle, no redeploy). With
     # this unset, all flags default off.
     FEATURE_FLAGS_SSM_PARAM = "/leagueql/${var.environment}/feature-flags"
+
+    # Yahoo OAuth (backend/yahoo-oauth). The Yahoo app is a PKCE public client, so only the
+    # client_id is needed (no client_secret) — it's fetched at runtime from a SecureString SSM
+    # parameter by *name* (value never lands here / in TF state / CI). The redirect_uri MUST
+    # exactly match the callback registered in the Yahoo developer app; the return URL is the
+    # fixed frontend /connect_league page the callback 302s back to. Tokens are KMS-encrypted
+    # with a single key (see the global stack); the client is pinned to that key's region so
+    # both regional API Lambdas share one key.
+    YAHOO_CLIENT_ID_SSM_PARAM = "/leagueql/${var.environment}/yahoo/client_id"
+    YAHOO_KMS_KEY_ID          = "arn:aws:kms:us-east-1:${local.account_id}:alias/leagueql-yahoo-token-${var.environment}"
+    YAHOO_KMS_REGION          = "us-east-1"
+    YAHOO_REDIRECT_URI        = var.yahoo_redirect_uri
+    YAHOO_CONNECT_RETURN_URL  = var.yahoo_connect_return_url
   }
 
   tags = {
@@ -517,6 +547,128 @@ resource "aws_cloudwatch_event_target" "sleeper_player_stats_refresh_target" {
   }
 }
 
+# --- Yahoo player-data refresher (backend/yahoo-player-stats-refresher) ---
+# Fargate task that fetches Yahoo player metadata + season scoring using the service
+# credential and caches them in S3 for the processor. Mirrors the Sleeper stats task.
+resource "aws_cloudwatch_log_group" "yahoo_player_stats_refresher" {
+  count             = local.region == "east" ? 1 : 0
+  name              = "/ecs/leagueql-yahoo-player-stats-refresher-${var.environment}"
+  retention_in_days = 7
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    component   = "data-processing"
+    managed-by  = "terraform"
+  }
+}
+
+resource "aws_ecs_task_definition" "yahoo_player_stats_refresher" {
+  count                    = local.region == "east" ? 1 : 0
+  family                   = "leagueql-yahoo-player-stats-refresher-${var.environment}"
+  requires_compatibilities = ["FARGATE"]
+  network_mode             = "awsvpc"
+  cpu                      = 512
+  memory                   = 1024
+  execution_role_arn       = local.yahoo_stats_task_exec_role_arn
+  task_role_arn            = local.yahoo_stats_task_role_arn
+
+  container_definitions = jsonencode([
+    {
+      name      = "yahoo-player-stats-refresher"
+      image     = local.yahoo_stats_image
+      essential = true
+      environment = [
+        {
+          name  = "S3_BUCKET_NAME"
+          value = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
+        },
+        {
+          name  = "DYNAMODB_TABLE_NAME"
+          value = "leagueql-table-${var.environment}"
+        },
+        # The service account whose linked Yahoo token authorizes the fetch, and its league
+        # (whose season-specific scoring Yahoo applies to player_points). Configured per-env.
+        {
+          name  = "YAHOO_SERVICE_USER_ID"
+          value = var.yahoo_service_user_id
+        },
+        {
+          name  = "YAHOO_SERVICE_LEAGUE_KEY"
+          value = var.yahoo_service_league_key
+        },
+        # Token engine config: KMS pinned to the key's region for cross-region decrypt; the
+        # client id is read from SSM by name at runtime.
+        {
+          name  = "YAHOO_CLIENT_ID_SSM_PARAM"
+          value = "/leagueql/${var.environment}/yahoo/client_id"
+        },
+        {
+          name  = "YAHOO_KMS_KEY_ID"
+          value = "arn:aws:kms:us-east-1:${local.account_id}:alias/leagueql-yahoo-token-${var.environment}"
+        },
+        {
+          name  = "YAHOO_KMS_REGION"
+          value = "us-east-1"
+        },
+        {
+          name  = "YAHOO_REDIRECT_URI"
+          value = var.yahoo_redirect_uri
+        }
+      ]
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = aws_cloudwatch_log_group.yahoo_player_stats_refresher[0].name
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = "ecs"
+        }
+      }
+    }
+  ])
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    component   = "data-processing"
+    managed-by  = "terraform"
+  }
+}
+
+# Weekly, offset from the Sleeper stats run to spread load. CloudWatch Events cron is UTC.
+resource "aws_cloudwatch_event_rule" "yahoo_player_stats_refresh_schedule" {
+  count               = local.region == "east" ? 1 : 0
+  name                = "yahoo-player-stats-refresh-${var.environment}-${local.region}"
+  schedule_expression = "cron(45 12 ? * TUE *)"
+  state               = "ENABLED"
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    component   = "data-processing"
+    managed-by  = "terraform"
+  }
+}
+
+resource "aws_cloudwatch_event_target" "yahoo_player_stats_refresh_target" {
+  count    = local.region == "east" ? 1 : 0
+  rule     = aws_cloudwatch_event_rule.yahoo_player_stats_refresh_schedule[0].name
+  arn      = aws_ecs_cluster.leagueql[0].arn
+  role_arn = local.yahoo_stats_events_role_arn
+
+  ecs_target {
+    task_definition_arn = aws_ecs_task_definition.yahoo_player_stats_refresher[0].arn
+    launch_type         = "FARGATE"
+    task_count          = 1
+
+    network_configuration {
+      subnets          = data.aws_subnets.fargate_public[0].ids
+      security_groups  = [data.aws_security_group.fargate_task[0].id]
+      assign_public_ip = true
+    }
+  }
+}
+
 resource "aws_sns_topic" "lambda_alerts" {
   count = var.environment == "prod" ? 1 : 0
   name  = "leagueql-lambda-alerts-${var.environment}-${local.region}"
@@ -789,6 +941,39 @@ resource "aws_cloudwatch_event_target" "sleeper_stats_task_failed_sns" {
   arn   = aws_sns_topic.lambda_alerts[0].arn
 }
 
+resource "aws_cloudwatch_event_rule" "yahoo_stats_task_failed" {
+  count       = local.region == "east" && var.environment == "prod" ? 1 : 0
+  name        = "leagueql-yahoo-player-stats-refresher-${var.environment}-task-failed"
+  description = "Yahoo player-data refresher Fargate task failed"
+
+  event_pattern = jsonencode({
+    source      = ["aws.ecs"]
+    detail-type = ["ECS Task State Change"]
+    detail = {
+      clusterArn        = [aws_ecs_cluster.leagueql[0].arn]
+      taskDefinitionArn = [{ prefix = "${aws_ecs_task_definition.yahoo_player_stats_refresher[0].arn_without_revision}:" }]
+      lastStatus        = ["STOPPED"]
+      "$or" = [
+        { containers = { exitCode = [{ "anything-but" = 0 }] } },
+        { stopCode = ["TaskFailedToStart"] }
+      ]
+    }
+  })
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    component   = "monitoring"
+    managed-by  = "terraform"
+  }
+}
+
+resource "aws_cloudwatch_event_target" "yahoo_stats_task_failed_sns" {
+  count = local.region == "east" && var.environment == "prod" ? 1 : 0
+  rule  = aws_cloudwatch_event_rule.yahoo_stats_task_failed[0].name
+  arn   = aws_sns_topic.lambda_alerts[0].arn
+}
+
 # Unlike CloudWatch alarm actions, EventBridge must be explicitly granted publish on
 # the topic, otherwise the notification silently fails to deliver.
 resource "aws_sns_topic_policy" "lambda_alerts_eventbridge" {
@@ -808,6 +993,7 @@ resource "aws_sns_topic_policy" "lambda_alerts_eventbridge" {
           ArnEquals = {
             "aws:SourceArn" = [
               aws_cloudwatch_event_rule.sleeper_stats_task_failed[0].arn,
+              aws_cloudwatch_event_rule.yahoo_stats_task_failed[0].arn,
             ]
           }
         }

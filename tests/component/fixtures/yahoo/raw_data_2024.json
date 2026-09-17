@@ -1,0 +1,116 @@
+[
+  {
+    "season": "2024",
+    "data_type": "settings",
+    "data": { "name": "Yahoo Test League", "num_playoff_teams": "4", "playoff_start_week": "15" }
+  },
+  {
+    "season": "2024",
+    "data_type": "standings",
+    "data": {
+      "standings": [
+        { "team_key": "423.l.431.t.1", "rank": "1" },
+        { "team_key": "423.l.431.t.2", "rank": "2" }
+      ]
+    }
+  },
+  {
+    "season": "2024",
+    "data_type": "teams",
+    "data": {
+      "members": [
+        { "manager_id": "G1", "nickname": "Alice" },
+        { "manager_id": "G2", "nickname": "Bob" }
+      ],
+      "teams": [
+        { "team_key": "423.l.431.t.1", "team_id": "1", "name": "Team Alice", "logo": "logoA", "manager_id": "G1" },
+        { "team_key": "423.l.431.t.2", "team_id": "2", "name": "Team Bob", "logo": "logoB", "manager_id": "G2" }
+      ]
+    }
+  },
+  {
+    "season": "2024",
+    "data_type": "matchups_week1",
+    "data": {
+      "matchups": [
+        {
+          "week": "1",
+          "is_playoffs": "0",
+          "is_consolation": "0",
+          "winner_team_key": "423.l.431.t.1",
+          "teams": [
+            { "team_key": "423.l.431.t.1", "points": "100.5" },
+            { "team_key": "423.l.431.t.2", "points": "90.0" }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "season": "2024",
+    "data_type": "rosters_week1",
+    "data": {
+      "rosters": [
+        { "team_key": "423.l.431.t.1", "week": "1", "player_key": "423.p.1", "player_name": "Josh QB", "position": "QB", "selected_position": "QB", "points": "25.0" },
+        { "team_key": "423.l.431.t.1", "week": "1", "player_key": "423.p.9", "player_name": "Benchy RB", "position": "RB", "selected_position": "BN", "points": "2.0" },
+        { "team_key": "423.l.431.t.2", "week": "1", "player_key": "423.p.2", "player_name": "Run Back", "position": "RB", "selected_position": "RB", "points": "18.0" }
+      ]
+    }
+  },
+  {
+    "season": "2024",
+    "data_type": "matchups_week15",
+    "data": {
+      "matchups": [
+        {
+          "week": "15",
+          "is_playoffs": "1",
+          "is_consolation": "0",
+          "winner_team_key": "423.l.431.t.1",
+          "teams": [
+            { "team_key": "423.l.431.t.1", "points": "110.0" },
+            { "team_key": "423.l.431.t.2", "points": "95.0" }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "season": "2024",
+    "data_type": "rosters_week15",
+    "data": {
+      "rosters": [
+        { "team_key": "423.l.431.t.1", "week": "15", "player_key": "423.p.1", "player_name": "Josh QB", "position": "QB", "selected_position": "QB", "points": "30.0" },
+        { "team_key": "423.l.431.t.2", "week": "15", "player_key": "423.p.2", "player_name": "Run Back", "position": "RB", "selected_position": "RB", "points": "20.0" }
+      ]
+    }
+  },
+  {
+    "season": "2024",
+    "data_type": "draft_picks",
+    "data": {
+      "draft_picks": [
+        { "pick": "1", "round": "1", "team_key": "423.l.431.t.1", "player_key": "423.p.1", "cost": null },
+        { "pick": "2", "round": "1", "team_key": "423.l.431.t.2", "player_key": "423.p.2", "cost": null }
+      ]
+    }
+  },
+  {
+    "season": "2024",
+    "data_type": "transactions",
+    "data": {
+      "transactions": [
+        {
+          "transaction_key": "423.l.431.tr.1",
+          "type": "add/drop",
+          "timestamp": "1700000000",
+          "faab_bid": "5",
+          "items": [
+            { "player_key": "423.p.3", "type": "add", "destination_team_key": "423.l.431.t.1", "source_team_key": null },
+            { "player_key": "423.p.9", "type": "drop", "source_team_key": "423.l.431.t.1", "destination_team_key": null }
+          ]
+        }
+      ]
+    }
+  }
+]

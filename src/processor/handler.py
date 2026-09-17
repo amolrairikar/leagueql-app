@@ -1016,6 +1016,357 @@ def _register_espn_raw_data(
     }
 
 
+# Yahoo positions largely match the app's convention; only team defense differs.
+_YAHOO_POSITION_NORMALIZE = {"DEF": "D/ST"}
+# Yahoo bench/IR lineup slots (everything else is a started lineup slot).
+_YAHOO_BENCH_SLOTS = {"BN", "IR"}
+
+
+def _norm_yahoo_position(position: Any) -> Any:
+    """Normalize a Yahoo position to the app's convention (DEF → D/ST)."""
+    return _YAHOO_POSITION_NORMALIZE.get(position, position)
+
+
+def _to_float(value: Any) -> float:
+    """Best-effort float coercion (Yahoo returns points as strings), defaulting to 0.0."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _is_true(value: Any) -> bool:
+    """Interpret Yahoo's ``"1"``/``1``/``true`` flags as boolean True."""
+    return str(value).lower() in ("1", "true")
+
+
+def compile_yahoo_player_scoring_totals(
+    player_stats: dict, player_metadata: dict, seasons: set[str]
+) -> list[dict]:
+    """Build per-player per-season scoring rows from the Yahoo player-data cache.
+
+    Args:
+        player_stats: ``{player_key: {season: total_points}}`` (already league-scored by
+            the Yahoo player-data refresher).
+        player_metadata: ``{player_key: {"name", "position"}}``.
+        seasons: The seasons being processed (rows for other seasons are skipped).
+
+    Returns:
+        Rows shaped like the ESPN/Sleeper ``player_scoring_totals`` view.
+    """
+    rows = []
+    for player_key, season_totals in player_stats.items():
+        meta = player_metadata.get(player_key, {})
+        for season, total_points in season_totals.items():
+            if seasons and season not in seasons:
+                continue
+            rows.append(
+                {
+                    "player_id": player_key,
+                    "player_name": meta.get("name"),
+                    "position": _norm_yahoo_position(meta.get("position")),
+                    "total_points": total_points,
+                    "season": season,
+                }
+            )
+    return rows
+
+
+def build_yahoo_team_map(
+    all_members: list[dict], all_teams: list[dict]
+) -> dict[str, dict[str, dict]]:
+    """Build season → team_key → {team_name, display_name} for Yahoo transaction labels."""
+    display_by_season: dict[tuple[str, Any], Any] = {
+        (m["season"], m.get("id")): m.get("displayName") for m in all_members
+    }
+    team_map: dict[str, dict[str, dict]] = defaultdict(dict)
+    for team in all_teams:
+        team_map[team["season"]][str(team["id"])] = {
+            "team_name": team.get("name"),
+            "display_name": display_by_season.get(
+                (team["season"], team.get("primaryOwner"))
+            ),
+        }
+    return team_map
+
+
+def _yahoo_roster_stat(row: dict) -> dict:
+    """Shape one Yahoo roster row into the starter/bench stat dict the MATCHUPS view stores."""
+    return {
+        "player_id": row.get("player_key"),
+        "full_name": row.get("player_name"),
+        "points_scored": _to_float(row.get("points")),
+        "position": _norm_yahoo_position(row.get("position")),
+        "fantasy_position": row.get("selected_position"),
+    }
+
+
+def _yahoo_lineups(
+    roster_lookup: dict, season: str, team_key: str, week: str
+) -> tuple[list[dict], list[dict]]:
+    """Split a team's weekly roster rows into (starters, bench) stat dicts for the matchup."""
+    rows = roster_lookup.get((season, team_key, week), [])
+    starters = [
+        _yahoo_roster_stat(r)
+        for r in rows
+        if r.get("selected_position") not in _YAHOO_BENCH_SLOTS
+    ]
+    bench = [
+        _yahoo_roster_stat(r)
+        for r in rows
+        if r.get("selected_position") in _YAHOO_BENCH_SLOTS
+    ]
+    return starters, bench
+
+
+def compile_yahoo_transactions(
+    raw_transactions: list[tuple[dict, str]],
+    team_map: dict[str, dict[str, dict]],
+    player_by_key: dict,
+) -> list[dict]:
+    """Build resolved transaction rows (shared view shape) from Yahoo transaction payloads."""
+
+    def _resolve(player_key: Any, team_key: Any) -> dict:
+        meta = player_by_key.get(player_key, {})
+        return {
+            "player_id": player_key,
+            "player_name": meta.get("name") or None,
+            "position": _norm_yahoo_position(meta.get("position")),
+            "roster_id": str(team_key) if team_key else None,
+        }
+
+    rows = []
+    for txn, season in raw_transactions:
+        season_teams = team_map.get(season, {})
+        adds, drops, roster_ids = [], [], []
+        for item in txn.get("items") or []:
+            if item.get("type") == "add":
+                dest = item.get("destination_team_key")
+                adds.append(_resolve(item.get("player_key"), dest))
+                if dest:
+                    roster_ids.append(str(dest))
+            elif item.get("type") == "drop":
+                src = item.get("source_team_key")
+                drops.append(_resolve(item.get("player_key"), src))
+                if src:
+                    roster_ids.append(str(src))
+        roster_ids = list(dict.fromkeys(roster_ids))
+        if txn.get("type") == "trade":
+            txn_type = "trade"
+        else:
+            txn_type = "waiver" if txn.get("faab_bid") is not None else "free_agent"
+        rows.append(
+            {
+                "season": season,
+                "transaction_id": txn.get("transaction_key"),
+                "type": txn_type,
+                "week": None,
+                "created": txn.get("timestamp"),
+                "roster_ids": roster_ids,
+                "teams": [
+                    {
+                        "roster_id": rid,
+                        "team_name": season_teams.get(rid, {}).get("team_name"),
+                        "display_name": season_teams.get(rid, {}).get("display_name"),
+                    }
+                    for rid in roster_ids
+                ],
+                "adds": adds,
+                "drops": drops,
+                "draft_picks": [],
+                "waiver_bid": txn.get("faab_bid"),
+            }
+        )
+    return rows
+
+
+def _register_yahoo_raw_data(
+    raw_data: list[dict],
+    player_metadata: dict,
+    player_stats: dict,
+) -> dict[str, list[dict]]:
+    """Parse raw Yahoo API data into grouped lists ready for DuckDB registration.
+
+    Yahoo rows are shaped to match the ESPN view schemas so the ESPN TEAMS/MATCHUPS/
+    PLAYOFF_BRACKET transforms (and ``_build_espn_brackets``) can be reused; only DRAFT and
+    the pre-compiled TRANSACTIONS view use Yahoo-specific handling. Player names/positions and
+    season scoring come from the Yahoo player-data cache (``player_metadata``/``player_stats``).
+    """
+    all_members: list[dict] = []
+    all_teams: list[dict] = []
+    all_matchups: list[dict] = []
+    all_draft_picks: list[dict] = []
+    raw_transactions: list[tuple[dict, str]] = []
+    league_name_by_season: dict[str, str] = {}
+    league_settings_by_season: dict[str, dict] = {}
+    rank_by_season: dict[tuple[str, str], Any] = {}
+    # (season, team_key, week) -> list of roster rows, used to attach matchup lineups.
+    roster_lookup: dict[tuple[str, str, str], list[dict]] = defaultdict(list)
+    matchup_items: list[dict] = []
+
+    for item in raw_data:
+        season = item["season"]
+        data_type = item["data_type"]
+        data = item["data"]
+        if data_type == "settings":
+            if data.get("name"):
+                league_name_by_season[season] = data["name"]
+            league_settings_by_season[season] = build_league_settings_row(
+                season=season,
+                num_playoff_teams=_int_or_none(data.get("num_playoff_teams")),
+                playoff_week_start=_int_or_none(data.get("playoff_start_week")),
+                regular_season_weeks=(
+                    _int_or_none(data.get("playoff_start_week")) - 1
+                    if _int_or_none(data.get("playoff_start_week"))
+                    else None
+                ),
+            )
+        elif data_type == "standings":
+            for row in data.get("standings", []):
+                rank_by_season[(season, row.get("team_key"))] = _int_or_none(
+                    row.get("rank")
+                )
+        elif data_type == "teams":
+            for member in data.get("members", []):
+                all_members.append(
+                    {
+                        "id": member.get("manager_id"),
+                        "displayName": member.get("nickname"),
+                        "season": season,
+                    }
+                )
+            for team in data.get("teams", []):
+                all_teams.append(
+                    {
+                        "id": team.get("team_key"),
+                        "name": team.get("name"),
+                        "logo": team.get("logo"),
+                        "season": season,
+                        "owners": [team.get("manager_id")],
+                        "primaryOwner": team.get("manager_id"),
+                    }
+                )
+        elif data_type.startswith("rosters"):
+            week = str(
+                item["data"].get("_week") or data_type.removeprefix("rosters_week")
+            )
+            for row in data.get("rosters", []):
+                roster_lookup[
+                    (season, row.get("team_key"), row.get("week") or week)
+                ].append(row)
+        elif data_type.startswith("matchups"):
+            for matchup in data.get("matchups", []):
+                matchup["season"] = season
+                matchup_items.append(matchup)
+        elif data_type == "draft_picks":
+            for pick in data.get("draft_picks", []):
+                pick_copy = dict(pick)
+                pick_copy["season"] = season
+                all_draft_picks.append(pick_copy)
+        elif data_type == "transactions":
+            for txn in data.get("transactions", []):
+                raw_transactions.append((txn, season))
+
+    # Dedupe members by (id, season) so the TEAMS join is 1:1.
+    seen_members = set()
+    deduped_members = []
+    for member in all_members:
+        key = (member["id"], member["season"])
+        if key not in seen_members:
+            seen_members.add(key)
+            deduped_members.append(member)
+    all_members = deduped_members
+
+    # Attach final ranks resolved from standings.
+    for team in all_teams:
+        team["rankCalculatedFinal"] = rank_by_season.get((team["season"], team["id"]))
+
+    # Build ESPN-shaped matchup rows (with starter/bench lineups joined from rosters).
+    for matchup in matchup_items:
+        teams = matchup.get("teams", [])
+        if len(teams) < 2:
+            continue  # bye week / incomplete matchup
+        season = matchup["season"]
+        week = str(matchup.get("week"))
+        team_a, team_b = teams[0], teams[1]
+        a_id, b_id = team_a.get("team_key"), team_b.get("team_key")
+        a_score, b_score = (
+            _to_float(team_a.get("points")),
+            _to_float(team_b.get("points")),
+        )
+        winner_key = matchup.get("winner_team_key")
+        if winner_key:
+            winner, loser = winner_key, (b_id if winner_key == a_id else a_id)
+        elif a_score > b_score:
+            winner, loser = a_id, b_id
+        elif b_score > a_score:
+            winner, loser = b_id, a_id
+        else:
+            winner = loser = "TIE"
+        if _is_true(matchup.get("is_playoffs")):
+            tier = (
+                "WINNERS_CONSOLATION_LADDER"
+                if _is_true(matchup.get("is_consolation"))
+                else "WINNERS_BRACKET"
+            )
+        else:
+            tier = "NONE"
+
+        a_starters, a_bench = _yahoo_lineups(roster_lookup, season, a_id, week)
+        b_starters, b_bench = _yahoo_lineups(roster_lookup, season, b_id, week)
+        all_matchups.append(
+            {
+                "team_a_id": a_id,
+                "team_a_score": a_score,
+                "team_a_starters": a_starters,
+                "team_a_bench": a_bench,
+                "team_b_id": b_id,
+                "team_b_score": b_score,
+                "team_b_starters": b_starters,
+                "team_b_bench": b_bench,
+                "playoff_tier_type": tier,
+                "winner": winner,
+                "loser": loser,
+                "week": week,
+                "season": season,
+            }
+        )
+
+    brackets = _build_espn_brackets(all_matchups)
+    seasons = {item["season"] for item in raw_data}
+    player_scoring_totals = compile_yahoo_player_scoring_totals(
+        player_stats, player_metadata, seasons
+    )
+    player_by_key = {
+        key: {"name": meta.get("name"), "position": meta.get("position")}
+        for key, meta in player_metadata.items()
+    }
+    transactions = compile_yahoo_transactions(
+        raw_transactions=raw_transactions,
+        team_map=build_yahoo_team_map(all_members, all_teams),
+        player_by_key=player_by_key,
+    )
+    return {
+        "members": all_members,
+        "teams": all_teams,
+        "matchups": all_matchups,
+        "brackets": brackets,
+        "draft_picks": all_draft_picks,
+        "player_scoring_totals": player_scoring_totals,
+        "transactions": transactions,
+        "league_name_by_season": league_name_by_season,
+        "league_settings_by_season": league_settings_by_season,
+    }
+
+
+def _int_or_none(value: Any) -> int | None:
+    """Best-effort int coercion returning None on failure (Yahoo returns numbers as strings)."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _trace_sleeper_championship_path(entries: list[dict]) -> set | None:
     """
     Identify the match IDs on the championship path of a Sleeper winners bracket.
@@ -1459,6 +1810,12 @@ def register_raw_data(
             player_metadata=player_metadata or {},
             player_stats=player_stats or {},
         )
+    elif platform == "YAHOO":
+        grouped = _register_yahoo_raw_data(
+            raw_data,
+            player_metadata=player_metadata or {},
+            player_stats=player_stats or {},
+        )
     else:
         raise ValueError(f"Unsupported platform: {platform}")
 
@@ -1808,31 +2165,44 @@ def _process_manifest(
 
     player_metadata: dict = {}
     player_stats: dict = {}
-    if platform == "SLEEPER":
+    # Sleeper and Yahoo both resolve player names/scoring from a platform-specific S3 cache
+    # produced by a separate refresher; ESPN resolves inline and needs no cache.
+    _player_cache_keys = {
+        "SLEEPER": (
+            "player-metadata/sleeper_nfl_players.json",
+            "player-stats/sleeper_nfl_player_stats.json",
+        ),
+        "YAHOO": (
+            "player-metadata/yahoo_nfl_players.json",
+            "player-stats/yahoo_nfl_player_stats.json",
+        ),
+    }
+    if platform in _player_cache_keys:
+        metadata_key, stats_key = _player_cache_keys[platform]
         try:
-            player_metadata = read_s3_object(
-                bucket=bucket, key="player-metadata/sleeper_nfl_players.json"
-            )
+            player_metadata = read_s3_object(bucket=bucket, key=metadata_key)
             logger.info(
-                "Loaded Sleeper player metadata (%d players)", len(player_metadata)
+                "Loaded %s player metadata (%d players)", platform, len(player_metadata)
             )
         except botocore.exceptions.ClientError as e:
             if e.response["Error"]["Code"] in ("NoSuchKey", "404"):
                 logger.warning(
-                    "Sleeper player metadata not found in S3; player names/positions will be null"
+                    "%s player metadata not found in S3; player names/positions will be null",
+                    platform,
                 )
             else:
                 raise
 
         try:
-            player_stats = read_s3_object(
-                bucket=bucket, key="player-stats/sleeper_nfl_player_stats.json"
+            player_stats = read_s3_object(bucket=bucket, key=stats_key)
+            logger.info(
+                "Loaded %s player stats (%d players)", platform, len(player_stats)
             )
-            logger.info("Loaded Sleeper player stats (%d players)", len(player_stats))
         except botocore.exceptions.ClientError as e:
             if e.response["Error"]["Code"] in ("NoSuchKey", "404"):
                 logger.warning(
-                    "Sleeper player stats not found in S3; draft scoring totals will be unavailable"
+                    "%s player stats not found in S3; draft scoring totals will be unavailable",
+                    platform,
                 )
             else:
                 raise

@@ -88,6 +88,20 @@ def step_seed_player_cache(context):
     )
 
 
+@given("Yahoo player metadata and stats are cached in S3")
+def step_seed_yahoo_player_cache(context):
+    context.s3.put_object(
+        Bucket=context.bucket_name,
+        Key="player-metadata/yahoo_nfl_players.json",
+        Body=json.dumps(load_fixture("yahoo", "player_metadata.json")),
+    )
+    context.s3.put_object(
+        Bucket=context.bucket_name,
+        Key="player-stats/yahoo_nfl_player_stats.json",
+        Body=json.dumps(load_fixture("yahoo", "player_stats.json")),
+    )
+
+
 @given("Sleeper player metadata is cached in S3 with no player stats")
 def step_seed_player_cache_no_stats(context):
     # A Sleeper league onboarded before its first games (e.g. a new season created in the
