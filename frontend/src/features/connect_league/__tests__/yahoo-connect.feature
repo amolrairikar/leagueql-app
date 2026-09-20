@@ -8,6 +8,11 @@ Feature: Yahoo OAuth return (frontend/connect-yahoo-league)
     When I return from Yahoo with a linked account for league "678"
     Then I see "HOME PAGE"
 
+  Scenario: An already-onboarded Yahoo league lands on the dashboard
+    Given the Yahoo league is already onboarded
+    When I return from Yahoo with a linked account for league "678"
+    Then I see "HOME PAGE"
+
   Scenario: A revoked Yahoo token during onboarding prompts a reconnect
     Given onboarding a Yahoo league fails with a re-link signal
     When I return from Yahoo with a linked account for league "678"

@@ -55,14 +55,23 @@ export default function YahooConnectReturn({
     void (async () => {
       try {
         const result = await onboardYahooLeague(leagueId);
-        const pollResult = await pollForCompletion(result.data.correlation_id);
-        if (pollResult.status === 'failed') {
-          // A revoked/expired Yahoo token surfaces as a FAILED job with YAHOO_AUTH —
-          // prompt a reconnect rather than a generic failure (backend/yahoo-oauth).
-          setState(
-            pollResult.failureCode === YAHOO_AUTH_CODE ? 'reconnect' : 'error',
+        // A league that's already onboarded returns 200 with a null `data` ("League already
+        // onboarded" — backend/league-onboarding). Skip polling and route straight into the
+        // existing league (e.g. after re-linking a revoked account), rather than erroring.
+        if (result.data) {
+          const pollResult = await pollForCompletion(
+            result.data.correlation_id,
           );
-          return;
+          if (pollResult.status === 'failed') {
+            // A revoked/expired Yahoo token surfaces as a FAILED job with YAHOO_AUTH —
+            // prompt a reconnect rather than a generic failure (backend/yahoo-oauth).
+            setState(
+              pollResult.failureCode === YAHOO_AUTH_CODE
+                ? 'reconnect'
+                : 'error',
+            );
+            return;
+          }
         }
         // Onboarding wrote new precomputed views; drop cached reads before re-reading.
         clearApiCache();

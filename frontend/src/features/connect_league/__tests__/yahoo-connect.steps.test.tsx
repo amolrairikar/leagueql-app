@@ -23,6 +23,13 @@ const onboardOk = http.post(`${API}/leagues`, () =>
   ),
 );
 
+const onboardAlreadyOnboarded = http.post(`${API}/leagues`, () =>
+  HttpResponse.json(
+    { detail: 'League already onboarded', data: null },
+    { status: 200 },
+  ),
+);
+
 function jobStatus(status: string, failureCode: string | null = null) {
   return http.get(`${API}/jobs/:id`, () =>
     HttpResponse.json({
@@ -70,6 +77,27 @@ defineFeature(feature, (test) => {
   }) => {
     given('onboarding a Yahoo league completes successfully', () => {
       server.use(onboardOk, jobStatus('COMPLETED'), getLeagueOk);
+    });
+    when(
+      /^I return from Yahoo with a linked account for league "(.*)"$/,
+      async (leagueId) => {
+        await renderReturn({ yahooLinked: '1', leagueId });
+      },
+    );
+    then(/^I see "(.*)"$/, (text) => {
+      expect(screen.getByText(new RegExp(text, 'i'))).toBeInTheDocument();
+    });
+  });
+
+  test('An already-onboarded Yahoo league lands on the dashboard', ({
+    given,
+    when,
+    then,
+  }) => {
+    given('the Yahoo league is already onboarded', () => {
+      // No jobStatus handler: an already-onboarded league returns data:null, so the
+      // return leg must skip polling and route straight into the existing league.
+      server.use(onboardAlreadyOnboarded, getLeagueOk);
     });
     when(
       /^I return from Yahoo with a linked account for league "(.*)"$/,

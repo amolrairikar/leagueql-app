@@ -63,14 +63,24 @@ export function getYahooAuthorizeUrl(
   );
 }
 
+export interface YahooOnboardResponse {
+  detail: string;
+  // A league that is already onboarded returns 200 with a null `data` ("League already
+  // onboarded"); a fresh onboard returns a `correlation_id` to poll.
+  data: { correlation_id: string } | null;
+}
+
 /**
- * Onboard a linked Yahoo league. Returns a `correlation_id` the caller polls to completion
- * (the same async flow as ESPN/Sleeper); a 403 means the link was lost and the user must
- * reconnect. No Yahoo tokens ever reach the browser.
+ * Onboard a linked Yahoo league. A fresh onboard returns a `correlation_id` the caller polls
+ * to completion (the same async flow as ESPN/Sleeper); an already-onboarded league returns a
+ * null `data` so the caller can route straight into the existing league. A 403 means the link
+ * was lost and the user must reconnect. No Yahoo tokens ever reach the browser.
  */
-export function onboardYahooLeague(leagueId: string): Promise<OnboardResponse> {
+export function onboardYahooLeague(
+  leagueId: string,
+): Promise<YahooOnboardResponse> {
   const params = new URLSearchParams({ requestType: 'ONBOARD' });
-  return apiClient.post<OnboardResponse>(`/leagues?${params}`, {
+  return apiClient.post<YahooOnboardResponse>(`/leagues?${params}`, {
     leagueId,
     platform: 'YAHOO',
   });
