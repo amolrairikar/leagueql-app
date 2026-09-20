@@ -17,6 +17,18 @@ export interface ChangelogRelease {
 // Newest release first.
 export const CHANGELOG: ChangelogRelease[] = [
   {
+    version: '1.7.0',
+    date: 'September 20, 2026',
+    sections: [
+      {
+        title: 'Added',
+        items: [
+          "Yahoo Fantasy support (Beta): connect a Yahoo league by selecting Yahoo on the landing page, entering your league ID, and authorizing LeagueQL through Yahoo's secure sign-in.",
+        ],
+      },
+    ],
+  },
+  {
     version: '1.6.0',
     date: 'September 6, 2026',
     sections: [

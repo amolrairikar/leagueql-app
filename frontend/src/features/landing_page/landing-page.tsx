@@ -21,6 +21,7 @@ import {
 import {
   getYahooAuthorizeUrl,
   onboardLeague,
+  onboardYahooLeague,
 } from '@/features/connect_league/api-calls';
 import { pollForCompletion } from '@/features/connect_league/poll';
 import {
@@ -31,7 +32,7 @@ import {
 import { Faq } from '@/features/landing_page/faq';
 import { ProductShowcase } from '@/features/landing_page/product-showcase';
 import type { Feature, HowStep } from '@/features/landing_page/types';
-import { ApiError } from '@/lib/api-client';
+import { ApiError, clearApiCache } from '@/lib/api-client';
 import {
   clearAllLeagueCookies,
   isDemoMode,
@@ -74,6 +75,27 @@ function computeLoadingState(elapsedSeconds: number): {
     progress: 90,
   };
 }
+
+// A linked Yahoo onboard whose stored refresh token was revoked surfaces as a
+// FAILED job carrying this code (backend/yahoo-oauth); the UI restarts the OAuth
+// (re)link rather than showing a generic failure.
+const YAHOO_AUTH_CODE = 'YAHOO_AUTH';
+
+// The generic inline message shown when connecting a league fails for an
+// infrastructure reason (network / 5xx) rather than a bad league id.
+const GENERIC_CONNECT_ERROR = (
+  <>
+    Something went wrong connecting your league. Please try again. If the error
+    persists, contact{' '}
+    <a
+      href="mailto:support@leagueql.com"
+      className="underline underline-offset-4"
+    >
+      support
+    </a>
+    .
+  </>
+);
 
 function FeatureCard({ icon: Icon, title, desc }: Feature) {
   return (
@@ -207,6 +229,60 @@ export default function LeagueQLLanding() {
     void navigate('/home');
   }
 
+  // Hand off to Yahoo's consent screen (backend/yahoo-oauth), carrying the league id so
+  // the callback resumes onboarding on return. The full-page redirect leaves this page,
+  // so `loading` stays set until navigation; only a failure to start it clears it.
+  async function startYahooOauth(trimmedId: string) {
+    try {
+      const { data } = await getYahooAuthorizeUrl(trimmedId);
+      window.location.href = data.authorize_url;
+    } catch {
+      setError('Could not start Yahoo sign-in. Please try again.');
+      setLoading(false);
+    }
+  }
+
+  // Connect a Yahoo league. An already-linked caller onboards in place with the same
+  // progress UI as Sleeper (no consent round-trip); only an unlinked caller is sent to
+  // Yahoo's consent screen. POST /leagues 403-gates unlinked callers before any side
+  // effect (backend/yahoo-oauth), so we optimistically onboard first and treat a 403 as
+  // "not linked". A revoked-token link passes the gate but fails the job with YAHOO_AUTH.
+  async function handleYahooConnect(trimmedId: string) {
+    try {
+      const onboardResult = await onboardYahooLeague(trimmedId);
+      // A fresh onboard returns a correlation_id to poll; an already-onboarded league
+      // returns 200 with null `data`, which skips straight to routing the user in.
+      if (onboardResult.data) {
+        const result = await pollForCompletion(
+          onboardResult.data.correlation_id,
+        );
+        if (result.status === 'failed') {
+          if (result.failureCode === YAHOO_AUTH_CODE) {
+            await startYahooOauth(trimmedId);
+            return;
+          }
+          setError(result.failureReason ?? GENERIC_CONNECT_ERROR);
+          setLoading(false);
+          return;
+        }
+      }
+      // Onboarding wrote new precomputed views; drop cached reads before re-reading.
+      clearApiCache();
+      const leagueData = await getLeague(trimmedId, 'YAHOO');
+      setLeagueCookies(trimmedId, 'YAHOO', leagueData.data.seasons);
+      void navigate('/home');
+    } catch (err) {
+      // 403 "Link your Yahoo account first" means the caller has no stored link — hand
+      // off to the OAuth consent screen (the only path that shows it now).
+      if (err instanceof ApiError && err.status === 403) {
+        await startYahooOauth(trimmedId);
+        return;
+      }
+      setError(GENERIC_CONNECT_ERROR);
+      setLoading(false);
+    }
+  }
+
   async function handleConnectSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!leagueId.trim() || loading) return;
@@ -215,16 +291,7 @@ export default function LeagueQLLanding() {
     setError(null);
 
     if (platform === 'YAHOO') {
-      // Yahoo requires an OAuth link (backend/yahoo-oauth): hand off to Yahoo's consent
-      // screen, carrying the league id so the callback resumes onboarding on return. The
-      // full-page redirect leaves this page, so `loading` stays until navigation.
-      try {
-        const { data } = await getYahooAuthorizeUrl(leagueId.trim());
-        window.location.href = data.authorize_url;
-      } catch {
-        setError('Could not start Yahoo sign-in. Please try again.');
-        setLoading(false);
-      }
+      await handleYahooConnect(leagueId.trim());
       return;
     }
 
@@ -291,19 +358,7 @@ export default function LeagueQLLanding() {
         // A non-404/403 lookup failure (network / 5xx) is infrastructure trouble,
         // not a bad league ID — show a generic message (matching the connect-league
         // form) rather than the rarely-actionable backend detail.
-        setError(
-          <>
-            Something went wrong connecting your league. Please try again. If
-            the error persists, contact{' '}
-            <a
-              href="mailto:support@leagueql.com"
-              className="underline underline-offset-4"
-            >
-              support
-            </a>
-            .
-          </>,
-        );
+        setError(GENERIC_CONNECT_ERROR);
       }
     } finally {
       setLoading(false);
@@ -496,6 +551,11 @@ export default function LeagueQLLanding() {
             >
               <img src={p.logo} alt="" className="h-5 w-auto" />
               {p.name}
+              {p.beta && (
+                <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[0.625rem] font-semibold uppercase tracking-wide text-primary">
+                  Beta
+                </span>
+              )}
             </span>
           ))}
         </div>

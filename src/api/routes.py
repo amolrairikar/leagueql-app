@@ -44,6 +44,8 @@ from helpers import (
     get_nfl_state,
     is_job_in_progress,
     lookup_league,
+    owner_has_other_yahoo_leagues,
+    publish_failure,
     record_league_access,
     require_league_member,
     require_league_owner,
@@ -666,6 +668,39 @@ def delete_league(
             )
 
         logger.info("Deleted raw API data for league from S3")
+
+        # A user's Yahoo OAuth token lives in a single per-user item
+        # (USER#{id}/YAHOO_OAUTH), not under the league, because one linked Yahoo
+        # account backs all of that user's Yahoo leagues. Deleting a Yahoo league
+        # would otherwise orphan those encrypted credentials forever, so once the
+        # owner (the only caller who reaches here) has no other Yahoo league we
+        # remove the token item too (backend/delete-league, backend/yahoo-oauth).
+        # Effective platform uses active_platform (a league migrated *to* Yahoo
+        # counts; one migrated *away* does not), falling back to platform. This is
+        # best-effort: the league data is already gone, so a cleanup failure is
+        # alerted but never fails the delete.
+        effective_platform = metadata.get("active_platform") or metadata.get("platform")
+        if (
+            effective_platform == Platform.YAHOO.value
+            and not owner_has_other_yahoo_leagues(
+                clerk_user_id, exclude_canonical_league_id=canonical_league_id
+            )
+        ):
+            try:
+                yahoo_oauth.delete_tokens(clerk_user_id)
+                logger.info(
+                    "Removed orphaned Yahoo OAuth link after owner's last Yahoo "
+                    "league delete"
+                )
+            except botocore.exceptions.ClientError as e:
+                logger.error(
+                    "Failed to delete Yahoo OAuth token item after league delete: %s",
+                    e,
+                )
+                publish_failure(
+                    "Failed to delete orphaned Yahoo OAuth token item for user after "
+                    f"deleting their last Yahoo league {canonical_league_id}: {e}"
+                )
 
         return APIResponse(
             detail="Successfully deleted league",

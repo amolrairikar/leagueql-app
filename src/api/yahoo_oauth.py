@@ -253,6 +253,11 @@ def _get_token_item(clerk_user_id: str) -> dict[str, Any] | None:
     return _token_client().get_token_item(clerk_user_id)
 
 
+def delete_tokens(clerk_user_id: str) -> None:
+    """Delete a user's stored ``YAHOO_OAUTH`` token item (idempotent; see YahooTokenClient)."""
+    _token_client().delete_tokens(clerk_user_id)
+
+
 def has_valid_link(clerk_user_id: str) -> bool:
     """Return whether the caller has a stored Yahoo link (the onboarding gate)."""
     return _token_client().has_valid_link(clerk_user_id)

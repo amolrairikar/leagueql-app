@@ -118,9 +118,53 @@ defineFeature(feature, (test) => {
     });
   });
 
+  test('The Works with strip marks Yahoo as Beta', ({ when, then, and }) => {
+    when('I open the landing page', async () => {
+      server.use(
+        http.get('https://api.leagueql.com/counts', () =>
+          HttpResponse.json({ leagueCount: 3 }),
+        ),
+      );
+      await renderRoute(<LeagueQLLanding />, { route: '/' });
+    });
+    then(/^I see "(.*)"$/, async (text) => {
+      expect((await screen.findAllByText(text)).length).toBeGreaterThan(0);
+    });
+    and(/^I see "(.*)"$/, async (text) => {
+      expect((await screen.findAllByText(text)).length).toBeGreaterThan(0);
+    });
+    and(/^I see "(.*)"$/, async (text) => {
+      expect((await screen.findAllByText(text)).length).toBeGreaterThan(0);
+    });
+  });
+
   test('The docs page renders', ({ when, then }) => {
     when('I open the docs page', async () => {
       await renderRoute(<InstructionsPage />, { route: '/docs' });
+    });
+    then(/^I see "(.*)"$/, async (text) => {
+      expect((await screen.findAllByText(text)).length).toBeGreaterThan(0);
+    });
+  });
+
+  test('The docs page documents connecting a Yahoo league', ({
+    when,
+    then,
+  }) => {
+    when('I open the docs page', async () => {
+      await renderRoute(<InstructionsPage />, { route: '/docs' });
+    });
+    then(/^I see "(.*)"$/, async (text) => {
+      expect((await screen.findAllByText(text)).length).toBeGreaterThan(0);
+    });
+  });
+
+  test('The privacy policy discloses Yahoo OAuth token storage', ({
+    when,
+    then,
+  }) => {
+    when('I open the privacy page', async () => {
+      await renderRoute(<PrivacyPage />, { route: '/privacy' });
     });
     then(/^I see "(.*)"$/, async (text) => {
       expect((await screen.findAllByText(text)).length).toBeGreaterThan(0);

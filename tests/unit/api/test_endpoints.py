@@ -887,6 +887,62 @@ class TestDeleteLeagueEndpoint:
         mock_table.update_item.assert_not_called()
         mock_s3_client.delete_objects.assert_not_called()
 
+    def _yahoo_lookup_item(self):
+        # A LEAGUE_LOOKUP item that doubles as METADATA (get_item returns it for
+        # both reads), marking the league as Yahoo and owned by the authed user.
+        return {
+            "PK": "LEAGUE#456#PLATFORM#YAHOO",
+            "SK": "LEAGUE_LOOKUP",
+            "canonical_league_id": "canonical-yh",
+            "platform": "YAHOO",
+            "owner_user_id": "user_1",
+        }
+
+    def test_deletes_yahoo_oauth_when_last_yahoo_league(
+        self, client, mock_table, mock_s3_client
+    ):
+        self._setup_delete_mocks(mock_table, self._yahoo_lookup_item(), mock_s3_client)
+        with (
+            patch("routes.owner_has_other_yahoo_leagues", return_value=False),
+            patch("yahoo_oauth.delete_tokens") as mock_delete_tokens,
+        ):
+            response = client.delete("/leagues/456?platform=YAHOO")
+        assert response.status_code == 200
+        mock_delete_tokens.assert_called_once_with("user_1")
+
+    def test_keeps_yahoo_oauth_when_other_yahoo_league_remains(
+        self, client, mock_table, mock_s3_client
+    ):
+        self._setup_delete_mocks(mock_table, self._yahoo_lookup_item(), mock_s3_client)
+        with (
+            patch("routes.owner_has_other_yahoo_leagues", return_value=True),
+            patch("yahoo_oauth.delete_tokens") as mock_delete_tokens,
+        ):
+            response = client.delete("/leagues/456?platform=YAHOO")
+        assert response.status_code == 200
+        mock_delete_tokens.assert_not_called()
+
+    def test_yahoo_oauth_cleanup_failure_does_not_fail_delete(
+        self, client, mock_table, mock_s3_client
+    ):
+        self._setup_delete_mocks(mock_table, self._yahoo_lookup_item(), mock_s3_client)
+        with (
+            patch("routes.owner_has_other_yahoo_leagues", return_value=False),
+            patch(
+                "yahoo_oauth.delete_tokens",
+                side_effect=botocore.exceptions.ClientError(
+                    {"Error": {"Code": "InternalError", "Message": "fail"}},
+                    "DeleteItem",
+                ),
+            ),
+            patch("routes.publish_failure") as mock_publish_failure,
+        ):
+            response = client.delete("/leagues/456?platform=YAHOO")
+        # The league data is already gone, so the delete still succeeds; the
+        # orphaned-token cleanup failure is alerted, not surfaced to the caller.
+        assert response.status_code == 200
+        mock_publish_failure.assert_called_once()
+
 
 class TestQueryLeagueEndpoint:
     def test_query_with_suffix_returns_item(

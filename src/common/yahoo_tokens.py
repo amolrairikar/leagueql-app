@@ -137,6 +137,18 @@ class YahooTokenClient:
             }
         )
 
+    def delete_tokens(self, clerk_user_id: str) -> None:
+        """Delete a user's stored ``YAHOO_OAUTH`` token item.
+
+        Idempotent: DynamoDB ``delete_item`` is a no-op when the item is absent, so
+        deleting an already-unlinked (or never-linked) user succeeds silently. Used
+        when the user deletes their last Yahoo league, so no encrypted credentials
+        are retained beyond their use (backend/delete-league).
+        """
+        self._table.delete_item(
+            Key={"PK": f"USER#{clerk_user_id}", "SK": "YAHOO_OAUTH"}
+        )
+
     def get_token_item(self, clerk_user_id: str) -> dict[str, Any] | None:
         """Read the raw (still-encrypted) ``YAHOO_OAUTH`` item for a user, or ``None``."""
         try:

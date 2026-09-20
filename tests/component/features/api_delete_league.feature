@@ -15,3 +15,24 @@ Feature: Delete league API (backend/delete-league)
   Scenario: An un-onboarded league returns 404
     When I DELETE "/leagues/404?platform=SLEEPER"
     Then the API responds with status 404
+
+  Scenario: Deleting the owner's last Yahoo league removes their stored OAuth token
+    Given a LEAGUE_LOOKUP exists for league "300" platform "YAHOO" canonical "canon-y"
+    And a YAHOO_OAUTH token item exists for the default user
+    When I DELETE "/leagues/300?platform=YAHOO"
+    Then the API responds with status 200
+    And no YAHOO_OAUTH token item exists for the default user
+
+  Scenario: Deleting a Yahoo league keeps the OAuth token when another Yahoo league remains
+    Given a LEAGUE_LOOKUP exists for league "300" platform "YAHOO" canonical "canon-y"
+    And an onboarded YAHOO league "canon-y2" owned by the default user
+    And a YAHOO_OAUTH token item exists for the default user
+    When I DELETE "/leagues/300?platform=YAHOO"
+    Then the API responds with status 200
+    And a YAHOO_OAUTH token item still exists for the default user
+
+  Scenario: Deleting a Sleeper league never removes a Yahoo OAuth token
+    Given a YAHOO_OAUTH token item exists for the default user
+    When I DELETE "/leagues/100?platform=SLEEPER"
+    Then the API responds with status 200
+    And a YAHOO_OAUTH token item still exists for the default user

@@ -259,6 +259,15 @@ class TestStoreTokens:
         assert item["expires_at"] > int(time.time())
 
 
+class TestDeleteTokens:
+    def test_deletes_item_by_key(self, yahoo, mock_table):
+        yahoo.delete_tokens("user_1")
+
+        mock_table.delete_item.assert_called_once_with(
+            Key={"PK": "USER#user_1", "SK": "YAHOO_OAUTH"}
+        )
+
+
 class TestHasValidLink:
     def test_true_when_item_present(self, yahoo, mock_table):
         mock_table.get_item.return_value = {"Item": {"PK": "USER#user_1"}}

@@ -3,8 +3,8 @@
 from unittest.mock import MagicMock, patch
 from urllib.parse import parse_qs, urlparse
 
-from behave import then, when
-from common_steps import get_item
+from behave import given, then, when
+from common_steps import get_item, put_item
 
 
 @when('I start the Yahoo authorization for league "{league_id}"')
@@ -67,6 +67,53 @@ def step_assert_linked(context):
 def step_assert_not_linked(context):
     assert context.response.status_code == 302, context.response.status_code
     assert "yahooLinked=0" in context.response.headers["location"]
+
+
+@given("a YAHOO_OAUTH token item exists for the default user")
+def step_seed_token_item(context):
+    # Seed a plausible (already-encrypted-looking) token item directly; the delete
+    # cleanup path only reads/removes the item, so no real KMS ciphertext is needed.
+    put_item(
+        context,
+        {
+            "PK": f"USER#{context.default_user}",
+            "SK": "YAHOO_OAUTH",
+            "access_token": "ciphertext-access",
+            "refresh_token": "ciphertext-refresh",
+            "token_type": "bearer",
+            "expires_at": 9999999999,
+            "updated_at": 1,
+        },
+    )
+
+
+@given('an onboarded YAHOO league "{canonical}" owned by the default user')
+def step_seed_onboarded_yahoo_league(context, canonical):
+    # A full METADATA item including onboarded_at, so it is projected into the
+    # sparse GSI3 all-METADATA index the owner-check queries.
+    put_item(
+        context,
+        {
+            "PK": f"LEAGUE#{canonical}",
+            "SK": "METADATA",
+            "platform": "YAHOO",
+            "league_name": "Other Yahoo League",
+            "owner_user_id": context.default_user,
+            "onboarded_at": "2024-09-01T00:00:00Z",
+        },
+    )
+
+
+@then("no YAHOO_OAUTH token item exists for the default user")
+def step_assert_token_item_absent(context):
+    item = get_item(context, f"USER#{context.default_user}", "YAHOO_OAUTH")
+    assert item is None, "expected the YAHOO_OAUTH item to be deleted"
+
+
+@then("a YAHOO_OAUTH token item still exists for the default user")
+def step_assert_token_item_present(context):
+    item = get_item(context, f"USER#{context.default_user}", "YAHOO_OAUTH")
+    assert item is not None, "expected the YAHOO_OAUTH item to be retained"
 
 
 @then("a YAHOO_OAUTH token item exists for the default user with encrypted tokens")

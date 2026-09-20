@@ -38,7 +38,7 @@ export const NAV_LINKS: NavLinkItem[] = [
 export const PLATFORMS: Platform[] = [
   { name: 'ESPN', logo: espnLogo },
   { name: 'Sleeper', logo: sleeperLogo },
-  { name: 'Yahoo', logo: yahooLogo },
+  { name: 'Yahoo', logo: yahooLogo, beta: true },
 ];
 
 export const SLIDES: Slide[] = [

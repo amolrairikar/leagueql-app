@@ -120,6 +120,18 @@ class TestStoreTokens:
         assert item["expires_at"] - int(time.time()) > 3000
 
 
+class TestDeleteTokens:
+    def test_deletes_item_by_key(self):
+        table = MagicMock()
+        client = _client(table=table)
+
+        client.delete_tokens("user_1")
+
+        table.delete_item.assert_called_once_with(
+            Key={"PK": "USER#user_1", "SK": "YAHOO_OAUTH"}
+        )
+
+
 class TestGetTokenItemAndHasValidLink:
     def test_get_token_item_returns_item(self):
         table = MagicMock()
