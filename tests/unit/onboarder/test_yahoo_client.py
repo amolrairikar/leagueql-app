@@ -220,6 +220,44 @@ class TestFilters:
             }
         ]
 
+    def test_teams_masked_guids_fall_back_to_manager_id(self, yc):
+        """Yahoo masks the guid in some (e.g. public) leagues, returning the SAME value for
+        every manager; owner ids must come from the distinct per-league manager_id so teams
+        don't all collapse onto one manager."""
+
+        def _team(idx, nick):
+            return {
+                "team": [
+                    [
+                        {"team_key": f"461.l.100.t.{idx}"},
+                        {"team_id": str(idx)},
+                        {"name": f"Team {nick}"},
+                        {
+                            "managers": [
+                                {
+                                    "manager": {
+                                        "manager_id": str(idx),
+                                        "nickname": nick,
+                                        "guid": "MASKED",
+                                    }
+                                }
+                            ]
+                        },
+                    ]
+                ]
+            }
+
+        data = _league_payload(
+            "teams",
+            {"0": _team(1, "Alice"), "1": _team(2, "Bob"), "count": 2},
+        )
+        out = yc._filter_teams(data, "2025", "teams")
+        assert out["members"] == [
+            {"manager_id": "1", "nickname": "Alice"},
+            {"manager_id": "2", "nickname": "Bob"},
+        ]
+        assert [t["manager_id"] for t in out["teams"]] == ["1", "2"]
+
     def test_matchups(self, yc):
         data = _league_payload(
             "scoreboard",

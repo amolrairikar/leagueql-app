@@ -126,3 +126,10 @@
   JOIN members) with a Yahoo-specific query that LEFT JOINs members, so a team with no resolvable
   manager still yields a `teams_output` row instead of emptying every dependent view. Add a
   processor regression test.
+- [x] 13.3 Fix collapsing managers: Yahoo masks the manager `guid` in some (e.g. public) leagues,
+  returning the SAME value for every team, so keying owners on `guid or manager_id` deduped all
+  members to one and every team showed a single manager in the UI. Add
+  `resolve_team_owner_ids`/`_primary_manager` in `src/common/yahoo_members.py` that use the guid only
+  when present for every team AND distinct, else fall back to the per-league `manager_id`; use it in
+  `_filter_teams` (`src/onboarder/yahoo_client.py`) and `parse_managers`. Add unit tests for masked,
+  distinct, and partial-guid cases.

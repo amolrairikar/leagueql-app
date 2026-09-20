@@ -162,8 +162,58 @@ class TestParseManagers:
         payload = _teams_payload([[{"team_key": "t.1"}, _manager(nickname="Ghost")]])
         assert parse_managers(payload) == []
 
+    def test_duplicate_guids_fall_back_to_manager_id(self):
+        # Yahoo masks the guid in some leagues, returning the SAME value for every manager;
+        # owner ids must then come from the distinct per-league manager_id, not collapse.
+        payload = _teams_payload(
+            [
+                [
+                    {"team_key": "t.1"},
+                    _manager(manager_id="1", guid="SAME", nickname="A"),
+                ],
+                [
+                    {"team_key": "t.2"},
+                    _manager(manager_id="2", guid="SAME", nickname="B"),
+                ],
+            ]
+        )
+        assert parse_managers(payload) == [
+            {"owner_id": "1", "display_name": "A"},
+            {"owner_id": "2", "display_name": "B"},
+        ]
+
     def test_empty_teams(self):
         assert parse_managers(_teams_payload([])) == []
+
+
+class TestResolveTeamOwnerIds:
+    @staticmethod
+    def _team_flat(**manager_fields):
+        return {"managers": [{"manager": manager_fields}]}
+
+    def test_distinct_guids_used(self):
+        flats = [
+            self._team_flat(manager_id="1", guid="G1"),
+            self._team_flat(manager_id="2", guid="G2"),
+        ]
+        assert yahoo_members.resolve_team_owner_ids(flats) == ["G1", "G2"]
+
+    def test_duplicate_guids_fall_back_to_manager_id(self):
+        flats = [
+            self._team_flat(manager_id="1", guid="X"),
+            self._team_flat(manager_id="2", guid="X"),
+        ]
+        assert yahoo_members.resolve_team_owner_ids(flats) == ["1", "2"]
+
+    def test_partial_guids_fall_back_to_manager_id(self):
+        flats = [
+            self._team_flat(manager_id="1"),
+            self._team_flat(manager_id="2", guid="G2"),
+        ]
+        assert yahoo_members.resolve_team_owner_ids(flats) == ["1", "2"]
+
+    def test_no_manager(self):
+        assert yahoo_members.resolve_team_owner_ids([{}]) == [None]
 
 
 # ── fetch_yahoo_members ───────────────────────────────────────────────────────────

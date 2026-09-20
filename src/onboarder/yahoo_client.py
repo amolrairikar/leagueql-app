@@ -27,7 +27,13 @@ from utils import fetch_with_retry, logger, run_fetches, validate_api_results
 
 # The pure Yahoo JSON-normalization helpers live in a shared module so the API Lambda's
 # Yahoo-members proxy can reuse them without importing this onboarding client.
-from common.yahoo_members import _collection_items, _flatten, _league_subresource
+from common.yahoo_members import (
+    _collection_items,
+    _flatten,
+    _league_subresource,
+    _primary_manager,
+    resolve_team_owner_ids,
+)
 
 YAHOO_BASE_URL = "https://fantasysports.yahooapis.com/fantasy/v2"
 
@@ -87,16 +93,16 @@ def _filter_standings(data: dict[str, Any], _season: str, _dt: str) -> dict[str,
 
 def _filter_teams(data: dict[str, Any], _season: str, _dt: str) -> dict[str, Any]:
     teams = _collection_items(_league_subresource(data, "teams") or {}, "team")
+    flats = [_flatten(team) for team in teams]
+    owner_ids = resolve_team_owner_ids(flats)
     members, out_teams = [], []
-    for team in teams:
-        flat = _flatten(team)
-        managers = _collection_items(flat.get("managers", {}), "manager")
-        primary = _flatten(managers[0]) if managers else {}
+    for flat, owner_id in zip(flats, owner_ids):
+        primary = _primary_manager(flat)
         logos = _collection_items(flat.get("team_logos", {}), "team_logo")
         logo_url = _flatten(logos[0]).get("url") if logos else None
         members.append(
             {
-                "manager_id": primary.get("guid") or primary.get("manager_id"),
+                "manager_id": owner_id,
                 "nickname": primary.get("nickname"),
             }
         )
@@ -106,7 +112,7 @@ def _filter_teams(data: dict[str, Any], _season: str, _dt: str) -> dict[str, Any
                 "team_id": flat.get("team_id"),
                 "name": flat.get("name"),
                 "logo": logo_url,
-                "manager_id": primary.get("guid") or primary.get("manager_id"),
+                "manager_id": owner_id,
             }
         )
     return {"members": members, "teams": out_teams}

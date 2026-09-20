@@ -68,7 +68,10 @@ The onboarder SHALL parse each team's identity, primary manager (owner id + disp
 logo from the Yahoo `/teams` payload. Because Yahoo returns a collection either as a numeric-keyed
 object (`{"0": {...}, "count": N}`, used for large collections like teams and roster players) or as
 a plain list (`[{...}]`, used for small nested sub-collections like `managers` and `team_logos`),
-the parsing SHALL handle both shapes so owner ids, display names, and logos populate.
+the parsing SHALL handle both shapes so owner ids, display names, and logos populate. Each team's
+primary-owner id SHALL be unique within the league: the manager `guid` SHALL be used when it is
+present for every team and distinct across the league; otherwise the per-league `manager_id` SHALL
+be used, so leagues where Yahoo masks the guid do not collapse every team onto one manager.
 
 #### Scenario: Managers and logos parsed from list-shaped sub-collections
 - **WHEN** a Yahoo `/teams` response returns each team's `managers` and `team_logos` as plain lists
@@ -78,3 +81,13 @@ the parsing SHALL handle both shapes so owner ids, display names, and logos popu
 #### Scenario: Managers parsed from a numeric-keyed sub-collection
 - **WHEN** a Yahoo sub-collection is instead returned as a numeric-keyed object
 - **THEN** the same fields are parsed identically
+
+#### Scenario: Masked or duplicate guids fall back to manager_id
+- **WHEN** Yahoo returns the same (masked) manager `guid` for every team, or omits it
+- **THEN** each team's primary-owner id comes from its distinct per-league `manager_id`, so every
+  team keeps a distinct owner and the correct manager name rather than collapsing onto the first
+
+#### Scenario: Distinct guids preserved for cross-season continuity
+- **WHEN** Yahoo exposes a distinct guid for every team (e.g. a private league)
+- **THEN** those guids are used as the owner ids so the same manager stays continuous across
+  seasons

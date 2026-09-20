@@ -120,22 +120,45 @@ def resolve_league_key(
     return meta.get("league_key") if meta else None
 
 
+def _primary_manager(team_flat: dict[str, Any]) -> dict[str, Any]:
+    """Return the flattened primary (first) manager of a flattened Yahoo team, or ``{}``."""
+    managers = _collection_items(team_flat.get("managers", {}), "manager")
+    return _flatten(managers[0]) if managers else {}
+
+
+def resolve_team_owner_ids(team_flats: list[dict[str, Any]]) -> list[Any]:
+    """Assign each team a primary-owner id, unique within the league.
+
+    Prefers the manager's stable cross-season Yahoo ``guid``. But Yahoo masks the guid in
+    some leagues (e.g. public ones), returning the SAME value for every manager — keying
+    owners on it then collapses every team onto one manager. So the guid is used only when
+    it is present for every team AND distinct across the league; otherwise this falls back
+    to the per-league ``manager_id`` (unique within a season) so each team keeps a distinct
+    owner. Returns owner ids positionally aligned with ``team_flats``.
+    """
+    primaries = [_primary_manager(flat) for flat in team_flats]
+    guids = [p.get("guid") for p in primaries]
+    non_null_guids = [g for g in guids if g]
+    guids_usable = len(non_null_guids) == len(team_flats) == len(set(non_null_guids))
+    return [(p.get("guid") if guids_usable else p.get("manager_id")) for p in primaries]
+
+
 def parse_managers(teams_payload: dict[str, Any]) -> list[dict[str, str]]:
     """Parse a ``/league/{key}/teams`` payload into ``[{owner_id, display_name}]``.
 
-    ``owner_id`` is the primary manager's stable cross-season Yahoo ``guid`` (falling back to
-    ``manager_id``); ``display_name`` is the manager ``nickname``, falling back to ``owner_id``.
-    Teams whose primary manager has no id are skipped.
+    ``owner_id`` is a per-league-unique primary-owner id (the manager ``guid`` when Yahoo
+    exposes distinct guids, else the per-league ``manager_id`` — see
+    ``resolve_team_owner_ids``); ``display_name`` is the manager ``nickname``, falling back
+    to ``owner_id``. Teams whose primary manager has no id are skipped.
     """
     teams = _collection_items(_league_subresource(teams_payload, "teams") or {}, "team")
+    flats = [_flatten(team) for team in teams]
+    owner_ids = resolve_team_owner_ids(flats)
     managers: list[dict[str, str]] = []
-    for team in teams:
-        flat = _flatten(team)
-        team_managers = _collection_items(flat.get("managers", {}), "manager")
-        primary = _flatten(team_managers[0]) if team_managers else {}
-        owner_id = primary.get("guid") or primary.get("manager_id")
+    for flat, owner_id in zip(flats, owner_ids):
         if not owner_id:
             continue
+        primary = _primary_manager(flat)
         managers.append(
             {"owner_id": owner_id, "display_name": primary.get("nickname") or owner_id}
         )
