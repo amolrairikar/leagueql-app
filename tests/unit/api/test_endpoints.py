@@ -943,6 +943,30 @@ class TestDeleteLeagueEndpoint:
         assert response.status_code == 200
         mock_publish_failure.assert_called_once()
 
+    def test_yahoo_ownership_check_failure_does_not_fail_delete(
+        self, client, mock_table, mock_s3_client
+    ):
+        # Regression: the GSI3 ownership query can raise (e.g. an IAM
+        # AccessDeniedException if the role lacks GSI3 Query). It sits inside the
+        # best-effort guard, so the already-completed league delete still returns
+        # 200 and the failure is alerted rather than surfaced as "Failed to delete".
+        self._setup_delete_mocks(mock_table, self._yahoo_lookup_item(), mock_s3_client)
+        with (
+            patch(
+                "routes.owner_has_other_yahoo_leagues",
+                side_effect=botocore.exceptions.ClientError(
+                    {"Error": {"Code": "AccessDeniedException", "Message": "no"}},
+                    "Query",
+                ),
+            ),
+            patch("yahoo_oauth.delete_tokens") as mock_delete_tokens,
+            patch("routes.publish_failure") as mock_publish_failure,
+        ):
+            response = client.delete("/leagues/456?platform=YAHOO")
+        assert response.status_code == 200
+        mock_delete_tokens.assert_not_called()
+        mock_publish_failure.assert_called_once()
+
 
 class TestQueryLeagueEndpoint:
     def test_query_with_suffix_returns_item(

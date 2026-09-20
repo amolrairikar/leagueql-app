@@ -3,7 +3,7 @@
 ## ADDED Requirements
 
 ### Requirement: Remove orphaned Yahoo OAuth credentials on last Yahoo league delete
-When a deleted league's effective platform is Yahoo, the API SHALL delete the owner's stored `YAHOO_OAUTH` token item once the owner no longer owns any other Yahoo league, and SHALL leave it in place while any other Yahoo league they own remains. Deleting an ESPN or Sleeper league SHALL never remove a `YAHOO_OAUTH` item. This cleanup is best-effort: a failure to remove the token item is logged/alerted but does not fail the league deletion.
+When a deleted league's effective platform is Yahoo, the API SHALL delete the owner's stored `YAHOO_OAUTH` token item once the owner no longer owns any other Yahoo league, and SHALL leave it in place while any other Yahoo league they own remains. Deleting an ESPN or Sleeper league SHALL never remove a `YAHOO_OAUTH` item. The entire cleanup — the check for other Yahoo leagues and the token deletion — SHALL be best-effort: because the league's data is already deleted before it runs, any failure within it (including the ownership-check query) SHALL be logged/alerted and SHALL NOT fail the league deletion. The API's execution role SHALL be granted the DynamoDB permission needed for the ownership-check query so the cleanup succeeds in normal operation.
 
 #### Scenario: Owner's last Yahoo league deleted
 - **WHEN** the owner deletes their only remaining Yahoo league
@@ -20,3 +20,7 @@ When a deleted league's effective platform is Yahoo, the API SHALL delete the ow
 #### Scenario: Token cleanup failure does not fail the delete
 - **WHEN** the league's items and S3 payloads are deleted but removing the `YAHOO_OAUTH` item raises a client error
 - **THEN** the API still returns `200` for the league deletion and the token-cleanup failure is logged/alerted
+
+#### Scenario: Ownership-check failure does not fail the delete
+- **WHEN** the league's items and S3 payloads are deleted but the "other Yahoo leagues" ownership-check query raises an error (e.g. a missing GSI permission)
+- **THEN** the API still returns `200` for the league deletion, no token is removed, and the failure is logged/alerted

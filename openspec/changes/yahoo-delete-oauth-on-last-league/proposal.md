@@ -26,9 +26,13 @@ needless re-link.
 - If the owner still has at least one other Yahoo league, the token item is
   left in place (the link is still in use).
 - Deleting an ESPN or Sleeper league never touches any `YAHOO_OAUTH` item.
-- The OAuth-item cleanup is best-effort: a failure to delete the token item is
-  logged and alerted but does not fail the league deletion (the league data is
-  already gone), consistent with the existing S3 best-effort behavior.
+- The OAuth-item cleanup is best-effort and fully self-contained: because the
+  league data is already gone before it runs, any failure within it — the
+  ownership-check GSI3 query included — is logged and alerted but never fails the
+  league deletion, consistent with the existing S3 best-effort behavior.
+- The API Lambda's IAM role is granted `dynamodb:Query` on the GSI3 index (it
+  previously had Query only on the base table and GSI1), so the ownership-check
+  query succeeds rather than failing with `AccessDeniedException`.
 
 ## Capabilities
 
@@ -49,5 +53,8 @@ needless re-link.
   - `src/api/helpers.py` — `owner_has_other_yahoo_leagues` (GSI3 query).
   - `src/api/routes.py` — `delete_league` invokes the cleanup for Yahoo leagues.
   - Backend unit + component tests.
-- No frontend, API-contract, or infrastructure changes. No new DynamoDB items or
-  indexes (reuses GSI3, the sparse all-METADATA index).
+- Infrastructure: `infrastructure/global/{prod,dev}/main.tf` — add
+  `/index/GSI3` (primary + replica) to the API role's `CRUDDynamoDB` DynamoDB
+  `Query` resources.
+- No frontend or API-contract changes. No new DynamoDB items or indexes (reuses
+  GSI3, the sparse all-METADATA index).

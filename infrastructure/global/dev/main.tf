@@ -565,7 +565,12 @@ module "api-lambda-role" {
           module.dynamodb.primary_table_arn,
           module.dynamodb.replica_table_arn,
           "${module.dynamodb.primary_table_arn}/index/GSI1",
-          "${module.dynamodb.replica_table_arn}/index/GSI1"
+          "${module.dynamodb.replica_table_arn}/index/GSI1",
+          # GSI3 (sparse all-METADATA index): delete_league queries it to decide
+          # whether an owner's last Yahoo league is gone before removing their
+          # per-user YAHOO_OAUTH token item (backend/delete-league).
+          "${module.dynamodb.primary_table_arn}/index/GSI3",
+          "${module.dynamodb.replica_table_arn}/index/GSI3"
         ]
       },
       {

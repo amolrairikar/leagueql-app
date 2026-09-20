@@ -676,30 +676,33 @@ def delete_league(
         # owner (the only caller who reaches here) has no other Yahoo league we
         # remove the token item too (backend/delete-league, backend/yahoo-oauth).
         # Effective platform uses active_platform (a league migrated *to* Yahoo
-        # counts; one migrated *away* does not), falling back to platform. This is
-        # best-effort: the league data is already gone, so a cleanup failure is
-        # alerted but never fails the delete.
+        # counts; one migrated *away* does not), falling back to platform.
+        #
+        # This whole block is best-effort and fully self-contained: the league data
+        # is already gone, so NOTHING here — including the GSI3 ownership check —
+        # may turn a successful delete into a failure. Any error (a GSI3 IAM/query
+        # error, a token delete error, ...) is alerted and swallowed so the caller
+        # still sees the delete succeed.
         effective_platform = metadata.get("active_platform") or metadata.get("platform")
-        if (
-            effective_platform == Platform.YAHOO.value
-            and not owner_has_other_yahoo_leagues(
-                clerk_user_id, exclude_canonical_league_id=canonical_league_id
-            )
-        ):
+        if effective_platform == Platform.YAHOO.value:
             try:
-                yahoo_oauth.delete_tokens(clerk_user_id)
-                logger.info(
-                    "Removed orphaned Yahoo OAuth link after owner's last Yahoo "
-                    "league delete"
-                )
-            except botocore.exceptions.ClientError as e:
+                if not owner_has_other_yahoo_leagues(
+                    clerk_user_id, exclude_canonical_league_id=canonical_league_id
+                ):
+                    yahoo_oauth.delete_tokens(clerk_user_id)
+                    logger.info(
+                        "Removed orphaned Yahoo OAuth link after owner's last Yahoo "
+                        "league delete"
+                    )
+            except Exception as e:  # noqa: BLE001 - cleanup must never fail the delete
                 logger.error(
-                    "Failed to delete Yahoo OAuth token item after league delete: %s",
+                    "Yahoo OAuth cleanup failed after deleting league %s: %s",
+                    canonical_league_id,
                     e,
                 )
                 publish_failure(
-                    "Failed to delete orphaned Yahoo OAuth token item for user after "
-                    f"deleting their last Yahoo league {canonical_league_id}: {e}"
+                    "Failed to clean up Yahoo OAuth token item after deleting league "
+                    f"{canonical_league_id}: {e}"
                 )
 
         return APIResponse(
