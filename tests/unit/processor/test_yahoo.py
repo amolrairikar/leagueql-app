@@ -153,7 +153,10 @@ _METADATA = {
     "461.p.2": {"name": "RB Two", "position": "RB"},
     "461.p.3": {"name": "WR Three", "position": "WR"},
 }
-_STATS = {"461.p.1": {"2025": 300.0}, "461.p.2": {"2025": 250.0}}
+# Yahoo returns points as strings, so the stats cache stores them as strings. Keep these
+# as strings so the DRAFT transform's arithmetic (VORP) is exercised against a text-typed
+# `player_scoring_totals` column, which must be coerced to numeric before it binds.
+_STATS = {"461.p.1": {"2025": "300.0"}, "461.p.2": {"2025": "250.0"}}
 
 
 class TestRegisterYahooRawData:
@@ -240,6 +243,10 @@ class TestYahooQueriesBind:
         assert rows["461.p.1"]["player_name"] == "QB One"
         # QB One scored 300 season points -> ranked #1 QB.
         assert rows["461.p.1"]["actual_position_rank"] == 1
+        # total_points is coerced to numeric so VORP arithmetic binds (regression:
+        # string-typed Yahoo points previously crashed the DRAFT transform with
+        # `-(VARCHAR, VARCHAR)`).
+        assert rows["461.p.1"]["total_points"] == 300.0
         con.close()
 
     def test_standings_binds(self, processor_handler):

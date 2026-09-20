@@ -1065,7 +1065,13 @@ def compile_yahoo_player_scoring_totals(
                     "player_id": player_key,
                     "player_name": meta.get("name"),
                     "position": _norm_yahoo_position(meta.get("position")),
-                    "total_points": total_points,
+                    # Yahoo returns points as strings ("300.0"), so the cache stores them
+                    # as strings. Coerce to float here (matching ESPN/Sleeper, which produce
+                    # numeric totals) so the registered `player_scoring_totals` column stays
+                    # numeric — the DRAFT transform does arithmetic on it (VORP:
+                    # total_points - replacement_points), which binds VARCHAR - VARCHAR and
+                    # crashes when the column is left as text.
+                    "total_points": _to_float(total_points),
                     "season": season,
                 }
             )
