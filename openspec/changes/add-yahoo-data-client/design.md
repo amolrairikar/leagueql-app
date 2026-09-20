@@ -77,11 +77,14 @@ incomplete for VORP and as coupling heavy stat fetching to the latency-sensitive
 
 **5c. The player-data task uses a dedicated service Yahoo credential, not any onboarding user's
 token.** The service account (the maintainer's own Yahoo account) is linked once through the normal
-OAuth flow; its token item (`USER#{id} / YAHOO_OAUTH`) is addressed by a configured
-`YAHOO_SERVICE_USER_ID`, and the task obtains/refreshes access through the shared
-`common/yahoo_tokens` engine. This reuses the existing storage + refresh path rather than
-introducing a separate secret-provisioning mechanism. Alternative — a raw refresh token in SSM —
-rejected: it would duplicate the encrypt/refresh logic the token module already owns.
+OAuth flow; its token item (`USER#{id} / YAHOO_OAUTH`) is addressed by a configured service-account
+id, and the task obtains/refreshes access through the shared `common/yahoo_tokens` engine. This
+reuses the existing storage + refresh path rather than introducing a separate secret-provisioning
+mechanism. The service-account id and league key are themselves resolved at runtime from SSM
+parameters (named via `YAHOO_SERVICE_USER_ID_SSM_PARAM` / `YAHOO_SERVICE_LEAGUE_KEY_SSM_PARAM`),
+matching the `YAHOO_CLIENT_ID_SSM_PARAM` pattern so config stays out of Terraform state/CI and is
+re-pointable without a redeploy. Alternative — a raw refresh token in SSM — rejected: it would
+duplicate the encrypt/refresh logic the token module already owns.
 
 **6. Cross-region KMS for decrypt in the onboarder.**
 The Yahoo KMS key is pinned to `YAHOO_KMS_REGION` (us-east-1). The shared module builds its own KMS

@@ -10,13 +10,21 @@ limits.
 
 ### Requirement: Use a dedicated service Yahoo credential
 The refresher SHALL authenticate to the Yahoo API using a configured service account's stored
-Yahoo OAuth token (addressed by `YAHOO_SERVICE_USER_ID`), obtaining and refreshing the access token
-through the shared token engine, and SHALL NOT use any onboarding user's token.
+Yahoo OAuth token, obtaining and refreshing the access token through the shared token engine, and
+SHALL NOT use any onboarding user's token. The service account's Clerk user id and its service
+league key SHALL be resolved at runtime from SSM parameters named by the
+`YAHOO_SERVICE_USER_ID_SSM_PARAM` and `YAHOO_SERVICE_LEAGUE_KEY_SSM_PARAM` env vars, so the values
+never land in Terraform state or CI and can be re-pointed without a redeploy.
 
 #### Scenario: Service token used and refreshed
 - **WHEN** the refresher runs
-- **THEN** it obtains a valid access token for `YAHOO_SERVICE_USER_ID` (refreshing if near expiry)
-  and uses it as the Bearer credential for all Yahoo requests
+- **THEN** it resolves the service account id from its SSM parameter, obtains a valid access token
+  for that account (refreshing if near expiry), and uses it as the Bearer credential for all Yahoo
+  requests
+
+#### Scenario: Service account not configured
+- **WHEN** either service SSM parameter is unset or resolves to an empty value
+- **THEN** the run fails fast with a clear configuration error and writes no partial cache
 
 #### Scenario: Service link missing or revoked
 - **WHEN** the service account has no Yahoo link or its refresh token is revoked

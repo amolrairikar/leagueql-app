@@ -35,7 +35,8 @@
 
 - [x] 4.1 Add `src/yahoo_player_stats_refresher/` (Dockerfile + `main()` + `requirements.txt`,
   mirroring `src/sleeper_player_stats_refresher/`) that authenticates with the service token
-  (`YAHOO_SERVICE_USER_ID` via `common.yahoo_tokens`), paginates `players;out=metadata,stats`
+  (service account resolved from SSM via `YAHOO_SERVICE_USER_ID_SSM_PARAM`, using
+  `common.yahoo_tokens`), paginates `players;out=metadata,stats`
   (25/page), and writes `player-metadata/yahoo_nfl_players.json` + `player-stats/yahoo_nfl_player_stats.json`
   to S3, deep-merging stats and honoring `SEASON`/`MAX_PLAYERS`/`OUTPUT_KEY` overrides. Verify
   `pipenv run pytest tests/unit/yahoo_player_stats_refresher/`.
@@ -83,7 +84,8 @@
   the `EncryptDecryptYahooTokens` KMS + `ReadYahooClientIdSsmParameter` SSM grants to the onboarder
   role in `infrastructure/global/{dev,prod}/main.tf`. Verify `terraform validate`/`terraform fmt -check`.
 - [x] 9.2 Add the Yahoo player-data ECS Fargate task (task definition, image, schedule, and
-  `YAHOO_SERVICE_USER_ID` + Yahoo env), with its role granted S3 write, KMS decrypt, SSM read, and
+  `YAHOO_SERVICE_USER_ID_SSM_PARAM` + `YAHOO_SERVICE_LEAGUE_KEY_SSM_PARAM` + Yahoo env), with its
+  role granted S3 write, KMS decrypt, SSM read, and
   DynamoDB read on the token item — mirroring the Sleeper stats task. Verify `terraform validate`.
 
 ## 10. Component tests

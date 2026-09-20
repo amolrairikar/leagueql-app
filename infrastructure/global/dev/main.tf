@@ -1111,14 +1111,17 @@ module "yahoo-player-stats-refresher-task-role" {
         ]
       },
       {
-        Sid    = "ReadYahooClientIdSsmParameter"
+        Sid    = "ReadYahooSsmParameters"
         Effect = "Allow"
         Action = [
           "ssm:GetParameter"
         ]
         Resource = [
           "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/yahoo/client_id",
-          "arn:aws:ssm:us-west-2:${var.account_id}:parameter/leagueql/${var.environment}/yahoo/client_id"
+          "arn:aws:ssm:us-west-2:${var.account_id}:parameter/leagueql/${var.environment}/yahoo/client_id",
+          # The refresher runs east-only, so its service-account/league params live in us-east-1.
+          "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/yahoo/service_user_id",
+          "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/yahoo/service_league_key"
         ]
       },
       {

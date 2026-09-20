@@ -41,15 +41,3 @@ variable "yahoo_connect_return_url" {
   type        = string
   default     = "https://leagueql.app/connect_league"
 }
-
-variable "yahoo_service_user_id" {
-  description = "Clerk user id of the service account whose linked Yahoo token the player-data refresher uses"
-  type        = string
-  default     = ""
-}
-
-variable "yahoo_service_league_key" {
-  description = "Yahoo league_key ({game_key}.l.{league_id}) whose scoring the player-data refresher applies to season player points"
-  type        = string
-  default     = ""
-}

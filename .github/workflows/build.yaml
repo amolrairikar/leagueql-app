@@ -351,9 +351,7 @@ jobs:
             -var="clerk_issuer_url=${{ env.CLERK_ISSUER_URL }}" \
             -var="clerk_jwt_audience=${{ secrets.CLERK_JWT_AUDIENCE }}" \
             -var="yahoo_redirect_uri=${{ env.YAHOO_REDIRECT_URI }}" \
-            -var="yahoo_connect_return_url=${{ env.YAHOO_CONNECT_RETURN_URL }}" \
-            -var="yahoo_service_user_id=${{ secrets.YAHOO_SERVICE_USER_ID }}" \
-            -var="yahoo_service_league_key=${{ secrets.YAHOO_SERVICE_LEAGUE_KEY }}"
+            -var="yahoo_connect_return_url=${{ env.YAHOO_CONNECT_RETURN_URL }}"
 
   # run-sleeper-onboarding-integration-tests:
   #   name: Run Sleeper Onboarding Integration Tests

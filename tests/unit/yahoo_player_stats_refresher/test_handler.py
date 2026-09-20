@@ -4,6 +4,7 @@ import json
 from unittest.mock import MagicMock, patch
 
 import botocore.exceptions
+import pytest
 
 
 def _players_payload(players):
@@ -161,6 +162,15 @@ class TestMain:
         put = self._run(yahoo_refresher_handler, pages)
         # Capped at 1 player despite the page holding 2.
         assert list(put["player-metadata/yahoo_nfl_players.json"]) == ["461.p.1"]
+
+    def test_missing_service_config_raises(self, yahoo_refresher_handler, monkeypatch):
+        # An unpopulated SSM parameter resolves to "" — fail fast with a clear error rather than
+        # letting an empty user id reach the token engine as "No Yahoo link for user".
+        monkeypatch.setattr(
+            yahoo_refresher_handler, "get_secret_from_env_param", lambda env_var: ""
+        )
+        with pytest.raises(RuntimeError, match="must be configured"):
+            yahoo_refresher_handler.main()
 
     def test_output_key_override(self, yahoo_refresher_handler, monkeypatch):
         monkeypatch.setenv("OUTPUT_KEY", "player-stats/test_yahoo.json")

@@ -588,14 +588,17 @@ resource "aws_ecs_task_definition" "yahoo_player_stats_refresher" {
           value = "leagueql-table-${var.environment}"
         },
         # The service account whose linked Yahoo token authorizes the fetch, and its league
-        # (whose season-specific scoring Yahoo applies to player_points). Configured per-env.
+        # (whose season-specific scoring Yahoo applies to player_points). Both are read from SSM
+        # by *name* at runtime (like the client_id below), so the values never land in TF state /
+        # CI and the service account/league can be re-pointed in the SSM console without a
+        # redeploy. Non-secret identifiers, so plain String parameters.
         {
-          name  = "YAHOO_SERVICE_USER_ID"
-          value = var.yahoo_service_user_id
+          name  = "YAHOO_SERVICE_USER_ID_SSM_PARAM"
+          value = "/leagueql/${var.environment}/yahoo/service_user_id"
         },
         {
-          name  = "YAHOO_SERVICE_LEAGUE_KEY"
-          value = var.yahoo_service_league_key
+          name  = "YAHOO_SERVICE_LEAGUE_KEY_SSM_PARAM"
+          value = "/leagueql/${var.environment}/yahoo/service_league_key"
         },
         # Token engine config: KMS pinned to the key's region for cross-region decrypt; the
         # client id is read from SSM by name at runtime.

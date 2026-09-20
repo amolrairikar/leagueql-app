@@ -59,7 +59,7 @@ link.
 - **Frontend:** `frontend/src/features/connect_league/{yahoo-connect-return.tsx,api-calls.ts}`.
 - **New component:** a Yahoo player-data ECS Fargate task (`src/yahoo_player_stats_refresher/`,
   Dockerfile + `main()`) on a schedule, reading a dedicated service Yahoo credential
-  (`YAHOO_SERVICE_USER_ID`) and writing `player-metadata/yahoo_nfl_players.json` +
+  (service account + league resolved from SSM) and writing `player-metadata/yahoo_nfl_players.json` +
   `player-stats/yahoo_nfl_player_stats.json` to S3 — mirroring `sleeper_player_stats_refresher`.
 - **External integration:** the onboarder and the player-data task now call the Yahoo Fantasy
   Sports API (`fantasysports.yahooapis.com`) — a new external dependency for the diagram.

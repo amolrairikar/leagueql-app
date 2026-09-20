@@ -5,9 +5,10 @@ per-player season fantasy scoring, then caches them in S3 for the processing pip
 (``player-metadata/yahoo_nfl_players.json`` and ``player-stats/yahoo_nfl_player_stats.json``).
 
 Unlike the onboarder (which uses each user's linked token), this task uses a **dedicated service
-credential** — the maintainer's own linked Yahoo account, addressed by ``YAHOO_SERVICE_USER_ID``
-via the shared ``common.yahoo_tokens`` engine. Player fantasy points are read under the service
-account's league (``YAHOO_SERVICE_LEAGUE_KEY``), whose season-specific scoring is applied by Yahoo.
+credential** — the maintainer's own linked Yahoo account, whose Clerk user id is read from SSM by
+*name* via ``YAHOO_SERVICE_USER_ID_SSM_PARAM`` (using the shared ``common.yahoo_tokens`` engine).
+Player fantasy points are read under the service account's league, whose key is likewise read from
+SSM via ``YAHOO_SERVICE_LEAGUE_KEY_SSM_PARAM`` and whose season-specific scoring Yahoo applies.
 """
 
 import json
@@ -19,6 +20,7 @@ import boto3
 import botocore.exceptions
 from utils import build_retry_session, logger
 
+from common.secrets import get_secret_from_env_param
 from common.yahoo_tokens import from_env as yahoo_tokens_from_env
 
 s3_client = boto3.client("s3")
@@ -131,8 +133,16 @@ def _load_existing(bucket: str, key: str) -> dict:
 
 def main() -> None:
     bucket = os.environ["S3_BUCKET_NAME"]
-    service_user_id = os.environ["YAHOO_SERVICE_USER_ID"]
-    league_key = os.environ["YAHOO_SERVICE_LEAGUE_KEY"]
+    # Service-account config is stored out-of-band as (non-secret) SSM parameters and read here by
+    # name, so a missing/empty value surfaces as a clear error rather than a misleading downstream
+    # "No Yahoo link for user" when the token engine looks up an empty id.
+    service_user_id = get_secret_from_env_param("YAHOO_SERVICE_USER_ID_SSM_PARAM")
+    league_key = get_secret_from_env_param("YAHOO_SERVICE_LEAGUE_KEY_SSM_PARAM")
+    if not service_user_id or not league_key:
+        raise RuntimeError(
+            "YAHOO_SERVICE_USER_ID_SSM_PARAM and YAHOO_SERVICE_LEAGUE_KEY_SSM_PARAM must be "
+            "configured (their SSM parameters populated)"
+        )
     # Test-only overrides: cap the fan-out and redirect the stats write so an integration run
     # exercises the full path without clobbering the production cache.
     max_players = os.environ.get("MAX_PLAYERS")
