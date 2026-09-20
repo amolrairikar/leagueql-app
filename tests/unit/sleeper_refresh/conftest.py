@@ -57,3 +57,6 @@ def sleeper_refresh_handler():
 def aws_env(monkeypatch):
     monkeypatch.setenv("DYNAMODB_TABLE_NAME", "test-table")
     monkeypatch.setenv("ONBOARDER_LAMBDA_NAME", "test-onboarder")
+    # Disable dispatch jitter by default so tests dispatch immediately and never
+    # sleep; the jitter-specific tests override this window explicitly.
+    monkeypatch.setenv("REFRESH_JITTER_WINDOW_SECONDS", "0")

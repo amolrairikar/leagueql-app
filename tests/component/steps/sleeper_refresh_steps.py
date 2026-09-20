@@ -1,6 +1,7 @@
 """Steps for the scheduled Sleeper auto-refresh Lambda (backend/scheduled-sleeper-auto-refresh)."""
 
 import json
+import os
 from unittest.mock import MagicMock, patch
 
 from behave import given, then, when
@@ -71,6 +72,12 @@ def step_run_refresh_with_season(context, season_type, week, season):
 
 
 def _run_refresh(context, season_type, week, season):
+    # Disable dispatch jitter so the run is deterministic and never sleeps; the
+    # spread/timing behavior is covered by the unit tests.
+    window_patch = patch.dict(os.environ, {"REFRESH_JITTER_WINDOW_SECONDS": "0"})
+    window_patch.start()
+    context._patches.append(window_patch)
+
     nfl_state = {"season_type": season_type, "season": season, "week": week}
     state_patch = patch.object(
         context.refresh_handler, "get_nfl_state", MagicMock(return_value=nfl_state)

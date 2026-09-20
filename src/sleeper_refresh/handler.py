@@ -1,9 +1,18 @@
 import json
+import os
+import random
+import time
 import uuid
 
 from utils import get_nfl_state, get_sleeper_leagues, invoke_onboarder_lambda, logger
 
 from common.tracing import init_tracing, traced_handler
+
+# Spread the per-league onboarder invocations across a randomized window so the
+# Sleeper API isn't hit by every onboarder at once (backend/scheduled-sleeper-auto-refresh:
+# "Spread refresh dispatches with jitter"). There's no time urgency to the refresh.
+# 0 disables jitter (immediate dispatch — the pre-jitter behavior, used by tests).
+DEFAULT_JITTER_WINDOW_SECONDS = 600.0
 
 # Originate a trace per refreshed league → Better Stack (backend/otel-tracing); the onboarder/
 # processor continue it. A no-op unless tracing is configured, so tests /
@@ -97,11 +106,46 @@ def lambda_handler(event, context) -> dict[str, str | int]:
 
     logger.info("Found %d Sleeper leagues to refresh", len(sleeper_leagues))
 
+    # Assign each league a random offset within the jitter window and dispatch in
+    # offset order, sleeping the gap between consecutive offsets. This randomizes
+    # both ordering and arrival times (true jitter) while bounding the run's total
+    # added delay to <= the window regardless of league count. A 0 window or a
+    # single league dispatches immediately (a per-league sleep would just be waste).
+    try:
+        jitter_window = float(
+            os.environ.get(
+                "REFRESH_JITTER_WINDOW_SECONDS", DEFAULT_JITTER_WINDOW_SECONDS
+            )
+        )
+    except (TypeError, ValueError):
+        jitter_window = DEFAULT_JITTER_WINDOW_SECONDS
+
+    if jitter_window > 0 and len(sleeper_leagues) > 1:
+        schedule = sorted(
+            # S311: jitter timing, not a cryptographic use.
+            ((random.uniform(0, jitter_window), league) for league in sleeper_leagues),  # noqa: S311
+            key=lambda pair: pair[0],
+        )
+        logger.info(
+            "Spreading %d refreshes across a %.0fs jitter window",
+            len(sleeper_leagues),
+            jitter_window,
+        )
+    else:
+        schedule = [(0.0, league) for league in sleeper_leagues]
+
     # Invoke onboarder lambda for each league
     success_count = 0
     failure_count = 0
+    previous_offset = 0.0
 
-    for league in sleeper_leagues:
+    for offset, league in schedule:
+        delay = offset - previous_offset
+        previous_offset = offset
+        # Sleep the gap outside the trace span so idle time isn't recorded as span
+        # duration.
+        if delay > 0:
+            time.sleep(delay)
         correlation_id = str(uuid.uuid4())
         # Each league gets its own root trace (the cron has no inbound context); the
         # active span is what propagates to the onboarder via the invoke payload.

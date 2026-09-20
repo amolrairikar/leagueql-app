@@ -55,7 +55,7 @@ module "onboarder_lambda" {
   role_arn             = local.onboarder_role_arn
   handler              = "handler.lambda_handler"
   memory_size          = 2048
-  timeout              = 30
+  timeout              = 60
   log_retention        = 7
   s3_bucket            = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
   s3_key               = "lambda-code-artifacts/onboarder-lambda.zip"
@@ -232,14 +232,23 @@ module "sleeper_refresh_lambda" {
   role_arn             = local.sleeper_refresh_role_arn
   handler              = "handler.lambda_handler"
   memory_size          = 512
-  timeout              = 60
-  log_retention        = 7
-  s3_bucket            = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
-  s3_key               = "lambda-code-artifacts/sleeper_refresh-lambda.zip"
+  # The handler spreads per-league onboarder invocations across REFRESH_JITTER_WINDOW_SECONDS
+  # of jitter (below), sleeping between dispatches, so the timeout must comfortably
+  # outlast that window plus the NFL-state fetch, DynamoDB query, and final invoke.
+  # 900s (the Lambda max) covers the 600s window with ample margin.
+  timeout       = 900
+  log_retention = 7
+  s3_bucket     = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
+  s3_key        = "lambda-code-artifacts/sleeper_refresh-lambda.zip"
 
   environment_variables = {
     DYNAMODB_TABLE_NAME   = "leagueql-table-${var.environment}"
     ONBOARDER_LAMBDA_NAME = "leagueql-onboarder-${var.environment}"
+
+    # Window (seconds) over which per-league refreshes are spread to avoid hitting
+    # the Sleeper API all at once (backend/scheduled-sleeper-auto-refresh). Must stay
+    # below the Lambda timeout above. 0 disables jitter (immediate dispatch).
+    REFRESH_JITTER_WINDOW_SECONDS = "600"
 
     # OpenTelemetry trace-context propagation → Better Stack (backend/otel-tracing). A no-op unless
     # set. The OTLP source token is fetched at runtime from SSM by *name* (value never

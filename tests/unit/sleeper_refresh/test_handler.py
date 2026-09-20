@@ -212,3 +212,137 @@ class TestLambdaHandlerSleeperRefresh:
 
         # A failure on lg2 must not stop lg1 from being attempted: both are tried.
         assert mock_invoke.call_count == 2
+
+
+class TestSleeperRefreshJitter:
+    """Dispatch jitter (backend/scheduled-sleeper-auto-refresh: "Spread refresh
+    dispatches with jitter")."""
+
+    def _make_context(self):
+        ctx = MagicMock()
+        ctx.aws_request_id = "req-123"
+        ctx.function_name = "sleeper-refresh"
+        return ctx
+
+    def _leagues(self, n):
+        return [
+            {"league_id": f"lg{i}", "canonical_league_id": f"c{i}"} for i in range(n)
+        ]
+
+    def test_spreads_dispatches_across_window(
+        self, sleeper_refresh_handler, monkeypatch
+    ):
+        """With a window and >1 league, invocations are staggered: time.sleep is
+        called with the gaps between sorted per-league offsets, every league is
+        still dispatched, and the total delay stays within the window."""
+        monkeypatch.setenv("REFRESH_JITTER_WINDOW_SECONDS", "600")
+        with (
+            patch.object(
+                sleeper_refresh_handler,
+                "get_nfl_state",
+                return_value={"season_type": "regular", "week": 5, "season": "2024"},
+            ),
+            patch.object(
+                sleeper_refresh_handler,
+                "get_sleeper_leagues",
+                return_value=self._leagues(3),
+            ),
+            # Deterministic offsets (in the leagues' order); the handler sorts them.
+            patch.object(
+                sleeper_refresh_handler.random,
+                "uniform",
+                side_effect=[300.0, 60.0, 120.0],
+            ),
+            patch.object(sleeper_refresh_handler, "time") as mock_time,
+            patch.object(
+                sleeper_refresh_handler, "invoke_onboarder_lambda"
+            ) as mock_invoke,
+        ):
+            result = sleeper_refresh_handler.lambda_handler({}, self._make_context())
+
+        assert result["statusCode"] == 200
+        # Every league dispatched, in offset (jittered) order: lg1(60) lg2(120) lg0(300).
+        dispatched = [c.args[0] for c in mock_invoke.call_args_list]
+        assert dispatched == ["lg1", "lg2", "lg0"]
+        # Gaps between sorted offsets 60,120,300 -> 60,60,180.
+        slept = [c.args[0] for c in mock_time.sleep.call_args_list]
+        assert slept == [60.0, 60.0, 180.0]
+        # Total added delay never exceeds the window.
+        assert sum(slept) <= 600.0
+
+    def test_no_sleep_when_window_zero(self, sleeper_refresh_handler, monkeypatch):
+        monkeypatch.setenv("REFRESH_JITTER_WINDOW_SECONDS", "0")
+        with (
+            patch.object(
+                sleeper_refresh_handler,
+                "get_nfl_state",
+                return_value={"season_type": "regular", "week": 5, "season": "2024"},
+            ),
+            patch.object(
+                sleeper_refresh_handler,
+                "get_sleeper_leagues",
+                return_value=self._leagues(3),
+            ),
+            patch.object(sleeper_refresh_handler, "time") as mock_time,
+            patch.object(
+                sleeper_refresh_handler, "invoke_onboarder_lambda"
+            ) as mock_invoke,
+        ):
+            sleeper_refresh_handler.lambda_handler({}, self._make_context())
+
+        mock_time.sleep.assert_not_called()
+        assert mock_invoke.call_count == 3
+
+    def test_no_sleep_for_single_league(self, sleeper_refresh_handler, monkeypatch):
+        """A lone league dispatches immediately even with a window set — a random
+        up-to-window delay for one league would be pure waste."""
+        monkeypatch.setenv("REFRESH_JITTER_WINDOW_SECONDS", "600")
+        with (
+            patch.object(
+                sleeper_refresh_handler,
+                "get_nfl_state",
+                return_value={"season_type": "regular", "week": 5, "season": "2024"},
+            ),
+            patch.object(
+                sleeper_refresh_handler,
+                "get_sleeper_leagues",
+                return_value=self._leagues(1),
+            ),
+            patch.object(sleeper_refresh_handler, "time") as mock_time,
+            patch.object(
+                sleeper_refresh_handler, "invoke_onboarder_lambda"
+            ) as mock_invoke,
+        ):
+            sleeper_refresh_handler.lambda_handler({}, self._make_context())
+
+        mock_time.sleep.assert_not_called()
+        assert mock_invoke.call_count == 1
+
+    def test_invalid_window_falls_back_to_default(
+        self, sleeper_refresh_handler, monkeypatch
+    ):
+        """A non-numeric window is treated as the default (jitter on), not a crash."""
+        monkeypatch.setenv("REFRESH_JITTER_WINDOW_SECONDS", "not-a-number")
+        with (
+            patch.object(
+                sleeper_refresh_handler,
+                "get_nfl_state",
+                return_value={"season_type": "regular", "week": 5, "season": "2024"},
+            ),
+            patch.object(
+                sleeper_refresh_handler,
+                "get_sleeper_leagues",
+                return_value=self._leagues(2),
+            ),
+            patch.object(
+                sleeper_refresh_handler.random,
+                "uniform",
+                side_effect=[10.0, 20.0],
+            ),
+            patch.object(sleeper_refresh_handler, "time") as mock_time,
+            patch.object(sleeper_refresh_handler, "invoke_onboarder_lambda"),
+        ):
+            sleeper_refresh_handler.lambda_handler({}, self._make_context())
+
+        # Default window is in effect, so jitter applied and sleeps happened.
+        assert mock_time.sleep.called
