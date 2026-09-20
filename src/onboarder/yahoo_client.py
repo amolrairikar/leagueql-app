@@ -18,6 +18,7 @@ player-data cache in S3 (see ``yahoo_player_stats_refresher``); records here car
 """
 
 import asyncio
+import json
 from collections.abc import Callable, Sequence
 from typing import Any
 
@@ -460,6 +461,14 @@ class YahooClient:
             season = result["season"]
             data_type = result["data_type"]
             data = result["data"]
+            # TEMPORARY: log the raw pre-filter teams response to inspect the
+            # managers/team_logos sub-collection shape. Remove after debugging.
+            if data_type == "teams":
+                logger.info(
+                    "TEMP raw teams response (season=%s): %s",
+                    season,
+                    json.dumps(data),
+                )
             if data_type.startswith("matchups"):
                 filter_fn = _filter_matchups
             elif data_type.startswith("rosters"):
