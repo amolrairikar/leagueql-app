@@ -62,3 +62,19 @@ whole-history behavior. A `REFRESH` SHALL fetch only the current season.
 #### Scenario: Yahoo refresh fetches the current season only
 - **WHEN** a Yahoo league is refreshed
 - **THEN** only the current season's `league_key` is fetched and reprocessed
+
+### Requirement: Parse Yahoo team, manager, and logo identities
+The onboarder SHALL parse each team's identity, primary manager (owner id + display name), and
+logo from the Yahoo `/teams` payload. Because Yahoo returns a collection either as a numeric-keyed
+object (`{"0": {...}, "count": N}`, used for large collections like teams and roster players) or as
+a plain list (`[{...}]`, used for small nested sub-collections like `managers` and `team_logos`),
+the parsing SHALL handle both shapes so owner ids, display names, and logos populate.
+
+#### Scenario: Managers and logos parsed from list-shaped sub-collections
+- **WHEN** a Yahoo `/teams` response returns each team's `managers` and `team_logos` as plain lists
+- **THEN** each team's primary owner id, display name, and logo URL are populated (not null),
+  and the derived member rows carry those owner ids
+
+#### Scenario: Managers parsed from a numeric-keyed sub-collection
+- **WHEN** a Yahoo sub-collection is instead returned as a numeric-keyed object
+- **THEN** the same fields are parsed identically

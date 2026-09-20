@@ -45,7 +45,9 @@ def _teams_payload(teams):
 
 
 def _manager(**fields):
-    return {"managers": {"0": {"manager": fields}, "count": 1}}
+    # Yahoo returns a team's nested ``managers`` as a plain list (not a numeric-keyed
+    # collection), which is what the parser must handle.
+    return {"managers": [{"manager": fields}]}
 
 
 def _http_returning(*payloads):
@@ -85,6 +87,15 @@ class TestCollectionItems:
     def test_stops_at_first_gap(self):
         container = {"0": {"team": "A"}, "2": {"team": "C"}, "count": 2}
         assert yahoo_members._collection_items(container, "team") == ["A"]
+
+    def test_returns_plain_list_inner_objects(self):
+        # Yahoo's small nested sub-collections (managers, team_logos) come as plain lists.
+        container = [{"manager": "A"}, {"manager": "B"}]
+        assert yahoo_members._collection_items(container, "manager") == ["A", "B"]
+
+    def test_plain_list_skips_elements_without_inner_key(self):
+        container = [{"manager": "A"}, [], {"other": "X"}]
+        assert yahoo_members._collection_items(container, "manager") == ["A"]
 
     def test_non_dict_returns_empty(self):
         assert yahoo_members._collection_items(None, "team") == []

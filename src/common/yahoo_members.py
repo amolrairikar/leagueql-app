@@ -48,11 +48,21 @@ def _flatten(node: Any) -> dict[str, Any]:
 
 
 def _collection_items(container: Any, inner_key: str) -> list[Any]:
-    """Return the inner objects of a Yahoo numeric-keyed collection.
+    """Return the inner objects of a Yahoo collection.
 
-    A Yahoo collection is ``{"0": {inner_key: X0}, "1": {inner_key: X1}, ..., "count": N}``.
-    Returns ``[X0, X1, ...]`` in index order, tolerating a missing/empty container.
+    Yahoo returns a collection in one of two shapes: a numeric-keyed object
+    ``{"0": {inner_key: X0}, "1": {inner_key: X1}, ..., "count": N}`` (used for large
+    collections like a league's teams or a roster's players) or a plain list
+    ``[{inner_key: X0}, {inner_key: X1}, ...]`` (used for small nested sub-collections
+    like a team's ``managers`` or ``team_logos``). Handles both, returning ``[X0, X1, ...]``
+    in index order and tolerating a missing/empty container.
     """
+    if isinstance(container, list):
+        return [
+            element[inner_key]
+            for element in container
+            if isinstance(element, dict) and inner_key in element
+        ]
     if not isinstance(container, dict):
         return []
     items = []
@@ -121,7 +131,7 @@ def parse_managers(teams_payload: dict[str, Any]) -> list[dict[str, str]]:
     managers: list[dict[str, str]] = []
     for team in teams:
         flat = _flatten(team)
-        team_managers = _collection_items(_flatten(flat.get("managers", {})), "manager")
+        team_managers = _collection_items(flat.get("managers", {}), "manager")
         primary = _flatten(team_managers[0]) if team_managers else {}
         owner_id = primary.get("guid") or primary.get("manager_id")
         if not owner_id:

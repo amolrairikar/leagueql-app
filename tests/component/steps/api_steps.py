@@ -151,17 +151,17 @@ def _yahoo_teams_payload():
                             "team": [
                                 [
                                     {"team_key": "461.l.456.t.1"},
+                                    # Yahoo returns a team's nested managers as a plain list.
                                     {
-                                        "managers": {
-                                            "0": {
+                                        "managers": [
+                                            {
                                                 "manager": {
                                                     "manager_id": "1",
                                                     "guid": "G1",
                                                     "nickname": "Alice",
                                                 }
-                                            },
-                                            "count": 1,
-                                        }
+                                            }
+                                        ]
                                     },
                                 ]
                             ]

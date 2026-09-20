@@ -21,6 +21,13 @@ views with identical schemas.
 - **THEN** owner IDs are resolved across platforms via the `PLATFORM_MIGRATION` mapping so all-time
   aggregates stay continuous
 
+#### Scenario: Yahoo team without a resolvable manager still appears
+- **WHEN** a Yahoo team has no matching member (Yahoo exposed no manager, or the manager parsed to
+  a null owner id)
+- **THEN** the team still appears in the `TEAMS` view (owner display fields null) rather than being
+  dropped, so the dependent matchups, standings, playoff bracket, and draft views are still
+  populated
+
 ### Requirement: Persist per-season league settings
 The processor SHALL write a `LEAGUE_SETTINGS#{season}` view item carrying `season`,
 `num_playoff_teams`, `num_playoff_teams_assumed`, `playoff_week_start`, and `regular_season_weeks`,

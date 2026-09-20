@@ -214,7 +214,7 @@ class TestRegisterYahooRawData:
 
 class TestYahooQueriesBind:
     def test_teams_matchups_draft_bind(self, processor_handler):
-        """The reused ESPN TEAMS/MATCHUPS SQL and the YAHOO DRAFT SQL bind against Yahoo rows."""
+        """The YAHOO TEAMS/DRAFT SQL and the reused ESPN MATCHUPS SQL bind against Yahoo rows."""
         grouped = processor_handler._register_yahoo_raw_data(
             _raw_data(), _METADATA, _STATS
         )
@@ -247,6 +247,41 @@ class TestYahooQueriesBind:
         # string-typed Yahoo points previously crashed the DRAFT transform with
         # `-(VARCHAR, VARCHAR)`).
         assert rows["461.p.1"]["total_points"] == 300.0
+        con.close()
+
+    def test_teams_survive_missing_manager(self, processor_handler):
+        """A Yahoo team with no matching member row still appears (LEFT JOIN members).
+
+        Regression: Yahoo may expose no manager for a team (private profiles), or the
+        managers sub-collection may parse to null owner ids. An INNER JOIN dropped every
+        such team, emptying teams_output and (via downstream INNER JOINs) every dependent
+        view. The YAHOO TEAMS query LEFT JOINs so the team survives with a null owner.
+        """
+        con = duckdb.connect()
+        # No members at all -> every team's primaryOwner has no match.
+        con.register(
+            "members", pd.DataFrame([], columns=["id", "displayName", "season"])
+        )
+        con.register(
+            "teams",
+            pd.DataFrame(
+                [
+                    {
+                        "id": "461.l.100.t.1",
+                        "name": "Orphan Team",
+                        "logo": None,
+                        "season": "2024",
+                        "owners": [None],
+                        "primaryOwner": None,
+                        "rankCalculatedFinal": 1,
+                    }
+                ]
+            ),
+        )
+        teams_df = con.sql(processor_handler.QUERIES["TEAMS"]["YAHOO"]).df()
+        assert set(teams_df["team_id"]) == {"461.l.100.t.1"}
+        assert teams_df.iloc[0]["team_name"] == "Orphan Team"
+        assert pd.isna(teams_df.iloc[0]["display_name"])
         con.close()
 
     def test_standings_binds(self, processor_handler):

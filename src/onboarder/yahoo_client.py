@@ -18,7 +18,6 @@ player-data cache in S3 (see ``yahoo_player_stats_refresher``); records here car
 """
 
 import asyncio
-import json
 from collections.abc import Callable, Sequence
 from typing import Any
 
@@ -91,9 +90,9 @@ def _filter_teams(data: dict[str, Any], _season: str, _dt: str) -> dict[str, Any
     members, out_teams = [], []
     for team in teams:
         flat = _flatten(team)
-        managers = _collection_items(_flatten(flat.get("managers", {})), "manager")
+        managers = _collection_items(flat.get("managers", {}), "manager")
         primary = _flatten(managers[0]) if managers else {}
-        logos = _collection_items(_flatten(flat.get("team_logos", {})), "team_logo")
+        logos = _collection_items(flat.get("team_logos", {}), "team_logo")
         logo_url = _flatten(logos[0]).get("url") if logos else None
         members.append(
             {
@@ -461,14 +460,6 @@ class YahooClient:
             season = result["season"]
             data_type = result["data_type"]
             data = result["data"]
-            # TEMPORARY: log the raw pre-filter teams response to inspect the
-            # managers/team_logos sub-collection shape. Remove after debugging.
-            if data_type == "teams":
-                logger.info(
-                    "TEMP raw teams response (season=%s): %s",
-                    season,
-                    json.dumps(data),
-                )
             if data_type.startswith("matchups"):
                 filter_fn = _filter_matchups
             elif data_type.startswith("rosters"):

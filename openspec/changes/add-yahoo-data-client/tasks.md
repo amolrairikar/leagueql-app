@@ -112,3 +112,17 @@
 - [ ] 12.2 DEV end-to-end with a real linked Yahoo account: run the player-data task once, then
   landing page → pick Yahoo → enter league id → Connect → OAuth → job polls to COMPLETED and
   standings/matchups/draft/transactions render; then a `REFRESH` succeeds.
+
+## 13. Fixes from DEV verification (task 12.2)
+
+- [x] 13.1 Fix Yahoo sub-collection parsing: real Yahoo returns a team's `managers`/`team_logos` as
+  plain lists, but `_collection_items(_flatten(...))` only handled the numeric-keyed shape, so every
+  owner id/display name/logo parsed to null. Make `_collection_items`
+  (`src/common/yahoo_members.py`) accept a plain list and drop the pre-`_flatten` at the
+  managers/logos call sites in `_filter_teams` (`src/onboarder/yahoo_client.py`) and
+  `parse_managers` (`src/common/yahoo_members.py`). Correct the unit-test fixtures (which used the
+  wrong numeric-keyed shape) to the real list shape and add plain-list coverage.
+- [x] 13.2 Make the Yahoo `TEAMS` transform resilient: replace the reused ESPN `TEAMS` query (INNER
+  JOIN members) with a Yahoo-specific query that LEFT JOINs members, so a team with no resolvable
+  manager still yields a `teams_output` row instead of emptying every dependent view. Add a
+  processor regression test.

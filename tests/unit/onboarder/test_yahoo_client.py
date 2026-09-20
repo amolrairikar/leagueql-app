@@ -189,23 +189,18 @@ class TestFilters:
                             {"team_key": "461.l.100.t.1"},
                             {"team_id": "1"},
                             {"name": "Team A"},
+                            # Yahoo returns these nested sub-collections as plain lists.
+                            {"team_logos": [{"team_logo": {"url": "http://logo"}}]},
                             {
-                                "team_logos": {
-                                    "0": {"team_logo": {"url": "http://logo"}},
-                                    "count": 1,
-                                }
-                            },
-                            {
-                                "managers": {
-                                    "0": {
+                                "managers": [
+                                    {
                                         "manager": {
                                             "manager_id": "1",
                                             "nickname": "Alice",
                                             "guid": "G1",
                                         }
-                                    },
-                                    "count": 1,
-                                }
+                                    }
+                                ]
                             },
                         ]
                     ]

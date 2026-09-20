@@ -627,9 +627,27 @@ QUERIES = {
 
 
 # Yahoo rows are shaped (in `_register_yahoo_raw_data`) to match the ESPN view schemas, so the
-# ESPN TEAMS / MATCHUPS / PLAYOFF_BRACKET transforms are reused verbatim, and TRANSACTIONS is the
-# same pre-compiled passthrough. Only DRAFT is Yahoo-specific (its draft_picks columns differ).
-QUERIES["TEAMS"]["YAHOO"] = QUERIES["TEAMS"]["ESPN"]
+# ESPN MATCHUPS / PLAYOFF_BRACKET transforms are reused verbatim, and TRANSACTIONS is the same
+# pre-compiled passthrough. TEAMS is Yahoo-specific: unlike ESPN, Yahoo may expose no manager for a
+# team (private profiles), so it LEFT JOINs members — otherwise a team with no matching member row
+# is dropped, emptying teams_output and (via the INNER JOINs downstream) every dependent view
+# (matchups, standings, playoff bracket, draft). DRAFT is Yahoo-specific too (draft_picks columns
+# differ).
+QUERIES["TEAMS"]["YAHOO"] = """
+SELECT
+    m.displayName AS display_name,
+    CAST(t.id AS STRING) AS team_id,
+    t.name AS team_name,
+    t.logo AS team_logo,
+    t.season,
+    t.owners[1] AS primary_owner_id,
+    t.owners[2] AS secondary_owner_id,
+    t.rankCalculatedFinal AS final_rank
+FROM teams t
+LEFT JOIN members m
+    ON t.primaryOwner = m.id
+    AND m.season = t.season
+"""
 QUERIES["MATCHUPS"]["YAHOO"] = QUERIES["MATCHUPS"]["ESPN"]
 QUERIES["PLAYOFF_BRACKET"]["YAHOO"] = QUERIES["PLAYOFF_BRACKET"]["ESPN"]
 QUERIES["TRANSACTIONS"]["YAHOO"] = QUERIES["TRANSACTIONS"]["ESPN"]
