@@ -23,3 +23,14 @@ Feature: League migration API (backend/league-migration)
     When I POST a migration of league "100" from "SLEEPER" to "ESPN" league "777" with an unknown mapping key
     Then the API responds with status 422
     And no PLATFORM_MIGRATION item exists for league "canon-1"
+
+  Scenario: Migrating to a Yahoo destination without a linked account returns 403
+    When I POST a Yahoo migration of league "100" from "SLEEPER" to league "456" without a link
+    Then the API responds with status 403
+    And no PLATFORM_MIGRATION item exists for league "canon-1"
+
+  Scenario: Migrating to a linked Yahoo destination records the mapping and triggers the onboarder
+    When I POST a Yahoo migration of league "100" from "SLEEPER" to league "456" with a linked account
+    Then the API responds with status 202
+    And a PLATFORM_MIGRATION item exists for league "canon-1"
+    And the onboarder Lambda was invoked

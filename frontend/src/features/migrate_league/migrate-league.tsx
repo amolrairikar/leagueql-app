@@ -1,6 +1,6 @@
 import { AlertTriangle, HelpCircle } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { getLeague } from '@/components/api/leagues';
 import type { Platform } from '@/components/api/types';
@@ -23,18 +23,24 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { getJobStatus } from '@/features/connect_league/api-calls';
+import {
+  getJobStatus,
+  getYahooAuthorizeUrl,
+} from '@/features/connect_league/api-calls';
 import {
   getEspnMembers,
   getSleeperUsers,
+  getYahooMembers,
   getTeams,
   migrateLeague,
   type EspnMemberEntry,
   type ManagerMappingEntry,
   type SleeperUserEntry,
+  type YahooMemberEntry,
   type TeamEntry,
 } from '@/features/migrate_league/api-calls';
 import { useEspnExtensionReady } from '@/hooks/use-espn-extension-ready';
+import { ApiError } from '@/lib/api-client';
 import { setLeagueCookies, getLeagueCookies } from '@/lib/cookie-handler';
 import {
   ESPN_EXTENSION_URL,
@@ -73,7 +79,7 @@ interface NewPlatformInfo {
   swid?: string;
 }
 
-type NewPlatformUser = EspnMemberEntry | SleeperUserEntry;
+type NewPlatformUser = EspnMemberEntry | SleeperUserEntry | YahooMemberEntry;
 
 function getUserId(user: NewPlatformUser): string {
   return 'user_id' in user ? user.user_id : user.owner_id;
@@ -200,26 +206,38 @@ function Step2({
   currentLeagueId,
   onNext,
   onBack,
+  initialDestination,
+  initialLeagueId,
+  initialNotice,
 }: {
   currentPlatform: Platform;
   currentLeagueId: string;
   onNext: (info: NewPlatformInfo, users: NewPlatformUser[]) => void;
   onBack: () => void;
+  // Set when resuming after a Yahoo OAuth round-trip so the wizard returns prefilled.
+  initialDestination?: Platform;
+  initialLeagueId?: string;
+  initialNotice?: string;
 }) {
   const availablePlatforms = (['ESPN', 'SLEEPER', 'YAHOO'] as const).filter(
     (p) => p !== currentPlatform,
   );
 
   const [destinationPlatform, setDestinationPlatform] = useState<Platform>(
-    availablePlatforms[0],
+    initialDestination ?? availablePlatforms[0],
   );
-  const [newPlatformLeagueId, setNewPlatformLeagueId] = useState('');
+  const [newPlatformLeagueId, setNewPlatformLeagueId] = useState(
+    initialLeagueId ?? '',
+  );
   const [season, setSeason] = useState('');
   const [seasonError, setSeasonError] = useState<string | null>(null);
   const [swid, setSwid] = useState('');
   const [s2, setS2] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(initialNotice ?? null);
+  // A Yahoo destination with no linked account: swap Next for a "Connect with Yahoo" action.
+  const [needsYahooLink, setNeedsYahooLink] = useState(false);
+  const [connecting, setConnecting] = useState(false);
 
   const extensionReady = useEspnExtensionReady();
   const [autofilling, setAutofilling] = useState(false);
@@ -233,6 +251,24 @@ function Step2({
     setS2('');
     setError(null);
     setAutofillError(null);
+    setNeedsYahooLink(false);
+  }
+
+  async function handleConnectYahoo() {
+    setError(null);
+    setConnecting(true);
+    try {
+      // Carry the MIGRATE return context so the callback returns to /migrate_league, and the
+      // entered Yahoo league id so the wizard resumes on it. No Yahoo token reaches the browser.
+      const { data } = await getYahooAuthorizeUrl(
+        newPlatformLeagueId.trim(),
+        'MIGRATE',
+      );
+      window.location.href = data.authorize_url;
+    } catch {
+      setConnecting(false);
+      setError('Could not start Yahoo connection. Please try again.');
+    }
   }
 
   async function handleAutofill() {
@@ -279,10 +315,18 @@ function Step2({
 
     setLoading(true);
     setError(null);
+    setNeedsYahooLink(false);
     try {
       let users: NewPlatformUser[];
       if (destinationPlatform === 'SLEEPER') {
         users = await getSleeperUsers(newPlatformLeagueId.trim());
+      } else if (destinationPlatform === 'YAHOO') {
+        const result = await getYahooMembers(
+          currentLeagueId,
+          currentPlatform,
+          newPlatformLeagueId.trim(),
+        );
+        users = result.data;
       } else {
         const result = await getEspnMembers(
           currentLeagueId,
@@ -312,7 +356,16 @@ function Step2({
         },
         users,
       );
-    } catch {
+    } catch (err) {
+      if (
+        destinationPlatform === 'YAHOO' &&
+        err instanceof ApiError &&
+        err.status === 403
+      ) {
+        // No linked Yahoo account — prompt the OAuth link instead of a generic error.
+        setNeedsYahooLink(true);
+        return;
+      }
       setError(
         'Failed to fetch users for that league. Check the ID and credentials.',
       );
@@ -479,29 +532,52 @@ function Step2({
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 
+      {needsYahooLink && (
+        <p className="text-[13px] text-muted-foreground">
+          Connect your Yahoo account to fetch this league&apos;s managers.
+        </p>
+      )}
+
       <div className="flex gap-2">
         <Button
           variant="outline"
           className="flex-1 cursor-pointer"
           onClick={onBack}
-          disabled={loading}
+          disabled={loading || connecting}
         >
           Back
         </Button>
-        <Button
-          className="flex-1 cursor-pointer"
-          onClick={() => void handleNext()}
-          disabled={loading}
-        >
-          {loading ? (
-            <span className="flex items-center gap-2">
-              <Spinner className="text-primary-foreground" />
-              Fetching users…
-            </span>
-          ) : (
-            'Next'
-          )}
-        </Button>
+        {needsYahooLink ? (
+          <Button
+            className="flex-1 cursor-pointer"
+            onClick={() => void handleConnectYahoo()}
+            disabled={connecting}
+          >
+            {connecting ? (
+              <span className="flex items-center gap-2">
+                <Spinner className="text-primary-foreground" />
+                Connecting
+              </span>
+            ) : (
+              'Connect with Yahoo'
+            )}
+          </Button>
+        ) : (
+          <Button
+            className="flex-1 cursor-pointer"
+            onClick={() => void handleNext()}
+            disabled={loading}
+          >
+            {loading ? (
+              <span className="flex items-center gap-2">
+                <Spinner className="text-primary-foreground" />
+                Fetching users…
+              </span>
+            ) : (
+              'Next'
+            )}
+          </Button>
+        )}
       </div>
     </div>
   );
@@ -825,6 +901,7 @@ function Step5({
 
 export default function MigrateLeague() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { leagueId, platform, seasons } = useMemo(() => getLeagueCookies(), []);
 
   const [step, setStep] = useState<WizardStep>(1);
@@ -846,6 +923,10 @@ export default function MigrateLeague() {
   const [operationId, setOperationId] = useState<string | null>(null);
   const [failureReason, setFailureReason] = useState<string | null>(null);
   const initRef = useRef(false);
+  // Set when resuming after a Yahoo OAuth round-trip so Step 2 returns prefilled.
+  const [resumeDestId, setResumeDestId] = useState('');
+  const [resumeNotice, setResumeNotice] = useState<string | null>(null);
+  const yahooReturnRef = useRef(false);
 
   useEffect(() => {
     if (initRef.current) return;
@@ -875,6 +956,46 @@ export default function MigrateLeague() {
 
     void init();
   }, [leagueId, platform, seasons]);
+
+  // Resume after a Yahoo OAuth round-trip (frontend/migrate-league). The callback returns to
+  // this page with a platform=YAHOO marker, a yahooLinked flag, and the destination league id.
+  // The source league still comes from cookies; only the Yahoo destination is reconstructed
+  // here. Guarded so StrictMode's double-invoke doesn't double-fetch.
+  useEffect(() => {
+    if (yahooReturnRef.current) return;
+    if (searchParams.get('platform') !== 'YAHOO') return;
+    yahooReturnRef.current = true;
+
+    const linked = searchParams.get('yahooLinked');
+    const destId = searchParams.get('leagueId') ?? '';
+
+    // All state updates happen inside the async callback (not the effect body) so a single
+    // OAuth-return resume doesn't trip react-hooks/set-state-in-effect, mirroring init() above.
+    void (async () => {
+      if (linked === '1' && destId) {
+        setResumeDestId(destId);
+        try {
+          const result = await getYahooMembers(leagueId, platform, destId);
+          setNewPlatformInfo({
+            newPlatform: 'YAHOO',
+            newPlatformLeagueId: destId,
+          });
+          setNewPlatformUsers(result.data);
+          setStep(3);
+        } catch {
+          // Link succeeded but the members fetch failed — return to Step 2 to retry.
+          setResumeNotice(
+            'Could not fetch that Yahoo league. Check the ID and try again.',
+          );
+          setStep(2);
+        }
+      } else if (linked === '0') {
+        setResumeDestId(destId);
+        setResumeNotice('Yahoo connection cancelled — try again.');
+        setStep(2);
+      }
+    })();
+  }, [leagueId, platform, searchParams]);
 
   async function handleConfirm() {
     if (!newPlatformInfo) return;
@@ -990,6 +1111,9 @@ export default function MigrateLeague() {
               <Step2
                 currentPlatform={platform}
                 currentLeagueId={leagueId}
+                initialDestination={resumeDestId ? 'YAHOO' : undefined}
+                initialLeagueId={resumeDestId || undefined}
+                initialNotice={resumeNotice ?? undefined}
                 onNext={(info, users) => {
                   setNewPlatformInfo(info);
                   setNewPlatformUsers(users);

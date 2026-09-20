@@ -60,6 +60,14 @@ class TestCreateOauthState:
         assert item["ttl"] == item["expires_at"]
         assert item["expires_at"] > int(time.time())
 
+    def test_flow_defaults_to_onboard(self, yahoo, mock_table):
+        yahoo.create_oauth_state("user_1", "678")
+        assert mock_table.put_item.call_args.kwargs["Item"]["flow"] == "ONBOARD"
+
+    def test_persists_migrate_flow(self, yahoo, mock_table):
+        yahoo.create_oauth_state("user_1", "678", flow="MIGRATE")
+        assert mock_table.put_item.call_args.kwargs["Item"]["flow"] == "MIGRATE"
+
     def test_pkce_challenge_is_s256_of_verifier(self, yahoo, mock_table):
         import base64
         import hashlib
@@ -90,11 +98,24 @@ class TestConsumeOauthState:
         assert result == {
             "clerk_user_id": "user_1",
             "league_id": "45.l.678",
+            "flow": "ONBOARD",
             "code_verifier": "verifier-abc",
         }
         mock_table.delete_item.assert_called_once_with(
             Key={"PK": "OAUTH_STATE#abc", "SK": "YAHOO"}
         )
+
+    def test_returns_migrate_flow(self, yahoo, mock_table):
+        mock_table.get_item.return_value = {
+            "Item": {
+                "clerk_user_id": "user_1",
+                "league_id": "678",
+                "flow": "MIGRATE",
+                "code_verifier": "v",
+                "expires_at": int(time.time()) + 300,
+            }
+        }
+        assert yahoo.consume_oauth_state("abc")["flow"] == "MIGRATE"
 
     def test_empty_state_returns_none(self, yahoo, mock_table):
         assert yahoo.consume_oauth_state("") is None
@@ -134,6 +155,7 @@ class TestConsumeOauthState:
         assert yahoo.consume_oauth_state("abc") == {
             "clerk_user_id": "user_1",
             "league_id": "x",
+            "flow": "ONBOARD",
             "code_verifier": "",
         }
 

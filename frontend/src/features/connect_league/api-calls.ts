@@ -51,8 +51,10 @@ export interface YahooAuthorizeResponse {
  */
 export function getYahooAuthorizeUrl(
   leagueId: string,
+  flow?: 'ONBOARD' | 'MIGRATE',
 ): Promise<YahooAuthorizeResponse> {
   const params = new URLSearchParams({ leagueId });
+  if (flow) params.set('flow', flow);
   // skipCache: this mints a single-use state server-side, so it must never be deduped.
   return apiClient.get<YahooAuthorizeResponse>(
     `/leagues/yahoo/oauth/authorize?${params}`,

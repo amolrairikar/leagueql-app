@@ -1176,6 +1176,65 @@ class TestMigrateLeagueEndpoint:
         assert "migration started" in response.json()["detail"].lower()
         assert "correlation_id" in response.json()["data"]
 
+    def test_yahoo_destination_without_link_returns_403(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        # A Yahoo destination is onboarded with the owner's linked token; an unlinked owner
+        # gets the "link first" signal before any migration records are written.
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+        ]
+        with (
+            patch("yahoo_oauth.has_valid_link", return_value=False),
+            patch("routes.invoke_onboarder") as mk_inv,
+        ):
+            response = client.post(
+                "/leagues/123/migrate?platform=SLEEPER",
+                json={
+                    "newPlatformLeagueId": "456",
+                    "newPlatform": "YAHOO",
+                    "managerMapping": [],
+                },
+            )
+        assert response.status_code == 403
+        assert "Link your Yahoo account first" in response.json()["detail"]
+        mk_inv.assert_not_called()
+
+    def test_yahoo_destination_forwards_owner_user_id(
+        self,
+        client,
+        mock_table,
+        league_lookup_item,
+        league_metadata_item,
+    ):
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+            {},  # destination not onboarded -> 404 -> migration proceeds
+        ]
+        mock_table.put_item.return_value = {}
+        mock_table.update_item.return_value = {}
+        with (
+            patch("yahoo_oauth.has_valid_link", return_value=True),
+            patch("routes.invoke_onboarder") as mk_inv,
+        ):
+            response = client.post(
+                "/leagues/123/migrate?platform=SLEEPER",
+                json={
+                    "newPlatformLeagueId": "456",
+                    "newPlatform": "YAHOO",
+                    "managerMapping": [],
+                },
+            )
+        assert response.status_code == 202
+        # The onboarder needs the owner's id to resolve their Yahoo token for the destination.
+        assert (
+            mk_inv.call_args.kwargs["owner_user_id"]
+            == league_metadata_item["owner_user_id"]
+        )
+        assert mk_inv.call_args.kwargs["body"]["platform"] == "YAHOO"
+
     def test_successful_migration_invokes_lambda(
         self,
         client,
@@ -1652,6 +1711,184 @@ class TestEspnMembersEndpoint:
         mock_get.assert_not_called()
 
 
+def _yahoo_leagues_payload(league_id="456", league_key="461.l.456"):
+    return {
+        "fantasy_content": {
+            "users": {
+                "0": {
+                    "user": [
+                        {},
+                        {
+                            "games": {
+                                "0": {
+                                    "game": [
+                                        {"game_key": "461", "game_code": "nfl"},
+                                        {
+                                            "leagues": {
+                                                "0": {
+                                                    "league": [
+                                                        {
+                                                            "league_key": league_key,
+                                                            "league_id": league_id,
+                                                            "season": "2025",
+                                                        }
+                                                    ]
+                                                },
+                                                "count": 1,
+                                            }
+                                        },
+                                    ]
+                                },
+                                "count": 1,
+                            }
+                        },
+                    ]
+                },
+                "count": 1,
+            }
+        }
+    }
+
+
+def _yahoo_teams_payload():
+    return {
+        "fantasy_content": {
+            "league": [
+                {},
+                {
+                    "teams": {
+                        "0": {
+                            "team": [
+                                [
+                                    {"team_key": "461.l.456.t.1"},
+                                    {
+                                        "managers": {
+                                            "0": {
+                                                "manager": {
+                                                    "manager_id": "1",
+                                                    "guid": "G1",
+                                                    "nickname": "Alice",
+                                                }
+                                            },
+                                            "count": 1,
+                                        }
+                                    },
+                                ]
+                            ]
+                        },
+                        "count": 1,
+                    }
+                },
+            ]
+        }
+    }
+
+
+def _yahoo_resp(payload):
+    resp = MagicMock()
+    resp.raise_for_status = MagicMock()
+    resp.json.return_value = payload
+    return resp
+
+
+class TestYahooMembersEndpoint:
+    """The /yahoo_members endpoint fetches a Yahoo league's managers via the owner's token."""
+
+    _URL = "/leagues/123/yahoo_members?platform=SLEEPER&yahooLeagueId=456"
+
+    def test_returns_members_on_success(self, client, mock_table, league_lookup_item):
+        mock_table.get_item.return_value = {"Item": league_lookup_item}
+        with (
+            patch("yahoo_oauth.get_valid_access_token", return_value="tok"),
+            patch(
+                "main.http_requests.get",
+                side_effect=[
+                    _yahoo_resp(_yahoo_leagues_payload()),
+                    _yahoo_resp(_yahoo_teams_payload()),
+                ],
+            ),
+        ):
+            response = client.post(self._URL)
+        assert response.status_code == 200
+        assert response.json()["data"] == [{"owner_id": "G1", "display_name": "Alice"}]
+
+    def test_no_link_returns_403(self, client, mock_table, league_lookup_item):
+        from common.yahoo_tokens import YahooReauthRequired
+
+        mock_table.get_item.return_value = {"Item": league_lookup_item}
+        with patch(
+            "yahoo_oauth.get_valid_access_token",
+            side_effect=YahooReauthRequired("no link"),
+        ):
+            response = client.post(self._URL)
+        assert response.status_code == 403
+        assert "Link your Yahoo account first" in response.json()["detail"]
+
+    def test_league_not_in_account_returns_404(
+        self, client, mock_table, league_lookup_item
+    ):
+        mock_table.get_item.return_value = {"Item": league_lookup_item}
+        with (
+            patch("yahoo_oauth.get_valid_access_token", return_value="tok"),
+            # The enumerated leagues don't include yahooLeagueId=456.
+            patch(
+                "main.http_requests.get",
+                return_value=_yahoo_resp(_yahoo_leagues_payload(league_id="999")),
+            ),
+        ):
+            response = client.post(self._URL)
+        assert response.status_code == 404
+        assert "isn't in your Yahoo account" in response.json()["detail"]
+
+    def test_upstream_error_returns_502(self, client, mock_table, league_lookup_item):
+        import requests
+
+        mock_table.get_item.return_value = {"Item": league_lookup_item}
+        with (
+            patch("yahoo_oauth.get_valid_access_token", return_value="tok"),
+            patch(
+                "main.http_requests.get",
+                side_effect=requests.exceptions.ConnectionError("boom"),
+            ),
+        ):
+            response = client.post(self._URL)
+        assert response.status_code == 502
+        assert "fetch Yahoo league members" in response.json()["detail"]
+
+    def test_parse_error_returns_502(self, client, mock_table, league_lookup_item):
+        mock_table.get_item.return_value = {"Item": league_lookup_item}
+        bad = MagicMock()
+        bad.raise_for_status = MagicMock()
+        bad.json.side_effect = ValueError("not json")
+        with (
+            patch("yahoo_oauth.get_valid_access_token", return_value="tok"),
+            patch("main.http_requests.get", return_value=bad),
+        ):
+            response = client.post(self._URL)
+        assert response.status_code == 502
+        assert "parse Yahoo API response" in response.json()["detail"]
+
+    @pytest.mark.parametrize("yahoo_league_id", ["abc", "456?x=1", "../evil", ""])
+    def test_invalid_yahoo_league_id_returns_422_without_upstream(
+        self, client, mock_table, league_lookup_item, yahoo_league_id
+    ):
+        from urllib.parse import quote
+
+        mock_table.get_item.return_value = {"Item": league_lookup_item}
+        url = (
+            f"/leagues/123/yahoo_members?platform=SLEEPER"
+            f"&yahooLeagueId={quote(yahoo_league_id, safe='')}"
+        )
+        with (
+            patch("yahoo_oauth.get_valid_access_token") as mk_token,
+            patch("main.http_requests.get") as mk_get,
+        ):
+            response = client.post(url)
+        assert response.status_code == 422
+        mk_token.assert_not_called()
+        mk_get.assert_not_called()
+
+
 def _as_user(user_id):
     """Override the Clerk auth dependency to a specific (non-default) caller."""
     import main
@@ -1713,6 +1950,22 @@ class TestOwnerGate:
                 json={"swid": "{abc}", "s2": "s2-token"},
             )
         assert response.status_code == 403
+        mock_get.assert_not_called()
+
+    def test_yahoo_members_non_owner_returns_403(
+        self, client, mock_table, league_lookup_item
+    ):
+        mock_table.get_item.return_value = {"Item": league_lookup_item}
+        _as_user("intruder")
+        with (
+            patch("yahoo_oauth.get_valid_access_token") as mk_token,
+            patch("main.http_requests.get") as mock_get,
+        ):
+            response = client.post(
+                "/leagues/123/yahoo_members?platform=SLEEPER&yahooLeagueId=456"
+            )
+        assert response.status_code == 403
+        mk_token.assert_not_called()
         mock_get.assert_not_called()
 
 

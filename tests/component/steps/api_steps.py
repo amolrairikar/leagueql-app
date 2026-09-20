@@ -101,6 +101,209 @@ def step_post_espn_members(context, league_id, code):
     )
 
 
+def _yahoo_leagues_payload(league_id, league_key):
+    return {
+        "fantasy_content": {
+            "users": {
+                "0": {
+                    "user": [
+                        {},
+                        {
+                            "games": {
+                                "0": {
+                                    "game": [
+                                        {"game_key": "461", "game_code": "nfl"},
+                                        {
+                                            "leagues": {
+                                                "0": {
+                                                    "league": [
+                                                        {
+                                                            "league_key": league_key,
+                                                            "league_id": league_id,
+                                                            "season": "2025",
+                                                        }
+                                                    ]
+                                                },
+                                                "count": 1,
+                                            }
+                                        },
+                                    ]
+                                },
+                                "count": 1,
+                            }
+                        },
+                    ]
+                },
+                "count": 1,
+            }
+        }
+    }
+
+
+def _yahoo_teams_payload():
+    return {
+        "fantasy_content": {
+            "league": [
+                {},
+                {
+                    "teams": {
+                        "0": {
+                            "team": [
+                                [
+                                    {"team_key": "461.l.456.t.1"},
+                                    {
+                                        "managers": {
+                                            "0": {
+                                                "manager": {
+                                                    "manager_id": "1",
+                                                    "guid": "G1",
+                                                    "nickname": "Alice",
+                                                }
+                                            },
+                                            "count": 1,
+                                        }
+                                    },
+                                ]
+                            ]
+                        },
+                        "count": 1,
+                    }
+                },
+            ]
+        }
+    }
+
+
+def _patch_yahoo_token(context, *, linked):
+    """Patch the API's Yahoo token resolution; unlinked raises YahooReauthRequired -> 403."""
+    import routes
+
+    from common.yahoo_tokens import YahooReauthRequired
+
+    token = (
+        MagicMock(return_value="access-tok")
+        if linked
+        else MagicMock(side_effect=YahooReauthRequired("no link"))
+    )
+    patcher = patch.object(routes.yahoo_oauth, "get_valid_access_token", token)
+    patcher.start()
+    context._patches.append(patcher)
+
+
+def _patch_yahoo_http(context, *, seeded_league_id):
+    """Patch the upstream Yahoo GETs: leagues enumeration then that league's teams."""
+    import routes
+
+    leagues_resp = MagicMock()
+    leagues_resp.raise_for_status.return_value = None
+    leagues_resp.json.return_value = _yahoo_leagues_payload(
+        seeded_league_id, f"461.l.{seeded_league_id}"
+    )
+    teams_resp = MagicMock()
+    teams_resp.raise_for_status.return_value = None
+    teams_resp.json.return_value = _yahoo_teams_payload()
+    patcher = patch.object(
+        routes.http_requests, "get", MagicMock(side_effect=[leagues_resp, teams_resp])
+    )
+    patcher.start()
+    context._patches.append(patcher)
+
+
+@when(
+    'I POST to yahoo_members for league "{league_id}" targeting Yahoo league '
+    '"{yahoo_league_id}" with a linked account'
+)
+def step_post_yahoo_members_linked(context, league_id, yahoo_league_id):
+    _patch_yahoo_token(context, linked=True)
+    _patch_yahoo_http(context, seeded_league_id=yahoo_league_id)
+    context.response = context.api.post(
+        f"/leagues/{league_id}/yahoo_members"
+        f"?platform=SLEEPER&yahooLeagueId={yahoo_league_id}"
+    )
+
+
+@when(
+    'I POST to yahoo_members for league "{league_id}" targeting Yahoo league '
+    '"{yahoo_league_id}" without a link'
+)
+def step_post_yahoo_members_unlinked(context, league_id, yahoo_league_id):
+    _patch_yahoo_token(context, linked=False)
+    context.response = context.api.post(
+        f"/leagues/{league_id}/yahoo_members"
+        f"?platform=SLEEPER&yahooLeagueId={yahoo_league_id}"
+    )
+
+
+@when(
+    'I POST to yahoo_members for league "{league_id}" targeting Yahoo league '
+    '"{yahoo_league_id}" not in the account'
+)
+def step_post_yahoo_members_not_in_account(context, league_id, yahoo_league_id):
+    _patch_yahoo_token(context, linked=True)
+    # The enumerated leagues contain a different id, so resolution misses -> 404.
+    _patch_yahoo_http(context, seeded_league_id="111")
+    context.response = context.api.post(
+        f"/leagues/{league_id}/yahoo_members"
+        f"?platform=SLEEPER&yahooLeagueId={yahoo_league_id}"
+    )
+
+
+@when(
+    'I POST a Yahoo migration of league "{league_id}" from "{platform}" to '
+    'league "{new_league_id}" with a linked account'
+)
+def step_post_yahoo_migration_linked(context, league_id, platform, new_league_id):
+    import routes
+
+    patcher = patch.object(
+        routes.yahoo_oauth, "has_valid_link", MagicMock(return_value=True)
+    )
+    patcher.start()
+    context._patches.append(patcher)
+    context.response = context.api.post(
+        f"/leagues/{league_id}/migrate?platform={platform}",
+        json={
+            "newPlatformLeagueId": new_league_id,
+            "newPlatform": "YAHOO",
+            "managerMapping": [
+                {
+                    "currentPlatformOwnerId": "u1",
+                    "newPlatformOwnerId": "G1",
+                    "displayName": "Alice",
+                }
+            ],
+        },
+    )
+
+
+@when(
+    'I POST a Yahoo migration of league "{league_id}" from "{platform}" to '
+    'league "{new_league_id}" without a link'
+)
+def step_post_yahoo_migration_unlinked(context, league_id, platform, new_league_id):
+    import routes
+
+    patcher = patch.object(
+        routes.yahoo_oauth, "has_valid_link", MagicMock(return_value=False)
+    )
+    patcher.start()
+    context._patches.append(patcher)
+    context.response = context.api.post(
+        f"/leagues/{league_id}/migrate?platform={platform}",
+        json={
+            "newPlatformLeagueId": new_league_id,
+            "newPlatform": "YAHOO",
+            "managerMapping": [
+                {
+                    "currentPlatformOwnerId": "u1",
+                    "newPlatformOwnerId": "G1",
+                    "displayName": "Alice",
+                }
+            ],
+        },
+    )
+
+
 @when('I POST a REFRESH of league "{league_id}" on "{platform}"')
 def step_post_refresh(context, league_id, platform):
     # requestType is a query param; the REFRESH path of an already-onboarded

@@ -226,13 +226,17 @@ kms_client = boto3.client(
 )
 
 # Yahoo OAuth endpoints. The redirect_uri MUST match the callback registered in the
-# Yahoo developer app exactly; the return URL is the fixed frontend /connect_league
-# path the callback 302s back to. Both are Terraform-driven per environment.
+# Yahoo developer app exactly; the return URLs are the fixed frontend paths the callback
+# 302s back to, chosen by the state's return-context ``flow`` (ONBOARD -> /connect_league,
+# MIGRATE -> /migrate_league). All are Terraform-driven per environment.
 YAHOO_REDIRECT_URI = os.environ.get(
     "YAHOO_REDIRECT_URI", "https://api.leagueql.com/leagues/yahoo/oauth/callback"
 )
 YAHOO_CONNECT_RETURN_URL = os.environ.get(
     "YAHOO_CONNECT_RETURN_URL", "https://leagueql.app/connect_league"
+)
+YAHOO_MIGRATE_RETURN_URL = os.environ.get(
+    "YAHOO_MIGRATE_RETURN_URL", "https://leagueql.app/migrate_league"
 )
 
 # Minimum interval between `last_accessed_at` writes for a single league (backend/league-access-tracking).

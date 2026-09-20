@@ -166,4 +166,206 @@ defineFeature(feature, (test) => {
       expect(await screen.findByText(message)).toBeInTheDocument();
     });
   });
+
+  const yahooLinkedHandlers = () => [
+    leagueMetadata({ seasons: ['2024'], league_name: 'My League' }),
+    leagueQuery({ TEAMS: [CURRENT_MANAGER] }),
+    http.post(`${API}/leagues/:id/yahoo_members`, () =>
+      HttpResponse.json({
+        data: [{ owner_id: 'yG1', display_name: 'Yahoo Mgr' }],
+      }),
+    ),
+  ];
+
+  async function selectYahooDestination(
+    user: ReturnType<typeof userEvent.setup>,
+  ) {
+    await user.click(
+      await screen.findByRole('button', { name: /^continue$/i }),
+    );
+    await user.click(screen.getByRole('combobox'));
+    await user.click(await screen.findByRole('option', { name: 'Yahoo' }));
+  }
+
+  test('A linked Yahoo destination fetches members via the proxy and completes', ({
+    given,
+    when,
+    then,
+  }) => {
+    given('a Yahoo migration where the account is already linked', () => {
+      server.use(
+        ...yahooLinkedHandlers(),
+        http.post(`${API}/leagues/:id/migrate`, () =>
+          HttpResponse.json(
+            { detail: 'Migration started', data: { correlation_id: 'mig-y' } },
+            { status: 202 },
+          ),
+        ),
+        http.get(`${API}/jobs/:id`, () =>
+          HttpResponse.json({
+            detail: 'ok',
+            data: {
+              status: 'COMPLETED',
+              failure_code: null,
+              failure_reason: null,
+            },
+          }),
+        ),
+      );
+    });
+
+    when(
+      /^I complete the migration wizard for Yahoo league "(.*)"$/,
+      async (id) => {
+        const user = userEvent.setup();
+        await renderRoute(
+          <Routes>
+            <Route path="/migrate_league" element={<MigrateLeague />} />
+            <Route path="/home" element={<div>HOME PAGE</div>} />
+          </Routes>,
+          { route: '/migrate_league', league },
+        );
+        await selectYahooDestination(user);
+        // Yahoo needs only the league id — no season / SWID / S2 fields.
+        await user.type(
+          screen.getByPlaceholderText('Enter your Yahoo league ID'),
+          id,
+        );
+        await user.click(screen.getByRole('button', { name: /^next$/i }));
+        // Step 3: map the current manager to the fetched Yahoo account.
+        const trigger = await screen.findByRole('combobox');
+        await user.click(trigger);
+        await user.click(
+          await screen.findByRole('option', { name: /Yahoo Mgr/i }),
+        );
+        await user.click(screen.getByRole('button', { name: /^next$/i }));
+        vi.useFakeTimers();
+        await act(async () => {
+          fireEvent.click(
+            screen.getByRole('button', { name: /^confirm migration$/i }),
+          );
+          await Promise.resolve();
+        });
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(9000);
+        });
+      },
+    );
+
+    then('I am routed to the home page', () => {
+      expect(screen.getByText('HOME PAGE')).toBeInTheDocument();
+    });
+  });
+
+  test('An unlinked Yahoo destination prompts the Yahoo OAuth link', ({
+    given,
+    when,
+    then,
+  }) => {
+    // jsdom's window.location.href is non-configurable and navigation is unimplemented,
+    // so swap window.location for a URL (settable href) to observe the redirect.
+    const originalLocation = window.location;
+    afterEach(() => {
+      Object.defineProperty(window, 'location', {
+        configurable: true,
+        value: originalLocation,
+      });
+    });
+
+    let authorizeParams: URLSearchParams | null = null;
+
+    given('a Yahoo migration where the account is not linked', () => {
+      server.use(
+        leagueMetadata({ seasons: ['2024'], league_name: 'My League' }),
+        leagueQuery({ TEAMS: [CURRENT_MANAGER] }),
+        http.post(`${API}/leagues/:id/yahoo_members`, () =>
+          HttpResponse.json(
+            { detail: 'Link your Yahoo account first' },
+            { status: 403 },
+          ),
+        ),
+        http.get(`${API}/leagues/yahoo/oauth/authorize`, ({ request }) => {
+          authorizeParams = new URL(request.url).searchParams;
+          return HttpResponse.json({
+            detail: 'ok',
+            data: { authorize_url: 'https://consent.yahoo.test/authorize?x=1' },
+          });
+        }),
+      );
+      Object.defineProperty(window, 'location', {
+        configurable: true,
+        value: new URL('http://localhost/migrate_league'),
+      });
+    });
+
+    when(/^I choose Yahoo league "(.*)" as the destination$/, async (id) => {
+      const user = userEvent.setup();
+      await renderRoute(
+        <Routes>
+          <Route path="/migrate_league" element={<MigrateLeague />} />
+          <Route path="/home" element={<div>HOME PAGE</div>} />
+        </Routes>,
+        { route: '/migrate_league', league },
+      );
+      await selectYahooDestination(user);
+      await user.type(
+        screen.getByPlaceholderText('Enter your Yahoo league ID'),
+        id,
+      );
+      await user.click(screen.getByRole('button', { name: /^next$/i }));
+      // A 403 (no linked account) surfaces the Connect-with-Yahoo action.
+      await user.click(
+        await screen.findByRole('button', { name: /connect with yahoo/i }),
+      );
+    });
+
+    then(
+      'the Yahoo authorization is requested for migration and the browser is redirected',
+      async () => {
+        await vi.waitFor(() => {
+          expect(authorizeParams?.get('leagueId')).toBe('999');
+          expect(authorizeParams?.get('flow')).toBe('MIGRATE');
+          expect(window.location.href).toBe(
+            'https://consent.yahoo.test/authorize?x=1',
+          );
+        });
+      },
+    );
+  });
+
+  test('Returning from Yahoo OAuth resumes the manager-mapping step', ({
+    given,
+    when,
+    then,
+  }) => {
+    given('a Yahoo migration where the account is already linked', () => {
+      server.use(...yahooLinkedHandlers());
+    });
+
+    when(
+      /^I return from Yahoo linking for destination league "(.*)"$/,
+      async (id) => {
+        // Build the return query from parts (the concatenated literal trips no-secrets).
+        const returnParams = new URLSearchParams({
+          platform: 'YAHOO',
+          yahooLinked: '1',
+          leagueId: id,
+        });
+        await renderRoute(
+          <Routes>
+            <Route path="/migrate_league" element={<MigrateLeague />} />
+            <Route path="/home" element={<div>HOME PAGE</div>} />
+          </Routes>,
+          {
+            route: `/migrate_league?${returnParams.toString()}`,
+            league,
+          },
+        );
+      },
+    );
+
+    then('I see the manager mapping step', async () => {
+      expect(await screen.findByText('Map managers')).toBeInTheDocument();
+    });
+  });
 });

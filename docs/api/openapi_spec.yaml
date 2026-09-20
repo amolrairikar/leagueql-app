@@ -72,6 +72,16 @@ paths:
           schema:
             type: string
             maxLength: 100
+        - name: flow
+          in: query
+          required: false
+          description: >
+            Return context. ONBOARD (default) returns the callback to /connect_league;
+            MIGRATE returns it to /migrate_league so the migration wizard resumes.
+          schema:
+            type: string
+            enum: [ONBOARD, MIGRATE]
+            default: ONBOARD
       responses:
         "200":
           description: Yahoo consent URL generated
@@ -363,6 +373,59 @@ paths:
       responses:
         "200":
           $ref: "#/components/responses/EspnMembersResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/LeagueNotFoundError"
+        "502":
+          $ref: "#/components/responses/BadGatewayError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      security:
+        - ClerkJWT: []
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        httpMethod: POST
+        uri: "arn:aws:apigateway:${aws_region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations"
+        payloadFormatVersion: "2.0"
+
+  /leagues/{leagueId}/yahoo_members:
+    post:
+      summary: Fetch Yahoo league members
+      description: >
+        Server-side proxy (backend/yahoo-members-proxy) that returns a destination Yahoo
+        league's managers for the migration mapping, using the caller's linked Yahoo OAuth
+        token to resolve the numeric league id to its league_key and fetch its teams. The
+        token never reaches the browser. Owner-gated.
+      operationId: getYahooMembers
+      parameters:
+        - name: leagueId
+          in: path
+          required: true
+          description: The ID of the current (source) league
+          schema:
+            type: string
+            pattern: '^\d+$'
+            example: "12345678"
+        - name: platform
+          in: query
+          required: true
+          description: The current platform the league is on
+          schema:
+            type: string
+            enum: [ESPN, SLEEPER, YAHOO]
+            example: "SLEEPER"
+        - name: yahooLeagueId
+          in: query
+          required: true
+          description: The destination Yahoo (numeric) league ID to fetch members from
+          schema:
+            type: string
+            pattern: '^\d+$'
+            example: "456"
+      responses:
+        "200":
+          $ref: "#/components/responses/YahooMembersResponse"
         "403":
           $ref: "#/components/responses/ForbiddenError"
         "404":
@@ -1007,6 +1070,31 @@ components:
             data:
               - owner_id: "{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}"
                 display_name: "John Doe"
+
+    YahooMembersResponse:
+      description: Yahoo league managers returned successfully
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: "#/components/schemas/APIResponse"
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      required: [owner_id, display_name]
+                      properties:
+                        owner_id:
+                          type: string
+                        display_name:
+                          type: string
+          example:
+            detail: "Found Yahoo members"
+            data:
+              - owner_id: "G1ABCDEF"
+                display_name: "Alice"
 
     MigrateSuccessResponse:
       description: Migration successfully initiated

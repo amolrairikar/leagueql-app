@@ -25,6 +25,10 @@ import aiohttp
 import requests
 from utils import fetch_with_retry, logger, run_fetches, validate_api_results
 
+# The pure Yahoo JSON-normalization helpers live in a shared module so the API Lambda's
+# Yahoo-members proxy can reuse them without importing this onboarding client.
+from common.yahoo_members import _collection_items, _flatten, _league_subresource
+
 YAHOO_BASE_URL = "https://fantasysports.yahooapis.com/fantasy/v2"
 
 # Per-league sub-resources fetched once per season (matchups are expanded per week separately).
@@ -44,56 +48,9 @@ YAHOO_CONCURRENCY = 4
 
 
 # --------------------------------------------------------------------------------------
-# Yahoo JSON normalization helpers
+# Yahoo JSON normalization helpers: ``_flatten`` / ``_collection_items`` / ``_league_subresource``
+# are imported from ``common.yahoo_members`` (shared with the API Lambda's members proxy).
 # --------------------------------------------------------------------------------------
-def _flatten(node: Any) -> dict[str, Any]:
-    """Merge Yahoo's list-of-single-key-dicts entity representation into one flat dict.
-
-    Yahoo represents an entity (team, player, transaction, ...) as a list whose elements are
-    either single-key dicts (base attributes) or nested lists of the same. Non-dict / empty
-    elements are ignored. A plain dict is returned as-is.
-    """
-    if isinstance(node, dict):
-        return node
-    merged: dict[str, Any] = {}
-    if isinstance(node, list):
-        for element in node:
-            if isinstance(element, dict):
-                merged.update(element)
-            elif isinstance(element, list):
-                merged.update(_flatten(element))
-    return merged
-
-
-def _collection_items(container: Any, inner_key: str) -> list[Any]:
-    """Return the inner objects of a Yahoo numeric-keyed collection.
-
-    A Yahoo collection is ``{"0": {inner_key: X0}, "1": {inner_key: X1}, ..., "count": N}``.
-    Returns ``[X0, X1, ...]`` in index order, tolerating a missing/empty container.
-    """
-    if not isinstance(container, dict):
-        return []
-    items = []
-    index = 0
-    while str(index) in container:
-        entry = container[str(index)]
-        index += 1
-        if isinstance(entry, dict) and inner_key in entry:
-            items.append(entry[inner_key])
-    return items
-
-
-def _league_subresource(payload: dict[str, Any], key: str) -> Any:
-    """Return the ``key`` sub-resource object from a ``/league/{key}/{sub}`` JSON payload.
-
-    ``fantasy_content.league`` is ``[meta, {sub: ...}, ...]``; scan the trailing elements for
-    the one carrying ``key``.
-    """
-    league = payload.get("fantasy_content", {}).get("league", [])
-    for element in league[1:] if isinstance(league, list) else []:
-        if isinstance(element, dict) and key in element:
-            return element[key]
-    return None
 
 
 # --------------------------------------------------------------------------------------

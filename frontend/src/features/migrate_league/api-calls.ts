@@ -19,6 +19,11 @@ export interface SleeperUserEntry {
   username: string;
 }
 
+export interface YahooMemberEntry {
+  owner_id: string;
+  display_name: string;
+}
+
 export interface ManagerMappingEntry {
   currentPlatformOwnerId: string;
   newPlatformOwnerId: string;
@@ -60,6 +65,23 @@ export function getEspnMembers(
   return apiClient.post<{ data: EspnMemberEntry[] }>(
     `/leagues/${leagueId}/espn_members?${params}`,
     { swid, s2 },
+  );
+}
+
+/**
+ * Fetch a destination Yahoo league's managers via the backend proxy (backend/yahoo-members-proxy).
+ * The proxy uses the caller's linked Yahoo OAuth token server-side — no token reaches the browser.
+ * A `403` means the caller has no valid Yahoo link; callers route that to the OAuth flow.
+ */
+export function getYahooMembers(
+  leagueId: string,
+  platform: Platform,
+  yahooLeagueId: string,
+): Promise<{ data: YahooMemberEntry[] }> {
+  const params = new URLSearchParams({ platform, yahooLeagueId });
+  return apiClient.post<{ data: YahooMemberEntry[] }>(
+    `/leagues/${leagueId}/yahoo_members?${params}`,
+    {},
   );
 }
 
