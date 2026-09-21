@@ -34,11 +34,11 @@ ESPN metadata and query reads SHALL be gated to members via `require_league_memb
 - **WHEN** the owner reads league metadata
 - **THEN** `is_owner` is true; for any other caller it is false
 
-### Requirement: Mint an ESPN invite token
-`POST /leagues/{id}/invite-token` (owner-gated) SHALL mint a reusable invite token for an ESPN league, storing only its sha256 hash on METADATA and returning the plaintext token once. Minting again SHALL overwrite the stored hash, invalidating any previously shared link.
+### Requirement: Mint an invite token
+`POST /leagues/{id}/invite-token` (owner-gated) SHALL mint a reusable invite token for a gated league (ESPN or Yahoo), storing only its sha256 hash on METADATA and returning the plaintext token once. Minting again SHALL overwrite the stored hash, invalidating any previously shared link. Sleeper leagues (whose reads are open) SHALL be rejected with `400`.
 
 #### Scenario: Owner mints an invite token
-- **WHEN** the league owner calls `invite-token` for an ESPN league
+- **WHEN** the league owner calls `invite-token` for an ESPN or Yahoo league
 - **THEN** the API returns a plaintext token once and stores only its sha256 hash (`invite_token_hash`) on METADATA, with no expiry
 
 #### Scenario: Non-owner mint rejected
@@ -49,15 +49,15 @@ ESPN metadata and query reads SHALL be gated to members via `require_league_memb
 - **WHEN** the owner mints a new invite token while one is already outstanding
 - **THEN** the stored hash is overwritten so the previously shared token no longer redeems
 
-#### Scenario: Non-ESPN rejected
+#### Scenario: Sleeper rejected
 - **WHEN** `invite-token` is called for a Sleeper league
 - **THEN** the API returns `400` (Sleeper reads are open, so no invite is needed)
 
-### Requirement: Redeem an ESPN invite token
-`POST /leagues/{id}/accept-invite` SHALL add the authenticated caller to `members` when the submitted token matches the stored hash, without requiring any ESPN cookies. The token SHALL be reusable (the stored hash is not consumed on redemption).
+### Requirement: Redeem an invite token
+`POST /leagues/{id}/accept-invite` SHALL add the authenticated caller to `members` when the submitted token matches the stored hash, without requiring any platform credentials of their own, for a gated league (ESPN or Yahoo). The token SHALL be reusable (the stored hash is not consumed on redemption). Sleeper leagues SHALL be rejected with `400`.
 
 #### Scenario: Successful redemption
-- **WHEN** an authenticated caller submits a token whose sha256 hash matches the league's stored `invite_token_hash`
+- **WHEN** an authenticated caller submits a token whose sha256 hash matches an ESPN or Yahoo league's stored `invite_token_hash`
 - **THEN** the caller's Clerk user ID is added to `members` (idempotent), the stored hash is left intact so other leaguemates can still redeem it, and the API returns `200`
 
 #### Scenario: Reusable across leaguemates
@@ -72,7 +72,7 @@ ESPN metadata and query reads SHALL be gated to members via `require_league_memb
 - **WHEN** the submitted token does not match the stored hash (compared in constant time)
 - **THEN** the API returns `403`
 
-#### Scenario: Non-ESPN rejected
+#### Scenario: Sleeper rejected
 - **WHEN** `accept-invite` is called for a Sleeper league
 - **THEN** the API returns `400`
 

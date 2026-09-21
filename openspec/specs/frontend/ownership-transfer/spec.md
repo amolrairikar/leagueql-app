@@ -6,39 +6,43 @@ Surface league ownership in the UI: gate owner-only sidebar actions to the owner
 ## Requirements
 
 ### Requirement: Gate owner-only actions
-The sidebar SHALL show Refresh / Migrate / Transfer Ownership / Invite Leaguemates / Delete only when the caller is the owner; non-owners SHALL see View Another League and Claim Ownership, with owner actions hidden until `getLeague` resolves.
+The sidebar SHALL show Refresh / Migrate / Transfer Ownership / Invite Leaguemates / Delete only when the caller is the owner; non-owners SHALL see View Another League and Claim Ownership, with owner actions hidden until `getLeague` resolves. Invite Leaguemates SHALL appear only for gated platforms (ESPN or Yahoo), not for Sleeper (whose reads are open).
 
 #### Scenario: Owner vs non-owner
 - **WHEN** the sidebar renders for a league
 - **THEN** Refresh, Migrate, Transfer Ownership, Invite Leaguemates, and Delete appear only when `is_owner`, while non-owners see View Another League and Claim Ownership
 
+#### Scenario: Invite action gated to gated platforms
+- **WHEN** the owner views an ESPN or Yahoo league versus a Sleeper league
+- **THEN** Invite Leaguemates appears for the ESPN/Yahoo league and is hidden for the Sleeper league
+
 #### Scenario: Owner state loading and failure
 - **WHEN** `getLeague` has not resolved, or fails, or the app is in demo/no-league
 - **THEN** owner-only actions stay hidden until it resolves (no flash), a failed request resolves to non-owner, and demo/no-league bypasses gating
 
-### Requirement: Owner shares an ESPN invite link
-An owner SHALL be able to mint a reusable invite link for an ESPN league and copy it to share with leaguemates.
+### Requirement: Owner shares an invite link
+An owner SHALL be able to mint a reusable invite link for a gated league (ESPN or Yahoo) and copy it to share with leaguemates.
 
 #### Scenario: Create invite link
-- **WHEN** the owner opens the Invite Leaguemates dialog and creates a link
-- **THEN** a reusable link (containing the league ID, platform, and minted token) is shown and copyable, closing the dialog clears it, and the dialog notes that anyone with the link can view the league and that creating a new link revokes the old one
+- **WHEN** the owner opens the Invite Leaguemates dialog for an ESPN or Yahoo league and creates a link
+- **THEN** a reusable link (containing the league ID, platform, and minted token) is shown and copyable, closing the dialog clears it, and the dialog notes that anyone with the link can view the league without their own ESPN or Yahoo login and that creating a new link revokes the old one
 
-### Requirement: Redeem an ESPN invite link
-A signed-in user who opens an invite link SHALL be added to the league's members and taken to its dashboard, without supplying ESPN cookies.
+### Requirement: Redeem an invite link
+A signed-in user who opens an invite link SHALL be added to the league's members and taken to its dashboard, without supplying any platform credentials of their own.
 
 #### Scenario: Redeem a valid link
-- **WHEN** a signed-in user opens the invite link and its token is valid
+- **WHEN** a signed-in user opens the invite link for an ESPN or Yahoo league and its token is valid
 - **THEN** the user is added to the league's members, the league cookies are set, and they are routed to the dashboard
 
 #### Scenario: Redeem an invalid or revoked link
-- **WHEN** the invite token is missing, malformed, or no longer matches the stored hash
+- **WHEN** the invite token is missing, malformed, the platform is Sleeper, or the token no longer matches the stored hash
 - **THEN** an inline error is shown asking the user to request a new link from the league owner, and they are not routed into the league
 
-### Requirement: Non-member ESPN read directs to an invite link
-An ESPN league returning `403` for a non-member SHALL show a message directing the caller to obtain an invite link from the league owner, rather than prompting for ESPN cookies.
+### Requirement: Non-member read directs to an invite link
+A gated league (ESPN or Yahoo) returning `403` for a non-member SHALL show a message directing the caller to obtain an invite link from the league owner, rather than prompting for platform credentials.
 
 #### Scenario: Non-member sees invite-link guidance
-- **WHEN** `getLeague` returns `403` for an ESPN league
+- **WHEN** `getLeague` returns `403` for an ESPN or Yahoo league
 - **THEN** the `MembershipGuard` shows a backdrop explaining the league is private and that the caller needs an invite link from the owner to join, with no cookie-entry form
 
 ### Requirement: Transfer and claim ownership

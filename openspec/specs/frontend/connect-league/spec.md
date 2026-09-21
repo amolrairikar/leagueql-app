@@ -43,7 +43,7 @@ The UI SHALL poll job status long enough to capture completion of slow (~120s) j
 - **THEN** polling persists long enough to observe `COMPLETED` rather than falsely timing out
 
 ### Requirement: Ownership/membership-aware routing
-The initial `getLeague` check SHALL route by outcome so a non-owner is not sent through an owner-only refresh, and an ESPN non-member is directed to obtain an invite link rather than being asked for ESPN cookies.
+The initial `getLeague` check SHALL route by outcome so a non-owner is not sent through an owner-only refresh, and a non-member of a gated league (ESPN or Yahoo) is directed to obtain an invite link rather than being asked for platform credentials.
 
 #### Scenario: Non-owner of an existing league
 - **WHEN** the league exists (`200`) and the caller is not its owner
@@ -52,6 +52,10 @@ The initial `getLeague` check SHALL route by outcome so a non-owner is not sent 
 #### Scenario: ESPN non-member join
 - **WHEN** the lookup returns `403` for an ESPN league
 - **THEN** the flow does not attempt cookie-based membership verification; it surfaces a message that the league is private and the caller needs an invite link from the league owner to join
+
+#### Scenario: Yahoo non-member join
+- **WHEN** the lookup returns `403` for a Yahoo league
+- **THEN** the flow surfaces the same private-league invite-link guidance and does not ask for platform credentials
 
 ### Requirement: Validate season input live
 The ESPN latest-season field SHALL accept any number of digits and surface an inline validation error live as the user types when the value is not exactly a 4-digit year.
