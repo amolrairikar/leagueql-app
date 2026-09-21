@@ -38,7 +38,6 @@ module "dynamodb" {
   tags = {
     environment = var.environment
     project     = "leagueql"
-    component   = "database"
     managed-by  = "terraform"
   }
 }
@@ -56,7 +55,6 @@ resource "aws_kms_key" "yahoo_tokens" {
   tags = {
     environment = var.environment
     project     = "leagueql"
-    component   = "yahoo-oauth"
     managed-by  = "terraform"
   }
 }
@@ -120,7 +118,6 @@ module "s3-replication-role" {
   tags = {
     environment = var.environment
     project     = "leagueql"
-    component   = "s3"
     managed-by  = "terraform"
   }
 }
@@ -177,7 +174,6 @@ module "s3-bidirectional-replication" {
   tags = {
     environment = var.environment
     project     = "leagueql"
-    component   = "s3"
     managed-by  = "terraform"
   }
 }
@@ -311,7 +307,6 @@ module "onboarding-lambda-role" {
   tags = {
     environment = var.environment
     project     = "leagueql"
-    component   = "data-processing"
     managed-by  = "terraform"
   }
 }
@@ -430,7 +425,6 @@ module "processing-lambda-role" {
   tags = {
     environment = var.environment
     project     = "leagueql"
-    component   = "data-processing"
     managed-by  = "terraform"
   }
 }
@@ -492,7 +486,6 @@ module "player-metadata-lambda-role" {
   tags = {
     environment = var.environment
     project     = "leagueql"
-    component   = "data-processing"
     managed-by  = "terraform"
   }
 }
@@ -661,7 +654,6 @@ module "api-lambda-role" {
   tags = {
     environment = var.environment
     project     = "leagueql"
-    component   = "api"
     managed-by  = "terraform"
   }
 }
@@ -730,7 +722,6 @@ module "discord-notifier-lambda-role" {
   tags = {
     environment = var.environment
     project     = "leagueql"
-    component   = "monitoring"
     managed-by  = "terraform"
   }
 }
@@ -787,7 +778,6 @@ module "api-gateway-role" {
   tags = {
     environment = var.environment
     project     = "leagueql"
-    component   = "api"
     managed-by  = "terraform"
   }
 }
@@ -806,7 +796,6 @@ resource "aws_ecr_repository" "sleeper_player_stats_refresher" {
   tags = {
     environment = var.environment
     project     = "leagueql"
-    component   = "data-processing"
     managed-by  = "terraform"
   }
 }
@@ -908,7 +897,6 @@ module "sleeper-player-stats-refresher-task-role" {
   tags = {
     environment = var.environment
     project     = "leagueql"
-    component   = "data-processing"
     managed-by  = "terraform"
   }
 }
@@ -969,7 +957,6 @@ module "sleeper-stats-task-exec-role" {
   tags = {
     environment = var.environment
     project     = "leagueql"
-    component   = "data-processing"
     managed-by  = "terraform"
   }
 }
@@ -1015,7 +1002,6 @@ module "sleeper-stats-events-role" {
   tags = {
     environment = var.environment
     project     = "leagueql"
-    component   = "data-processing"
     managed-by  = "terraform"
   }
 }
@@ -1033,7 +1019,6 @@ resource "aws_ecr_repository" "yahoo_player_stats_refresher" {
   tags = {
     environment = var.environment
     project     = "leagueql"
-    component   = "data-processing"
     managed-by  = "terraform"
   }
 }
@@ -1146,7 +1131,6 @@ module "yahoo-player-stats-refresher-task-role" {
   tags = {
     environment = var.environment
     project     = "leagueql"
-    component   = "data-processing"
     managed-by  = "terraform"
   }
 }
@@ -1206,7 +1190,6 @@ module "yahoo-stats-task-exec-role" {
   tags = {
     environment = var.environment
     project     = "leagueql"
-    component   = "data-processing"
     managed-by  = "terraform"
   }
 }
@@ -1252,7 +1235,6 @@ module "yahoo-stats-events-role" {
   tags = {
     environment = var.environment
     project     = "leagueql"
-    component   = "data-processing"
     managed-by  = "terraform"
   }
 }
@@ -1341,7 +1323,6 @@ module "league-refresh-lambda-role" {
   tags = {
     environment = var.environment
     project     = "leagueql"
-    component   = "data-processing"
     managed-by  = "terraform"
   }
 }

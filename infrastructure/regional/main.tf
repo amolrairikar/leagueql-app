@@ -94,7 +94,6 @@ module "onboarder_lambda" {
   tags = {
     environment = var.environment
     project     = "leagueql"
-    component   = "api"
     managed-by  = "terraform"
   }
 }
@@ -130,7 +129,6 @@ module "processor_lambda" {
   tags = {
     environment = var.environment
     project     = "leagueql"
-    component   = "api"
     managed-by  = "terraform"
   }
 }
@@ -193,7 +191,6 @@ module "api_lambda" {
   tags = {
     environment = var.environment
     project     = "leagueql"
-    component   = "api"
     managed-by  = "terraform"
   }
 }
@@ -219,7 +216,6 @@ module "player_metadata_lambda" {
   tags = {
     environment = var.environment
     project     = "leagueql"
-    component   = "api"
     managed-by  = "terraform"
   }
 }
@@ -233,7 +229,6 @@ resource "aws_cloudwatch_event_rule" "player_metadata_schedule" {
   tags = {
     environment = var.environment
     project     = "leagueql"
-    component   = "api"
     managed-by  = "terraform"
   }
 }
@@ -291,7 +286,6 @@ module "league_refresh_lambda" {
   tags = {
     environment = var.environment
     project     = "leagueql"
-    component   = "api"
     managed-by  = "terraform"
   }
 }
@@ -305,7 +299,6 @@ resource "aws_cloudwatch_event_rule" "league_refresh_schedule" {
   tags = {
     environment = var.environment
     project     = "leagueql"
-    component   = "api"
     managed-by  = "terraform"
   }
 }
@@ -354,7 +347,6 @@ module "admin_report_lambda" {
   tags = {
     environment = var.environment
     project     = "leagueql"
-    component   = "monitoring"
     managed-by  = "terraform"
   }
 }
@@ -368,7 +360,6 @@ resource "aws_cloudwatch_event_rule" "admin_report_schedule" {
   tags = {
     environment = var.environment
     project     = "leagueql"
-    component   = "monitoring"
     managed-by  = "terraform"
   }
 }
@@ -414,7 +405,6 @@ module "backend_api" {
   tags = {
     environment = var.environment
     project     = "leagueql"
-    component   = "api"
     managed-by  = "terraform"
   }
 }
@@ -462,7 +452,6 @@ resource "aws_ecs_cluster" "leagueql" {
   tags = {
     environment = var.environment
     project     = "leagueql"
-    component   = "data-processing"
     managed-by  = "terraform"
   }
 }
@@ -475,7 +464,6 @@ resource "aws_cloudwatch_log_group" "sleeper_player_stats_refresher" {
   tags = {
     environment = var.environment
     project     = "leagueql"
-    component   = "data-processing"
     managed-by  = "terraform"
   }
 }
@@ -515,7 +503,6 @@ resource "aws_ecs_task_definition" "sleeper_player_stats_refresher" {
   tags = {
     environment = var.environment
     project     = "leagueql"
-    component   = "data-processing"
     managed-by  = "terraform"
   }
 }
@@ -531,7 +518,6 @@ resource "aws_cloudwatch_event_rule" "sleeper_player_stats_refresh_schedule" {
   tags = {
     environment = var.environment
     project     = "leagueql"
-    component   = "data-processing"
     managed-by  = "terraform"
   }
 }
@@ -566,7 +552,6 @@ resource "aws_cloudwatch_log_group" "yahoo_player_stats_refresher" {
   tags = {
     environment = var.environment
     project     = "leagueql"
-    component   = "data-processing"
     managed-by  = "terraform"
   }
 }
@@ -641,7 +626,6 @@ resource "aws_ecs_task_definition" "yahoo_player_stats_refresher" {
   tags = {
     environment = var.environment
     project     = "leagueql"
-    component   = "data-processing"
     managed-by  = "terraform"
   }
 }
@@ -656,7 +640,6 @@ resource "aws_cloudwatch_event_rule" "yahoo_player_stats_refresh_schedule" {
   tags = {
     environment = var.environment
     project     = "leagueql"
-    component   = "data-processing"
     managed-by  = "terraform"
   }
 }
@@ -687,7 +670,6 @@ resource "aws_sns_topic" "lambda_alerts" {
   tags = {
     environment = var.environment
     project     = "leagueql"
-    component   = "monitoring"
     managed-by  = "terraform"
   }
 }
@@ -719,7 +701,6 @@ module "discord_notifier_lambda" {
   tags = {
     environment = var.environment
     project     = "leagueql"
-    component   = "monitoring"
     managed-by  = "terraform"
   }
 }
@@ -755,7 +736,6 @@ resource "aws_sqs_queue" "onboarder_dlq" {
   tags = {
     environment = var.environment
     project     = "leagueql"
-    component   = "monitoring"
     managed-by  = "terraform"
   }
 }
@@ -802,7 +782,6 @@ resource "aws_cloudwatch_metric_alarm" "onboarder_dlq_messages" {
   tags = {
     environment = var.environment
     project     = "leagueql"
-    component   = "monitoring"
     managed-by  = "terraform"
   }
 }
@@ -829,7 +808,6 @@ resource "aws_cloudwatch_metric_alarm" "onboarder_errors" {
   tags = {
     environment = var.environment
     project     = "leagueql"
-    component   = "monitoring"
     managed-by  = "terraform"
   }
 }
@@ -856,7 +834,6 @@ resource "aws_cloudwatch_metric_alarm" "processor_errors" {
   tags = {
     environment = var.environment
     project     = "leagueql"
-    component   = "monitoring"
     managed-by  = "terraform"
   }
 }
@@ -883,7 +860,6 @@ resource "aws_cloudwatch_metric_alarm" "league_refresh_errors" {
   tags = {
     environment = var.environment
     project     = "leagueql"
-    component   = "monitoring"
     managed-by  = "terraform"
   }
 }
@@ -910,7 +886,6 @@ resource "aws_cloudwatch_metric_alarm" "player_metadata_errors" {
   tags = {
     environment = var.environment
     project     = "leagueql"
-    component   = "monitoring"
     managed-by  = "terraform"
   }
 }
@@ -941,7 +916,6 @@ resource "aws_cloudwatch_event_rule" "sleeper_stats_task_failed" {
   tags = {
     environment = var.environment
     project     = "leagueql"
-    component   = "monitoring"
     managed-by  = "terraform"
   }
 }
@@ -974,7 +948,6 @@ resource "aws_cloudwatch_event_rule" "yahoo_stats_task_failed" {
   tags = {
     environment = var.environment
     project     = "leagueql"
-    component   = "monitoring"
     managed-by  = "terraform"
   }
 }
@@ -1035,7 +1008,6 @@ resource "aws_cloudwatch_metric_alarm" "api_lambda_errors" {
   tags = {
     environment = var.environment
     project     = "leagueql"
-    component   = "monitoring"
     managed-by  = "terraform"
   }
 }
@@ -1062,7 +1034,6 @@ resource "aws_cloudwatch_metric_alarm" "api_gw_5xx" {
   tags = {
     environment = var.environment
     project     = "leagueql"
-    component   = "monitoring"
     managed-by  = "terraform"
   }
 }
@@ -1089,7 +1060,6 @@ resource "aws_cloudwatch_metric_alarm" "dynamodb_write_spike" {
   tags = {
     environment = var.environment
     project     = "leagueql"
-    component   = "monitoring"
     managed-by  = "terraform"
   }
 }
@@ -1116,7 +1086,6 @@ resource "aws_cloudwatch_metric_alarm" "dynamodb_read_spike" {
   tags = {
     environment = var.environment
     project     = "leagueql"
-    component   = "monitoring"
     managed-by  = "terraform"
   }
 }
@@ -1154,7 +1123,6 @@ resource "aws_acm_certificate" "api_subdomain_cert" {
   tags = {
     environment = var.environment
     project     = "leagueql"
-    component   = "api"
     managed-by  = "terraform"
   }
 }
