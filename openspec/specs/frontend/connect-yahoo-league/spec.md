@@ -13,11 +13,15 @@ The Connect-League platform selector SHALL offer Yahoo alongside ESPN and Sleepe
 - **THEN** the form shows the league-id field and a Connect button, and no ESPN cookie fields
 
 ### Requirement: Start the OAuth link on Connect
-Clicking Connect with Yahoo selected SHALL call `GET /leagues/yahoo/oauth/authorize` with the entered league id and navigate the browser (full-page redirect) to the returned Yahoo consent URL.
+Clicking Connect with Yahoo selected SHALL first attempt an in-place onboard (`POST /leagues` with `platform=YAHOO`) for the entered league id, and SHALL redirect the browser to Yahoo's consent screen only when the caller has no stored Yahoo link. An already-linked caller onboards in place (no consent redirect); a `403` "link first" response triggers the OAuth redirect via `GET /leagues/yahoo/oauth/authorize`.
+
+#### Scenario: Already linked — no consent redirect
+- **WHEN** the user selects Yahoo, enters a league id, and clicks Connect while already linked (the onboard call returns a `correlation_id` or a `200` null-`data` "already onboarded")
+- **THEN** the league is onboarded in place and the browser is NOT redirected to Yahoo's consent screen
 
 #### Scenario: Begin consent
-- **WHEN** the user selects Yahoo, enters a league id, and clicks Connect
-- **THEN** the form calls `GET /leagues/yahoo/oauth/authorize?leagueId=<id>` and navigates the browser to the returned Yahoo consent URL
+- **WHEN** the user selects Yahoo, enters a league id, and clicks Connect while not linked (the onboard call returns `403` "Link your Yahoo account first")
+- **THEN** the form calls `GET /leagues/yahoo/oauth/authorize?leagueId=<id>` and navigates the browser (full-page redirect) to the returned Yahoo consent URL
 
 ### Requirement: Handle the OAuth return
 Returning to `/connect_league?platform=YAHOO&yahooLinked=1` SHALL show the linked state and resume onboarding for the carried league id; a league that is already onboarded SHALL route the user into their existing league dashboard rather than erroring; a declined/failed link SHALL show an inline retry alert.

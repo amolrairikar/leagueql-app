@@ -6,11 +6,15 @@ The public marketing/home page at `/`. It introduces LeagueQL, showcases the pro
 ## Requirements
 
 ### Requirement: Render the marketing sections
-`/` SHALL render the hero, product showcase, "Works with" strip, feature highlights, "How it works" steps, FAQ accordion, final CTA band, and footer with the marketing header, responsively on mobile and desktop. The FAQ accordion SHALL appear between the "How it works" steps and the final CTA band.
+`/` SHALL render the hero, product showcase, "Works with" strip, feature highlights, "How it works" steps, FAQ accordion, final CTA band, and footer with the marketing header, responsively on mobile and desktop. The FAQ accordion SHALL appear between the "How it works" steps and the final CTA band. The "Works with" strip SHALL list ESPN, Sleeper, and Yahoo, and SHALL mark Yahoo with a "Beta" badge indicating its support is newly released.
 
 #### Scenario: Full page render
 - **WHEN** a visitor loads `/`
 - **THEN** the hero, product showcase, "Works with" strip, feature highlights, "How it works" steps, FAQ accordion, final CTA band, and footer render with the marketing header, laid out responsively
+
+#### Scenario: Yahoo marked Beta in the Works with strip
+- **WHEN** a visitor loads `/` and the "Works with" strip renders
+- **THEN** the Yahoo platform chip carries a "Beta" badge, while ESPN and Sleeper do not
 
 ### Requirement: FAQ accordion
 The landing page SHALL present the frequently asked questions as a collapsible accordion in which every question renders collapsed by default (only the question and an expand indicator visible), a visitor can expand a question to reveal its answer, and the indicator reflects the open/closed state.
@@ -65,7 +69,7 @@ CTAs SHALL route to sign in / connect league (or into the app for signed-in user
 - **THEN** Docs resolves to `/docs` and Changelog to the in-app `/changelog` page
 
 ### Requirement: Inline connect routing by existence check
-The inline connect form SHALL resolve the league via `getLeague` and route by outcome, surfacing invite-link guidance on an ESPN `403`.
+The inline connect form SHALL resolve the league via `getLeague` and route by outcome, surfacing invite-link guidance on an ESPN `403`. For Yahoo, the form SHALL attempt an in-place onboard (`POST /leagues` with `platform=YAHOO`) before any OAuth redirect, so that an already-linked caller never re-visits Yahoo's consent screen; the consent redirect is used only when the caller has no stored Yahoo link.
 
 #### Scenario: Sleeper not onboarded
 - **WHEN** the inline form resolves a Sleeper league to `404`
@@ -78,6 +82,22 @@ The inline connect form SHALL resolve the league via `getLeague` and route by ou
 #### Scenario: ESPN member gate
 - **WHEN** the inline form resolves an ESPN league to `403` (onboarded but caller not a member)
 - **THEN** it surfaces an inline message directing the caller to an owner's invite link, without prompting for ESPN cookies
+
+#### Scenario: Yahoo already linked — onboard in place
+- **WHEN** a Yahoo league is connected and `POST /leagues` (`platform=YAHOO`) succeeds with a `correlation_id` (the caller has a stored Yahoo link)
+- **THEN** the form polls the job to completion in place with the same progress UI as Sleeper and, on success, navigates to `/home` — without redirecting to Yahoo's consent screen
+
+#### Scenario: Yahoo already onboarded
+- **WHEN** a Yahoo league is connected and `POST /leagues` responds `200` with a null `data` (the league already exists)
+- **THEN** the form skips polling and routes the caller into the existing league dashboard (`/home`), without redirecting to Yahoo's consent screen
+
+#### Scenario: Yahoo not linked — begin consent
+- **WHEN** a Yahoo league is connected and `POST /leagues` responds `403` ("Link your Yahoo account first")
+- **THEN** the form calls `GET /leagues/yahoo/oauth/authorize?leagueId=<id>` and navigates the browser (full-page redirect) to the returned Yahoo consent URL
+
+#### Scenario: Yahoo link revoked
+- **WHEN** a Yahoo onboard job fails with the `YAHOO_AUTH` re-link signal (a stored link whose token was revoked)
+- **THEN** the form restarts the Yahoo OAuth step rather than showing a generic failure
 
 #### Scenario: Other failure
 - **WHEN** the existence check fails for another reason
