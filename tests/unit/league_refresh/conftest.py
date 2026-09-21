@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-_SRC = Path(__file__).parents[3] / "src" / "sleeper_refresh"
+_SRC = Path(__file__).parents[3] / "src" / "league_refresh"
 
 
 def _load_module(unique_name: str, path: Path) -> object:
@@ -18,8 +18,8 @@ def _load_module(unique_name: str, path: Path) -> object:
 
 
 @pytest.fixture(scope="session", autouse=True)
-def _bootstrap_sleeper_refresh():
-    """Load sleeper_refresh modules into sys.modules with unique names."""
+def _bootstrap_league_refresh():
+    """Load league_refresh modules into sys.modules with unique names."""
     saved = {n: sys.modules.get(n) for n in ["utils", "handler"]}
     env = {
         "DYNAMODB_TABLE_NAME": "test-table",
@@ -28,10 +28,10 @@ def _bootstrap_sleeper_refresh():
 
     with patch.dict(os.environ, env), patch("boto3.client") as mock_client:
         mock_client.return_value = MagicMock()
-        utils_mod = _load_module("sleeper_refresh.utils", _SRC / "utils.py")
+        utils_mod = _load_module("league_refresh.utils", _SRC / "utils.py")
         sys.modules["utils"] = utils_mod
 
-        handler_mod = _load_module("sleeper_refresh.handler", _SRC / "handler.py")
+        handler_mod = _load_module("league_refresh.handler", _SRC / "handler.py")
         sys.modules["handler"] = handler_mod
 
     for name, prev in saved.items():
@@ -44,13 +44,13 @@ def _bootstrap_sleeper_refresh():
 
 
 @pytest.fixture(scope="session")
-def sleeper_refresh_utils():
-    return sys.modules["sleeper_refresh.utils"]
+def league_refresh_utils():
+    return sys.modules["league_refresh.utils"]
 
 
 @pytest.fixture(scope="session")
-def sleeper_refresh_handler():
-    return sys.modules["sleeper_refresh.handler"]
+def league_refresh_handler():
+    return sys.modules["league_refresh.handler"]
 
 
 @pytest.fixture(autouse=True)

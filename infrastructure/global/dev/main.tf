@@ -1257,10 +1257,10 @@ module "yahoo-stats-events-role" {
   }
 }
 
-module "sleeper-refresh-lambda-role" {
+module "league-refresh-lambda-role" {
   source           = "../../modules/iam-role"
-  role_name        = "leagueql-${var.environment}-sleeper-league-refresh-role"
-  role_description = "Execution role for Sleeper refresh lambda."
+  role_name        = "leagueql-${var.environment}-league-refresh-role"
+  role_description = "Execution role for the league refresh lambda."
   trust_policy_json = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -1283,7 +1283,7 @@ module "sleeper-refresh-lambda-role" {
           "logs:CreateLogGroup"
         ]
         Resource = [
-          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/lambda/leagueql-sleeper-refresh-${var.environment}"
+          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/lambda/leagueql-league-refresh-${var.environment}"
         ]
       },
       {
@@ -1294,7 +1294,7 @@ module "sleeper-refresh-lambda-role" {
           "logs:PutLogEvents"
         ],
         Resource = [
-          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/lambda/leagueql-sleeper-refresh-${var.environment}:*"
+          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/lambda/leagueql-league-refresh-${var.environment}:*"
         ]
       },
       {
@@ -1311,10 +1311,14 @@ module "sleeper-refresh-lambda-role" {
         ]
       },
       {
-        Sid    = "QueryDynamoDB"
+        # Query GSI2 to enumerate per-platform LEAGUE_LOOKUP items; GetItem the base
+        # table to read a Yahoo canonical league's owner_user_id from its METADATA item
+        # (backend/scheduled-league-auto-refresh).
+        Sid    = "ReadDynamoDB"
         Effect = "Allow"
         Action = [
-          "dynamodb:Query"
+          "dynamodb:Query",
+          "dynamodb:GetItem"
         ]
         Resource = [
           module.dynamodb.primary_table_arn,

@@ -1,5 +1,5 @@
 Feature: Sleeper refresh integration
-  Scenarios test the full dispatch path from sleeper_refresh handler
+  Scenarios test the full dispatch path from the league_refresh handler
   through to DynamoDB status updates written by the downstream Lambda chain.
 
   Background:

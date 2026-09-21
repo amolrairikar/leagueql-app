@@ -1,4 +1,4 @@
-"""Steps for the scheduled Sleeper auto-refresh Lambda (backend/scheduled-sleeper-auto-refresh)."""
+"""Steps for the scheduled league auto-refresh Lambda (backend/scheduled-league-auto-refresh)."""
 
 import json
 from unittest.mock import MagicMock, patch
@@ -56,6 +56,57 @@ def step_seed_espn_league(context, league_id, canonical):
     )
 
 
+@given(
+    'an onboarded Yahoo league "{league_id}" canonical "{canonical}" season "{season}" owner "{owner}"'
+)
+def step_seed_yahoo_league(context, league_id, canonical, season, owner):
+    put_item(
+        context,
+        {
+            "PK": f"LEAGUE#{league_id}#PLATFORM#YAHOO",
+            "SK": "LEAGUE_LOOKUP",
+            "canonical_league_id": canonical,
+            "seasons": {season},
+            "platform": "YAHOO",
+            "league_id": league_id,
+        },
+    )
+    put_item(
+        context,
+        {
+            "PK": f"LEAGUE#{canonical}",
+            "SK": "METADATA",
+            "platform": "YAHOO",
+            "owner_user_id": owner,
+        },
+    )
+
+
+@given(
+    'an onboarded Yahoo league "{league_id}" canonical "{canonical}" season "{season}" with no owner'
+)
+def step_seed_yahoo_league_no_owner(context, league_id, canonical, season):
+    put_item(
+        context,
+        {
+            "PK": f"LEAGUE#{league_id}#PLATFORM#YAHOO",
+            "SK": "LEAGUE_LOOKUP",
+            "canonical_league_id": canonical,
+            "seasons": {season},
+            "platform": "YAHOO",
+            "league_id": league_id,
+        },
+    )
+    put_item(
+        context,
+        {
+            "PK": f"LEAGUE#{canonical}",
+            "SK": "METADATA",
+            "platform": "YAHOO",
+        },
+    )
+
+
 @when(
     'the auto-refresh runs with NFL state season_type "{season_type}" week "{week:d}"'
 )
@@ -78,6 +129,11 @@ def _run_refresh(context, season_type, week, season):
     state_patch.start()
     context._patches.append(state_patch)
 
+    # Pacing sleeps between same-platform dispatches; no-op it so the run is fast.
+    pace_patch = patch.object(context.refresh_handler, "pace_dispatch", MagicMock())
+    pace_patch.start()
+    context._patches.append(pace_patch)
+
     invoke = MagicMock()
     invoke_patch = patch.object(
         context.refresh_handler, "invoke_onboarder_lambda", invoke
@@ -85,7 +141,7 @@ def _run_refresh(context, season_type, week, season):
     context.invoke_mock = invoke_patch.start()
     context._patches.append(invoke_patch)
 
-    ctx = MagicMock(aws_request_id="req", function_name="sleeper-refresh-test")
+    ctx = MagicMock(aws_request_id="req", function_name="league-refresh-test")
     context.refresh_response = context.refresh_handler.lambda_handler({}, ctx)
 
 
@@ -106,3 +162,16 @@ def step_invoke_count(context, count):
 def step_invoke_for(context, league_id):
     called = [c.args[0] for c in context.invoke_mock.call_args_list]
     assert league_id in called, f"invoked for {called}, not {league_id}"
+
+
+@then('the onboarder was invoked for Yahoo league "{league_id}" with owner "{owner}"')
+def step_invoke_for_with_owner(context, league_id, owner):
+    match = [
+        c
+        for c in context.invoke_mock.call_args_list
+        if c.args and c.args[0] == league_id
+    ]
+    assert match, f"onboarder not invoked for league {league_id}"
+    call = match[0]
+    assert call.kwargs.get("platform") == "YAHOO", call.kwargs
+    assert call.kwargs.get("owner_user_id") == owner, call.kwargs

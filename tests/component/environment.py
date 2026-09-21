@@ -215,16 +215,16 @@ def _load_handlers(context) -> None:
         "processor.handler", _SRC / "processor" / "handler.py"
     )
 
-    # --- sleeper_refresh (overwrites bare ``utils`` for its own load) -------
-    refresh_pkg = types.ModuleType("sleeper_refresh")
-    refresh_pkg.__path__ = [str(_SRC / "sleeper_refresh")]
-    sys.modules["sleeper_refresh"] = refresh_pkg
+    # --- league_refresh (overwrites bare ``utils`` for its own load) -------
+    refresh_pkg = types.ModuleType("league_refresh")
+    refresh_pkg.__path__ = [str(_SRC / "league_refresh")]
+    sys.modules["league_refresh"] = refresh_pkg
     sys.modules["utils"] = _load_module(
-        "sleeper_refresh.utils", _SRC / "sleeper_refresh" / "utils.py"
+        "league_refresh.utils", _SRC / "league_refresh" / "utils.py"
     )
     context.refresh_utils_mod = sys.modules["utils"]
     context.refresh_handler = _load_module(
-        "sleeper_refresh.handler", _SRC / "sleeper_refresh" / "handler.py"
+        "league_refresh.handler", _SRC / "league_refresh" / "handler.py"
     )
 
     # --- API (main/helpers/routes are plain top-level modules) -------------

@@ -2,7 +2,7 @@
 
 Vendored into every function's deployment zip. Centralizes the async invoke
 payload contract (``body`` / ``requestType`` / ``canonicalLeagueId`` /
-``correlation_id`` / ``trace_context``) shared by the API and the Sleeper refresh
+``correlation_id`` / ``trace_context``) shared by the API and the league refresh
 job. ``trace_context`` carries W3C trace context so the onboarder continues the
 caller's OpenTelemetry trace (backend/otel-tracing); it is empty when tracing is disabled.
 """
@@ -34,8 +34,10 @@ def invoke_onboarder(
         canonical_league_id: The canonical league ID, or None for first-time onboarding.
         correlation_id: Correlation ID propagated for request tracing.
         owner_user_id: Clerk user ID of the onboarding owner, recorded on the
-            league's METADATA on first ONBOARD (backend/league-authorization). ``None`` for the
-            Sleeper auto-refresh job and other system-initiated invocations.
+            league's METADATA on first ONBOARD (backend/league-authorization). ``None`` for
+            Sleeper (public API) and other system-initiated invocations; the league
+            auto-refresh job supplies it for Yahoo so the onboarder can obtain that
+            owner's OAuth token.
         reprocess_all: When True, flag the run as a backfill so the processor rebuilds
             every season's views (not just the latest). Used by the Sleeper backfill
             script (backend/sleeper-transactions); default False leaves normal onboards/refreshes unchanged.
