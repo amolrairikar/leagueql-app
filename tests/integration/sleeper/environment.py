@@ -11,7 +11,7 @@ import requests
 _HERE = Path(__file__).parent
 _SRC = Path(__file__).parents[3] / "src"
 _ONBOARDER_SRC = _SRC / "onboarder"
-_SLEEPER_REFRESH_SRC = _SRC / "sleeper_refresh"
+_LEAGUE_REFRESH_SRC = _SRC / "league_refresh"
 _API_SRC = _SRC / "api"
 
 # The dev API Lambda is freshly (re)deployed by the CI job that runs immediately
@@ -150,15 +150,15 @@ def before_all(context):
         "onboarder.handler", _ONBOARDER_SRC / "handler.py"
     )
 
-    # Load sleeper_refresh after onboarder; handler uses sleeper_refresh.utils (qualified), not bare utils.
-    pkg = types.ModuleType("sleeper_refresh")
-    pkg.__path__ = [str(_SLEEPER_REFRESH_SRC)]
-    sys.modules["sleeper_refresh"] = pkg
+    # Load league_refresh after onboarder; handler uses league_refresh.utils (qualified), not bare utils.
+    pkg = types.ModuleType("league_refresh")
+    pkg.__path__ = [str(_LEAGUE_REFRESH_SRC)]
+    sys.modules["league_refresh"] = pkg
 
-    utils_mod = _load_module("sleeper_refresh.utils", _SLEEPER_REFRESH_SRC / "utils.py")
+    utils_mod = _load_module("league_refresh.utils", _LEAGUE_REFRESH_SRC / "utils.py")
     sys.modules["utils"] = utils_mod
     handler_mod = _load_module(
-        "sleeper_refresh.handler", _SLEEPER_REFRESH_SRC / "handler.py"
+        "league_refresh.handler", _LEAGUE_REFRESH_SRC / "handler.py"
     )
     sys.modules["handler"] = handler_mod
 

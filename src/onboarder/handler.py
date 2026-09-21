@@ -14,7 +14,7 @@ from common.job_status import (
 )
 from common.tracing import init_tracing, traced_handler
 
-# Continue the trace started upstream (API or Sleeper refresh) → Better Stack (backend/otel-tracing).
+# Continue the trace started upstream (API or league refresh) → Better Stack (backend/otel-tracing).
 # A no-op unless tracing is configured, so tests / unconfigured envs are unaffected.
 init_tracing("leagueql-onboarder")
 

@@ -97,7 +97,7 @@ renewed season before it starts (`pre_draft`/`drafting`), the new ID is register
 `pending_season` marker, but **no `seasons`** (an empty DynamoDB string set is invalid, and the
 season must not surface in any dropdown until it has data). This is essential because Sleeper
 only links seasons *backwards*, so a discarded new ID could never be re-discovered. The
-scheduled auto-refresh ([backend/scheduled-sleeper-auto-refresh](../requirements/backend/backend/scheduled-sleeper-auto-refresh-scheduled-sleeper-auto-refresh.md))
+scheduled auto-refresh ([backend/scheduled-league-auto-refresh](../requirements/backend/backend/scheduled-league-auto-refresh-scheduled-league-auto-refresh.md))
 polls pending lookups and promotes this item to a normal lookup — adding `seasons` and removing
 `pending_season` — the first run after the season flips to `in_season`
 ([backend/league-onboarding](../requirements/backend/backend/league-onboarding-league-onboarding.md) /

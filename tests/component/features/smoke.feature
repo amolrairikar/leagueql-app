@@ -1,6 +1,6 @@
 Feature: Component harness smoke test
   Confirms the moto-backed harness loads every component (onboarder, processor,
-  sleeper_refresh, API) and that AWS calls hit the in-memory moto stack rather
+  league_refresh, API) and that AWS calls hit the in-memory moto stack rather
   than a real account.
 
   Scenario: The API health check responds

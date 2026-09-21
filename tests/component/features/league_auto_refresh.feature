@@ -1,6 +1,7 @@
-Feature: Scheduled Sleeper auto-refresh (backend/scheduled-sleeper-auto-refresh)
+Feature: Scheduled league auto-refresh (backend/scheduled-league-auto-refresh)
   During the NFL season the Lambda invokes the onboarder in REFRESH mode for every
-  onboarded Sleeper league; ESPN leagues are excluded and offseason/week-1 are skipped.
+  onboarded Sleeper and Yahoo league; ESPN leagues are excluded, offseason/week-1 are
+  skipped, and each Yahoo league is dispatched with its resolved owner.
 
   Scenario: In-season run invokes the onboarder for each Sleeper league only
     Given an onboarded Sleeper league "100" canonical "canon-1" season "2024"
@@ -11,6 +12,21 @@ Feature: Scheduled Sleeper auto-refresh (backend/scheduled-sleeper-auto-refresh)
     And the onboarder was invoked 2 time(s)
     And the onboarder was invoked for league "100"
     And the onboarder was invoked for league "200"
+
+  Scenario: In-season run refreshes a Yahoo league with its resolved owner
+    Given an onboarded Sleeper league "100" canonical "canon-1" season "2024"
+    And an onboarded Yahoo league "400" canonical "canon-4" season "2024" owner "user-42"
+    When the auto-refresh runs with NFL state season_type "regular" week "10"
+    Then the auto-refresh response status is "succeeded"
+    And the onboarder was invoked 2 time(s)
+    And the onboarder was invoked for league "100"
+    And the onboarder was invoked for Yahoo league "400" with owner "user-42"
+
+  Scenario: A Yahoo league with no owner is skipped
+    Given an onboarded Yahoo league "500" canonical "canon-5" season "2024" with no owner
+    When the auto-refresh runs with NFL state season_type "regular" week "10"
+    Then the auto-refresh response status is "succeeded"
+    And the onboarder was invoked 0 time(s)
 
   Scenario: Offseason runs are skipped
     Given an onboarded Sleeper league "100" canonical "canon-1" season "2024"

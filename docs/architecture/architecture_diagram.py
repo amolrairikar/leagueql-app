@@ -88,7 +88,7 @@ with Diagram(
 
         with Cluster("Scheduled jobs (EventBridge)"):
             evb = Eventbridge("EventBridge\nrules")
-            sleeper_refresh = Lambda("Sleeper refresh\n(weekly)")
+            league_refresh = Lambda("League refresh\n(Sleeper + Yahoo,\nweekly)")
             player_meta = Lambda("Player metadata\nrefresher")
             stats_task = Fargate("Sleeper stats\nrefresher (Fargate)")
             yahoo_stats_task = Fargate("Yahoo player-data\nrefresher (Fargate)")
@@ -136,14 +136,14 @@ with Diagram(
         evb
         >> SCHED
         >> [
-            sleeper_refresh,
+            league_refresh,
             player_meta,
             stats_task,
             yahoo_stats_task,
             admin_report,
         ]
     )
-    sleeper_refresh >> ASYNC >> onboarder
+    league_refresh >> ASYNC >> onboarder
     # Player metadata + Sleeper stats land in S3; the processor reads both prefixes
     # (alongside the raw payloads) when building precomputed views.
     player_meta >> Edge(label="player metadata\nJSON") >> s3

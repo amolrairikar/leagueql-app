@@ -29,7 +29,7 @@ def _test_league_current_season(context) -> str:
 @given("the NFL state API returns week {week:d} of the regular season")
 def step_nfl_state_week(context, week):
     context.nfl_patcher = patch(
-        "sleeper_refresh.handler.get_nfl_state",
+        "league_refresh.handler.get_nfl_state",
         return_value={
             "season_type": "regular",
             "week": week,
@@ -42,7 +42,7 @@ def step_nfl_state_week(context, week):
 @given("the NFL state API returns off-season")
 def step_nfl_state_offseason(context):
     context.nfl_patcher = patch(
-        "sleeper_refresh.handler.get_nfl_state",
+        "league_refresh.handler.get_nfl_state",
         return_value={"season_type": "off", "week": 0},
     )
     context.nfl_patcher.start()
@@ -68,7 +68,7 @@ def step_verify_league(context):
 def step_invoke_handler(context):
     mock_ctx = MagicMock()
     mock_ctx.aws_request_id = "integration-test-request-id"
-    mock_ctx.function_name = "sleeper-refresh-integration-test"
+    mock_ctx.function_name = "league-refresh-integration-test"
     context.response = context.handler_mod.lambda_handler({}, mock_ctx)
     context.invoke_time = datetime.now(timezone.utc)
     if hasattr(context, "nfl_patcher"):

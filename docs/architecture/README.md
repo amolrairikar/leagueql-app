@@ -21,8 +21,8 @@ pipenv run python docs/architecture/architecture_diagram.py
 - **AWS backend** — API Gateway → FastAPI Lambda, which fire-and-forget invokes the
   **onboarder → (S3 manifest event) → processor** async chain that writes precomputed views
   to DynamoDB. A prod-only SQS DLQ catches poison onboarder events.
-- **Scheduled jobs** (EventBridge) — Sleeper refresh, player-metadata refresher, and the
-  Sleeper stats Fargate task.
+- **Scheduled jobs** (EventBridge) — league refresh (Sleeper + Yahoo), player-metadata refresher,
+  and the Sleeper stats Fargate task.
 - **Ops** — SNS alerts fan out to the Discord notifier Lambda; API, onboarder, and processor
   export one end-to-end OpenTelemetry trace to Better Stack.
 

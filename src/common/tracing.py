@@ -3,7 +3,7 @@
 Vendored into every function's deployment zip via
 ``scripts/deployment_scripts/build_lambda_zip.sh``. Framework-agnostic: the API
 Lambda layers FastAPI instrumentation on top in ``src/api/telemetry.py``; the async
-onboarding chain (onboarder, processor, sleeper_refresh) uses :func:`init_tracing`
+onboarding chain (onboarder, processor, league_refresh) uses :func:`init_tracing`
 + :func:`traced_handler` directly to continue the trace started upstream.
 
 Design notes (mirroring ``src/api/telemetry.py``):
@@ -194,7 +194,7 @@ def traced_handler(span_name: str, *, carrier=None, root: bool = False):
         span_name: Name for the invocation span.
         carrier: A mapping (invoke payload sub-dict or S3 metadata) holding the
             upstream W3C ``traceparent``/``tracestate``; ignored when ``root``.
-        root: Start a fresh root trace (used by the Sleeper cron, which has no
+        root: Start a fresh root trace (used by the league-refresh cron, which has no
             inbound context to continue).
     """
     if _provider is None:

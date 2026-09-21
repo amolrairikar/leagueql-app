@@ -22,7 +22,7 @@ locals {
   processor_role_arn        = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-onboarding-processor-role"
   api_role_arn              = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-api-role"
   player_metadata_role_arn  = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-sleeper-player-metadata-fetcher-role"
-  sleeper_refresh_role_arn  = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-sleeper-league-refresh-role"
+  league_refresh_role_arn   = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-league-refresh-role"
   discord_notifier_role_arn = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-discord-notifier-role"
   admin_report_role_arn     = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-admin-report-role"
 
@@ -253,23 +253,31 @@ resource "aws_lambda_permission" "allow_eventbridge_player_metadata" {
   source_arn    = aws_cloudwatch_event_rule.player_metadata_schedule[0].arn
 }
 
-module "sleeper_refresh_lambda" {
+module "league_refresh_lambda" {
   source = "../modules/lambda"
   count  = local.region == "east" ? 1 : 0
 
-  function_name        = "leagueql-sleeper-refresh-${var.environment}"
-  function_description = "Lambda function to schedule Sleeper league refreshes"
-  role_arn             = local.sleeper_refresh_role_arn
+  function_name        = "leagueql-league-refresh-${var.environment}"
+  function_description = "Lambda function to schedule Sleeper and Yahoo league refreshes"
+  role_arn             = local.league_refresh_role_arn
   handler              = "handler.lambda_handler"
   memory_size          = 512
-  timeout              = 60
-  log_retention        = 7
-  s3_bucket            = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
-  s3_key               = "lambda-code-artifacts/sleeper_refresh-lambda.zip"
+  # Dispatches are paced with interval + jitter between same-platform onboarder
+  # invokes (backend/scheduled-league-auto-refresh), so the run is dominated by
+  # sleeps; allow ample headroom over the old 60s.
+  timeout       = 900
+  log_retention = 7
+  s3_bucket     = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
+  s3_key        = "lambda-code-artifacts/league_refresh-lambda.zip"
 
   environment_variables = {
     DYNAMODB_TABLE_NAME   = "leagueql-table-${var.environment}"
     ONBOARDER_LAMBDA_NAME = "leagueql-onboarder-${var.environment}"
+
+    # Pacing between consecutive same-platform onboarder dispatches (seconds):
+    # a base interval plus up to this much random jitter.
+    REFRESH_DISPATCH_INTERVAL_SECONDS = "3"
+    REFRESH_DISPATCH_JITTER_SECONDS   = "5"
 
     # OpenTelemetry trace-context propagation → Better Stack (backend/otel-tracing). A no-op unless
     # set. The OTLP source token is fetched at runtime from SSM by *name* (value never
@@ -288,9 +296,9 @@ module "sleeper_refresh_lambda" {
   }
 }
 
-resource "aws_cloudwatch_event_rule" "sleeper_refresh_schedule" {
+resource "aws_cloudwatch_event_rule" "league_refresh_schedule" {
   count               = local.region == "east" ? 1 : 0
-  name                = "sleeper-refresh-schedule-${var.environment}-${local.region}"
+  name                = "league-refresh-schedule-${var.environment}-${local.region}"
   schedule_expression = "cron(0 13 ? * TUE *)"
   state               = "ENABLED"
 
@@ -302,19 +310,19 @@ resource "aws_cloudwatch_event_rule" "sleeper_refresh_schedule" {
   }
 }
 
-resource "aws_cloudwatch_event_target" "sleeper_refresh_target" {
+resource "aws_cloudwatch_event_target" "league_refresh_target" {
   count = local.region == "east" ? 1 : 0
-  rule  = aws_cloudwatch_event_rule.sleeper_refresh_schedule[0].name
-  arn   = module.sleeper_refresh_lambda[0].lambda_arn
+  rule  = aws_cloudwatch_event_rule.league_refresh_schedule[0].name
+  arn   = module.league_refresh_lambda[0].lambda_arn
 }
 
-resource "aws_lambda_permission" "allow_eventbridge_sleeper_refresh" {
+resource "aws_lambda_permission" "allow_eventbridge_league_refresh" {
   count         = local.region == "east" ? 1 : 0
   statement_id  = "AllowEventBridgeInvoke"
   action        = "lambda:InvokeFunction"
-  function_name = module.sleeper_refresh_lambda[0].lambda_arn
+  function_name = module.league_refresh_lambda[0].lambda_arn
   principal     = "events.amazonaws.com"
-  source_arn    = aws_cloudwatch_event_rule.sleeper_refresh_schedule[0].arn
+  source_arn    = aws_cloudwatch_event_rule.league_refresh_schedule[0].arn
 }
 
 # Nightly admin onboarding report (backend/admin-onboarding-report). Prod-only (the data
@@ -853,9 +861,9 @@ resource "aws_cloudwatch_metric_alarm" "processor_errors" {
   }
 }
 
-resource "aws_cloudwatch_metric_alarm" "sleeper_refresh_errors" {
+resource "aws_cloudwatch_metric_alarm" "league_refresh_errors" {
   count               = local.region == "east" && var.environment == "prod" ? 1 : 0
-  alarm_name          = "leagueql-sleeper-refresh-${var.environment}-errors"
+  alarm_name          = "leagueql-league-refresh-${var.environment}-errors"
   comparison_operator = "GreaterThanOrEqualToThreshold"
   evaluation_periods  = 1
   metric_name         = "Errors"
@@ -863,13 +871,13 @@ resource "aws_cloudwatch_metric_alarm" "sleeper_refresh_errors" {
   period              = 300
   statistic           = "Sum"
   threshold           = 1
-  alarm_description   = "Sleeper refresh Lambda error detected"
+  alarm_description   = "League refresh Lambda error detected"
   alarm_actions       = [aws_sns_topic.lambda_alerts[0].arn]
   ok_actions          = [aws_sns_topic.lambda_alerts[0].arn]
   treat_missing_data  = "notBreaching"
 
   dimensions = {
-    FunctionName = "leagueql-sleeper-refresh-${var.environment}"
+    FunctionName = "leagueql-league-refresh-${var.environment}"
   }
 
   tags = {

@@ -1,19 +1,26 @@
 import json
 import uuid
+from collections import defaultdict
 
-from utils import get_nfl_state, get_sleeper_leagues, invoke_onboarder_lambda, logger
+from utils import (
+    get_leagues_to_refresh,
+    get_nfl_state,
+    invoke_onboarder_lambda,
+    logger,
+    pace_dispatch,
+)
 
 from common.tracing import init_tracing, traced_handler
 
 # Originate a trace per refreshed league → Better Stack (backend/otel-tracing); the onboarder/
 # processor continue it. A no-op unless tracing is configured, so tests /
 # unconfigured envs are unaffected.
-init_tracing("leagueql-sleeper-refresh")
+init_tracing("leagueql-league-refresh")
 
 
 def lambda_handler(event, context) -> dict[str, str | int]:
     """
-    Main handler function for Sleeper refresh.
+    Main handler function for the multi-platform league refresh.
 
     Args:
         event: The event data that triggered the Lambda function.
@@ -22,7 +29,7 @@ def lambda_handler(event, context) -> dict[str, str | int]:
     Returns:
         dict: A response indicating the success of the operation.
     """
-    logger.info("Starting Sleeper refresh execution.")
+    logger.info("Starting league refresh execution.")
     logger.info("Event data: %s", event)
     logger.info(
         "Context data: request_id=%s, function_name=%s",
@@ -31,7 +38,7 @@ def lambda_handler(event, context) -> dict[str, str | int]:
     )
 
     # Fetch current NFL state. Raise on failure so the Lambda's Errors metric
-    # increments and the sleeper_refresh_errors alarm fires — otherwise the
+    # increments and the league_refresh_errors alarm fires — otherwise the
     # scheduled run would report success while refreshing nothing.
     try:
         nfl_state = get_nfl_state()
@@ -78,53 +85,71 @@ def lambda_handler(event, context) -> dict[str, str | int]:
         current_season,
     )
 
-    # Query DynamoDB for all Sleeper leagues. Raise on failure (see NFL-state note
-    # above) so a query failure that refreshes zero leagues trips the error alarm.
+    # Query DynamoDB for all Sleeper and Yahoo leagues. Raise on failure (see NFL-state
+    # note above) so a query failure that refreshes zero leagues trips the error alarm.
     try:
-        sleeper_leagues = get_sleeper_leagues(current_season)
+        leagues = get_leagues_to_refresh(current_season)
     except Exception:
-        logger.error("Failed to fetch Sleeper leagues from DynamoDB", exc_info=True)
+        logger.error("Failed to fetch leagues from DynamoDB", exc_info=True)
         raise
 
-    if not sleeper_leagues:
-        logger.info("No Sleeper leagues found in DynamoDB")
+    if not leagues:
+        logger.info("No leagues found to refresh")
         return {
             "statusCode": 200,
             "body": json.dumps(
-                {"status": "succeeded", "message": "No Sleeper leagues to refresh"}
+                {"status": "succeeded", "message": "No leagues to refresh"}
             ),
         }
 
-    logger.info("Found %d Sleeper leagues to refresh", len(sleeper_leagues))
+    logger.info("Found %d leagues to refresh", len(leagues))
 
-    # Invoke onboarder lambda for each league
+    # Group by platform so pacing is applied within a platform's dispatches (the
+    # per-platform API is what we protect from a burst).
+    leagues_by_platform = defaultdict(list)
+    for league in leagues:
+        leagues_by_platform[league["platform"]].append(league)
+
     success_count = 0
     failure_count = 0
 
-    for league in sleeper_leagues:
-        correlation_id = str(uuid.uuid4())
-        # Each league gets its own root trace (the cron has no inbound context); the
-        # active span is what propagates to the onboarder via the invoke payload.
-        with traced_handler("sleeper_refresh.league", root=True):
-            try:
-                invoke_onboarder_lambda(
-                    league["league_id"],
-                    canonical_league_id=league["canonical_league_id"],
-                    correlation_id=correlation_id,
-                )
-                success_count += 1
-                logger.info(
-                    "Successfully triggered refresh for league %s with correlation_id %s",
-                    league["league_id"],
-                    correlation_id,
-                )
-            except Exception as e:  # noqa: BLE001 — isolate one league's failure
-                failure_count += 1
-                logger.error(
-                    "Failed to trigger refresh for league %s: %s",
-                    league["league_id"],
-                    e,
-                )
+    for platform, platform_leagues in leagues_by_platform.items():
+        for index, league in enumerate(platform_leagues):
+            # Pace between consecutive same-platform dispatches (not before the first,
+            # and not between platform groups) so the fanned-out onboarders don't hit
+            # a platform's API all at once.
+            if index > 0:
+                pace_dispatch()
+
+            correlation_id = str(uuid.uuid4())
+            # Each league gets its own root trace (the cron has no inbound context); the
+            # active span is what propagates to the onboarder via the invoke payload.
+            with traced_handler("league_refresh.league", root=True) as span:
+                if span is not None:
+                    span.set_attribute("platform", platform)
+                try:
+                    invoke_onboarder_lambda(
+                        league["league_id"],
+                        canonical_league_id=league["canonical_league_id"],
+                        correlation_id=correlation_id,
+                        platform=platform,
+                        owner_user_id=league["owner_user_id"],
+                    )
+                    success_count += 1
+                    logger.info(
+                        "Successfully triggered refresh for %s league %s with correlation_id %s",
+                        platform,
+                        league["league_id"],
+                        correlation_id,
+                    )
+                except Exception as e:  # noqa: BLE001 — isolate one league's failure
+                    failure_count += 1
+                    logger.error(
+                        "Failed to trigger refresh for %s league %s: %s",
+                        platform,
+                        league["league_id"],
+                        e,
+                    )
 
     logger.info(
         "Refresh complete: %d succeeded, %d failed",
@@ -138,8 +163,7 @@ def lambda_handler(event, context) -> dict[str, str | int]:
     # the failed dispatches).
     if failure_count > 0:
         raise RuntimeError(
-            f"Failed to trigger refresh for {failure_count} of "
-            f"{len(sleeper_leagues)} Sleeper leagues"
+            f"Failed to trigger refresh for {failure_count} of {len(leagues)} leagues"
         )
 
     return {
@@ -147,7 +171,7 @@ def lambda_handler(event, context) -> dict[str, str | int]:
         "body": json.dumps(
             {
                 "status": "succeeded",
-                "total_leagues": len(sleeper_leagues),
+                "total_leagues": len(leagues),
                 "success_count": success_count,
                 "failure_count": failure_count,
             }
