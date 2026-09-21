@@ -138,6 +138,12 @@ def before_all(context):
     )
     sys.modules["sleeper_client"] = sleeper_client_mod
 
+    # onboarding_service also imports yahoo_client under its bare name.
+    yahoo_client_mod = _load_module(
+        "onboarder.yahoo_client", _ONBOARDER_SRC / "yahoo_client.py"
+    )
+    sys.modules["yahoo_client"] = yahoo_client_mod
+
     _load_module("onboarding_service", _ONBOARDER_SRC / "onboarding_service.py")
 
     onboarder_handler_mod = _load_module(
