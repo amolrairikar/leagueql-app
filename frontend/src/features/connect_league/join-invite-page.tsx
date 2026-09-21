@@ -62,8 +62,9 @@ export default function JoinInvitePage() {
   // Strict Mode / re-renders) so the token is only submitted a single time.
   useEffect(() => {
     if (!isSignedIn || attempted.current || invalidLink) return;
-    // Narrowed by `invalidLink`, but TS can't see it, so guard for the types.
-    if (!leagueId || !token || !platform || platform === 'SLEEPER') return;
+    // `invalidLink` already narrows out null/Sleeper (TS sees the aliased
+    // condition); this guard re-narrows for the closure below.
+    if (!leagueId || !token || !platform) return;
     attempted.current = true;
 
     let cancelled = false;

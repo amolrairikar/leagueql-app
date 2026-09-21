@@ -4,6 +4,7 @@ import { expect } from 'vitest';
 
 import { MembershipGuard } from '../membership-guard';
 
+import type { Platform } from '@/lib/cookie-handler';
 import { leagueMetadata, leagueMetadataError, server } from '@/test/msw/server';
 import { renderRoute } from '@/test/render';
 
@@ -11,19 +12,25 @@ const feature = loadFeature(
   'src/features/ownership/__tests__/membership-guard.feature',
 );
 
-const league = {
+interface LeagueFixture {
+  leagueId: string;
+  platform: Platform;
+  seasons: string[];
+}
+
+const league: LeagueFixture = {
   leagueId: '100',
-  platform: 'ESPN' as const,
+  platform: 'ESPN',
   seasons: ['2024'],
 };
 
-const yahooLeague = {
+const yahooLeague: LeagueFixture = {
   leagueId: '100',
-  platform: 'YAHOO' as const,
+  platform: 'YAHOO',
   seasons: ['2024'],
 };
 
-async function openGuardedLeague(leagueFixture = league) {
+async function openGuardedLeague(leagueFixture: LeagueFixture = league) {
   await renderRoute(
     <MembershipGuard>
       <div>Protected dashboard</div>
