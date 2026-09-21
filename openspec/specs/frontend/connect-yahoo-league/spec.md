@@ -1,7 +1,7 @@
 # frontend/connect-yahoo-league Specification
 
 ## Purpose
-Add Yahoo as a selectable platform in the Connect League flow. Because Yahoo requires OAuth 2.0, onboarding a Yahoo league routes through an account-link redirect: the user picks Yahoo, enters their league id, and clicks Connect; the app hands off to Yahoo's consent screen and, on return, resumes onboarding. The OAuth handshake and token storage are backend-owned; this capability covers the UI. No Yahoo tokens ever reach the browser. This increment ships the linking round-trip; actual Yahoo league onboarding surfaces a "coming soon" state until the data client lands.
+Add Yahoo as a selectable platform in the Connect League flow. Because Yahoo requires OAuth 2.0, onboarding a Yahoo league routes through an account-link redirect: the user picks Yahoo, enters their league id, and clicks Connect; the app hands off to Yahoo's consent screen and, on return, resumes onboarding. The OAuth handshake and token storage are backend-owned; this capability covers the UI. No Yahoo tokens ever reach the browser. A linked Yahoo league onboards for real through the same pipeline as ESPN and Sleeper.
 
 ## Requirements
 
@@ -38,16 +38,21 @@ Returning to `/connect_league?platform=YAHOO&yahooLinked=1` SHALL show the linke
 - **WHEN** the return carries `yahooLinked=0`
 - **THEN** an inline retry alert ("Yahoo linking was cancelled or failed — try again") is shown with a retry CTA (no global banner, no hard error page)
 
-### Requirement: Surface onboarding and re-link states
-Onboarding a linked Yahoo league SHALL surface the backend signals: a "coming soon" notice while the data client is unshipped, and a "Reconnect your Yahoo account" prompt on a `YAHOO_AUTH` re-link signal.
+### Requirement: Onboard a linked Yahoo league
+Onboarding a linked Yahoo league SHALL start onboarding via `POST /leagues` with `platform=YAHOO`
+and poll the returned job to completion (the same success/progress/error flow used for ESPN and
+Sleeper), and SHALL surface a "Reconnect your Yahoo account" prompt on a `YAHOO_AUTH` re-link
+signal.
 
-#### Scenario: Coming soon
-- **WHEN** a linked Yahoo league is submitted and the backend returns the "coming soon" signal
-- **THEN** the UI shows a neutral "Yahoo onboarding is coming soon" notice, not an error
+#### Scenario: Onboard and poll to completion
+- **WHEN** a linked Yahoo league is submitted and the backend returns `201` with a `correlation_id`
+- **THEN** the UI polls job status and shows progress, then the completed league on success and an
+  inline error alert on a `FAILED` job — with no "coming soon" notice
 
 #### Scenario: Expired/revoked link
-- **WHEN** onboarding returns the `YAHOO_AUTH` re-link signal
-- **THEN** the UI shows a "Reconnect your Yahoo account" prompt that restarts the OAuth step rather than a generic failure
+- **WHEN** onboarding returns the `YAHOO_AUTH` re-link signal (at submit time or as a `FAILED` job)
+- **THEN** the UI shows a "Reconnect your Yahoo account" prompt that restarts the OAuth step rather
+  than a generic failure
 
 ### Requirement: Keep tokens out of the browser and respect demo mode
 Yahoo access/refresh tokens SHALL never appear in the frontend, and connecting (and the OAuth redirect) SHALL be disabled/redirected in demo mode.

@@ -109,7 +109,7 @@
 - [x] 12.1 Lint/format clean (`pipenv run ruff check --fix . && pipenv run ruff format .`;
   `npm run format:fix && npm run lint` in `frontend/`); `openspec validate --all` green; full backend
   unit + component suites and the connect_league vitest suite pass.
-- [ ] 12.2 DEV end-to-end with a real linked Yahoo account: run the player-data task once, then
+- [x] 12.2 DEV end-to-end with a real linked Yahoo account: run the player-data task once, then
   landing page → pick Yahoo → enter league id → Connect → OAuth → job polls to COMPLETED and
   standings/matchups/draft/transactions render; then a `REFRESH` succeeds.
 
