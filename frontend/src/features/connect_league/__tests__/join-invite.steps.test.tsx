@@ -13,8 +13,8 @@ const feature = loadFeature(
   'src/features/connect_league/__tests__/join-invite.feature',
 );
 
-async function openInviteLink(leagueId: string) {
-  const query = new URLSearchParams({ platform: 'ESPN', invite: 'tok' });
+async function openInviteLink(leagueId: string, platform = 'ESPN') {
+  const query = new URLSearchParams({ platform, invite: 'tok' });
   await renderRoute(
     <Routes>
       <Route path="/join/:leagueId" element={<JoinInvitePage />} />
@@ -48,6 +48,51 @@ defineFeature(feature, (test) => {
     );
     then('I am routed to the home page', async () => {
       expect(await screen.findByText('HOME PAGE')).toBeInTheDocument();
+    });
+  });
+
+  test('A valid Yahoo invite link joins the league and opens the dashboard', ({
+    given,
+    and,
+    when,
+    then,
+  }) => {
+    given('I am signed in', () => {
+      setClerkState({ isSignedIn: true });
+    });
+    and('the invite token is accepted', () => {
+      server.use(
+        postJson('/leagues/100/accept-invite', { detail: 'Invite accepted' }),
+        leagueMetadata({ seasons: ['2024'], is_owner: false }),
+      );
+    });
+    when(
+      /^I open the invite link for Yahoo league "(.*)"$/,
+      async (leagueId) => {
+        await openInviteLink(leagueId, 'YAHOO');
+      },
+    );
+    then('I am routed to the home page', async () => {
+      expect(await screen.findByText('HOME PAGE')).toBeInTheDocument();
+    });
+  });
+
+  test('A Sleeper invite link is rejected as invalid', ({
+    given,
+    when,
+    then,
+  }) => {
+    given('I am signed in', () => {
+      setClerkState({ isSignedIn: true });
+    });
+    when(
+      /^I open a Sleeper invite link for league "(.*)"$/,
+      async (leagueId) => {
+        await openInviteLink(leagueId, 'SLEEPER');
+      },
+    );
+    then(/^I see an inline error "(.*)"$/, async (message) => {
+      expect(await screen.findByText(new RegExp(message))).toBeInTheDocument();
     });
   });
 

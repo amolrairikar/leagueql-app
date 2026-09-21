@@ -940,22 +940,22 @@ def create_invite_token(
     platform: Annotated[Platform, Query(description="The platform the league is on")],
     clerk_user_id: Annotated[str, Depends(get_authenticated_user)],
 ) -> APIResponse:
-    """Mint a reusable ESPN invite token (owner-gated, backend/league-authorization).
+    """Mint a reusable invite token (owner-gated, backend/league-authorization).
 
     The owner shares the resulting link with leaguemates; anyone who opens it and
     redeems it via ``accept-invite`` is added to ``members`` without needing their
-    own ESPN cookies. Only the plaintext token is returned (to the owner, once);
-    only its sha256 hash is stored on METADATA. The token has no expiry and is
-    reusable — minting a new one overwrites the stored hash, invalidating any
-    previously shared link (revoke-by-regenerate).
+    own ESPN or Yahoo credentials. Only the plaintext token is returned (to the
+    owner, once); only its sha256 hash is stored on METADATA. The token has no
+    expiry and is reusable — minting a new one overwrites the stored hash,
+    invalidating any previously shared link (revoke-by-regenerate).
 
-    Only applies to ESPN leagues — Sleeper reads are open, so no invite is needed
-    and the request is a 400.
+    Only applies to gated leagues (ESPN and Yahoo) — Sleeper reads are open, so no
+    invite is needed and the request is a 400.
     """
-    if platform != Platform.ESPN:
+    if platform == Platform.SLEEPER:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invite links only apply to ESPN leagues",
+            detail="Invite links only apply to ESPN and Yahoo leagues",
         )
 
     canonical_league_id = lookup_league(league_id=leagueId, platform=platform)
@@ -989,20 +989,22 @@ def accept_invite(
     payload: AcceptInvitePayload,
     clerk_user_id: Annotated[str, Depends(get_authenticated_user)],
 ) -> APIResponse:
-    """Redeem an ESPN invite token to join a league (backend/league-authorization).
+    """Redeem an invite token to join a league (backend/league-authorization).
 
     A signed-in caller submits the token from the owner's invite link; when its
     sha256 hash matches the league's stored ``invite_token_hash`` the caller is
-    added to ``members`` (idempotent) and may read the league — no ESPN cookies
-    required. The token is reusable: the stored hash is left intact so other
-    leaguemates can redeem the same link. The compare is constant-time.
+    added to ``members`` (idempotent) and may read the league — no ESPN or Yahoo
+    credentials of their own required. The token is reusable: the stored hash is
+    left intact so other leaguemates can redeem the same link. The compare is
+    constant-time.
 
-    Only applies to ESPN leagues — Sleeper reads are open, so redemption is a 400.
+    Only applies to gated leagues (ESPN and Yahoo) — Sleeper reads are open, so
+    redemption is a 400.
     """
-    if platform != Platform.ESPN:
+    if platform == Platform.SLEEPER:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invite links only apply to ESPN leagues",
+            detail="Invite links only apply to ESPN and Yahoo leagues",
         )
 
     canonical_league_id = lookup_league(league_id=leagueId, platform=platform)

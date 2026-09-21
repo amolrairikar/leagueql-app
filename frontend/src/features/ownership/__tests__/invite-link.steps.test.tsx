@@ -20,6 +20,12 @@ const league = {
   seasons: ['2024'],
 };
 
+const yahooLeague = {
+  leagueId: '100',
+  platform: 'YAHOO' as const,
+  seasons: ['2024'],
+};
+
 // Keeps the dialog mounted (as the sidebar does) while toggling `open`, so a
 // close-then-reopen exercises what state survives across opens.
 function InviteDialogHarness() {
@@ -68,6 +74,48 @@ defineFeature(feature, (test) => {
       expect(await screen.findByRole('status')).toHaveTextContent(
         /new link created/i,
       );
+    });
+  });
+
+  test('Creating an invite link for a Yahoo league carries the Yahoo platform', ({
+    given,
+    and,
+    when,
+    then,
+  }) => {
+    given(/^the invite dialog is open for Yahoo league "(.*)"$/, async () => {
+      await renderRoute(<InviteLinkDialog open onOpenChange={vi.fn()} />, {
+        league: yahooLeague,
+      });
+    });
+    and(/^the backend mints an invite token "(.*)"$/, (token) => {
+      server.use(
+        postJson('/leagues/100/invite-token', {
+          detail: 'Invite link created',
+          data: { token },
+        }),
+      );
+    });
+    when('I create the invite link', async () => {
+      await userEvent.click(
+        screen.getByRole('button', { name: /create invite link/i }),
+      );
+    });
+    then(/^I see a shareable link containing "(.*)"$/, async (fragment) => {
+      const input =
+        await screen.findByLabelText<HTMLInputElement>('Invite link');
+      expect(input.value).toContain(fragment);
+    });
+  });
+
+  test('The invite dialog copy is platform-neutral', ({ given, then }) => {
+    given(/^the invite dialog is open for Yahoo league "(.*)"$/, async () => {
+      await renderRoute(<InviteLinkDialog open onOpenChange={vi.fn()} />, {
+        league: yahooLeague,
+      });
+    });
+    then(/^I see the dialog copy "(.*)"$/, async (fragment) => {
+      expect(await screen.findByText(new RegExp(fragment))).toBeInTheDocument();
     });
   });
 

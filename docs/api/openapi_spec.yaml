@@ -526,20 +526,21 @@ paths:
 
   /leagues/{leagueId}/invite-token:
     post:
-      summary: Mint an ESPN invite token
+      summary: Mint an invite token
       description: >
         Owner-only (backend/league-authorization). Mints a reusable invite token
-        for an ESPN league, returning the plaintext token once; only its sha256
-        hash is stored (no expiry). The owner shares the resulting link; anyone who
-        redeems it via accept-invite becomes a member without ESPN cookies. Minting
-        a new token overwrites the stored hash, invalidating any prior link. ESPN
-        leagues only — Sleeper returns 400.
+        for a gated league (ESPN or Yahoo), returning the plaintext token once;
+        only its sha256 hash is stored (no expiry). The owner shares the resulting
+        link; anyone who redeems it via accept-invite becomes a member without
+        their own ESPN or Yahoo credentials. Minting a new token overwrites the
+        stored hash, invalidating any prior link. Gated leagues only — Sleeper
+        returns 400.
       operationId: createInviteToken
       parameters:
         - name: leagueId
           in: path
           required: true
-          description: The ESPN league ID
+          description: The fantasy league ID
           schema:
             type: string
             pattern: '^\d+$'
@@ -547,7 +548,7 @@ paths:
         - name: platform
           in: query
           required: true
-          description: The platform the league is on (must be ESPN)
+          description: The platform the league is on (ESPN or YAHOO; SLEEPER returns 400)
           schema:
             type: string
             enum: [ESPN, SLEEPER, YAHOO]
@@ -587,19 +588,19 @@ paths:
 
   /leagues/{leagueId}/accept-invite:
     post:
-      summary: Redeem an ESPN invite token
+      summary: Redeem an invite token
       description: >
-        Adds the authenticated caller to the ESPN league's members when the
-        submitted token matches the stored hash (backend/league-authorization) —
-        no ESPN cookies required. The token is reusable (the stored hash is not
-        consumed). Returns 404 (no outstanding link), 403 (token mismatch), or 400
-        (Sleeper league).
+        Adds the authenticated caller to a gated league's (ESPN or Yahoo) members
+        when the submitted token matches the stored hash
+        (backend/league-authorization) — no ESPN or Yahoo credentials of their own
+        required. The token is reusable (the stored hash is not consumed). Returns
+        404 (no outstanding link), 403 (token mismatch), or 400 (Sleeper league).
       operationId: acceptInvite
       parameters:
         - name: leagueId
           in: path
           required: true
-          description: The ESPN league ID
+          description: The fantasy league ID
           schema:
             type: string
             pattern: '^\d+$'
@@ -607,7 +608,7 @@ paths:
         - name: platform
           in: query
           required: true
-          description: The platform the league is on (must be ESPN)
+          description: The platform the league is on (ESPN or YAHOO; SLEEPER returns 400)
           schema:
             type: string
             enum: [ESPN, SLEEPER, YAHOO]

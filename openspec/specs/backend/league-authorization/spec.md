@@ -1,7 +1,7 @@
 # league-authorization Specification
 
 ## Purpose
-Bind each league to an owner and gate state-changing endpoints to that owner, and gate reads of ESPN leagues to verified members. This closes the object-level authorization gap where any valid Clerk JWT could act on any league ID. The owner is the Clerk user who first onboards a league; ESPN membership is granted by redeeming an owner-shared invite link; ownership can be transferred with a one-time token.
+Bind each league to an owner and gate state-changing endpoints to that owner, and gate reads of private leagues (ESPN and Yahoo) to verified members. This closes the object-level authorization gap where any valid Clerk JWT could act on any league ID. The owner is the Clerk user who first onboards a league; membership is granted by redeeming an owner-shared invite link; ownership can be transferred with a one-time token.
 
 ## Requirements
 

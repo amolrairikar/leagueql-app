@@ -1,7 +1,7 @@
 Feature: Owner invite link (backend/league-authorization / frontend/ownership-transfer)
-  An owner creates a reusable invite link for an ESPN league and shares it with
-  leaguemates. Creating a link surfaces a shareable /join URL carrying the minted
-  token.
+  An owner creates a reusable invite link for a gated league (ESPN or Yahoo) and
+  shares it with leaguemates. Creating a link surfaces a shareable /join URL
+  carrying the platform and the minted token.
 
   Scenario: Creating an invite link shows a shareable /join URL
     Given the invite dialog is open for ESPN league "100"
@@ -9,6 +9,16 @@ Feature: Owner invite link (backend/league-authorization / frontend/ownership-tr
     When I create the invite link
     Then I see a shareable link containing "/join/100?platform=ESPN&invite=invite-tok-123"
     And I see a confirmation that the link was created
+
+  Scenario: Creating an invite link for a Yahoo league carries the Yahoo platform
+    Given the invite dialog is open for Yahoo league "100"
+    And the backend mints an invite token "yahoo-tok-1"
+    When I create the invite link
+    Then I see a shareable link containing "/join/100?platform=YAHOO&invite=yahoo-tok-1"
+
+  Scenario: The invite dialog copy is platform-neutral
+    Given the invite dialog is open for Yahoo league "100"
+    Then I see the dialog copy "their own ESPN or Yahoo login"
 
   Scenario: Regenerating replaces the link with a new one
     Given the invite dialog is open for ESPN league "100"

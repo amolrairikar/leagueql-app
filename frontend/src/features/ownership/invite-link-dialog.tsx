@@ -17,11 +17,12 @@ import { getLeagueCookies } from '@/lib/cookie-handler';
 import { ErrorAlert } from '@/lib/error-alert';
 
 /**
- * Owner-side ESPN invite link (backend/league-authorization / frontend/ownership-transfer).
+ * Owner-side invite link (backend/league-authorization / frontend/ownership-transfer).
  * Mints a reusable invite token and composes the shareable link the owner hands to
  * their leaguemates; anyone who opens it and signs in is added to the league's
- * members without ESPN cookies. Creating a new link revokes the previous one. The
- * plaintext token is shown once; only its hash is stored server-side.
+ * members without their own ESPN or Yahoo login. Creating a new link revokes the
+ * previous one. The plaintext token is shown once; only its hash is stored
+ * server-side.
  */
 export function InviteLinkDialog({
   open,
@@ -97,8 +98,9 @@ export function InviteLinkDialog({
           <DialogTitle>Invite leaguemates</DialogTitle>
           <DialogDescription>
             Create a link and share it with your leaguemates. Anyone who opens
-            it and signs into LeagueQL can view this league — no ESPN cookies
-            needed. Creating a new link revokes the previous one.
+            it and signs into LeagueQL can view this league — they don&apos;t
+            need their own ESPN or Yahoo login. Creating a new link revokes the
+            previous one.
           </DialogDescription>
         </DialogHeader>
         {link ? (

@@ -2317,7 +2317,25 @@ class TestInviteTokenEndpoint:
         kwargs = mock_table.update_item.call_args.kwargs
         assert "invite_token_hash" in kwargs["UpdateExpression"]
 
-    def test_non_espn_returns_400(self, client, mock_table):
+    def test_owner_mints_token_yahoo(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        # Yahoo is a gated platform like ESPN, so it mints invite tokens too.
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+        ]
+        mock_table.update_item.return_value = {}
+        response = client.post("/leagues/123/invite-token?platform=YAHOO")
+        assert response.status_code == 200
+        assert response.json()["data"]["token"]
+        assert (
+            "invite_token_hash"
+            in mock_table.update_item.call_args.kwargs["UpdateExpression"]
+        )
+
+    def test_sleeper_returns_400(self, client, mock_table):
+        # Only Sleeper (open reads) is rejected; ESPN and Yahoo are allowed.
         response = client.post("/leagues/123/invite-token?platform=SLEEPER")
         assert response.status_code == 400
         mock_table.get_item.assert_not_called()
@@ -2358,7 +2376,8 @@ class TestAcceptInviteEndpoint:
             "invite_token_hash": hashlib.sha256(token.encode()).hexdigest(),
         }
 
-    def test_non_espn_returns_400(self, client, mock_table):
+    def test_sleeper_returns_400(self, client, mock_table):
+        # Only Sleeper (open reads) is rejected; ESPN and Yahoo are allowed.
         response = client.post(
             "/leagues/123/accept-invite?platform=SLEEPER", json={"token": "tok"}
         )
@@ -2382,6 +2401,22 @@ class TestAcceptInviteEndpoint:
         # Reusable: the invite hash is left intact (not consumed on redemption).
         assert "REMOVE" not in kwargs["UpdateExpression"]
         assert "invite_token_hash" not in kwargs["UpdateExpression"]
+
+    def test_happy_path_adds_member_yahoo(self, client, mock_table, league_lookup_item):
+        # Yahoo redemption adds the caller to members, same as ESPN.
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": self._meta_with_invite("tok")},
+        ]
+        mock_table.update_item.return_value = {}
+        _as_user("user_9")
+        response = client.post(
+            "/leagues/123/accept-invite?platform=YAHOO", json={"token": "tok"}
+        )
+        assert response.status_code == 200
+        kwargs = mock_table.update_item.call_args.kwargs
+        assert "ADD members" in kwargs["UpdateExpression"]
+        assert kwargs["ExpressionAttributeValues"][":m"] == {"user_9"}
 
     def test_reusable_second_redeem(self, client, mock_table, league_lookup_item):
         mock_table.get_item.side_effect = [

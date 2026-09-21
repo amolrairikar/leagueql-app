@@ -274,7 +274,10 @@ export function AppSidebar() {
                             <span>Transfer Ownership</span>
                           </SidebarMenuButton>
                         </SidebarMenuItem>
-                        {currentPlatform === 'ESPN' && (
+                        {/* Invite links only apply to gated platforms (ESPN and
+                            Yahoo); Sleeper reads are open, so there is nothing to
+                            invite anyone to (backend/league-authorization). */}
+                        {currentPlatform !== 'SLEEPER' && (
                           <SidebarMenuItem>
                             <SidebarMenuButton
                               tooltip="Invite Leaguemates"

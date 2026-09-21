@@ -1,7 +1,7 @@
 # connect-league Specification
 
 ## Purpose
-The `/connect_league` flow lets a signed-in user onboard a new league or refresh an existing one. The user selects a platform, enters a league ID (and latest season + ESPN cookies for private ESPN leagues), submits to `POST /leagues`, and polls `GET /jobs/{jobId}` until the job completes or fails. The flow is ownership/membership aware: a non-member of a private ESPN league is directed to an owner's invite link rather than onboarding.
+The `/connect_league` flow lets a signed-in user onboard a new league or refresh an existing one. The user selects a platform, enters a league ID (and latest season + ESPN cookies for private ESPN leagues), submits to `POST /leagues`, and polls `GET /jobs/{jobId}` until the job completes or fails. The flow is ownership/membership aware: a non-member of a private league (ESPN or Yahoo) is directed to an owner's invite link rather than onboarding.
 
 ## Requirements
 

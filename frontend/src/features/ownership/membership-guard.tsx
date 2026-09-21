@@ -11,7 +11,8 @@ import { getLeagueCookies, isDemoMode } from '@/lib/cookie-handler';
 type GateState = 'loading' | 'ok' | 'denied';
 
 /**
- * Member-gates ESPN league views (backend/league-authorization / frontend/ownership-transfer). ESPN league data is
+ * Member-gates gated-platform league views (ESPN and Yahoo;
+ * backend/league-authorization / frontend/ownership-transfer). Their league data is
  * confidential, so a non-member's `GET /leagues/{id}` returns 403; this guard
  * detects that and directs the caller to obtain an invite link from the league
  * owner (the invite link is the only non-owner join path) instead of rendering the
@@ -61,7 +62,7 @@ export function MembershipGuard({ children }: { children: React.ReactNode }) {
         <div className="bg-muted flex size-12 items-center justify-center rounded-full">
           <ShieldCheck className="size-6 text-muted-foreground" />
         </div>
-        <h1 className="text-2xl font-bold">This ESPN league is private</h1>
+        <h1 className="text-2xl font-bold">This league is private</h1>
         <p className="text-muted-foreground max-w-md">
           You&apos;re not a member of this league yet. Ask the league owner to
           share their invite link with you, then open that link to join and
