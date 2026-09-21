@@ -24,6 +24,7 @@ from diagrams.aws.integration import (
 )
 from diagrams.aws.management import SystemsManagerParameterStore
 from diagrams.aws.network import APIGateway
+from diagrams.aws.security import KeyManagementService
 from diagrams.aws.storage import S3
 from diagrams.generic.blank import Blank
 from diagrams.generic.storage import Storage
@@ -62,6 +63,7 @@ with Diagram(
         clerk = Auth0("Clerk\n(auth)")
         espn = Client("ESPN API")
         sleeper = Client("Sleeper API")
+        yahoo = Client("Yahoo API\n(OAuth 2.0)")
         # Text-only node (no vendor icon) for the OTEL / Better Stack observability backend.
         betterstack = Blank("OTEL\nBetter Stack (traces + RUM)")
 
@@ -89,15 +91,17 @@ with Diagram(
             sleeper_refresh = Lambda("Sleeper refresh\n(weekly)")
             player_meta = Lambda("Player metadata\nrefresher")
             stats_task = Fargate("Sleeper stats\nrefresher (Fargate)")
+            yahoo_stats_task = Fargate("Yahoo player-data\nrefresher (Fargate)")
             admin_report = Lambda("Admin onboarding\nreport (nightly, prod)")
 
         discord_fn = Lambda("Discord notifier\nLambda")
         sns = SimpleNotificationServiceSns("SNS\n(alerts)")
 
         with Cluster("Data stores"):
-            ddb = Dynamodb("DynamoDB\n(views, job status,\ncounts)")
+            ddb = Dynamodb("DynamoDB\n(views, job status,\ncounts, Yahoo tokens)")
             s3 = S3("S3\n(raw API payloads)")
             ssm = SystemsManagerParameterStore("SSM\n(flags + secrets)")
+            kms = KeyManagementService("KMS\n(Yahoo token key)")
 
     discord = Discord("Discord\n(ops alerts)")
 
@@ -116,7 +120,9 @@ with Diagram(
     api >> ASYNC >> onboarder
     api >> DATA >> ddb  # job status, metadata reads/writes
     onboarder >> Edge(label="poison") >> dlq
-    onboarder >> Edge(label="fetch seasons") >> [espn, sleeper]
+    onboarder >> Edge(label="fetch seasons") >> [espn, sleeper, yahoo]
+    # Yahoo onboarding decrypts the owner's stored token to authenticate the fetch.
+    onboarder >> Edge(label="decrypt Yahoo token") >> kms
     onboarder >> Edge(label="raw payloads +\nmanifest.json") >> s3
     (
         s3
@@ -126,16 +132,38 @@ with Diagram(
     processor >> Edge(label="precomputed views") >> ddb
 
     # ── Scheduled jobs ────────────────────────────────────────────────────────
-    evb >> SCHED >> [sleeper_refresh, player_meta, stats_task, admin_report]
+    (
+        evb
+        >> SCHED
+        >> [
+            sleeper_refresh,
+            player_meta,
+            stats_task,
+            yahoo_stats_task,
+            admin_report,
+        ]
+    )
     sleeper_refresh >> ASYNC >> onboarder
     # Player metadata + Sleeper stats land in S3; the processor reads both prefixes
     # (alongside the raw payloads) when building precomputed views.
     player_meta >> Edge(label="player metadata\nJSON") >> s3
     stats_task >> Edge(label="player stats\nJSON") >> s3
+    # The Yahoo player-data task uses a service Yahoo credential (decrypted via KMS) to fetch
+    # player metadata + season scoring, writing both caches the processor reads.
+    yahoo_stats_task >> Edge(label="fetch players\n+ stats") >> yahoo
+    yahoo_stats_task >> Edge(label="decrypt service token") >> kms
+    yahoo_stats_task >> Edge(label="player metadata +\nstats JSON") >> s3
     # Nightly onboarding-health digest: reads the METADATA all-leagues index (GSI3)
     # and posts to the same Discord channel as the alert notifier (webhook URL from SSM).
     admin_report >> Edge(label="query GSI3\n(METADATA)") >> ddb
     admin_report >> Edge(label="webhook URL from SSM") >> discord
+
+    # ── Yahoo OAuth link (backend/yahoo-oauth) ────────────────────────────────
+    # The API Lambda runs the OAuth handshake (authorize/callback), reads the Yahoo
+    # client credentials from SSM, encrypts the per-user tokens with KMS, and stores the
+    # ciphertext in DynamoDB. No Yahoo token ever reaches the browser.
+    api >> Edge(label="OAuth 2.0\n(authorize/callback)") >> yahoo
+    api >> Edge(label="encrypt/decrypt\ntokens") >> kms
 
     # ── Alerting & config ─────────────────────────────────────────────────────
     sns >> discord_fn >> Edge(label="webhook URL from SSM") >> discord

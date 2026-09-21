@@ -23,12 +23,13 @@ type JoinState = 'joining' | 'error';
  * Invite-link redemption page (`/join/:leagueId`,
  * backend/league-authorization / frontend/ownership-transfer).
  *
- * A leaguemate opens the owner-shared link `/join/{leagueId}?platform=ESPN&invite={token}`.
+ * A leaguemate opens the owner-shared link `/join/{leagueId}?platform={ESPN|Yahoo}&invite={token}`.
  * If signed out, an embedded Clerk sign-in returns them to this same URL after
- * auth. Once signed in, the token is redeemed via `accept-invite` (no ESPN cookies
- * required); on success the caller is added to the league's members, the league
- * cookies are set, and they are routed to the dashboard. An invalid or revoked
- * token surfaces an inline error asking for a fresh link.
+ * auth. Once signed in, the token is redeemed via `accept-invite` (no ESPN or
+ * Yahoo credentials of their own required); on success the caller is added to the
+ * league's members, the league cookies are set, and they are routed to the
+ * dashboard. An invalid or revoked token surfaces an inline error asking for a
+ * fresh link.
  */
 export default function JoinInvitePage() {
   const { isSignedIn, isLoaded } = useUser();
@@ -41,7 +42,10 @@ export default function JoinInvitePage() {
   const token = searchParams.get('invite');
   // Validated at render time (not in the effect) so no state is set synchronously
   // inside the effect body — a malformed link starts in the error state directly.
-  const invalidLink = !leagueId || !token || platform !== 'ESPN';
+  // Invite links only apply to gated platforms (ESPN and Yahoo); a Sleeper or
+  // missing platform is not a valid invite (backend/league-authorization).
+  const invalidLink =
+    !leagueId || !token || !platform || platform === 'SLEEPER';
 
   const [state, setState] = useState<JoinState>(
     invalidLink ? 'error' : 'joining',
@@ -59,7 +63,7 @@ export default function JoinInvitePage() {
   useEffect(() => {
     if (!isSignedIn || attempted.current || invalidLink) return;
     // Narrowed by `invalidLink`, but TS can't see it, so guard for the types.
-    if (!leagueId || !token || platform !== 'ESPN') return;
+    if (!leagueId || !token || !platform || platform === 'SLEEPER') return;
     attempted.current = true;
 
     let cancelled = false;

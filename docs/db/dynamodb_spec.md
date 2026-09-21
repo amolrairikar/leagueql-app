@@ -8,7 +8,7 @@
 | Billing mode | On-demand (pay-per-request) |
 | Primary key | `PK` (String) + `SK` (String) |
 | GSIs | `GSI1` - Get all league IDs for a canonical league ID; `GSI2` - Look up a league by platform and league ID; `GSI3` - List all onboarded leagues (sparse index over METADATA items) |
-| TTL | Enabled on the `ttl` attribute (Unix epoch seconds). Only JOB_STATUS items set it, so old onboard/refresh/migrate jobs are reaped ~24h after their last write; items without a `ttl` attribute never expire |
+| TTL | Enabled on the `ttl` attribute (Unix epoch seconds). JOB_STATUS items set it (~24h, reaping old onboard/refresh/migrate jobs) and OAUTH_STATE items set it (~10min, reaping unused Yahoo OAuth states); items without a `ttl` attribute never expire |
 
 ---
 
@@ -125,19 +125,19 @@ the league will not appear as onboarded and a retry will re-run the full onboard
 |---|---|---|---|
 | `PK` | String | Yes | `LEAGUE#{league_id}` |
 | `SK` | String | Yes | `METADATA` |
-| `platform` | String | Yes | Platform the league belongs to. Enum: `ESPN`, `SLEEPER` |
+| `platform` | String | Yes | Platform the league belongs to. Enum: `ESPN`, `SLEEPER`, `YAHOO` |
 | `onboarded_at` | String | Yes | ISO 8601 timestamp of when the league was onboarded |
 | `last_refresh_at` | String | No | ISO 8601 timestamp of when the most recent refresh completed successfully. Used to enforce the per-league weekly refresh cooldown (a manual refresh is rejected with `429` while this is less than 7 days old). |
 | `last_accessed_at` | String | No | ISO 8601 (UTC) timestamp of when a member last opened the league via `GET /leagues/{leagueId}` (backend/league-access-tracking). Written at most once per hour (app-side throttle); absent on older items and on leagues never opened since the field shipped. Used to identify stale leagues for future pruning/archival. |
 | `league_name` | String | No | League name from the most recent season's settings |
 | `owner_user_id` | String | No | Clerk user ID of the league's owner — the authorization anchor for mutating endpoints (backend/league-authorization). Set **once** on first ONBOARD; never overwritten by REFRESH/MIGRATE. Absent for system-initiated onboards. |
-| `members` | String Set | No | Clerk user IDs entitled to **read** an ESPN league (backend/league-authorization). Seeded with the owner at onboard; a leaguemate is `ADD`ed when they redeem an owner's invite link via `POST /leagues/{id}/accept-invite`. Unused for Sleeper (Sleeper reads are open). |
-| `invite_token_hash` | String | No | sha256 of the league's reusable ESPN invite token (backend/league-authorization). Plaintext is never stored; set by `POST /leagues/{id}/invite-token` and matched (not removed) on each `POST /leagues/{id}/accept-invite`. No expiry — minting a new token overwrites this hash, revoking the prior link. |
+| `members` | String Set | No | Clerk user IDs entitled to **read** a gated league — ESPN or Yahoo (backend/league-authorization). Seeded with the owner at onboard; a leaguemate is `ADD`ed when they redeem an owner's invite link via `POST /leagues/{id}/accept-invite`. Unused for Sleeper (Sleeper reads are open). |
+| `invite_token_hash` | String | No | sha256 of the gated league's (ESPN or Yahoo) reusable invite token (backend/league-authorization). Plaintext is never stored; set by `POST /leagues/{id}/invite-token` and matched (not removed) on each `POST /leagues/{id}/accept-invite`. No expiry — minting a new token overwrites this hash, revoking the prior link. |
 | `transfer_token_hash` | String | No | sha256 of an outstanding ownership-transfer token (backend/league-authorization). Plaintext is never stored; set by `POST /leagues/{id}/transfer-token` and removed when redeemed. |
 | `transfer_token_expires_at` | String | No | ISO 8601 (UTC) expiry of the outstanding transfer token (backend/league-authorization). |
 | `active_job_id` | String | No | Concurrency-guard pointer to the league's most recently started in-flight job. Holds the `correlation_id` of the current onboard/refresh/migrate; the API dereferences it to the `JOB#{correlation_id}` / `JOB_STATUS` item and rejects a duplicate request only while that job is `IN_PROGRESS`. Written best-effort on job start; stale pointers self-heal because the JOB_STATUS item carries a 24h TTL. |
-| `active_platform` | String | No | Current platform the league is served from after an ESPN → Sleeper migration. Set to the destination platform when a migration is initiated; before any migration `platform` is authoritative. Enum: `ESPN`, `SLEEPER`. |
-| `migrated_from` | String | No | Source platform recorded when a league is migrated to a new platform (e.g. `ESPN` when migrating ESPN → Sleeper). Enum: `ESPN`, `SLEEPER`. |
+| `active_platform` | String | No | Current platform the league is served from after an ESPN → Sleeper migration. Set to the destination platform when a migration is initiated; before any migration `platform` is authoritative. Enum: `ESPN`, `SLEEPER`, `YAHOO`. |
+| `migrated_from` | String | No | Source platform recorded when a league is migrated to a new platform (e.g. `ESPN` when migrating ESPN → Sleeper). Enum: `ESPN`, `SLEEPER`, `YAHOO`. |
 | `migrated_at` | String | No | ISO 8601 (UTC) timestamp of when a platform migration was initiated (set together with `active_platform` and `migrated_from`). |
 
 **Example:**
@@ -728,7 +728,7 @@ job's item.
 | `failure_code` | String | No | Machine-readable failure classification, only set on `FAILED`. Enum: `INVALID_INPUT`, `ESPN_AUTH`, `NOT_FOUND`, `NOT_STARTED`, `UPSTREAM`, `PROCESSING`, `INTERNAL` |
 | `failure_reason` | String | No | User-facing failure message derived from `failure_code`. Never contains raw exception detail, credentials, or stack traces |
 | `league_id` | String | No | Platform league ID, recorded for observability when known |
-| `platform` | String | No | Platform the job targets (observability). Enum: `ESPN`, `SLEEPER` |
+| `platform` | String | No | Platform the job targets (observability). Enum: `ESPN`, `SLEEPER`, `YAHOO` |
 | `canonical_league_id` | String | No | Canonical league ID, recorded for observability when known |
 
 **Example:**
@@ -745,6 +745,74 @@ job's item.
   "failure_reason": "We couldn't find that league on ESPN. Please confirm the league ID is correct.",
   "league_id": "123456789",
   "platform": "ESPN"
+}
+```
+</details>
+
+<details>
+<summary><b>YAHOO_OAUTH</b></summary>
+
+Per-user Yahoo OAuth link (backend/yahoo-oauth). Written by `GET /leagues/yahoo/oauth/callback` after a
+successful code→token exchange and refreshed on `grant_type=refresh_token`. Keyed by the
+Clerk user id (not a league), so onboarding gates and the future Yahoo data client can find a
+caller's tokens. Access and refresh tokens are **KMS-encrypted** (base64 ciphertext); the
+plaintext never appears in logs, traces, API responses, or Terraform state. No TTL — the link
+persists until the user re-links or revokes access.
+
+| Attribute | Type | Required | Description |
+|---|---|---|---|
+| `PK` | String | Yes | `USER#{clerk_user_id}` |
+| `SK` | String | Yes | `YAHOO_OAUTH` |
+| `access_token` | String | Yes | KMS-encrypted (base64) Yahoo access token (1-hour lifetime) |
+| `refresh_token` | String | Yes | KMS-encrypted (base64) Yahoo refresh token (long-lived; may rotate on refresh) |
+| `token_type` | String | Yes | Yahoo token type, e.g. `bearer` |
+| `expires_at` | Number | Yes | Unix epoch seconds when the access token expires; the code refreshes within a skew before this |
+| `updated_at` | Number | Yes | Unix epoch seconds of the most recent write |
+
+**Example:**
+```json
+{
+  "PK": "USER#user_2abc123",
+  "SK": "YAHOO_OAUTH",
+  "access_token": "AQID...base64-kms-ciphertext...",
+  "refresh_token": "AQID...base64-kms-ciphertext...",
+  "token_type": "bearer",
+  "expires_at": 1725238800,
+  "updated_at": 1725235200
+}
+```
+</details>
+
+<details>
+<summary><b>OAUTH_STATE</b></summary>
+
+Single-use Yahoo OAuth `state` (backend/yahoo-oauth). Written by `GET /leagues/yahoo/oauth/authorize`
+to bind the consent flow to the caller and carry the pending `league_id` across the stateless
+authorize→callback redirect. `GET /leagues/yahoo/oauth/callback` reads it, deletes it (single-use), and
+rejects any state past `expires_at`. A ~10-minute `ttl` reaps unused states.
+
+| Attribute | Type | Required | Description |
+|---|---|---|---|
+| `PK` | String | Yes | `OAUTH_STATE#{state}` (`state` is a URL-safe random token) |
+| `SK` | String | Yes | `YAHOO` |
+| `clerk_user_id` | String | Yes | The authenticated caller the state is bound to |
+| `league_id` | String | Yes | The Yahoo league id to resume onboarding for after the callback |
+| `code_verifier` | String | Yes | PKCE `code_verifier` (Yahoo requires PKCE); the callback sends it in the token exchange. Never leaves the backend |
+| `created_at` | Number | Yes | Unix epoch seconds the state was minted |
+| `expires_at` | Number | Yes | Unix epoch seconds after which the state is invalid (checked on read) |
+| `ttl` | Number | Yes | Unix epoch seconds after which DynamoDB TTL reaps the item (~10min) |
+
+**Example:**
+```json
+{
+  "PK": "OAUTH_STATE#Rk9v3nS2...urlsafe...",
+  "SK": "YAHOO",
+  "clerk_user_id": "user_2abc123",
+  "league_id": "45.l.678",
+  "code_verifier": "dBjftJeZ4CVP...urlsafe-43-128-chars...",
+  "created_at": 1725235200,
+  "expires_at": 1725235800,
+  "ttl": 1725235800
 }
 ```
 </details>

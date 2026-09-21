@@ -624,3 +624,130 @@ QUERIES = {
         """,
     },
 }
+
+
+# Yahoo rows are shaped (in `_register_yahoo_raw_data`) to match the ESPN view schemas, so the
+# ESPN MATCHUPS / PLAYOFF_BRACKET transforms are reused verbatim, and TRANSACTIONS is the same
+# pre-compiled passthrough. TEAMS is Yahoo-specific: unlike ESPN, Yahoo may expose no manager for a
+# team (private profiles), so it LEFT JOINs members — otherwise a team with no matching member row
+# is dropped, emptying teams_output and (via the INNER JOINs downstream) every dependent view
+# (matchups, standings, playoff bracket, draft). DRAFT is Yahoo-specific too (draft_picks columns
+# differ).
+QUERIES["TEAMS"]["YAHOO"] = """
+SELECT
+    m.displayName AS display_name,
+    CAST(t.id AS STRING) AS team_id,
+    t.name AS team_name,
+    t.logo AS team_logo,
+    t.season,
+    t.owners[1] AS primary_owner_id,
+    t.owners[2] AS secondary_owner_id,
+    t.rankCalculatedFinal AS final_rank
+FROM teams t
+LEFT JOIN members m
+    ON t.primaryOwner = m.id
+    AND m.season = t.season
+"""
+QUERIES["MATCHUPS"]["YAHOO"] = QUERIES["MATCHUPS"]["ESPN"]
+QUERIES["PLAYOFF_BRACKET"]["YAHOO"] = QUERIES["PLAYOFF_BRACKET"]["ESPN"]
+QUERIES["TRANSACTIONS"]["YAHOO"] = QUERIES["TRANSACTIONS"]["ESPN"]
+QUERIES["DRAFT"]["YAHOO"] = """
+WITH actual_position_ranks AS (
+    SELECT
+        player_id,
+        season,
+        player_name,
+        position,
+        total_points,
+        RANK() OVER (
+            PARTITION BY season, position
+            ORDER BY total_points DESC
+        ) AS actual_position_rank
+    FROM player_scoring_totals
+    WHERE position IS NOT NULL
+),
+team_counts AS (
+    SELECT season, COUNT(DISTINCT CAST(team_key AS STRING)) AS num_teams
+    FROM draft_picks
+    GROUP BY season
+),
+auction_seasons AS (
+    SELECT season, COALESCE(MAX(TRY_CAST(cost AS INTEGER)), 0) > 0 AS is_auction
+    FROM draft_picks
+    GROUP BY season
+),
+replacement_level AS (
+    SELECT
+        apr.season,
+        apr.position,
+        apr.total_points AS replacement_points
+    FROM actual_position_ranks apr
+    INNER JOIN team_counts tc ON apr.season = tc.season
+    WHERE
+        apr.position NOT IN ('K', 'D/ST')
+        AND (
+            (apr.position IN ('RB', 'WR') AND apr.actual_position_rank = CAST(FLOOR(2.5 * tc.num_teams) AS INTEGER) + 1)
+            OR
+            (apr.position NOT IN ('RB', 'WR') AND apr.actual_position_rank = tc.num_teams + 1)
+        )
+),
+draft_with_scoring AS (
+    SELECT
+        dp.*,
+        apr.player_name AS resolved_player_name,
+        apr.position AS resolved_position,
+        apr.total_points,
+        apr.actual_position_rank,
+        a.is_auction,
+        RANK() OVER (
+            PARTITION BY dp.season, apr.position
+            ORDER BY CAST(dp.pick AS INTEGER) ASC
+        ) AS snake_rank,
+        RANK() OVER (
+            PARTITION BY dp.season, apr.position
+            ORDER BY TRY_CAST(dp.cost AS INTEGER) DESC
+        ) AS auction_rank
+    FROM draft_picks dp
+    LEFT JOIN actual_position_ranks apr
+        ON (dp.player_key = apr.player_id AND dp.season = apr.season)
+    INNER JOIN auction_seasons a
+        ON dp.season = a.season
+)
+SELECT
+    CAST(ds.team_key AS STRING) AS team_id,
+    t.display_name AS owner_username,
+    t.team_name,
+    t.team_logo,
+    NULL AS pick_id,
+    ds.round,
+    NULL AS round_pick_number,
+    CAST(ds.pick AS INTEGER) AS overall_pick_number,
+    ds.player_key AS player_id,
+    ds.resolved_player_name AS player_name,
+    ds.resolved_position AS position,
+    ds.total_points,
+    NULL AS keeper,
+    NULL AS reserved_for_keeper,
+    NULL AS auto_draft_type_id,
+    TRY_CAST(ds.cost AS INTEGER) AS bid_amount,
+    NULL AS lineup_slot_id,
+    NULL AS member_id,
+    NULL AS nominating_team_id,
+    NULL AS trade_locked,
+    ds.season,
+    ds.is_auction,
+    CASE WHEN ds.is_auction THEN ds.auction_rank ELSE ds.snake_rank END AS drafted_position_rank,
+    ds.actual_position_rank,
+    (CASE WHEN ds.is_auction THEN ds.auction_rank ELSE ds.snake_rank END)
+        - ds.actual_position_rank AS draft_rank_delta,
+    CASE
+        WHEN ds.resolved_position IN ('K', 'D/ST') THEN NULL
+        ELSE ds.total_points - rl.replacement_points
+    END AS vorp
+FROM draft_with_scoring ds
+INNER JOIN teams_output t
+    ON (CAST(ds.team_key AS STRING) = t.team_id AND ds.season = t.season)
+LEFT JOIN replacement_level rl
+    ON (ds.resolved_position = rl.position AND ds.season = rl.season)
+ORDER BY ds.season, CAST(ds.pick AS INTEGER)
+"""

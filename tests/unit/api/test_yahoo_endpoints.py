@@ -1,0 +1,249 @@
+"""Unit tests for the Yahoo OAuth API routes and the onboarding gate."""
+
+from unittest.mock import patch
+
+import pytest
+
+
+class TestYahooAuthorizeEndpoint:
+    def test_returns_consent_url(self, client, mock_table):
+        with (
+            patch(
+                "yahoo_oauth.create_oauth_state",
+                return_value=("state-1", "challenge-1"),
+            ) as mk_state,
+            patch(
+                "yahoo_oauth.build_authorize_url",
+                return_value="https://api.login.yahoo.com/oauth2/request_auth?x=1",
+            ) as mk_url,
+        ):
+            response = client.get("/leagues/yahoo/oauth/authorize?leagueId=45.l.678")
+
+        assert response.status_code == 200
+        body = response.json()
+        assert (
+            body["data"]["authorize_url"]
+            == "https://api.login.yahoo.com/oauth2/request_auth?x=1"
+        )
+        mk_state.assert_called_once_with("user_1", "45.l.678", flow="ONBOARD")
+        mk_url.assert_called_once_with("state-1", "challenge-1")
+
+    def test_forwards_migrate_flow(self, client, mock_table):
+        with (
+            patch(
+                "yahoo_oauth.create_oauth_state",
+                return_value=("state-1", "challenge-1"),
+            ) as mk_state,
+            patch("yahoo_oauth.build_authorize_url", return_value="https://y/auth"),
+        ):
+            response = client.get(
+                "/leagues/yahoo/oauth/authorize?leagueId=678&flow=MIGRATE"
+            )
+
+        assert response.status_code == 200
+        mk_state.assert_called_once_with("user_1", "678", flow="MIGRATE")
+
+    def test_rejects_unknown_flow(self, client):
+        response = client.get("/leagues/yahoo/oauth/authorize?leagueId=678&flow=BOGUS")
+        assert response.status_code == 422
+
+    def test_requires_league_id(self, client):
+        response = client.get("/leagues/yahoo/oauth/authorize")
+        assert response.status_code == 422
+
+    def test_unauthenticated_returns_401(self, client):
+        import main
+        import routes
+
+        main.app.dependency_overrides.pop(routes.get_authenticated_user, None)
+        try:
+            response = client.get("/leagues/yahoo/oauth/authorize?leagueId=1")
+        finally:
+            main.app.dependency_overrides[routes.get_authenticated_user] = lambda: (
+                "user_1"
+            )
+        assert response.status_code == 401
+
+
+class TestYahooCallbackEndpoint:
+    def test_successful_link_redirects_with_marker(self, client):
+        with (
+            patch(
+                "yahoo_oauth.consume_oauth_state",
+                return_value={
+                    "clerk_user_id": "user_1",
+                    "league_id": "45.l.678",
+                    "code_verifier": "verifier-1",
+                },
+            ),
+            patch(
+                "yahoo_oauth.exchange_code_for_tokens",
+                return_value={"access_token": "at", "refresh_token": "rt"},
+            ),
+            patch("yahoo_oauth.store_tokens") as mk_store,
+        ):
+            response = client.get(
+                "/leagues/yahoo/oauth/callback?code=abc&state=s1",
+                follow_redirects=False,
+            )
+
+        assert response.status_code == 302
+        location = response.headers["location"]
+        assert "platform=YAHOO" in location
+        assert "yahooLinked=1" in location
+        assert "leagueId=45.l.678" in location
+        mk_store.assert_called_once()
+
+    def test_successful_migrate_flow_returns_to_migrate_page(self, client):
+        with (
+            patch("main.YAHOO_MIGRATE_RETURN_URL", "https://app/migrate_league"),
+            patch(
+                "yahoo_oauth.consume_oauth_state",
+                return_value={
+                    "clerk_user_id": "user_1",
+                    "league_id": "678",
+                    "flow": "MIGRATE",
+                    "code_verifier": "verifier-1",
+                },
+            ),
+            patch(
+                "yahoo_oauth.exchange_code_for_tokens",
+                return_value={"access_token": "at", "refresh_token": "rt"},
+            ),
+            patch("yahoo_oauth.store_tokens"),
+        ):
+            response = client.get(
+                "/leagues/yahoo/oauth/callback?code=abc&state=s1",
+                follow_redirects=False,
+            )
+
+        assert response.status_code == 302
+        location = response.headers["location"]
+        assert location.startswith("https://app/migrate_league?")
+        assert "yahooLinked=1" in location
+        assert "leagueId=678" in location
+
+    def test_declined_error_redirects_not_linked(self, client):
+        # Yahoo echoes ``state`` on access_denied; the callback consumes it to recover the
+        # return-context flow, then redirects declined to that flow's page.
+        with patch(
+            "yahoo_oauth.consume_oauth_state",
+            return_value={
+                "clerk_user_id": "user_1",
+                "league_id": "678",
+                "flow": "ONBOARD",
+                "code_verifier": "v",
+            },
+        ):
+            response = client.get(
+                "/leagues/yahoo/oauth/callback?error=access_denied&state=s1",
+                follow_redirects=False,
+            )
+        assert response.status_code == 302
+        assert "yahooLinked=0" in response.headers["location"]
+
+    def test_declined_migrate_flow_returns_to_migrate_page(self, client):
+        with (
+            patch("main.YAHOO_MIGRATE_RETURN_URL", "https://app/migrate_league"),
+            patch(
+                "yahoo_oauth.consume_oauth_state",
+                return_value={
+                    "clerk_user_id": "user_1",
+                    "league_id": "678",
+                    "flow": "MIGRATE",
+                    "code_verifier": "v",
+                },
+            ),
+        ):
+            response = client.get(
+                "/leagues/yahoo/oauth/callback?error=access_denied&state=s1",
+                follow_redirects=False,
+            )
+        assert response.status_code == 302
+        location = response.headers["location"]
+        assert location.startswith("https://app/migrate_league?")
+        assert "yahooLinked=0" in location
+
+    @pytest.mark.parametrize("query", ["state=s1", "code=abc"])
+    def test_missing_code_or_state_redirects_not_linked(self, client, query):
+        with patch(
+            "yahoo_oauth.consume_oauth_state",
+            return_value={
+                "clerk_user_id": "user_1",
+                "league_id": "678",
+                "flow": "ONBOARD",
+                "code_verifier": "v",
+            },
+        ):
+            response = client.get(
+                f"/leagues/yahoo/oauth/callback?{query}", follow_redirects=False
+            )
+        assert response.status_code == 302
+        assert "yahooLinked=0" in response.headers["location"]
+
+    def test_invalid_state_redirects_not_linked(self, client):
+        with patch("yahoo_oauth.consume_oauth_state", return_value=None):
+            response = client.get(
+                "/leagues/yahoo/oauth/callback?code=abc&state=bad",
+                follow_redirects=False,
+            )
+        assert response.status_code == 302
+        assert "yahooLinked=0" in response.headers["location"]
+
+    def test_exchange_failure_redirects_not_linked_no_store(self, client):
+        with (
+            patch(
+                "yahoo_oauth.consume_oauth_state",
+                return_value={
+                    "clerk_user_id": "user_1",
+                    "league_id": "x",
+                    "code_verifier": "verifier-1",
+                },
+            ),
+            patch(
+                "yahoo_oauth.exchange_code_for_tokens",
+                side_effect=RuntimeError("yahoo 500"),
+            ),
+            patch("yahoo_oauth.store_tokens") as mk_store,
+        ):
+            response = client.get(
+                "/leagues/yahoo/oauth/callback?code=abc&state=s1",
+                follow_redirects=False,
+            )
+        assert response.status_code == 302
+        assert "yahooLinked=0" in response.headers["location"]
+        mk_store.assert_not_called()
+
+
+class TestYahooOnboardGate:
+    def test_unlinked_returns_403(self, client):
+        with patch("yahoo_oauth.has_valid_link", return_value=False):
+            response = client.post(
+                "/leagues", json={"leagueId": "45.l.678", "platform": "YAHOO"}
+            )
+        assert response.status_code == 403
+        assert "Link your Yahoo account first" in response.json()["detail"]
+
+    def test_linked_new_league_invokes_onboarder(
+        self, client, mock_table, mock_lambda_client
+    ):
+        # A linked caller falls through to the normal onboard path: a not-yet-onboarded
+        # league triggers the onboarder Lambda (no s2/swid; the onboarder resolves the token).
+        mock_table.get_item.return_value = {}
+        mock_lambda_client.invoke.return_value = {}
+        with patch("yahoo_oauth.has_valid_link", return_value=True):
+            response = client.post(
+                "/leagues", json={"leagueId": "678", "platform": "YAHOO"}
+            )
+        assert response.status_code == 201
+        assert response.json()["data"]["correlation_id"]
+        mock_lambda_client.invoke.assert_called_once()
+
+    def test_refresh_unlinked_returns_403(self, client):
+        with patch("yahoo_oauth.has_valid_link", return_value=False):
+            response = client.post(
+                "/leagues?requestType=REFRESH",
+                json={"leagueId": "678", "platform": "YAHOO"},
+            )
+        assert response.status_code == 403
+        assert "Link your Yahoo account first" in response.json()["detail"]

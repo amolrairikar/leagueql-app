@@ -17,12 +17,18 @@ const league = {
   seasons: ['2024'],
 };
 
-async function openGuardedLeague() {
+const yahooLeague = {
+  leagueId: '100',
+  platform: 'YAHOO' as const,
+  seasons: ['2024'],
+};
+
+async function openGuardedLeague(leagueFixture = league) {
   await renderRoute(
     <MembershipGuard>
       <div>Protected dashboard</div>
     </MembershipGuard>,
-    { league },
+    { league: leagueFixture },
   );
 }
 
@@ -40,6 +46,26 @@ defineFeature(feature, (test) => {
       'I open the ESPN league behind the membership guard',
       openGuardedLeague,
     );
+    then(/^I see the guidance "(.*)"$/, async (text) => {
+      expect(await screen.findByText(new RegExp(text))).toBeInTheDocument();
+    });
+    and(/^I do not see the gated content "(.*)"$/, (text) => {
+      expect(screen.queryByText(text)).not.toBeInTheDocument();
+    });
+  });
+
+  test('A Yahoo non-member is directed to an invite link', ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    given('the Yahoo league returns 403 for the current caller', () => {
+      server.use(leagueMetadataError(403));
+    });
+    when('I open the Yahoo league behind the membership guard', async () => {
+      await openGuardedLeague(yahooLeague);
+    });
     then(/^I see the guidance "(.*)"$/, async (text) => {
       expect(await screen.findByText(new RegExp(text))).toBeInTheDocument();
     });

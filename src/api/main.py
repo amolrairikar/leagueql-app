@@ -75,6 +75,7 @@ class CaseInsensitiveEnum(str, Enum):
 class Platform(CaseInsensitiveEnum):
     SLEEPER = "SLEEPER"
     ESPN = "ESPN"
+    YAHOO = "YAHOO"
 
 
 class RequestType(CaseInsensitiveEnum):
@@ -212,6 +213,32 @@ lambda_client = boto3.client("lambda", config=_retry_config)
 s3_client = boto3.client("s3", config=_retry_config)
 S3_BUCKET = os.environ["S3_BUCKET_NAME"]
 
+# KMS client + key used to encrypt Yahoo OAuth tokens at rest (backend/yahoo-oauth).
+# Access/refresh tokens are never stored in plaintext; the key id is a non-sensitive
+# env var. The key is a single key in one region (YAHOO_KMS_REGION) so both regional API
+# Lambdas encrypt/decrypt against the same key — pin the client there rather than the
+# Lambda's own region. Absent in unit tests / local dev, where the Yahoo flow is unused.
+YAHOO_KMS_KEY_ID = os.environ.get("YAHOO_KMS_KEY_ID", "")
+kms_client = boto3.client(
+    "kms",
+    config=_retry_config,
+    region_name=os.environ.get("YAHOO_KMS_REGION") or None,
+)
+
+# Yahoo OAuth endpoints. The redirect_uri MUST match the callback registered in the
+# Yahoo developer app exactly; the return URLs are the fixed frontend paths the callback
+# 302s back to, chosen by the state's return-context ``flow`` (ONBOARD -> /connect_league,
+# MIGRATE -> /migrate_league). All are Terraform-driven per environment.
+YAHOO_REDIRECT_URI = os.environ.get(
+    "YAHOO_REDIRECT_URI", "https://api.leagueql.com/leagues/yahoo/oauth/callback"
+)
+YAHOO_CONNECT_RETURN_URL = os.environ.get(
+    "YAHOO_CONNECT_RETURN_URL", "https://leagueql.app/connect_league"
+)
+YAHOO_MIGRATE_RETURN_URL = os.environ.get(
+    "YAHOO_MIGRATE_RETURN_URL", "https://leagueql.app/migrate_league"
+)
+
 # Minimum interval between `last_accessed_at` writes for a single league (backend/league-access-tracking).
 # `get_league` already reads METADATA, so a fresher timestamp short-circuits the write;
 # this caps the tracking writes to at most one per league per hour by default.
@@ -236,6 +263,7 @@ from helpers import (  # noqa: F401
     get_nfl_state,
     is_job_in_progress,
     lookup_league,
+    owner_has_other_yahoo_leagues,
     publish_failure,
     record_league_access,
     require_league_member,

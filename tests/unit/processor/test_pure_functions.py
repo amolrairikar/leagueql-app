@@ -842,7 +842,7 @@ class TestRegisterRawData:
     def test_raises_for_unsupported_platform(self, processor_handler):
         con = duckdb.connect()
         with pytest.raises(ValueError, match="Unsupported platform"):
-            processor_handler.register_raw_data([], con, platform="YAHOO")
+            processor_handler.register_raw_data([], con, platform="MYFANTASY")
 
 
 class TestBuildESPNBrackets:

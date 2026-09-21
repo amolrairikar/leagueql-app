@@ -33,8 +33,8 @@ const FAQ_ITEMS: FaqItem[] = [
     a: (
       <>
         If you encounter an error while connecting your league, try again once
-        as there may be an issue with the ESPN or Sleeper servers. If the issue
-        persists, file a bug report with{' '}
+        as there may be an issue with the ESPN, Sleeper, or Yahoo servers. If
+        the issue persists, file a bug report with{' '}
         <a
           href="mailto:support@leagueql.com"
           className="text-primary underline underline-offset-2 hover:text-primary/80"
@@ -51,8 +51,8 @@ const FAQ_ITEMS: FaqItem[] = [
     a: (
       <>
         For ESPN leagues, click <Kbd>Refresh League</Kbd> in the sidebar and
-        re-submit your league credentials. Sleeper leagues will refresh
-        automatically each week during the season.
+        re-submit your league credentials. Sleeper and Yahoo leagues will
+        refresh automatically each week during the season.
       </>
     ),
   },
@@ -91,8 +91,8 @@ const FAQ_ITEMS: FaqItem[] = [
           and click <Kbd>Connect</Kbd>.
         </li>
         <li>
-          <span className="font-medium">ESPN:</span> ask the leaguemate who
-          connected the league to create an invite link using{' '}
+          <span className="font-medium">ESPN &amp; Yahoo:</span> ask the
+          leaguemate who connected the league to create an invite link using{' '}
           <Kbd>Invite Leaguemates</Kbd> in the sidebar and send it to you, you
           can open the app using that link.
         </li>

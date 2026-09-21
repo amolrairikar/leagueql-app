@@ -39,6 +39,7 @@ import {
   leagueConnectSchema,
 } from '@/features/connect_league/league-connect-schema';
 import { pollForCompletion, sleep } from '@/features/connect_league/poll';
+import YahooConnectReturn from '@/features/connect_league/yahoo-connect-return';
 import { useEspnExtensionReady } from '@/hooks/use-espn-extension-ready';
 import { ApiError, clearApiCache } from '@/lib/api-client';
 import { clearEspnCookies, setLeagueCookies } from '@/lib/cookie-handler';
@@ -55,6 +56,23 @@ const ONBOARD_RETRY_DELAY_MS = 2000;
 const POLL_INITIAL_DELAY_MS = 5000;
 
 export default function LeagueConnect() {
+  // A Yahoo OAuth return (frontend/connect-yahoo-league) lands here with a
+  // platform=YAHOO query param plus a yahooLinked flag, and needs its own
+  // two-phase UI, not the ESPN/Sleeper onboard form. Dispatch before the form's
+  // hooks run so neither component calls hooks conditionally.
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('platform')?.toUpperCase() === 'YAHOO') {
+    return (
+      <YahooConnectReturn
+        linked={params.get('yahooLinked') === '1'}
+        leagueId={params.get('leagueId') ?? ''}
+      />
+    );
+  }
+  return <LeagueConnectForm />;
+}
+
+function LeagueConnectForm() {
   const navigate = useNavigate();
   const [pollStatus, setPollStatus] = useState<'idle' | 'success' | 'failed'>(
     'idle',

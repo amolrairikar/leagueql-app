@@ -1,6 +1,6 @@
 import { DEMO_LEAGUE_ID, DEMO_PLATFORM } from './demo-constants';
 
-export type Platform = 'ESPN' | 'SLEEPER';
+export type Platform = 'ESPN' | 'SLEEPER' | 'YAHOO';
 
 export interface LeagueCookies {
   leagueId: string;
@@ -21,8 +21,8 @@ function eraseCookie(name: string): void {
   document.cookie = `${name}=${COOKIE_FLAGS}; max-age=0`;
 }
 
-function isPlatform(value: string): value is Platform {
-  return value === 'ESPN' || value === 'SLEEPER';
+export function isPlatform(value: string): value is Platform {
+  return value === 'ESPN' || value === 'SLEEPER' || value === 'YAHOO';
 }
 
 export function getLeagueCookies(): LeagueCookies {

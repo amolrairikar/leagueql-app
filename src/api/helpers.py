@@ -15,7 +15,7 @@ from typing import Any
 import botocore.exceptions
 import main
 import requests as http_requests
-from boto3.dynamodb.conditions import Key
+from boto3.dynamodb.conditions import Attr, Key
 from fastapi import HTTPException, status
 from main import (
     SLEEPER_STATE_URL,
@@ -359,6 +359,49 @@ def delete_all_league_items(canonical_league_id: str, max_attempts: int = 4) -> 
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to fully delete league data",
         )
+
+
+def owner_has_other_yahoo_leagues(
+    clerk_user_id: str, exclude_canonical_league_id: str
+) -> bool:
+    """Return whether ``clerk_user_id`` owns a Yahoo league other than the excluded one.
+
+    Used by ``delete_league`` to decide whether the owner's per-user ``YAHOO_OAUTH``
+    token item is still needed: a single linked Yahoo account backs all of that
+    user's Yahoo leagues, so the token must survive as long as any other Yahoo
+    league remains (backend/delete-league, backend/yahoo-oauth).
+
+    Queries GSI3 (the sparse all-METADATA index), filters to the caller's owned
+    leagues, and inspects each one's effective platform (``active_platform`` falling
+    back to ``platform``, so a league migrated *to* Yahoo counts and one migrated
+    *away* from Yahoo does not). The league being deleted is skipped by PK.
+
+    Args:
+        clerk_user_id: The owner whose remaining Yahoo leagues are counted.
+        exclude_canonical_league_id: Canonical id of the league being deleted.
+
+    Returns:
+        ``True`` if at least one *other* Yahoo league is owned by the user.
+    """
+    excluded_pk = f"LEAGUE#{exclude_canonical_league_id}"
+    kwargs: dict[str, Any] = {
+        "IndexName": "GSI3",
+        "KeyConditionExpression": Key("SK").eq("METADATA"),
+        "FilterExpression": Attr("owner_user_id").eq(clerk_user_id),
+    }
+    while True:
+        response = main.table.query(**kwargs)
+        for item in response.get("Items", []):
+            if item.get("PK") == excluded_pk:
+                continue
+            effective_platform = item.get("active_platform") or item.get("platform")
+            if effective_platform == main.Platform.YAHOO.value:
+                return True
+        last_key = response.get("LastEvaluatedKey")
+        if not last_key:
+            break
+        kwargs["ExclusiveStartKey"] = last_key
+    return False
 
 
 def create_job_status(

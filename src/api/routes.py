@@ -12,11 +12,13 @@ import os
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
+from urllib.parse import urlencode
 
 import botocore.exceptions
 import main
 import requests as http_requests
+import yahoo_oauth
 from boto3.dynamodb.conditions import Key
 from fastapi import (
     APIRouter,
@@ -28,6 +30,7 @@ from fastapi import (
     Response,
     status,
 )
+from fastapi.responses import RedirectResponse
 from helpers import (
     _is_conditional_check_failure,
     add_league_member,
@@ -41,6 +44,8 @@ from helpers import (
     get_nfl_state,
     is_job_in_progress,
     lookup_league,
+    owner_has_other_yahoo_leagues,
+    publish_failure,
     record_league_access,
     require_league_member,
     require_league_owner,
@@ -70,6 +75,7 @@ from common.feature_flags import (
     is_enabled,
 )
 from common.onboarder_invoke import invoke_onboarder
+from common.yahoo_members import YahooLeagueNotFound, fetch_yahoo_members
 
 router = APIRouter()
 
@@ -231,6 +237,17 @@ def onboard_league(
     correlation_id = str(uuid.uuid4())
     correlation_id_var.set(correlation_id)
     platform = Platform(payload.platform)
+
+    if platform == Platform.YAHOO and not yahoo_oauth.has_valid_link(clerk_user_id):
+        # Yahoo onboarding/refresh is gated on a linked OAuth token (backend/yahoo-oauth):
+        # an unlinked caller gets the "link first" signal the frontend routes to the OAuth
+        # step. A linked caller falls through to the normal onboard/refresh path below — the
+        # onboarder resolves the Yahoo access token from the owner's Clerk id (no s2/swid).
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Link your Yahoo account first",
+        )
+
     canonical_league_id = None
 
     try:
@@ -419,6 +436,74 @@ def get_espn_members(
     return APIResponse(detail="Found ESPN members", data=members)
 
 
+@router.post("/leagues/{leagueId}/yahoo_members", status_code=status.HTTP_200_OK)
+def get_yahoo_members(
+    leagueId: Annotated[
+        str, Path(description="The ID of the current league", pattern=r"^\d+$")
+    ],
+    platform: Annotated[Platform, Query(description="The current platform")],
+    yahooLeagueId: Annotated[
+        str,
+        Query(
+            description="The destination Yahoo league ID to fetch members from",
+            pattern=r"^\d+$",
+        ),
+    ],
+    clerk_user_id: Annotated[str, Depends(get_authenticated_user)],
+) -> APIResponse:
+    """Fetch a destination Yahoo league's managers for migration mapping (backend/yahoo-members-proxy).
+
+    Uses the caller's linked user-level Yahoo OAuth token to enumerate their NFL leagues,
+    resolve ``yahooLeagueId`` to its ``league_key``, and fetch that league's managers
+    server-side — the Yahoo access token never reaches the browser.
+
+    ``yahooLeagueId`` is constrained to digits (``^\\d+$``) so attacker-controlled characters
+    (``?``, ``&``, ``/``, ``..``) can't be injected into the upstream Yahoo request path/query.
+
+    Owner-gated (backend/league-authorization): this is the owner's migration manager-mapping
+    tool. A caller with no valid Yahoo link (or a revoked refresh token) gets ``403`` so the
+    frontend routes to the OAuth link; a league that isn't among the caller's Yahoo leagues gets
+    ``404``; Yahoo HTTP/network/parse failures get ``502``.
+    """
+    canonical_league_id = lookup_league(league_id=leagueId, platform=platform)
+    metadata = get_league_metadata(canonical_league_id=canonical_league_id)
+    require_league_owner(canonical_league_id, clerk_user_id, metadata=metadata)
+
+    try:
+        access_token = yahoo_oauth.get_valid_access_token(clerk_user_id)
+    except yahoo_oauth.YahooReauthRequired:
+        # No valid link, or the stored refresh token was revoked — the frontend routes this
+        # 403 to the "Connect with Yahoo" OAuth step (backend/yahoo-oauth).
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Link your Yahoo account first",
+        )
+
+    try:
+        members = fetch_yahoo_members(
+            access_token, yahooLeagueId, http=main.http_requests
+        )
+    except YahooLeagueNotFound:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="That Yahoo league isn't in your Yahoo account",
+        )
+    except http_requests.exceptions.RequestException as e:
+        logger.error("Yahoo API error fetching members: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Failed to fetch Yahoo league members",
+        )
+    except ValueError as e:
+        logger.error("Failed to parse Yahoo members response: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Failed to parse Yahoo API response",
+        )
+
+    return APIResponse(detail="Found Yahoo members", data=members)
+
+
 @router.post("/leagues/{leagueId}/migrate", status_code=status.HTTP_202_ACCEPTED)
 def migrate_league(
     leagueId: Annotated[
@@ -443,6 +528,16 @@ def migrate_league(
 
     league_metadata = get_league_metadata(canonical_league_id)
     require_league_owner(canonical_league_id, clerk_user_id, metadata=league_metadata)
+    if payload.newPlatform == Platform.YAHOO and not yahoo_oauth.has_valid_link(
+        clerk_user_id
+    ):
+        # A Yahoo destination is onboarded with the owner's linked OAuth token (no cookies).
+        # An unlinked caller gets the same "link first" signal the frontend routes to the
+        # Yahoo OAuth step (backend/yahoo-oauth); the members proxy uses the same gate.
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Link your Yahoo account first",
+        )
     if is_job_in_progress(league_metadata):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -521,6 +616,10 @@ def migrate_league(
             request_type="MIGRATE",
             canonical_league_id=canonical_league_id,
             correlation_id=correlation_id,
+            # Migration is owner-gated, so the caller is the league owner; the destination
+            # onboarder needs this to resolve the owner's Yahoo access token (no-op for
+            # ESPN/Sleeper destinations).
+            owner_user_id=clerk_user_id,
         )
     except botocore.exceptions.ClientError as e:
         logger.error("Failed to invoke onboarder Lambda for migration: %s", e)
@@ -569,6 +668,42 @@ def delete_league(
             )
 
         logger.info("Deleted raw API data for league from S3")
+
+        # A user's Yahoo OAuth token lives in a single per-user item
+        # (USER#{id}/YAHOO_OAUTH), not under the league, because one linked Yahoo
+        # account backs all of that user's Yahoo leagues. Deleting a Yahoo league
+        # would otherwise orphan those encrypted credentials forever, so once the
+        # owner (the only caller who reaches here) has no other Yahoo league we
+        # remove the token item too (backend/delete-league, backend/yahoo-oauth).
+        # Effective platform uses active_platform (a league migrated *to* Yahoo
+        # counts; one migrated *away* does not), falling back to platform.
+        #
+        # This whole block is best-effort and fully self-contained: the league data
+        # is already gone, so NOTHING here — including the GSI3 ownership check —
+        # may turn a successful delete into a failure. Any error (a GSI3 IAM/query
+        # error, a token delete error, ...) is alerted and swallowed so the caller
+        # still sees the delete succeed.
+        effective_platform = metadata.get("active_platform") or metadata.get("platform")
+        if effective_platform == Platform.YAHOO.value:
+            try:
+                if not owner_has_other_yahoo_leagues(
+                    clerk_user_id, exclude_canonical_league_id=canonical_league_id
+                ):
+                    yahoo_oauth.delete_tokens(clerk_user_id)
+                    logger.info(
+                        "Removed orphaned Yahoo OAuth link after owner's last Yahoo "
+                        "league delete"
+                    )
+            except Exception as e:  # noqa: BLE001 - cleanup must never fail the delete
+                logger.error(
+                    "Yahoo OAuth cleanup failed after deleting league %s: %s",
+                    canonical_league_id,
+                    e,
+                )
+                publish_failure(
+                    "Failed to clean up Yahoo OAuth token item after deleting league "
+                    f"{canonical_league_id}: {e}"
+                )
 
         return APIResponse(
             detail="Successfully deleted league",
@@ -805,22 +940,22 @@ def create_invite_token(
     platform: Annotated[Platform, Query(description="The platform the league is on")],
     clerk_user_id: Annotated[str, Depends(get_authenticated_user)],
 ) -> APIResponse:
-    """Mint a reusable ESPN invite token (owner-gated, backend/league-authorization).
+    """Mint a reusable invite token (owner-gated, backend/league-authorization).
 
     The owner shares the resulting link with leaguemates; anyone who opens it and
     redeems it via ``accept-invite`` is added to ``members`` without needing their
-    own ESPN cookies. Only the plaintext token is returned (to the owner, once);
-    only its sha256 hash is stored on METADATA. The token has no expiry and is
-    reusable — minting a new one overwrites the stored hash, invalidating any
-    previously shared link (revoke-by-regenerate).
+    own ESPN or Yahoo credentials. Only the plaintext token is returned (to the
+    owner, once); only its sha256 hash is stored on METADATA. The token has no
+    expiry and is reusable — minting a new one overwrites the stored hash,
+    invalidating any previously shared link (revoke-by-regenerate).
 
-    Only applies to ESPN leagues — Sleeper reads are open, so no invite is needed
-    and the request is a 400.
+    Only applies to gated leagues (ESPN and Yahoo) — Sleeper reads are open, so no
+    invite is needed and the request is a 400.
     """
-    if platform != Platform.ESPN:
+    if platform == Platform.SLEEPER:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invite links only apply to ESPN leagues",
+            detail="Invite links only apply to ESPN and Yahoo leagues",
         )
 
     canonical_league_id = lookup_league(league_id=leagueId, platform=platform)
@@ -854,20 +989,22 @@ def accept_invite(
     payload: AcceptInvitePayload,
     clerk_user_id: Annotated[str, Depends(get_authenticated_user)],
 ) -> APIResponse:
-    """Redeem an ESPN invite token to join a league (backend/league-authorization).
+    """Redeem an invite token to join a league (backend/league-authorization).
 
     A signed-in caller submits the token from the owner's invite link; when its
     sha256 hash matches the league's stored ``invite_token_hash`` the caller is
-    added to ``members`` (idempotent) and may read the league — no ESPN cookies
-    required. The token is reusable: the stored hash is left intact so other
-    leaguemates can redeem the same link. The compare is constant-time.
+    added to ``members`` (idempotent) and may read the league — no ESPN or Yahoo
+    credentials of their own required. The token is reusable: the stored hash is
+    left intact so other leaguemates can redeem the same link. The compare is
+    constant-time.
 
-    Only applies to ESPN leagues — Sleeper reads are open, so redemption is a 400.
+    Only applies to gated leagues (ESPN and Yahoo) — Sleeper reads are open, so
+    redemption is a 400.
     """
-    if platform != Platform.ESPN:
+    if platform == Platform.SLEEPER:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invite links only apply to ESPN leagues",
+            detail="Invite links only apply to ESPN and Yahoo leagues",
         )
 
     canonical_league_id = lookup_league(league_id=leagueId, platform=platform)
@@ -890,3 +1027,107 @@ def accept_invite(
     add_league_member(canonical_league_id, clerk_user_id)
     logger.info("Redeemed invite link; added user to league %s", canonical_league_id)
     return APIResponse(detail="Invite accepted")
+
+
+@router.get("/leagues/yahoo/oauth/authorize", status_code=status.HTTP_200_OK)
+def yahoo_authorize(
+    clerk_user_id: Annotated[str, Depends(get_authenticated_user)],
+    leagueId: Annotated[
+        str,
+        Query(
+            description="The Yahoo league id to resume onboarding for", max_length=100
+        ),
+    ],
+    flow: Annotated[
+        Literal["ONBOARD", "MIGRATE"],
+        Query(
+            description="Return context: ONBOARD returns to /connect_league, MIGRATE to /migrate_league"
+        ),
+    ] = "ONBOARD",
+) -> APIResponse:
+    """Start the Yahoo OAuth link (backend/yahoo-oauth).
+
+    Mints a single-use ``state`` bound to the caller (carrying the pending ``leagueId`` and the
+    return-context ``flow``), persists it with a short TTL, and returns the Yahoo consent URL.
+    The frontend performs a full-page redirect to that URL; the client secret never leaves the
+    backend. The callback returns to the page selected by ``flow``.
+    """
+    state, code_challenge = yahoo_oauth.create_oauth_state(
+        clerk_user_id, leagueId, flow=flow
+    )
+    authorize_url = yahoo_oauth.build_authorize_url(state, code_challenge)
+    return APIResponse(
+        detail="Yahoo authorization URL generated",
+        data={"authorize_url": authorize_url},
+    )
+
+
+@router.get("/leagues/yahoo/oauth/callback")
+def yahoo_callback(
+    code: Annotated[str | None, Query()] = None,
+    state: Annotated[str | None, Query()] = None,
+    error: Annotated[str | None, Query()] = None,
+) -> RedirectResponse:
+    """Handle Yahoo's OAuth redirect (backend/yahoo-oauth).
+
+    Public route — Yahoo redirects the browser here with no Clerk JWT. Validates and
+    single-use-consumes ``state``, exchanges the ``code`` for tokens, persists an encrypted
+    ``YAHOO_OAUTH`` item, and 302s back to the frontend page selected by the state's
+    return-context ``flow`` (``MIGRATE`` -> ``/migrate_league``, else ``/connect_league``) with
+    a linked/declined marker. ``state`` is consumed first — even on a declined link (Yahoo
+    echoes it on ``error=access_denied``) — so the return page is recovered from ``flow``; when
+    no usable ``state`` is present the callback falls back to ``/connect_league``. A
+    declined/invalid/failed link writes no token item and never reflects an external redirect
+    target.
+    """
+
+    def _base_for_flow(flow: str) -> str:
+        return (
+            main.YAHOO_MIGRATE_RETURN_URL
+            if flow == "MIGRATE"
+            else main.YAHOO_CONNECT_RETURN_URL
+        )
+
+    def _redirect(
+        linked: bool, return_base: str, league_id: str = ""
+    ) -> RedirectResponse:
+        params: dict[str, str] = {
+            "platform": "YAHOO",
+            "yahooLinked": "1" if linked else "0",
+        }
+        if linked and league_id:
+            params["leagueId"] = league_id
+        return RedirectResponse(
+            url=f"{return_base}?{urlencode(params)}",
+            status_code=status.HTTP_302_FOUND,
+        )
+
+    # Consume state first (when present) so a single-use state is enforced and the return-context
+    # ``flow`` is recoverable even when the user declined — otherwise a MIGRATE decline would
+    # bounce the user to /connect_league.
+    state_payload = yahoo_oauth.consume_oauth_state(state) if state else None
+    return_base = (
+        _base_for_flow(state_payload.get("flow", "ONBOARD"))
+        if state_payload
+        else main.YAHOO_CONNECT_RETURN_URL
+    )
+
+    if error or not code or state_payload is None:
+        logger.info(
+            "Yahoo callback declined or missing/invalid state (error=%s)", error
+        )
+        return _redirect(linked=False, return_base=return_base)
+
+    try:
+        token_response = yahoo_oauth.exchange_code_for_tokens(
+            code, state_payload["code_verifier"]
+        )
+        yahoo_oauth.store_tokens(state_payload["clerk_user_id"], token_response)
+    except Exception as e:  # noqa: BLE001  any exchange/storage failure → declined marker
+        logger.error("Yahoo code exchange failed: %s", type(e).__name__)
+        return _redirect(linked=False, return_base=return_base)
+
+    logger.info("Yahoo account linked for user")
+    return _redirect(
+        linked=True, return_base=return_base, league_id=state_payload["league_id"]
+    )

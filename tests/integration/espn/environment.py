@@ -138,11 +138,17 @@ def before_all(context):
     )
     sys.modules["espn_client"] = espn_client_mod
 
-    # onboarding_service imports sleeper_client too, so it must be importable.
+    # onboarding_service imports sleeper_client + yahoo_client too, so both must
+    # be importable under their bare names.
     sleeper_client_mod = _load_module(
         "onboarder.sleeper_client", _ONBOARDER_SRC / "sleeper_client.py"
     )
     sys.modules["sleeper_client"] = sleeper_client_mod
+
+    yahoo_client_mod = _load_module(
+        "onboarder.yahoo_client", _ONBOARDER_SRC / "yahoo_client.py"
+    )
+    sys.modules["yahoo_client"] = yahoo_client_mod
 
     _load_module("onboarding_service", _ONBOARDER_SRC / "onboarding_service.py")
 

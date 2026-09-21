@@ -1,7 +1,7 @@
-Feature: League ownership and ESPN read authorization (backend/league-authorization)
-  Mutations are owner-gated; ESPN league data is confidential, so reads are
-  member-gated and non-owners join via an owner-shared invite link. Sleeper reads
-  stay open.
+Feature: League ownership and read authorization (backend/league-authorization)
+  Mutations are owner-gated; gated-platform (ESPN and Yahoo) league data is
+  confidential, so reads are member-gated and non-owners join via an owner-shared
+  invite link. Sleeper reads stay open.
 
   Background:
     Given a LEAGUE_LOOKUP exists for league "100" platform "ESPN" canonical "canon-1"
@@ -34,6 +34,19 @@ Feature: League ownership and ESPN read authorization (backend/league-authorizat
     Then the API responds with status 200
     And user "league_mate" is a member of league "canon-1"
     When I GET "/leagues/100?platform=ESPN"
+    Then the API responds with status 200
+    And the response data field "is_owner" equals "False"
+
+  Scenario: A non-member joins a Yahoo league via an invite link, then can read
+    Given a LEAGUE_LOOKUP exists for league "300" platform "YAHOO" canonical "canon-3"
+    And the request is authenticated as "owner_user"
+    When I POST an invite token for league "300" on "YAHOO"
+    Then the API responds with status 200
+    Given the request is authenticated as "yahoo_mate"
+    When I accept the invite for league "300" on "YAHOO" with the minted token
+    Then the API responds with status 200
+    And user "yahoo_mate" is a member of league "canon-3"
+    When I GET "/leagues/300?platform=YAHOO"
     Then the API responds with status 200
     And the response data field "is_owner" equals "False"
 

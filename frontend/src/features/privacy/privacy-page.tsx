@@ -58,7 +58,7 @@ export default function PrivacyPage() {
           <div>
             <h1 className="text-4xl font-bold">Privacy Policy</h1>
             <p className="text-sm text-muted-foreground mt-2">
-              Last updated: June 4, 2026
+              Last updated: September 20, 2026
             </p>
           </div>
 
@@ -67,8 +67,8 @@ export default function PrivacyPage() {
             <p className="text-muted-foreground leading-relaxed">
               LeagueQL (&quot;we&quot;, &quot;our&quot;, &quot;us&quot;) is a
               tool that helps you analyze your fantasy football league history
-              from ESPN and Sleeper platforms. We collect and process league
-              data to provide you with different insights.
+              from ESPN, Sleeper, and Yahoo platforms. We collect and process
+              league data to provide you with different insights.
             </p>
           </section>
 
@@ -79,7 +79,7 @@ export default function PrivacyPage() {
             <div className="space-y-4 text-muted-foreground leading-relaxed">
               <div>
                 <h3 className="font-semibold text-foreground mb-2">
-                  League Data (from ESPN/Sleeper APIs):
+                  League Data (from ESPN/Sleeper/Yahoo APIs):
                 </h3>
                 <ul className="list-disc pl-6 space-y-1">
                   <li>Team names, logos, and owner display names</li>
@@ -103,6 +103,40 @@ export default function PrivacyPage() {
               </div>
               <div>
                 <h3 className="font-semibold text-foreground mb-2">
+                  Yahoo OAuth Tokens (for Yahoo leagues):
+                </h3>
+                <p className="mb-2">
+                  Yahoo does not offer a public read-only data feed the way ESPN
+                  and Sleeper do, so connecting a Yahoo league uses Yahoo&apos;s
+                  official OAuth sign-in. Unlike ESPN cookies, which we never
+                  store, this means we <strong>do</strong> store your Yahoo
+                  authorization:
+                </p>
+                <ul className="list-disc pl-6 space-y-1">
+                  <li>
+                    We store the OAuth access and refresh tokens Yahoo issues
+                    after you authorize LeagueQL. We never receive or store your
+                    Yahoo password.
+                  </li>
+                  <li>
+                    These tokens are stored encrypted at rest and are never
+                    written to logs, shown in the app, or included in API
+                    responses.
+                  </li>
+                  <li>
+                    We use them only to fetch and refresh your Yahoo league data
+                    on your behalf. They are never sold or shared with anyone.
+                  </li>
+                  <li>
+                    You can disconnect at any time: your stored Yahoo tokens are
+                    removed when you request deletion of your league data, and
+                    you can also revoke LeagueQL&apos;s access from your Yahoo
+                    account settings.
+                  </li>
+                </ul>
+              </div>
+              <div>
+                <h3 className="font-semibold text-foreground mb-2">
                   How We Store It:
                 </h3>
                 <ul className="list-disc pl-6 space-y-1">
@@ -114,6 +148,11 @@ export default function PrivacyPage() {
                   <li>
                     ESPN cookies are only used temporarily to fetch private
                     league data and are not stored on our servers
+                  </li>
+                  <li>
+                    Yahoo OAuth tokens are the exception: they are stored, but
+                    encrypted at rest, and used only to fetch and refresh your
+                    Yahoo league data
                   </li>
                   <li>
                     We offer an optional Chrome extension, &quot;LeagueQL ESPN
@@ -146,6 +185,10 @@ export default function PrivacyPage() {
               <li>
                 <strong>Sleeper API:</strong> Source of Sleeper fantasy football
                 data
+              </li>
+              <li>
+                <strong>Yahoo Fantasy API:</strong> Source of Yahoo fantasy
+                football data, accessed via Yahoo OAuth
               </li>
               <li>
                 <strong>AWS:</strong> Application backend hosting

@@ -460,6 +460,82 @@ class TestDeleteLeagueHelpers:
             delete_all_league_items("canonical-abc")
 
 
+class TestOwnerHasOtherYahooLeagues:
+    def test_true_when_another_yahoo_league_owned(self, mock_table):
+        from main import owner_has_other_yahoo_leagues
+
+        mock_table.query.return_value = {
+            "Items": [
+                {"PK": "LEAGUE#deleted", "platform": "YAHOO"},
+                {"PK": "LEAGUE#other", "platform": "YAHOO"},
+            ]
+        }
+        assert owner_has_other_yahoo_leagues("user_1", "deleted") is True
+
+    def test_false_when_only_the_excluded_league(self, mock_table):
+        from main import owner_has_other_yahoo_leagues
+
+        mock_table.query.return_value = {
+            "Items": [{"PK": "LEAGUE#deleted", "platform": "YAHOO"}]
+        }
+        assert owner_has_other_yahoo_leagues("user_1", "deleted") is False
+
+    def test_false_when_other_leagues_not_yahoo(self, mock_table):
+        from main import owner_has_other_yahoo_leagues
+
+        mock_table.query.return_value = {
+            "Items": [
+                {"PK": "LEAGUE#espn", "platform": "ESPN"},
+                {"PK": "LEAGUE#sleeper", "platform": "SLEEPER"},
+            ]
+        }
+        assert owner_has_other_yahoo_leagues("user_1", "deleted") is False
+
+    def test_migrated_away_from_yahoo_does_not_count(self, mock_table):
+        from main import owner_has_other_yahoo_leagues
+
+        # A league migrated away from Yahoo (active_platform SLEEPER) no longer
+        # needs the Yahoo link, so it does not keep the token alive.
+        mock_table.query.return_value = {
+            "Items": [
+                {
+                    "PK": "LEAGUE#migrated_away",
+                    "platform": "YAHOO",
+                    "active_platform": "SLEEPER",
+                }
+            ]
+        }
+        assert owner_has_other_yahoo_leagues("user_1", "deleted") is False
+
+    def test_migrated_to_yahoo_counts(self, mock_table):
+        from main import owner_has_other_yahoo_leagues
+
+        # A league migrated *to* Yahoo (active_platform YAHOO) does need the link.
+        mock_table.query.return_value = {
+            "Items": [
+                {
+                    "PK": "LEAGUE#migrated_to",
+                    "platform": "SLEEPER",
+                    "active_platform": "YAHOO",
+                }
+            ]
+        }
+        assert owner_has_other_yahoo_leagues("user_1", "deleted") is True
+
+    def test_paginates_over_last_evaluated_key(self, mock_table):
+        from main import owner_has_other_yahoo_leagues
+
+        mock_table.query.side_effect = [
+            {
+                "Items": [{"PK": "LEAGUE#deleted", "platform": "YAHOO"}],
+                "LastEvaluatedKey": {"k": 1},
+            },
+            {"Items": [{"PK": "LEAGUE#other", "platform": "YAHOO"}]},
+        ]
+        assert owner_has_other_yahoo_leagues("user_1", "deleted") is True
+        assert mock_table.query.call_count == 2
+
+
 class TestPublishFailure:
     # The shared publish/no-op/error-swallow behavior is covered by
     # tests/unit/common/test_sns.py; here we verify the API binds its own subject.

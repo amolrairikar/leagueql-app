@@ -15,6 +15,8 @@ const TOC_ITEMS = [
   { id: 'chrome-extension', label: 'Chrome Extension', level: 3 },
   { id: 'sleeper-leagues', label: 'Sleeper', level: 2 },
   { id: 'sleeper-form-fields', label: 'Form Fields', level: 3 },
+  { id: 'yahoo-leagues', label: 'Yahoo', level: 2 },
+  { id: 'yahoo-form-fields', label: 'Form Fields', level: 3 },
   { id: 'league-ownership', label: 'League Ownership', level: 2 },
   { id: 'joining-an-espn-league', label: 'Joining an ESPN League', level: 3 },
   { id: 'transferring-ownership', label: 'Transferring Ownership', level: 3 },
@@ -285,9 +287,9 @@ export default function InstructionsPage() {
               Connecting a League
             </SectionHeading>
             <p className="text-muted-foreground leading-relaxed mb-8">
-              On the landing page, select your platform (ESPN or Sleeper) and
-              enter your league ID, then click <Kbd>Connect</Kbd>. What happens
-              next depends on the platform:
+              On the landing page, select your platform (ESPN, Sleeper, or
+              Yahoo) and enter your league ID, then click <Kbd>Connect</Kbd>.
+              What happens next depends on the platform:
             </p>
 
             <div className="space-y-8">
@@ -409,6 +411,69 @@ export default function InstructionsPage() {
                         <>
                           The numeric ID in your Sleeper league URL (e.g.{' '}
                           <Kbd>https://sleeper.com/leagues/12345</Kbd>)
+                        </>,
+                      ],
+                    ]}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <SubHeading id="yahoo-leagues">Yahoo</SubHeading>
+                <p className="text-muted-foreground leading-relaxed mb-4">
+                  Yahoo leagues connect through Yahoo&apos;s official sign-in
+                  (OAuth), so there are no cookies to copy. Select{' '}
+                  <strong className="text-foreground">Yahoo</strong>, enter your
+                  league ID, and click <Kbd>Connect</Kbd>:
+                </p>
+                <ol className="list-decimal pl-6 space-y-2 text-muted-foreground leading-relaxed mb-4">
+                  <li>
+                    You are sent to Yahoo&apos;s consent screen. Sign in to
+                    Yahoo (if you are not already) and click{' '}
+                    <strong className="text-foreground">Agree</strong> to let
+                    LeagueQL read your fantasy data.
+                  </li>
+                  <li>
+                    Yahoo redirects you back to LeagueQL, where onboarding
+                    resumes automatically. You will see the same progress bar as
+                    a Sleeper connect while we pull your league history, then
+                    land on your dashboard.
+                  </li>
+                </ol>
+                <Callout>
+                  You only authorize once. After your Yahoo account is linked,
+                  connecting more Yahoo leagues (or reconnecting later) skips
+                  the consent screen and onboards in place. If your Yahoo
+                  authorization is ever revoked or expires, LeagueQL will prompt
+                  you to reconnect.
+                </Callout>
+                <p className="text-muted-foreground leading-relaxed mb-3">
+                  LeagueQL never sees your Yahoo password. It stores only the
+                  OAuth tokens Yahoo issues, encrypted at rest, and uses them
+                  solely to fetch and refresh your league data. See the{' '}
+                  <a
+                    href="/privacy"
+                    className="text-primary underline underline-offset-2 hover:text-primary/80"
+                  >
+                    Privacy Policy
+                  </a>{' '}
+                  for details.
+                </p>
+                <SubSubHeading id="yahoo-form-fields">
+                  Form Fields
+                </SubSubHeading>
+                <div className="mb-4">
+                  <DocTable
+                    headers={['Field', 'Description']}
+                    rows={[
+                      [
+                        'League ID',
+                        <>
+                          The numeric league ID in your Yahoo fantasy URL (e.g.{' '}
+                          <Kbd>
+                            https://football.fantasysports.yahoo.com/f1/12345
+                          </Kbd>{' '}
+                          → <Kbd>12345</Kbd>)
                         </>,
                       ],
                     ]}

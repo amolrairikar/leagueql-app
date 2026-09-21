@@ -56,6 +56,79 @@ paths:
         uri: "arn:aws:apigateway:${aws_region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations"
         payloadFormatVersion: "2.0"
 
+  /leagues/yahoo/oauth/authorize:
+    get:
+      summary: Start the Yahoo OAuth link
+      description: >
+        Clerk-authenticated (backend/yahoo-oauth). Mints a single-use state bound to the
+        caller (carrying the pending leagueId) and returns the Yahoo consent URL the SPA
+        full-page-redirects to. The client secret never leaves the backend.
+      operationId: yahooAuthorize
+      parameters:
+        - name: leagueId
+          in: query
+          required: true
+          description: The Yahoo league id to resume onboarding for after the callback
+          schema:
+            type: string
+            maxLength: 100
+        - name: flow
+          in: query
+          required: false
+          description: >
+            Return context. ONBOARD (default) returns the callback to /connect_league;
+            MIGRATE returns it to /migrate_league so the migration wizard resumes.
+          schema:
+            type: string
+            enum: [ONBOARD, MIGRATE]
+            default: ONBOARD
+      responses:
+        "200":
+          description: Yahoo consent URL generated
+        "401":
+          description: Unauthenticated
+      security:
+        - ClerkJWT: []
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        httpMethod: POST
+        uri: "arn:aws:apigateway:${aws_region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations"
+        payloadFormatVersion: "2.0"
+
+  /leagues/yahoo/oauth/callback:
+    get:
+      summary: Yahoo OAuth callback
+      description: >
+        Public — no Clerk authorizer (backend/yahoo-oauth). Yahoo redirects the browser here
+        with no JWT after the user authorizes. Validates and single-use-consumes the state,
+        exchanges the code for tokens (PKCE public client, no secret), stores an encrypted per-user token item,
+        and 302-redirects to the frontend /connect_league page with a linked/declined marker.
+      operationId: yahooCallback
+      parameters:
+        - name: code
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: error
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "302":
+          description: Redirect to the frontend connect page with a linked/declined marker
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        httpMethod: POST
+        uri: "arn:aws:apigateway:${aws_region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations"
+        payloadFormatVersion: "2.0"
+
   /leagues/{leagueId}:
     get:
       summary: Get league metadata
@@ -79,7 +152,7 @@ paths:
           description: The name of the platform the fantasy football league is on
           schema:
             type: string
-            enum: [ESPN, SLEEPER]
+            enum: [ESPN, SLEEPER, YAHOO]
             example: "ESPN"
       responses:
         "200":
@@ -119,7 +192,7 @@ paths:
           description: The name of the platform the fantasy football league is on
           schema:
             type: string
-            enum: [ESPN, SLEEPER]
+            enum: [ESPN, SLEEPER, YAHOO]
             example: "ESPN"
       responses:
         "200":
@@ -206,7 +279,7 @@ paths:
           description: The name of the platform the fantasy football league is on
           schema:
             type: string
-            enum: [ESPN, SLEEPER]
+            enum: [ESPN, SLEEPER, YAHOO]
             example: "ESPN"
         - name: queryType
           in: query
@@ -273,7 +346,7 @@ paths:
           description: The current platform the league is on
           schema:
             type: string
-            enum: [ESPN, SLEEPER]
+            enum: [ESPN, SLEEPER, YAHOO]
             example: "SLEEPER"
         - name: espnLeagueId
           in: query
@@ -316,6 +389,59 @@ paths:
         uri: "arn:aws:apigateway:${aws_region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations"
         payloadFormatVersion: "2.0"
 
+  /leagues/{leagueId}/yahoo_members:
+    post:
+      summary: Fetch Yahoo league members
+      description: >
+        Server-side proxy (backend/yahoo-members-proxy) that returns a destination Yahoo
+        league's managers for the migration mapping, using the caller's linked Yahoo OAuth
+        token to resolve the numeric league id to its league_key and fetch its teams. The
+        token never reaches the browser. Owner-gated.
+      operationId: getYahooMembers
+      parameters:
+        - name: leagueId
+          in: path
+          required: true
+          description: The ID of the current (source) league
+          schema:
+            type: string
+            pattern: '^\d+$'
+            example: "12345678"
+        - name: platform
+          in: query
+          required: true
+          description: The current platform the league is on
+          schema:
+            type: string
+            enum: [ESPN, SLEEPER, YAHOO]
+            example: "SLEEPER"
+        - name: yahooLeagueId
+          in: query
+          required: true
+          description: The destination Yahoo (numeric) league ID to fetch members from
+          schema:
+            type: string
+            pattern: '^\d+$'
+            example: "456"
+      responses:
+        "200":
+          $ref: "#/components/responses/YahooMembersResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/LeagueNotFoundError"
+        "502":
+          $ref: "#/components/responses/BadGatewayError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      security:
+        - ClerkJWT: []
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        httpMethod: POST
+        uri: "arn:aws:apigateway:${aws_region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations"
+        payloadFormatVersion: "2.0"
+
   /leagues/{leagueId}/migrate:
     post:
       summary: Migrate a league to a new platform
@@ -339,7 +465,7 @@ paths:
           description: The current platform the league is on
           schema:
             type: string
-            enum: [ESPN, SLEEPER]
+            enum: [ESPN, SLEEPER, YAHOO]
             example: "SLEEPER"
       requestBody:
         required: true
@@ -400,20 +526,21 @@ paths:
 
   /leagues/{leagueId}/invite-token:
     post:
-      summary: Mint an ESPN invite token
+      summary: Mint an invite token
       description: >
         Owner-only (backend/league-authorization). Mints a reusable invite token
-        for an ESPN league, returning the plaintext token once; only its sha256
-        hash is stored (no expiry). The owner shares the resulting link; anyone who
-        redeems it via accept-invite becomes a member without ESPN cookies. Minting
-        a new token overwrites the stored hash, invalidating any prior link. ESPN
-        leagues only — Sleeper returns 400.
+        for a gated league (ESPN or Yahoo), returning the plaintext token once;
+        only its sha256 hash is stored (no expiry). The owner shares the resulting
+        link; anyone who redeems it via accept-invite becomes a member without
+        their own ESPN or Yahoo credentials. Minting a new token overwrites the
+        stored hash, invalidating any prior link. Gated leagues only — Sleeper
+        returns 400.
       operationId: createInviteToken
       parameters:
         - name: leagueId
           in: path
           required: true
-          description: The ESPN league ID
+          description: The fantasy league ID
           schema:
             type: string
             pattern: '^\d+$'
@@ -421,10 +548,10 @@ paths:
         - name: platform
           in: query
           required: true
-          description: The platform the league is on (must be ESPN)
+          description: The platform the league is on (ESPN or YAHOO; SLEEPER returns 400)
           schema:
             type: string
-            enum: [ESPN, SLEEPER]
+            enum: [ESPN, SLEEPER, YAHOO]
             example: "ESPN"
       responses:
         "200":
@@ -461,19 +588,19 @@ paths:
 
   /leagues/{leagueId}/accept-invite:
     post:
-      summary: Redeem an ESPN invite token
+      summary: Redeem an invite token
       description: >
-        Adds the authenticated caller to the ESPN league's members when the
-        submitted token matches the stored hash (backend/league-authorization) —
-        no ESPN cookies required. The token is reusable (the stored hash is not
-        consumed). Returns 404 (no outstanding link), 403 (token mismatch), or 400
-        (Sleeper league).
+        Adds the authenticated caller to a gated league's (ESPN or Yahoo) members
+        when the submitted token matches the stored hash
+        (backend/league-authorization) — no ESPN or Yahoo credentials of their own
+        required. The token is reusable (the stored hash is not consumed). Returns
+        404 (no outstanding link), 403 (token mismatch), or 400 (Sleeper league).
       operationId: acceptInvite
       parameters:
         - name: leagueId
           in: path
           required: true
-          description: The ESPN league ID
+          description: The fantasy league ID
           schema:
             type: string
             pattern: '^\d+$'
@@ -481,10 +608,10 @@ paths:
         - name: platform
           in: query
           required: true
-          description: The platform the league is on (must be ESPN)
+          description: The platform the league is on (ESPN or YAHOO; SLEEPER returns 400)
           schema:
             type: string
-            enum: [ESPN, SLEEPER]
+            enum: [ESPN, SLEEPER, YAHOO]
             example: "ESPN"
       requestBody:
         required: true
@@ -541,7 +668,7 @@ paths:
           description: The platform the league is on
           schema:
             type: string
-            enum: [ESPN, SLEEPER]
+            enum: [ESPN, SLEEPER, YAHOO]
             example: "SLEEPER"
       responses:
         "200":
@@ -600,7 +727,7 @@ paths:
           description: The platform the league is on
           schema:
             type: string
-            enum: [ESPN, SLEEPER]
+            enum: [ESPN, SLEEPER, YAHOO]
             example: "SLEEPER"
       requestBody:
         required: true
@@ -725,7 +852,7 @@ components:
           example: "12345678"
         platform:
           type: string
-          enum: [ESPN, SLEEPER]
+          enum: [ESPN, SLEEPER, YAHOO]
           description: The fantasy platform this league belongs to
           example: "ESPN"
         season:
@@ -790,7 +917,7 @@ components:
           example: "87654321"
         newPlatform:
           type: string
-          enum: [ESPN, SLEEPER]
+          enum: [ESPN, SLEEPER, YAHOO]
           description: The destination platform
           example: "ESPN"
         season:
@@ -945,6 +1072,31 @@ components:
               - owner_id: "{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}"
                 display_name: "John Doe"
 
+    YahooMembersResponse:
+      description: Yahoo league managers returned successfully
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: "#/components/schemas/APIResponse"
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      required: [owner_id, display_name]
+                      properties:
+                        owner_id:
+                          type: string
+                        display_name:
+                          type: string
+          example:
+            detail: "Found Yahoo members"
+            data:
+              - owner_id: "G1ABCDEF"
+                display_name: "Alice"
+
     MigrateSuccessResponse:
       description: Migration successfully initiated
       content:
@@ -995,7 +1147,7 @@ components:
             $ref: "#/components/schemas/ErrorResponse"
           example:
             error: "Unprocessable entity"
-            message: "platform must be one of: ESPN, SLEEPER"
+            message: "platform must be one of: ESPN, SLEEPER, YAHOO"
 
     ConflictError:
       description: Conflict — operation already in progress or league already onboarded
