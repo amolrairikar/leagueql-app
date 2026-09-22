@@ -36,3 +36,8 @@ Feature: Refresh reminder banner (frontend/refresh-reminder-banner)
     Given I am viewing a stale ESPN league in demo mode
     When I render the refresh reminder banner
     Then I do not see the refresh reminder
+
+  Scenario: An auto-refresh-enabled ESPN league shows no reminder
+    Given I am the owner of a stale ESPN league enrolled in auto-refresh
+    When I render the refresh reminder banner
+    Then I do not see the refresh reminder

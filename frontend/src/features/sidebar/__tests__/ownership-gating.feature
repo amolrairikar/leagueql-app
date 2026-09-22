@@ -25,3 +25,10 @@ Feature: Owner-gated sidebar actions (backend/league-authorization / frontend/ow
     Then I see the "Delete League" action
     And I see the "Transfer Ownership" action
     And I do not see the "Refresh League" action
+
+  Scenario: An ESPN owner with auto-refresh enabled does not see Refresh League
+    Given I am the owner of the current ESPN league with auto-refresh enabled
+    When I render the sidebar
+    Then I see the "Delete League" action
+    And I see the "Transfer Ownership" action
+    And I do not see the "Refresh League" action
