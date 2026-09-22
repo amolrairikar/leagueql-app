@@ -18,7 +18,7 @@ interface FaqItem {
 const FAQ_ITEMS: FaqItem[] = [
   {
     q: 'Why do I need to provide my ESPN cookies?',
-    a: 'ESPN leagues are private and require logging in to ESPN to view. The SWID and ESPN S2 cookies provide the authentication required to fetch data. These cookies are not stored. To find your ESPN cookies:',
+    a: 'ESPN leagues are private and require logging in to ESPN to view. The SWID and ESPN S2 cookies provide the authentication required to fetch data. These cookies are not stored unless you opt into automatic weekly refresh, in which case they are stored encrypted so LeagueQL can refresh your league for you (and removed when you turn auto-refresh off). To find your ESPN cookies:',
     steps: [
       'Open your browser and go to fantasy.espn.com',
       'Log in to your account',
@@ -50,9 +50,12 @@ const FAQ_ITEMS: FaqItem[] = [
     q: 'My data looks outdated. How do I refresh it?',
     a: (
       <>
-        For ESPN leagues, click <Kbd>Refresh League</Kbd> in the sidebar and
-        re-submit your league credentials. Sleeper and Yahoo leagues will
-        refresh automatically each week during the season.
+        Sleeper leagues refresh automatically each week during the season. ESPN
+        and Yahoo auto-refresh are opt-in: enable{' '}
+        <Kbd>Enable automatic weekly refresh</Kbd> when you connect the league
+        (enabling it for ESPN stores your cookies encrypted so LeagueQL can
+        refresh for you). You can also refresh an ESPN league manually anytime
+        with <Kbd>Refresh League</Kbd> in the sidebar.
       </>
     ),
   },

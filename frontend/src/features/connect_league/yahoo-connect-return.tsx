@@ -11,6 +11,7 @@ import {
   onboardYahooLeague,
 } from '@/features/connect_league/api-calls';
 import { pollForCompletion } from '@/features/connect_league/poll';
+import { takeYahooAutoRefreshPref } from '@/features/connect_league/yahoo-auto-refresh-pref';
 import { ApiError, clearApiCache } from '@/lib/api-client';
 import { isDemoMode, setLeagueCookies } from '@/lib/cookie-handler';
 
@@ -54,7 +55,11 @@ export default function YahooConnectReturn({
     startedRef.current = true;
     void (async () => {
       try {
-        const result = await onboardYahooLeague(leagueId);
+        // The opt-in was chosen before the OAuth redirect; apply it on this onboard.
+        const result = await onboardYahooLeague(
+          leagueId,
+          takeYahooAutoRefreshPref(),
+        );
         // A league that's already onboarded returns 200 with a null `data` ("League already
         // onboarded" — backend/league-onboarding). Skip polling and route straight into the
         // existing league (e.g. after re-linking a revoked account), rather than erroring.

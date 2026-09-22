@@ -24,6 +24,8 @@ export interface OnboardRequest {
   season?: string;
   s2?: string;
   swid?: string;
+  /** Opt this league into scheduled auto-refresh (backend/scheduled-league-auto-refresh). */
+  autoRefresh?: boolean;
 }
 
 export interface OnboardResponse {
@@ -37,6 +39,28 @@ export function onboardLeague(
 ): Promise<OnboardResponse> {
   const params = new URLSearchParams({ requestType });
   return apiClient.post<OnboardResponse>(`/leagues?${params}`, body);
+}
+
+export interface SetAutoRefreshResponse {
+  detail: string;
+  data: { auto_refresh_enabled: boolean };
+}
+
+/**
+ * Enable or disable scheduled auto-refresh for a league (owner only,
+ * backend/scheduled-league-auto-refresh). For Yahoo this is sufficient (tokens are already
+ * stored); enabling ESPN still requires supplying cookies through the connect/refresh form.
+ */
+export function setAutoRefresh(
+  leagueId: string,
+  platform: Platform,
+  enabled: boolean,
+): Promise<SetAutoRefreshResponse> {
+  const params = new URLSearchParams({ platform });
+  return apiClient.put<SetAutoRefreshResponse>(
+    `/leagues/${leagueId}/auto-refresh?${params}`,
+    { enabled },
+  );
 }
 
 export interface YahooAuthorizeResponse {
@@ -78,10 +102,12 @@ export interface YahooOnboardResponse {
  */
 export function onboardYahooLeague(
   leagueId: string,
+  autoRefresh = false,
 ): Promise<YahooOnboardResponse> {
   const params = new URLSearchParams({ requestType: 'ONBOARD' });
   return apiClient.post<YahooOnboardResponse>(`/leagues?${params}`, {
     leagueId,
     platform: 'YAHOO',
+    autoRefresh,
   });
 }

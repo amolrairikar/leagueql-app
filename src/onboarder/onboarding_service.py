@@ -48,6 +48,7 @@ class OnboardingService:
         is_new_season_refresh: bool = False,
         owner_user_id: str | None = None,
         reprocess_all: bool = False,
+        auto_refresh: bool | None = None,
     ):
         """Constructor."""
         self.league_id = league_id
@@ -56,6 +57,10 @@ class OnboardingService:
         self.is_new_season_refresh = is_new_season_refresh
         self.owner_user_id = owner_user_id
         self.reprocess_all = reprocess_all
+        # Per-league scheduled auto-refresh opt-in (backend/scheduled-league-auto-refresh).
+        # None means "not specified" (e.g. a scheduled refresh) — the flag is left untouched;
+        # a bool is an explicit user choice written onto METADATA.
+        self.auto_refresh = auto_refresh
         self.latest_season = str(latest_season) if latest_season else None
         self.client = self._build_client(
             league_id=league_id,
@@ -88,6 +93,7 @@ class OnboardingService:
             request_type=self.request_type,
             is_new_season_refresh=self.is_new_season_refresh,
             owner_user_id=self.owner_user_id,
+            auto_refresh=self.auto_refresh,
         )
         logger.info("Wrote job onboarding status to DynamoDB")
         logger.info(

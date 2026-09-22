@@ -7,6 +7,8 @@ from sleeper_client import resolve_sleeper_canonical_league_id
 from utils import correlation_id_var, logger, publish_failure
 from writer import write_pending_league_lookup
 
+from common.espn_credentials import ESPNReauthRequired
+from common.espn_credentials import from_env as espn_credentials_from_env
 from common.job_status import (
     SYSTEMIC_FAILURE_CODES,
     classify_http_error,
@@ -194,18 +196,56 @@ def _handle(event, context) -> dict[str, str | int]:
                 body.get("leagueId"),
             )
 
+    owner_user_id = event.get("ownerUserId")
+    auto_refresh = body.get("autoRefresh")
+
+    # ESPN scheduled auto-refresh path: the league_refresh Lambda invokes an ESPN REFRESH with
+    # the owner id but no cookies. Resolve the owner's stored (encrypted) ESPN cookies so the
+    # fetch can proceed without the user re-entering them. A user-initiated onboard/refresh
+    # supplies the cookies in the body and skips this (backend/espn-credential-storage). No stored
+    # cookies (or a re-auth signal) surfaces as the non-paging ESPN_AUTH failure.
+    espn_s2_cookie = body.get("s2")
+    swid_cookie = body.get("swid")
+    if (
+        body.get("platform") == "ESPN"
+        and not espn_s2_cookie
+        and not swid_cookie
+        and owner_user_id
+    ):
+        try:
+            swid_cookie, espn_s2_cookie = espn_credentials_from_env().get_credentials(
+                owner_user_id
+            )
+        except ESPNReauthRequired as e:
+            logger.warning(
+                "No stored ESPN cookies for owner of league %s; recording ESPN_AUTH: %s",
+                body.get("leagueId"),
+                e,
+            )
+            _record_failure(request_type, "ESPN_AUTH", body, canonical_league_id)
+            return {
+                "statusCode": 401,
+                "body": json.dumps(
+                    {
+                        "status": "failed",
+                        "error_msg": "ESPN credentials are required and were not found.",
+                    }
+                ),
+            }
+
     try:
         onboarding_service = OnboardingService(
             league_id=str(body["leagueId"]),
             platform=body["platform"],
             latest_season=body.get("season"),
-            espn_s2_cookie=body.get("s2"),
-            swid_cookie=body.get("swid"),
+            espn_s2_cookie=espn_s2_cookie,
+            swid_cookie=swid_cookie,
             request_type=request_type,
             canonical_league_id=canonical_league_id,
             is_new_season_refresh=is_new_season_refresh,
-            owner_user_id=event.get("ownerUserId"),
+            owner_user_id=owner_user_id,
             reprocess_all=bool(event.get("reprocessAll")),
+            auto_refresh=auto_refresh,
         )
     except KeyError as e:
         logger.error("Missing required field in request body: %s", e)
@@ -410,6 +450,25 @@ def _handle(event, context) -> dict[str, str | int]:
                 }
             ),
         }
+
+    # Persist the owner's ESPN cookies for reuse by the scheduled refresh when they opted in
+    # (backend/league-onboarding). Only on a user-initiated ESPN onboard/refresh that supplied
+    # cookies (a scheduled refresh passes autoRefresh=None and reuses already-stored cookies).
+    # Best-effort: a storage failure is logged but never fails the refresh the user just ran.
+    if (
+        auto_refresh
+        and body.get("platform") == "ESPN"
+        and owner_user_id
+        and espn_s2_cookie
+        and swid_cookie
+    ):
+        try:
+            espn_credentials_from_env().store_credentials(
+                owner_user_id, swid_cookie, espn_s2_cookie
+            )
+            logger.info("Stored ESPN credentials for scheduled auto-refresh")
+        except Exception as e:  # noqa: BLE001 — best-effort credential persistence
+            logger.error("Failed to store ESPN credentials for auto-refresh: %s", e)
 
     logger.info("Ending league onboarding process execution.")
     return {

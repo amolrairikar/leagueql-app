@@ -699,3 +699,174 @@ class TestLambdaHandlerSuccess:
             result = onboarder_handler.lambda_handler(event, MagicMock())
 
         assert result["statusCode"] == 200
+
+
+class TestLambdaHandlerEspnAutoRefresh:
+    """ESPN opt-in auto-refresh: cookie storage on opt-in and stored-cookie reuse on the
+    scheduled path (backend/league-onboarding, backend/espn-credential-storage)."""
+
+    def _running_service(self):
+        svc = MagicMock()
+        svc.canonical_league_id = "espn-canon"
+        # Truthy seasons so the handler proceeds past the no-op guard into run().
+        svc.client.get_seasons.return_value = ["2026"]
+        return svc
+
+    def test_scheduled_refresh_uses_stored_cookies(self, onboarder_handler):
+        # A scheduled ESPN REFRESH arrives with the owner id and no cookies; the handler
+        # fetches/decrypts the owner's stored cookies and passes them to OnboardingService.
+        event = {
+            "requestType": "REFRESH",
+            "canonicalLeagueId": "espn-canon",
+            "ownerUserId": "user-7",
+            "body": {"leagueId": "e-2026", "platform": "ESPN", "season": "2026"},
+        }
+        svc = self._running_service()
+        cred_client = MagicMock()
+        cred_client.get_credentials.return_value = ("swid-val", "s2-val")
+        with (
+            patch.object(
+                onboarder_handler, "OnboardingService", return_value=svc
+            ) as mock_cls,
+            patch.object(
+                onboarder_handler,
+                "espn_credentials_from_env",
+                return_value=cred_client,
+            ),
+        ):
+            result = onboarder_handler.lambda_handler(event, MagicMock())
+
+        assert result["statusCode"] == 200
+        cred_client.get_credentials.assert_called_once_with("user-7")
+        kwargs = mock_cls.call_args.kwargs
+        assert kwargs["swid_cookie"] == "swid-val"
+        assert kwargs["espn_s2_cookie"] == "s2-val"
+        # A scheduled refresh does not re-store cookies (autoRefresh absent → None).
+        cred_client.store_credentials.assert_not_called()
+
+    def test_scheduled_refresh_missing_cookies_records_espn_auth(
+        self, onboarder_handler
+    ):
+        event = {
+            "requestType": "REFRESH",
+            "canonicalLeagueId": "espn-canon",
+            "ownerUserId": "user-7",
+            "body": {"leagueId": "e-2026", "platform": "ESPN", "season": "2026"},
+        }
+        cred_client = MagicMock()
+        cred_client.get_credentials.side_effect = onboarder_handler.ESPNReauthRequired(
+            "none"
+        )
+        with (
+            patch.object(onboarder_handler, "OnboardingService") as mock_cls,
+            patch.object(
+                onboarder_handler,
+                "espn_credentials_from_env",
+                return_value=cred_client,
+            ),
+            patch.object(onboarder_handler, "write_job_status") as mock_wjs,
+        ):
+            result = onboarder_handler.lambda_handler(event, MagicMock())
+
+        assert result["statusCode"] == 401
+        # No fetch is attempted without cookies.
+        mock_cls.assert_not_called()
+        # The failure is recorded as the non-paging ESPN_AUTH re-link signal.
+        assert mock_wjs.call_args.kwargs["failure_code"] == "ESPN_AUTH"
+
+    def test_optin_onboard_stores_cookies(self, onboarder_handler):
+        # A user-initiated ESPN onboard that opts in stores the supplied cookies after a
+        # successful fetch so the scheduled refresh can reuse them.
+        event = {
+            "requestType": "ONBOARD",
+            "ownerUserId": "user-7",
+            "body": {
+                "leagueId": "e-2026",
+                "platform": "ESPN",
+                "season": "2026",
+                "s2": "s2-val",
+                "swid": "swid-val",
+                "autoRefresh": True,
+            },
+        }
+        svc = self._running_service()
+        cred_client = MagicMock()
+        with (
+            patch.object(
+                onboarder_handler, "OnboardingService", return_value=svc
+            ) as mock_cls,
+            patch.object(
+                onboarder_handler,
+                "espn_credentials_from_env",
+                return_value=cred_client,
+            ),
+        ):
+            result = onboarder_handler.lambda_handler(event, MagicMock())
+
+        assert result["statusCode"] == 200
+        # The opt-in choice is threaded into the service (which writes the METADATA flag).
+        assert mock_cls.call_args.kwargs["auto_refresh"] is True
+        cred_client.store_credentials.assert_called_once_with(
+            "user-7", "swid-val", "s2-val"
+        )
+        # Cookies were supplied in the body, so no stored-cookie fetch is needed.
+        cred_client.get_credentials.assert_not_called()
+
+    def test_optout_onboard_does_not_store_cookies(self, onboarder_handler):
+        event = {
+            "requestType": "ONBOARD",
+            "ownerUserId": "user-7",
+            "body": {
+                "leagueId": "e-2026",
+                "platform": "ESPN",
+                "season": "2026",
+                "s2": "s2-val",
+                "swid": "swid-val",
+                "autoRefresh": False,
+            },
+        }
+        svc = self._running_service()
+        cred_client = MagicMock()
+        with (
+            patch.object(onboarder_handler, "OnboardingService", return_value=svc),
+            patch.object(
+                onboarder_handler,
+                "espn_credentials_from_env",
+                return_value=cred_client,
+            ),
+        ):
+            result = onboarder_handler.lambda_handler(event, MagicMock())
+
+        assert result["statusCode"] == 200
+        cred_client.store_credentials.assert_not_called()
+
+    def test_store_failure_does_not_fail_the_refresh(self, onboarder_handler):
+        # Persisting cookies is best-effort: a storage error is logged but the refresh
+        # the user just ran still succeeds.
+        event = {
+            "requestType": "REFRESH",
+            "canonicalLeagueId": "espn-canon",
+            "ownerUserId": "user-7",
+            "body": {
+                "leagueId": "e-2026",
+                "platform": "ESPN",
+                "season": "2026",
+                "s2": "s2-val",
+                "swid": "swid-val",
+                "autoRefresh": True,
+            },
+        }
+        svc = self._running_service()
+        cred_client = MagicMock()
+        cred_client.store_credentials.side_effect = RuntimeError("kms down")
+        with (
+            patch.object(onboarder_handler, "OnboardingService", return_value=svc),
+            patch.object(
+                onboarder_handler,
+                "espn_credentials_from_env",
+                return_value=cred_client,
+            ),
+        ):
+            result = onboarder_handler.lambda_handler(event, MagicMock())
+
+        assert result["statusCode"] == 200

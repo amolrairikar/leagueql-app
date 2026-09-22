@@ -131,5 +131,11 @@ export interface GetLeagueResponse {
      * (frontend/refresh-reminder-banner).
      */
     last_refresh_at?: string | null;
+    /**
+     * Whether the league is opted into scheduled auto-refresh
+     * (backend/scheduled-league-auto-refresh). Drives the connect-form checkbox prefill and
+     * the sidebar auto-refresh toggle. Absent/false on leagues onboarded before opt-in.
+     */
+    auto_refresh_enabled?: boolean;
   };
 }

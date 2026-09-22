@@ -627,3 +627,88 @@ class TestJobStatusHelpers:
             {"Error": {"Code": "InternalError", "Message": "fail"}}, "UpdateItem"
         )
         set_active_job("canonical-abc", "corr-1")
+
+
+class TestOwnerHasOtherOptedinEspnLeagues:
+    # GSI3 does not project auto_refresh_enabled, so the helper reads each candidate ESPN
+    # league's METADATA (get_item) to check the flag.
+    def test_true_when_another_optedin_espn_league(self, mock_table):
+        from main import owner_has_other_optedin_espn_leagues
+
+        mock_table.query.return_value = {
+            "Items": [
+                {"PK": "LEAGUE#deleted", "platform": "ESPN"},
+                {"PK": "LEAGUE#other", "platform": "ESPN"},
+            ]
+        }
+        # The excluded league is skipped by PK; the other's METADATA reads opted-in.
+        mock_table.get_item.return_value = {"Item": {"auto_refresh_enabled": True}}
+        assert owner_has_other_optedin_espn_leagues("user_1", "deleted") is True
+        mock_table.get_item.assert_called_once_with(
+            Key={"PK": "LEAGUE#other", "SK": "METADATA"}
+        )
+
+    def test_false_when_only_the_excluded_league(self, mock_table):
+        from main import owner_has_other_optedin_espn_leagues
+
+        mock_table.query.return_value = {
+            "Items": [{"PK": "LEAGUE#deleted", "platform": "ESPN"}]
+        }
+        assert owner_has_other_optedin_espn_leagues("user_1", "deleted") is False
+        mock_table.get_item.assert_not_called()
+
+    def test_false_when_other_espn_not_opted_in(self, mock_table):
+        from main import owner_has_other_optedin_espn_leagues
+
+        # Another ESPN league exists but its METADATA is not opted in, so it does not
+        # keep the stored cookies alive.
+        mock_table.query.return_value = {
+            "Items": [
+                {"PK": "LEAGUE#other", "platform": "ESPN"},
+                {"PK": "LEAGUE#other2", "platform": "ESPN"},
+            ]
+        }
+        mock_table.get_item.return_value = {"Item": {}}
+        assert owner_has_other_optedin_espn_leagues("user_1", "deleted") is False
+
+    def test_false_when_other_leagues_not_espn(self, mock_table):
+        from main import owner_has_other_optedin_espn_leagues
+
+        mock_table.query.return_value = {
+            "Items": [
+                {"PK": "LEAGUE#yahoo", "platform": "YAHOO"},
+                {"PK": "LEAGUE#sleeper", "platform": "SLEEPER"},
+            ]
+        }
+        assert owner_has_other_optedin_espn_leagues("user_1", "deleted") is False
+        # Non-ESPN leagues never trigger the METADATA read.
+        mock_table.get_item.assert_not_called()
+
+    def test_migrated_to_espn_counts(self, mock_table):
+        from main import owner_has_other_optedin_espn_leagues
+
+        mock_table.query.return_value = {
+            "Items": [
+                {
+                    "PK": "LEAGUE#migrated_to",
+                    "platform": "SLEEPER",
+                    "active_platform": "ESPN",
+                }
+            ]
+        }
+        mock_table.get_item.return_value = {"Item": {"auto_refresh_enabled": True}}
+        assert owner_has_other_optedin_espn_leagues("user_1", "deleted") is True
+
+    def test_paginates_over_last_evaluated_key(self, mock_table):
+        from main import owner_has_other_optedin_espn_leagues
+
+        mock_table.query.side_effect = [
+            {
+                "Items": [{"PK": "LEAGUE#deleted", "platform": "ESPN"}],
+                "LastEvaluatedKey": {"k": 1},
+            },
+            {"Items": [{"PK": "LEAGUE#other", "platform": "ESPN"}]},
+        ]
+        mock_table.get_item.return_value = {"Item": {"auto_refresh_enabled": True}}
+        assert owner_has_other_optedin_espn_leagues("user_1", "deleted") is True
+        assert mock_table.query.call_count == 2

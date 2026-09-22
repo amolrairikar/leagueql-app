@@ -22,7 +22,7 @@ Feature: Public pages render (frontend/landing-page, frontend/instructions-docs,
   Scenario: Expanding a landing page FAQ question reveals its answer
     When I open the landing page
     And I expand the FAQ question "Why do I need to provide my ESPN cookies?"
-    Then I see "ESPN leagues are private and require logging in to ESPN to view. The SWID and ESPN S2 cookies provide the authentication required to fetch data. These cookies are not stored. To find your ESPN cookies:"
+    Then I see "ESPN leagues are private and require logging in to ESPN to view. The SWID and ESPN S2 cookies provide the authentication required to fetch data. These cookies are not stored unless you opt into automatic weekly refresh, in which case they are stored encrypted so LeagueQL can refresh your league for you (and removed when you turn auto-refresh off). To find your ESPN cookies:"
     And I see "Find SWID and espn_s2 and copy their values"
 
   Scenario: The Works with strip marks Yahoo as Beta

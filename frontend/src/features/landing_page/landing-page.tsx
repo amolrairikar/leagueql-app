@@ -1,5 +1,5 @@
 import { SignIn, useUser } from '@clerk/react';
-import { ArrowRight, ChevronRight } from 'lucide-react';
+import { ArrowRight, ChevronRight, HelpCircle } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -10,6 +10,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import {
   Select,
@@ -19,11 +20,18 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import {
   getYahooAuthorizeUrl,
   onboardLeague,
   onboardYahooLeague,
 } from '@/features/connect_league/api-calls';
 import { pollForCompletion } from '@/features/connect_league/poll';
+import { setYahooAutoRefreshPref } from '@/features/connect_league/yahoo-auto-refresh-pref';
 import {
   FEATURES,
   HOW_STEPS,
@@ -147,6 +155,9 @@ export default function LeagueQLLanding() {
   const [authOpen, setAuthOpen] = useState(false);
   const [showConnectForm, setShowConnectForm] = useState(false);
   const [platform, setPlatform] = useState<Platform>('ESPN');
+  // Yahoo auto-refresh opt-in (default off). Persisted before the OAuth redirect so the
+  // return leg can apply it (backend/scheduled-league-auto-refresh).
+  const [yahooAutoRefresh, setYahooAutoRefresh] = useState(false);
   const [leagueId, setLeagueId] = useState('');
   const [loading, setLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
@@ -248,8 +259,14 @@ export default function LeagueQLLanding() {
   // effect (backend/yahoo-oauth), so we optimistically onboard first and treat a 403 as
   // "not linked". A revoked-token link passes the gate but fails the job with YAHOO_AUTH.
   async function handleYahooConnect(trimmedId: string) {
+    // Persist the opt-in so it survives a possible OAuth redirect, and apply it on the
+    // direct (already-linked) onboard below.
+    setYahooAutoRefreshPref(yahooAutoRefresh);
     try {
-      const onboardResult = await onboardYahooLeague(trimmedId);
+      const onboardResult = await onboardYahooLeague(
+        trimmedId,
+        yahooAutoRefresh,
+      );
       // A fresh onboard returns a correlation_id to poll; an already-onboarded league
       // returns 200 with null `data`, which skips straight to routing the user in.
       if (onboardResult.data) {
@@ -490,6 +507,38 @@ export default function LeagueQLLanding() {
                 )}
               </Button>
             </form>
+            {platform === 'YAHOO' && (
+              <div className="mt-3 flex items-center gap-2 text-left">
+                <input
+                  id="yahoo-auto-refresh"
+                  type="checkbox"
+                  className="size-4 cursor-pointer accent-primary"
+                  checked={yahooAutoRefresh}
+                  onChange={(e) => setYahooAutoRefresh(e.target.checked)}
+                  disabled={loading}
+                />
+                <div className="flex items-center gap-1.5">
+                  <Label
+                    htmlFor="yahoo-auto-refresh"
+                    className="cursor-pointer"
+                  >
+                    Enable automatic weekly refresh
+                  </Label>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <HelpCircle className="size-3.5 text-muted-foreground cursor-help" />
+                      </TooltipTrigger>
+                      <TooltipContent side="right" className="max-w-64">
+                        When enabled, LeagueQL refreshes your league
+                        automatically each week during the season using your
+                        saved Yahoo connection.
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+              </div>
+            )}
             {loading && (
               <div className="mt-4 flex flex-col gap-1.5">
                 <Progress value={progress} className="w-full" />

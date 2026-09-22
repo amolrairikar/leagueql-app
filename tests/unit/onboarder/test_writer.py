@@ -349,3 +349,92 @@ class TestWritePendingLeagueLookup:
                 canonical_league_id="canonical-abc",
                 pending_season="2026",
             )
+
+
+class TestWriteLeagueRecordsAutoRefresh:
+    """auto_refresh_enabled persistence on METADATA (backend/scheduled-league-auto-refresh)."""
+
+    def test_onboard_records_optin_true(self, onboarder_writer, monkeypatch):
+        monkeypatch.setenv("DYNAMODB_TABLE_NAME", "test-table")
+        mock_ddb = MagicMock()
+        with patch.object(onboarder_writer, "_dynamodb", mock_ddb):
+            onboarder_writer.write_league_records(
+                league_id="123",
+                platform="ESPN",
+                canonical_league_id="canonical-abc",
+                seasons=["2024"],
+                request_type="ONBOARD",
+                owner_user_id="user_1",
+                auto_refresh=True,
+            )
+        metadata_item = mock_ddb.transact_write_items.call_args[1]["TransactItems"][0][
+            "Put"
+        ]["Item"]
+        assert metadata_item["auto_refresh_enabled"] == {"BOOL": True}
+
+    def test_onboard_defaults_optin_false(self, onboarder_writer, monkeypatch):
+        # No explicit choice (e.g. system onboard) defaults to opted-out.
+        monkeypatch.setenv("DYNAMODB_TABLE_NAME", "test-table")
+        mock_ddb = MagicMock()
+        with patch.object(onboarder_writer, "_dynamodb", mock_ddb):
+            onboarder_writer.write_league_records(
+                league_id="123",
+                platform="ESPN",
+                canonical_league_id="canonical-abc",
+                seasons=["2024"],
+                request_type="ONBOARD",
+                owner_user_id="user_1",
+            )
+        metadata_item = mock_ddb.transact_write_items.call_args[1]["TransactItems"][0][
+            "Put"
+        ]["Item"]
+        assert metadata_item["auto_refresh_enabled"] == {"BOOL": False}
+
+    def test_refresh_with_explicit_choice_updates_metadata(
+        self, onboarder_writer, monkeypatch
+    ):
+        # A user-initiated refresh toggling the opt-in adds a METADATA update alongside
+        # the LEAGUE_LOOKUP write.
+        monkeypatch.setenv("DYNAMODB_TABLE_NAME", "test-table")
+        mock_ddb = MagicMock()
+        with patch.object(onboarder_writer, "_dynamodb", mock_ddb):
+            onboarder_writer.write_league_records(
+                league_id="123",
+                platform="ESPN",
+                canonical_league_id="canonical-abc",
+                seasons=["2024"],
+                request_type="REFRESH",
+                is_new_season_refresh=False,
+                auto_refresh=True,
+            )
+        items = mock_ddb.transact_write_items.call_args[1]["TransactItems"]
+        assert len(items) == 2
+        metadata_update = next(
+            i["Update"]
+            for i in items
+            if "Update" in i and i["Update"]["Key"]["SK"] == {"S": "METADATA"}
+        )
+        assert metadata_update["Key"]["PK"] == {"S": "LEAGUE#canonical-abc"}
+        assert metadata_update["ExpressionAttributeValues"][":ar"] == {"BOOL": True}
+
+    def test_refresh_without_choice_preserves_metadata(
+        self, onboarder_writer, monkeypatch
+    ):
+        # A scheduled/new-season refresh (auto_refresh=None) must not touch the flag,
+        # so only the LEAGUE_LOOKUP write is issued.
+        monkeypatch.setenv("DYNAMODB_TABLE_NAME", "test-table")
+        mock_ddb = MagicMock()
+        with patch.object(onboarder_writer, "_dynamodb", mock_ddb):
+            onboarder_writer.write_league_records(
+                league_id="123",
+                platform="ESPN",
+                canonical_league_id="canonical-abc",
+                seasons=["2024"],
+                request_type="REFRESH",
+                is_new_season_refresh=False,
+                auto_refresh=None,
+            )
+        items = mock_ddb.transact_write_items.call_args[1]["TransactItems"]
+        assert len(items) == 1
+        assert "Update" in items[0]
+        assert items[0]["Update"]["Key"]["SK"] == {"S": "LEAGUE_LOOKUP"}

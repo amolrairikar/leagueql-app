@@ -59,6 +59,12 @@ class OnboardingPayload(BaseModel):
     season: str | None = Field(default=None, max_length=100)
     s2: str | None = Field(default=None)
     swid: str | None = Field(default=None, max_length=100)
+    # Per-league scheduled auto-refresh opt-in (backend/scheduled-league-auto-refresh).
+    autoRefresh: bool = Field(default=False)
+
+
+class AutoRefreshPayload(BaseModel):
+    enabled: bool
 
 
 class CaseInsensitiveEnum(str, Enum):
@@ -219,6 +225,9 @@ S3_BUCKET = os.environ["S3_BUCKET_NAME"]
 # Lambdas encrypt/decrypt against the same key — pin the client there rather than the
 # Lambda's own region. Absent in unit tests / local dev, where the Yahoo flow is unused.
 YAHOO_KMS_KEY_ID = os.environ.get("YAHOO_KMS_KEY_ID", "")
+# ESPN cookies are encrypted with the same shared credential KMS key/region as Yahoo tokens
+# (backend/espn-credential-storage); the env var points at that same key.
+ESPN_KMS_KEY_ID = os.environ.get("ESPN_KMS_KEY_ID", "")
 kms_client = boto3.client(
     "kms",
     config=_retry_config,
@@ -263,6 +272,7 @@ from helpers import (  # noqa: F401
     get_nfl_state,
     is_job_in_progress,
     lookup_league,
+    owner_has_other_optedin_espn_leagues,
     owner_has_other_yahoo_leagues,
     publish_failure,
     record_league_access,

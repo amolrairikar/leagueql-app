@@ -25,6 +25,7 @@ const TOC_ITEMS = [
   { id: 'refreshing-league-data', label: 'Refreshing League Data', level: 2 },
   { id: 'refresh-espn', label: 'ESPN', level: 3 },
   { id: 'refresh-sleeper', label: 'Sleeper', level: 3 },
+  { id: 'refresh-yahoo', label: 'Yahoo', level: 3 },
   { id: 'migrating-your-league', label: 'Migrating Your League', level: 2 },
   { id: 'switching-leagues', label: 'Switching Leagues', level: 2 },
   { id: 'deleting-a-league', label: 'Deleting a League', level: 2 },
@@ -344,8 +345,12 @@ export default function InstructionsPage() {
                   />
                 </div>
                 <Callout>
-                  Your SWID and ESPN S2 cookies are only transmitted once over
-                  HTTPS to fetch your data and are never stored by LeagueQL.
+                  Your SWID and ESPN S2 cookies are transmitted once over HTTPS
+                  to fetch your data. They are not stored by LeagueQL unless you
+                  enable automatic weekly refresh for the league, in which case
+                  they are stored encrypted so LeagueQL can refresh it for you
+                  (and removed when you turn auto-refresh off or delete the
+                  league).
                 </Callout>
 
                 <div className="mt-6">
@@ -627,11 +632,24 @@ export default function InstructionsPage() {
                   Refreshing League Data
                 </SubHeading>
                 <SubSubHeading id="refresh-espn">ESPN</SubSubHeading>
+                <MinorHeading>Manual Refresh</MinorHeading>
                 <p className="text-muted-foreground leading-relaxed mb-4">
                   Click the Refresh League button in the sidebar. This navigates
                   you to the league connection page where you can submit your
                   credentials again. The system detects the league already
                   exists and fetches the latest data for your league.
+                </p>
+                <MinorHeading>Automatic Weekly Refresh (opt-in)</MinorHeading>
+                <p className="text-muted-foreground leading-relaxed mb-4">
+                  On the connection page you can check{' '}
+                  <Kbd>Enable automatic weekly refresh</Kbd> (or use the
+                  Auto-Refresh toggle in the sidebar). When enabled, LeagueQL
+                  securely stores your ESPN cookies, encrypted, and refreshes
+                  your league automatically each week during the season, so you
+                  do not have to re-enter them. ESPN cookies expire
+                  periodically; when they do, we ask you to re-enter them to
+                  keep automatic refresh working. You can turn it off anytime,
+                  which removes your stored cookies.
                 </p>
                 <SubSubHeading id="refresh-sleeper">Sleeper</SubSubHeading>
                 <MinorHeading>Midseason Refreshes</MinorHeading>
@@ -641,11 +659,21 @@ export default function InstructionsPage() {
                   morning to update your league data.
                 </p>
                 <MinorHeading>New Season Refreshes</MinorHeading>
-                <p className="text-muted-foreground leading-relaxed">
+                <p className="text-muted-foreground leading-relaxed mb-4">
                   If refreshing for a new season, enter your new Sleeper league
                   ID as if you are connecting a new league (Sleeper league IDs
                   change each season). The system automatically associates the
                   new league ID with your existing history.
+                </p>
+                <SubSubHeading id="refresh-yahoo">Yahoo</SubSubHeading>
+                <p className="text-muted-foreground leading-relaxed">
+                  Yahoo auto-refresh is opt-in. Enable it when you connect your
+                  Yahoo league, or flip the Auto-Refresh toggle in the sidebar
+                  settings anytime. Because your Yahoo connection is already
+                  stored, no extra credentials are needed — LeagueQL refreshes
+                  your league automatically each week during the season using
+                  your existing Yahoo authorization. Turn it off anytime from
+                  the same toggle.
                 </p>
               </div>
 

@@ -53,3 +53,18 @@ Feature: Connect league onboarding flow (frontend/connect-league)
     When I connect ESPN league "100"
     Then I see a failure message "Ask the league owner to share their invite link"
     And no onboard, refresh, or membership request was made
+
+  Scenario: Enabling auto-refresh sends the opt-in with an ESPN onboard
+    Given onboarding will complete successfully
+    When I onboard ESPN league "100" with auto-refresh enabled
+    Then the onboard request included auto-refresh
+
+  Scenario: Onboarding ESPN without checking auto-refresh sends opt-out
+    Given onboarding will complete successfully
+    When I onboard ESPN league "100" without enabling auto-refresh
+    Then the onboard request did not include auto-refresh
+
+  Scenario: The auto-refresh checkbox reflects an already-enrolled ESPN league on refresh
+    Given an ESPN league already enrolled in auto-refresh
+    When I open the ESPN refresh form for league "100"
+    Then the auto-refresh checkbox is checked

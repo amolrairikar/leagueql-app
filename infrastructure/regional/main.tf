@@ -89,6 +89,12 @@ module "onboarder_lambda" {
     YAHOO_KMS_KEY_ID          = "arn:aws:kms:us-east-1:${local.account_id}:alias/leagueql-yahoo-token-${var.environment}"
     YAHOO_KMS_REGION          = "us-east-1"
     YAHOO_REDIRECT_URI        = var.yahoo_redirect_uri
+
+    # ESPN cookie storage for opt-in scheduled auto-refresh (backend/espn-credential-storage):
+    # the onboarder encrypts/decrypts the owner's stored SWID/espn_s2 cookies. These reuse the
+    # SAME shared credential KMS key/region as Yahoo tokens (no separate key, no extra IAM grant).
+    ESPN_KMS_KEY_ID = "arn:aws:kms:us-east-1:${local.account_id}:alias/leagueql-yahoo-token-${var.environment}"
+    ESPN_KMS_REGION = "us-east-1"
   }
 
   tags = {
@@ -186,6 +192,12 @@ module "api_lambda" {
     YAHOO_KMS_REGION          = "us-east-1"
     YAHOO_REDIRECT_URI        = var.yahoo_redirect_uri
     YAHOO_CONNECT_RETURN_URL  = var.yahoo_connect_return_url
+
+    # ESPN cookie storage for opt-in scheduled auto-refresh (backend/espn-credential-storage):
+    # the API deletes a user's stored cookies when they opt out of their last ESPN league. Reuses
+    # the SAME shared credential KMS key/region as Yahoo tokens (no separate key, no extra grant).
+    ESPN_KMS_KEY_ID = "arn:aws:kms:us-east-1:${local.account_id}:alias/leagueql-yahoo-token-${var.environment}"
+    ESPN_KMS_REGION = "us-east-1"
   }
 
   tags = {

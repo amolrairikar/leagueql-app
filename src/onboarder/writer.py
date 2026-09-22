@@ -167,6 +167,7 @@ def write_league_records(
     request_type: str,
     is_new_season_refresh: bool = False,
     owner_user_id: str | None = None,
+    auto_refresh: bool | None = None,
 ) -> None:
     """
     Writes the league's METADATA (on first onboard) and LEAGUE_LOOKUP records.
@@ -186,6 +187,11 @@ def write_league_records(
         owner_user_id: Clerk user ID of the onboarding owner (backend/league-authorization). On first
             ONBOARD it is recorded on METADATA and seeds the ``members`` set; REFRESH/MIGRATE
             never touch it, so the original owner and any verified members are preserved.
+        auto_refresh: The scheduled-auto-refresh opt-in choice (backend/scheduled-league-auto-refresh).
+            ``None`` leaves ``auto_refresh_enabled`` untouched (a scheduled/new-season refresh or
+            migrate must not reset an explicit user choice); a bool writes it onto METADATA — set on
+            the new METADATA item for ONBOARD, or applied to the existing METADATA via an update for
+            a user-initiated REFRESH.
     """
     try:
         table_name = os.environ["DYNAMODB_TABLE_NAME"]
@@ -253,8 +259,30 @@ def write_league_records(
                 }
 
             # Job status now lives in the JOB_STATUS item (keyed by correlation_id);
-            # the refresh's only DynamoDB write here is the LEAGUE_LOOKUP update.
+            # the refresh's LEAGUE_LOOKUP update is always written.
             transact_items = [league_lookup_operation]
+
+            # A user-initiated refresh may also toggle the scheduled auto-refresh opt-in
+            # (backend/scheduled-league-auto-refresh). Only apply it when explicitly provided
+            # (auto_refresh is not None); a scheduled/new-season refresh passes None and must
+            # leave the owner's existing choice on METADATA untouched. METADATA always exists
+            # for a refresh (the league is already onboarded), so a plain SET is safe.
+            if auto_refresh is not None:
+                transact_items.append(
+                    {
+                        "Update": {
+                            "TableName": table_name,
+                            "Key": {
+                                "PK": {"S": f"LEAGUE#{canonical_league_id}"},
+                                "SK": {"S": "METADATA"},
+                            },
+                            "UpdateExpression": "SET auto_refresh_enabled = :ar",
+                            "ExpressionAttributeValues": {
+                                ":ar": {"BOOL": bool(auto_refresh)}
+                            },
+                        }
+                    }
+                )
         else:
             metadata_item = {
                 "PK": {"S": f"LEAGUE#{canonical_league_id}"},
@@ -268,6 +296,9 @@ def write_league_records(
             if owner_user_id:
                 metadata_item["owner_user_id"] = {"S": owner_user_id}
                 metadata_item["members"] = {"SS": [owner_user_id]}
+            # Record the scheduled auto-refresh opt-in on first onboard. Absent choice
+            # (system onboard) defaults to opted-out (backend/scheduled-league-auto-refresh).
+            metadata_item["auto_refresh_enabled"] = {"BOOL": bool(auto_refresh)}
             transact_items = [
                 {
                     "Put": {

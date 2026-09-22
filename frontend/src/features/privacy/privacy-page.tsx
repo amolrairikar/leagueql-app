@@ -103,14 +103,44 @@ export default function PrivacyPage() {
               </div>
               <div>
                 <h3 className="font-semibold text-foreground mb-2">
+                  ESPN Cookies (for private ESPN leagues):
+                </h3>
+                <p className="mb-2">
+                  To read a private ESPN league we need your ESPN{' '}
+                  <code>SWID</code> and <code>espn_s2</code> cookies. By default
+                  we use them only to fetch your league data for that request
+                  and do <strong>not</strong> store them. If you turn on{' '}
+                  <strong>automatic weekly refresh</strong> for an ESPN league,
+                  we then store those cookies so we can refresh it on your
+                  behalf:
+                </p>
+                <ul className="list-disc pl-6 space-y-1">
+                  <li>
+                    Your ESPN cookies are stored{' '}
+                    <strong>encrypted at rest</strong> and are never written to
+                    logs, shown in the app, or included in API responses.
+                  </li>
+                  <li>
+                    They are used only to refresh your ESPN league data on your
+                    behalf, and are never sold or shared with anyone.
+                  </li>
+                  <li>
+                    They are removed when you turn off automatic refresh for
+                    your last ESPN league or delete your league data. ESPN
+                    cookies also expire on their own, after which we ask you to
+                    re-enter them.
+                  </li>
+                </ul>
+              </div>
+              <div>
+                <h3 className="font-semibold text-foreground mb-2">
                   Yahoo OAuth Tokens (for Yahoo leagues):
                 </h3>
                 <p className="mb-2">
                   Yahoo does not offer a public read-only data feed the way ESPN
                   and Sleeper do, so connecting a Yahoo league uses Yahoo&apos;s
-                  official OAuth sign-in. Unlike ESPN cookies, which we never
-                  store, this means we <strong>do</strong> store your Yahoo
-                  authorization:
+                  official OAuth sign-in. This means we <strong>do</strong>{' '}
+                  store your Yahoo authorization:
                 </p>
                 <ul className="list-disc pl-6 space-y-1">
                   <li>
@@ -146,29 +176,35 @@ export default function PrivacyPage() {
                     policy). Clerk uses cookies for session management.
                   </li>
                   <li>
-                    ESPN cookies are only used temporarily to fetch private
-                    league data and are not stored on our servers
+                    ESPN cookies are used temporarily to fetch private league
+                    data and are not stored on our servers unless you enable
+                    automatic weekly refresh, in which case they are stored
+                    encrypted at rest and used only to refresh your league
                   </li>
                   <li>
-                    Yahoo OAuth tokens are the exception: they are stored, but
-                    encrypted at rest, and used only to fetch and refresh your
-                    Yahoo league data
-                  </li>
-                  <li>
-                    We offer an optional Chrome extension, &quot;LeagueQL ESPN
-                    Cookie Helper,&quot; that auto-fills your ESPN cookies into
-                    our onboarding and refresh forms. The extension does not
-                    store or transmit your cookies to us; it only fills them
-                    into the form on your device. See the{' '}
-                    <a
-                      href="/extension-privacy"
-                      className="text-foreground underline underline-offset-4"
-                    >
-                      Chrome Extension Privacy Policy
-                    </a>{' '}
-                    for details.
+                    Yahoo OAuth tokens are stored, but encrypted at rest, and
+                    used only to fetch and refresh your Yahoo league data
                   </li>
                 </ul>
+              </div>
+              <div>
+                <h3 className="font-semibold text-foreground mb-2">
+                  ESPN Chrome Extension:
+                </h3>
+                <p>
+                  We offer an optional Chrome extension, &quot;LeagueQL ESPN
+                  Cookie Helper,&quot; that auto-fills your ESPN cookies into
+                  our onboarding and refresh forms. The extension does not store
+                  or transmit your cookies to us; it only fills them into the
+                  form on your device. See the{' '}
+                  <a
+                    href="/extension-privacy"
+                    className="text-foreground underline underline-offset-4"
+                  >
+                    Chrome Extension Privacy Policy
+                  </a>{' '}
+                  for details.
+                </p>
               </div>
             </div>
           </section>

@@ -169,6 +169,26 @@ function LeagueConnectForm() {
     };
   }, [isSubmitting]);
 
+  useEffect(() => {
+    // On the refresh entrypoint (the sidebar's Refresh League link prefills the ESPN league),
+    // reflect the league's current auto-refresh enrollment in the checkbox so an already-enrolled
+    // league stays enrolled unless the owner unchecks it. Best-effort; ignore failures.
+    if (urlPlatform !== 'espn' || !urlLeagueId) return;
+    let cancelled = false;
+    void getLeague(urlLeagueId, 'ESPN')
+      .then((res) => {
+        if (!cancelled && res.data.auto_refresh_enabled) {
+          setValue('autoRefresh', true);
+        }
+      })
+      .catch(() => {
+        // A 404 (not yet onboarded) or any read failure just leaves the default (off).
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [urlLeagueId, urlPlatform, setValue]);
+
   const onSubmit = async (data: LeagueConnectFormValues) => {
     setPollStatus('idle');
     setLastRequestType(null);
@@ -224,14 +244,18 @@ function LeagueConnectForm() {
       return;
     }
 
-    // ESPN S2/SWID are read from cookies, transmitted once over HTTPS, then cleared by
-    // clearEspnCookies() on success. Never persist or log these credentials.
+    // ESPN S2/SWID are read from cookies, transmitted once over HTTPS, then cleared from the
+    // browser by clearEspnCookies() on success. They are never logged; the backend stores them
+    // (encrypted) only when the owner opts into auto-refresh (backend/espn-credential-storage).
     const body: OnboardRequest = {
       leagueId: data.leagueId,
       platform: apiPlatform,
       season: data.platform === 'espn' ? data.latestSeason : undefined,
       s2: data.platform === 'espn' ? data.espnS2 : undefined,
       swid: data.platform === 'espn' ? data.swid : undefined,
+      // Opt-in choice (ESPN only; Sleeper stays automatic). On opt-in the backend stores the
+      // ESPN cookies encrypted so the scheduled refresh can reuse them.
+      autoRefresh: data.platform === 'espn' ? data.autoRefresh : undefined,
     };
 
     let onboardSucceeded = false;
@@ -482,6 +506,33 @@ function LeagueConnectForm() {
                       to autofill them automatically.
                     </p>
                   )}
+                  <div className="flex items-center gap-2">
+                    <input
+                      id="auto-refresh"
+                      type="checkbox"
+                      className="size-4 cursor-pointer accent-primary"
+                      {...register('autoRefresh')}
+                    />
+                    <div className="flex items-center gap-1.5">
+                      <Label htmlFor="auto-refresh" className="cursor-pointer">
+                        Enable automatic weekly refresh
+                      </Label>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <HelpCircle className="size-3.5 text-muted-foreground cursor-help" />
+                          </TooltipTrigger>
+                          <TooltipContent side="right" className="max-w-64">
+                            When enabled, LeagueQL securely stores your ESPN
+                            cookies (encrypted) and refreshes your league
+                            automatically each week during the season. ESPN
+                            cookies expire periodically, so you may occasionally
+                            need to re-enter them.
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
+                  </div>
                 </>
               )}
               <div className="flex gap-2">

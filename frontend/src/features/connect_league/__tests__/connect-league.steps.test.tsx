@@ -96,7 +96,10 @@ async function submitLeague(leagueId: string) {
   });
 }
 
-async function connectEspnFlow(leagueId: string) {
+async function connectEspnFlow(
+  leagueId: string,
+  opts: { autoRefresh?: boolean } = {},
+) {
   vi.useFakeTimers();
   window.history.pushState({}, '', '/connect_league?platform=espn');
   await renderRoute(
@@ -122,6 +125,13 @@ async function connectEspnFlow(leagueId: string) {
     fireEvent.change(screen.getByPlaceholderText('Enter your ESPN S2 token'), {
       target: { value: 's2cookie' },
     });
+    if (opts.autoRefresh) {
+      fireEvent.click(
+        screen.getByRole('checkbox', {
+          name: /enable automatic weekly refresh/i,
+        }),
+      );
+    }
     await Promise.resolve();
   });
   await act(async () => {
@@ -348,6 +358,116 @@ defineFeature(feature, (test) => {
     });
     and('no onboard or refresh request was made', () => {
       expect(onboardCalled).toBe(false);
+    });
+  });
+
+  test('Enabling auto-refresh sends the opt-in with an ESPN onboard', ({
+    given,
+    when,
+    then,
+  }) => {
+    let capturedBody: { autoRefresh?: boolean } | null = null;
+    given('onboarding will complete successfully', () => {
+      server.use(
+        statefulGetLeague(),
+        http.post(`${API}/leagues`, async ({ request }) => {
+          capturedBody = (await request.json()) as { autoRefresh?: boolean };
+          return HttpResponse.json(
+            {
+              detail: 'Successfully triggered onboarding',
+              data: { correlation_id: 'corr-1' },
+            },
+            { status: 201 },
+          );
+        }),
+        jobStatus('COMPLETED'),
+      );
+    });
+    when(
+      /^I onboard ESPN league "(.*)" with auto-refresh enabled$/,
+      async (leagueId) => {
+        await connectEspnFlow(leagueId, { autoRefresh: true });
+      },
+    );
+    then('the onboard request included auto-refresh', () => {
+      expect(capturedBody?.autoRefresh).toBe(true);
+    });
+  });
+
+  test('Onboarding ESPN without checking auto-refresh sends opt-out', ({
+    given,
+    when,
+    then,
+  }) => {
+    let capturedBody: { autoRefresh?: boolean } | null = null;
+    given('onboarding will complete successfully', () => {
+      server.use(
+        statefulGetLeague(),
+        http.post(`${API}/leagues`, async ({ request }) => {
+          capturedBody = (await request.json()) as { autoRefresh?: boolean };
+          return HttpResponse.json(
+            {
+              detail: 'Successfully triggered onboarding',
+              data: { correlation_id: 'corr-1' },
+            },
+            { status: 201 },
+          );
+        }),
+        jobStatus('COMPLETED'),
+      );
+    });
+    when(
+      /^I onboard ESPN league "(.*)" without enabling auto-refresh$/,
+      async (leagueId) => {
+        await connectEspnFlow(leagueId, { autoRefresh: false });
+      },
+    );
+    then('the onboard request did not include auto-refresh', () => {
+      expect(capturedBody?.autoRefresh).toBeFalsy();
+    });
+  });
+
+  test('The auto-refresh checkbox reflects an already-enrolled ESPN league on refresh', ({
+    given,
+    when,
+    then,
+  }) => {
+    given('an ESPN league already enrolled in auto-refresh', () => {
+      server.use(
+        http.get(`${API}/leagues/:id`, () =>
+          HttpResponse.json({
+            detail: 'Found league',
+            data: {
+              seasons: ['2024'],
+              league_name: 'L',
+              is_owner: true,
+              auto_refresh_enabled: true,
+            },
+          }),
+        ),
+      );
+    });
+    when(
+      /^I open the ESPN refresh form for league "(.*)"$/,
+      async (leagueId) => {
+        window.history.pushState(
+          {},
+          '',
+          `/connect_league?platform=espn&leagueId=${leagueId}`,
+        );
+        await renderRoute(
+          <Routes>
+            <Route path="/connect_league" element={<LeagueConnect />} />
+          </Routes>,
+          { route: `/connect_league?platform=espn&leagueId=${leagueId}` },
+        );
+      },
+    );
+    then('the auto-refresh checkbox is checked', async () => {
+      const checkbox = await screen.findByRole('checkbox', {
+        name: /enable automatic weekly refresh/i,
+      });
+      expect(checkbox).toBeChecked();
     });
   });
 

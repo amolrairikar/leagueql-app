@@ -36,3 +36,24 @@ Feature: Delete league API (backend/delete-league)
     When I DELETE "/leagues/100?platform=SLEEPER"
     Then the API responds with status 200
     And a YAHOO_OAUTH token item still exists for the default user
+
+  Scenario: Deleting the owner's last opted-in ESPN league removes their stored cookies
+    Given a LEAGUE_LOOKUP exists for league "500" platform "ESPN" canonical "canon-e"
+    And an ESPN_CREDENTIALS item exists for the default user
+    When I DELETE "/leagues/500?platform=ESPN"
+    Then the API responds with status 200
+    And no ESPN_CREDENTIALS item exists for the default user
+
+  Scenario: Deleting an ESPN league keeps the cookies when another opted-in ESPN league remains
+    Given a LEAGUE_LOOKUP exists for league "500" platform "ESPN" canonical "canon-e"
+    And an onboarded ESPN league "canon-e2" opted into auto-refresh owned by the default user
+    And an ESPN_CREDENTIALS item exists for the default user
+    When I DELETE "/leagues/500?platform=ESPN"
+    Then the API responds with status 200
+    And an ESPN_CREDENTIALS item still exists for the default user
+
+  Scenario: Deleting a Sleeper league never removes ESPN cookies
+    Given an ESPN_CREDENTIALS item exists for the default user
+    When I DELETE "/leagues/100?platform=SLEEPER"
+    Then the API responds with status 200
+    And an ESPN_CREDENTIALS item still exists for the default user

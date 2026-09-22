@@ -8,8 +8,11 @@ import { getLeagueCookies, isDemoMode } from '@/lib/cookie-handler';
  * Reminds an ESPN league's owner to refresh when the data is more than 7 days old
  * (frontend/refresh-reminder-banner). Rendered below the in-app header. Shows only
  * for ESPN leagues, only to the owner, and only while the data is stale — it is not
- * dismissible and disappears on its own once the league is refreshed. Sleeper
- * leagues auto-refresh, so no reminder is shown for them.
+ * dismissible and disappears on its own once the league is refreshed. ESPN auto-refresh
+ * is opt-in and its stored cookies can expire, so a stale ESPN league still warrants the
+ * nudge (re-submitting cookies re-enables the weekly refresh); Sleeper and Yahoo need no
+ * reminder here (Sleeper always auto-refreshes; an opted-in Yahoo league refreshes on its
+ * stored OAuth token without the owner re-entering anything).
  */
 export function RefreshReminderBanner() {
   const { platform, leagueId } = getLeagueCookies();
