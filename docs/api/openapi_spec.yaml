@@ -1294,8 +1294,9 @@ components:
     TooManyRequests:
       description: >
         The league is within the once-per-week refresh cooldown
-        (backend/league-refresh). A manual refresh is rejected while the most
-        recent successful refresh is less than 7 days old.
+        (backend/league-refresh). A manual refresh is rejected until the current
+        UTC date is at least 7 calendar days after the UTC date of the most recent
+        successful refresh (measured in whole days, not an exact 7x24h window).
       content:
         application/json:
           schema:

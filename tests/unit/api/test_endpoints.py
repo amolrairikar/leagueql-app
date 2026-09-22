@@ -539,6 +539,42 @@ class TestOnboardLeagueEndpoint:
         )
         assert response.status_code == 201
 
+    def test_refresh_proceeds_on_seventh_calendar_day_earlier_time(
+        self,
+        client,
+        mock_table,
+        mock_lambda_client,
+        league_lookup_item,
+        league_metadata_item,
+        monkeypatch,
+    ):
+        # Boundary case: refreshed at 10:00 UTC, retried at 08:00 UTC on the seventh
+        # calendar day (only 6d 22h elapsed). The whole-day cooldown must allow it;
+        # an exact 7x24h check would wrongly 429. Freeze `now` so the calendar-day
+        # diff is deterministic regardless of when the suite runs.
+        from datetime import datetime, timezone
+
+        import routes
+
+        class _FrozenDatetime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return datetime(2026, 9, 22, 8, 0, tzinfo=timezone.utc)
+
+        monkeypatch.setenv("ENVIRONMENT", "prod")
+        monkeypatch.setattr(routes, "datetime", _FrozenDatetime)
+        league_metadata_item["last_refresh_at"] = "2026-09-15T10:00:00+00:00"
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+        ]
+        mock_lambda_client.invoke.return_value = {}
+        response = client.post(
+            "/leagues?requestType=REFRESH",
+            json={"leagueId": "123", "platform": "SLEEPER"},
+        )
+        assert response.status_code == 201
+
     def test_refresh_blocked_when_stored_equals_current_state(
         self, client, mock_table, league_lookup_item, league_metadata_item
     ):
