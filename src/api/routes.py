@@ -302,10 +302,24 @@ def onboard_league(
         # iterated on without waiting a week between test refreshes.
         if last_refresh_at and os.environ.get("ENVIRONMENT") != "dev":
             last_refresh_dt = datetime.fromisoformat(last_refresh_at)
-            cooldown = timedelta(days=REFRESH_COOLDOWN_DAYS)
-            elapsed = datetime.now(timezone.utc) - last_refresh_dt
-            if elapsed < cooldown:
-                wait = _format_cooldown_wait(cooldown - elapsed)
+            now = datetime.now(timezone.utc)
+            # Measure the cooldown in whole UTC calendar days, not an exact 7x24h
+            # duration: the intent is "once per week", so a refresh 7 calendar days
+            # later is allowed at any time of day. An exact-duration check would
+            # wrongly reject a refresh a few hours short of the clock (e.g. last
+            # refreshed 10:00, retried 08:00 on day 7).
+            elapsed_days = (now.date() - last_refresh_dt.date()).days
+            if elapsed_days < REFRESH_COOLDOWN_DAYS:
+                allowed_date = last_refresh_dt.date() + timedelta(
+                    days=REFRESH_COOLDOWN_DAYS
+                )
+                allowed_at = datetime(
+                    allowed_date.year,
+                    allowed_date.month,
+                    allowed_date.day,
+                    tzinfo=timezone.utc,
+                )
+                wait = _format_cooldown_wait(allowed_at - now)
                 raise HTTPException(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                     detail=f"This league can only be refreshed once per week. You can refresh again in {wait}.",
