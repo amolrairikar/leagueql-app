@@ -1,5 +1,6 @@
 """Tests for FastAPI endpoint handlers in main.py."""
 
+import json
 from datetime import datetime, timedelta, timezone
 from typing import ClassVar
 from unittest.mock import MagicMock, patch
@@ -2468,3 +2469,219 @@ class TestAcceptInviteEndpoint:
             "/leagues/123/accept-invite?platform=ESPN", json={"token": "tok"}
         )
         assert response.status_code == 500
+
+
+class TestGetLeagueAutoRefreshFlag:
+    def test_returns_auto_refresh_enabled(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        # The flag drives the connect-form checkbox prefill / sidebar toggle
+        # (backend/scheduled-league-auto-refresh).
+        league_metadata_item["auto_refresh_enabled"] = True
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+        ]
+        mock_table.query.return_value = {
+            "Items": [{"seasons": {"2024"}, "canonical_league_id": "canonical-abc"}]
+        }
+        response = client.get("/leagues/123?platform=SLEEPER")
+        assert response.status_code == 200
+        assert response.json()["data"]["auto_refresh_enabled"] is True
+
+    def test_defaults_false_when_absent(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+        ]
+        mock_table.query.return_value = {
+            "Items": [{"seasons": {"2024"}, "canonical_league_id": "canonical-abc"}]
+        }
+        response = client.get("/leagues/123?platform=SLEEPER")
+        assert response.json()["data"]["auto_refresh_enabled"] is False
+
+
+class TestOnboardForwardsAutoRefresh:
+    def test_auto_refresh_forwarded_in_invoke(
+        self, client, mock_table, mock_lambda_client
+    ):
+        mock_table.get_item.return_value = {}
+        mock_lambda_client.invoke.return_value = {}
+        response = client.post(
+            "/leagues",
+            json={
+                "leagueId": "123",
+                "platform": "ESPN",
+                "season": "2026",
+                "s2": "a",
+                "swid": "b",
+                "autoRefresh": True,
+            },
+        )
+        assert response.status_code == 201
+        payload = json.loads(mock_lambda_client.invoke.call_args[1]["Payload"])
+        assert payload["body"]["autoRefresh"] is True
+
+
+class TestSetAutoRefreshEndpoint:
+    def _espn_items(self, owner="user_1"):
+        lookup = {
+            "PK": "LEAGUE#456#PLATFORM#ESPN",
+            "SK": "LEAGUE_LOOKUP",
+            "canonical_league_id": "canonical-espn",
+            "owner_user_id": owner,
+        }
+        metadata = {
+            "PK": "LEAGUE#canonical-espn",
+            "SK": "METADATA",
+            "platform": "ESPN",
+            "owner_user_id": owner,
+            "members": {owner},
+        }
+        return lookup, metadata
+
+    def test_enable_sets_flag(self, client, mock_table):
+        lookup, metadata = self._espn_items()
+        mock_table.get_item.side_effect = [{"Item": lookup}, {"Item": metadata}]
+        response = client.put(
+            "/leagues/456/auto-refresh?platform=ESPN", json={"enabled": True}
+        )
+        assert response.status_code == 200
+        assert response.json()["data"]["auto_refresh_enabled"] is True
+        update = mock_table.update_item.call_args.kwargs
+        assert update["ExpressionAttributeValues"][":ar"] is True
+        assert update["Key"] == {"PK": "LEAGUE#canonical-espn", "SK": "METADATA"}
+
+    def test_disable_last_espn_deletes_credentials(self, client, mock_table):
+        lookup, metadata = self._espn_items()
+        mock_table.get_item.side_effect = [{"Item": lookup}, {"Item": metadata}]
+        with (
+            patch("routes.owner_has_other_optedin_espn_leagues", return_value=False),
+            patch("espn_credentials.delete_credentials") as mock_del,
+        ):
+            response = client.put(
+                "/leagues/456/auto-refresh?platform=ESPN", json={"enabled": False}
+            )
+        assert response.status_code == 200
+        mock_del.assert_called_once_with("user_1")
+
+    def test_disable_with_other_espn_keeps_credentials(self, client, mock_table):
+        lookup, metadata = self._espn_items()
+        mock_table.get_item.side_effect = [{"Item": lookup}, {"Item": metadata}]
+        with (
+            patch("routes.owner_has_other_optedin_espn_leagues", return_value=True),
+            patch("espn_credentials.delete_credentials") as mock_del,
+        ):
+            response = client.put(
+                "/leagues/456/auto-refresh?platform=ESPN", json={"enabled": False}
+            )
+        assert response.status_code == 200
+        mock_del.assert_not_called()
+
+    def test_disable_yahoo_does_not_touch_espn_credentials(self, client, mock_table):
+        lookup = {
+            "PK": "LEAGUE#456#PLATFORM#YAHOO",
+            "SK": "LEAGUE_LOOKUP",
+            "canonical_league_id": "canonical-yh",
+            "owner_user_id": "user_1",
+        }
+        metadata = {
+            "PK": "LEAGUE#canonical-yh",
+            "SK": "METADATA",
+            "platform": "YAHOO",
+            "owner_user_id": "user_1",
+            "members": {"user_1"},
+        }
+        mock_table.get_item.side_effect = [{"Item": lookup}, {"Item": metadata}]
+        with patch("espn_credentials.delete_credentials") as mock_del:
+            response = client.put(
+                "/leagues/456/auto-refresh?platform=YAHOO", json={"enabled": False}
+            )
+        assert response.status_code == 200
+        mock_del.assert_not_called()
+
+    def test_non_owner_forbidden(self, client, mock_table):
+        lookup, metadata = self._espn_items(owner="someone_else")
+        mock_table.get_item.side_effect = [{"Item": lookup}, {"Item": metadata}]
+        response = client.put(
+            "/leagues/456/auto-refresh?platform=ESPN", json={"enabled": True}
+        )
+        assert response.status_code == 403
+        mock_table.update_item.assert_not_called()
+
+    def test_credential_cleanup_failure_does_not_fail_request(self, client, mock_table):
+        lookup, metadata = self._espn_items()
+        mock_table.get_item.side_effect = [{"Item": lookup}, {"Item": metadata}]
+        with (
+            patch("routes.owner_has_other_optedin_espn_leagues", return_value=False),
+            patch(
+                "espn_credentials.delete_credentials",
+                side_effect=RuntimeError("kms down"),
+            ),
+        ):
+            response = client.put(
+                "/leagues/456/auto-refresh?platform=ESPN", json={"enabled": False}
+            )
+        assert response.status_code == 200
+
+
+class TestDeleteLeagueEspnCredentialCleanup:
+    def _espn_lookup_item(self):
+        return {
+            "PK": "LEAGUE#456#PLATFORM#ESPN",
+            "SK": "LEAGUE_LOOKUP",
+            "canonical_league_id": "canonical-espn",
+            "platform": "ESPN",
+            "owner_user_id": "user_1",
+        }
+
+    def _setup(self, mock_table, item, mock_s3_client):
+        mock_table.get_item.return_value = {"Item": item}
+        mock_table.delete_item.return_value = {}
+        mock_writer = MagicMock()
+        mock_table.batch_writer.return_value.__enter__ = MagicMock(
+            return_value=mock_writer
+        )
+        mock_table.batch_writer.return_value.__exit__ = MagicMock(return_value=False)
+        mock_table.query.return_value = {"Items": []}
+        mock_s3_client.list_objects_v2.return_value = {}
+
+    def test_deletes_credentials_when_last_espn_league(
+        self, client, mock_table, mock_s3_client
+    ):
+        self._setup(mock_table, self._espn_lookup_item(), mock_s3_client)
+        with (
+            patch("routes.owner_has_other_optedin_espn_leagues", return_value=False),
+            patch("espn_credentials.delete_credentials") as mock_del,
+        ):
+            response = client.delete("/leagues/456?platform=ESPN")
+        assert response.status_code == 200
+        mock_del.assert_called_once_with("user_1")
+
+    def test_keeps_credentials_when_other_espn_league_remains(
+        self, client, mock_table, mock_s3_client
+    ):
+        self._setup(mock_table, self._espn_lookup_item(), mock_s3_client)
+        with (
+            patch("routes.owner_has_other_optedin_espn_leagues", return_value=True),
+            patch("espn_credentials.delete_credentials") as mock_del,
+        ):
+            response = client.delete("/leagues/456?platform=ESPN")
+        assert response.status_code == 200
+        mock_del.assert_not_called()
+
+    def test_credential_cleanup_failure_does_not_fail_delete(
+        self, client, mock_table, mock_s3_client
+    ):
+        self._setup(mock_table, self._espn_lookup_item(), mock_s3_client)
+        with (
+            patch("routes.owner_has_other_optedin_espn_leagues", return_value=False),
+            patch(
+                "espn_credentials.delete_credentials",
+                side_effect=RuntimeError("kms down"),
+            ),
+        ):
+            response = client.delete("/leagues/456?platform=ESPN")
+        assert response.status_code == 200

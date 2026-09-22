@@ -134,6 +134,7 @@ def lambda_handler(event, context) -> dict[str, str | int]:
                         correlation_id=correlation_id,
                         platform=platform,
                         owner_user_id=league["owner_user_id"],
+                        season=league.get("season"),
                     )
                     success_count += 1
                     logger.info(

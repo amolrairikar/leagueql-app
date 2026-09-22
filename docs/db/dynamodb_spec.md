@@ -135,6 +135,7 @@ the league will not appear as onboarded and a retry will re-run the full onboard
 | `invite_token_hash` | String | No | sha256 of the gated league's (ESPN or Yahoo) reusable invite token (backend/league-authorization). Plaintext is never stored; set by `POST /leagues/{id}/invite-token` and matched (not removed) on each `POST /leagues/{id}/accept-invite`. No expiry — minting a new token overwrites this hash, revoking the prior link. |
 | `transfer_token_hash` | String | No | sha256 of an outstanding ownership-transfer token (backend/league-authorization). Plaintext is never stored; set by `POST /leagues/{id}/transfer-token` and removed when redeemed. |
 | `transfer_token_expires_at` | String | No | ISO 8601 (UTC) expiry of the outstanding transfer token (backend/league-authorization). |
+| `auto_refresh_enabled` | Boolean | No | Whether the league is opted into scheduled auto-refresh (backend/scheduled-league-auto-refresh). Gates selection for the credentialed platforms (ESPN and Yahoo); Sleeper is always auto-refreshed regardless. Set on onboard from the opt-in choice, toggled by `PUT /leagues/{leagueId}/auto-refresh`, and updated on a user-initiated refresh that changes the choice (a scheduled/new-season refresh preserves it). Absent (treated as `false`) on leagues onboarded before opt-in. |
 | `active_job_id` | String | No | Concurrency-guard pointer to the league's most recently started in-flight job. Holds the `correlation_id` of the current onboard/refresh/migrate; the API dereferences it to the `JOB#{correlation_id}` / `JOB_STATUS` item and rejects a duplicate request only while that job is `IN_PROGRESS`. Written best-effort on job start; stale pointers self-heal because the JOB_STATUS item carries a 24h TTL. |
 | `active_platform` | String | No | Current platform the league is served from after an ESPN → Sleeper migration. Set to the destination platform when a migration is initiated; before any migration `platform` is authoritative. Enum: `ESPN`, `SLEEPER`, `YAHOO`. |
 | `migrated_from` | String | No | Source platform recorded when a league is migrated to a new platform (e.g. `ESPN` when migrating ESPN → Sleeper). Enum: `ESPN`, `SLEEPER`, `YAHOO`. |
@@ -778,6 +779,39 @@ persists until the user re-links or revokes access.
   "refresh_token": "AQID...base64-kms-ciphertext...",
   "token_type": "bearer",
   "expires_at": 1725238800,
+  "updated_at": 1725235200
+}
+```
+</details>
+
+<details>
+<summary><b>ESPN_CREDENTIALS</b></summary>
+
+Per-user ESPN cookies for opt-in scheduled auto-refresh (backend/espn-credential-storage). Written
+by the onboarder after a successful ESPN onboard/refresh that opts into auto-refresh, so the
+scheduled refresh can reuse the owner's cookies without them re-entering them. Keyed by the Clerk
+user id (not a league) because one ESPN session backs all of that user's ESPN leagues. Both cookie
+values are **KMS-encrypted** (base64 ciphertext) with the same shared credential key as
+`YAHOO_OAUTH`; the plaintext never appears in logs, traces, API responses, or Terraform state. No
+TTL — deleted when the user has no ESPN league opted into auto-refresh (on opt-out or league
+delete). ESPN cookies cannot be refreshed programmatically, so an expired cookie surfaces as the
+non-paging `ESPN_AUTH` failure prompting re-entry.
+
+| Attribute | Type | Required | Description |
+|---|---|---|---|
+| `PK` | String | Yes | `USER#{clerk_user_id}` |
+| `SK` | String | Yes | `ESPN_CREDENTIALS` |
+| `swid` | String | Yes | KMS-encrypted (base64) ESPN `SWID` cookie |
+| `espn_s2` | String | Yes | KMS-encrypted (base64) ESPN `espn_s2` cookie |
+| `updated_at` | Number | Yes | Unix epoch seconds of the most recent write |
+
+**Example:**
+```json
+{
+  "PK": "USER#user_2abc123",
+  "SK": "ESPN_CREDENTIALS",
+  "swid": "AQID...base64-kms-ciphertext...",
+  "espn_s2": "AQID...base64-kms-ciphertext...",
   "updated_at": 1725235200
 }
 ```

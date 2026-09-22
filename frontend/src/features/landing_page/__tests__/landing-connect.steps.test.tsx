@@ -83,7 +83,10 @@ function swapLocationWithConnect() {
  * Interactions run on real timers; the click and the ensuing onboard/poll run under
  * fake timers so `pollForCompletion`'s 1s interval can be fast-forwarded.
  */
-async function connectYahooLeague(leagueId: string) {
+async function connectYahooLeague(
+  leagueId: string,
+  opts: { autoRefresh?: boolean } = {},
+) {
   const user = userEvent.setup();
   await renderRoute(
     <Routes>
@@ -95,6 +98,9 @@ async function connectYahooLeague(leagueId: string) {
   await user.click(await screen.findByRole('combobox'));
   await user.click(await screen.findByRole('option', { name: 'Yahoo' }));
   await user.type(screen.getByPlaceholderText('League ID'), leagueId);
+  if (opts.autoRefresh) {
+    await user.click(screen.getByRole('checkbox'));
+  }
   vi.useFakeTimers();
   await act(async () => {
     fireEvent.click(screen.getByRole('button', { name: /^connect$/i }));
@@ -296,6 +302,39 @@ defineFeature(feature, (test) => {
       expect(window.location.href).toBe(
         'https://consent.yahoo.test/authorize?x=1',
       );
+    });
+  });
+
+  test('Enabling auto-refresh when connecting a linked Yahoo league sends the opt-in', ({
+    given,
+    when,
+    then,
+  }) => {
+    let capturedBody: { autoRefresh?: boolean } | null = null;
+    given('onboarding a linked Yahoo league completes successfully', () => {
+      server.use(
+        getLeagueOk,
+        http.post(`${API}/leagues`, async ({ request }) => {
+          capturedBody = (await request.json()) as { autoRefresh?: boolean };
+          return HttpResponse.json(
+            {
+              detail: 'Successfully triggered onboarding',
+              data: { correlation_id: 'corr-1' },
+            },
+            { status: 201 },
+          );
+        }),
+        jobStatus('COMPLETED'),
+      );
+    });
+    when(
+      /^I connect a Yahoo league "(.*)" with auto-refresh enabled$/,
+      async (leagueId) => {
+        await connectYahooLeague(leagueId, { autoRefresh: true });
+      },
+    );
+    then('the Yahoo onboard request included auto-refresh', () => {
+      expect(capturedBody?.autoRefresh).toBe(true);
     });
   });
 });

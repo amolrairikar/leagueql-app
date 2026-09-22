@@ -16,6 +16,7 @@ from typing import Annotated, Any, Literal
 from urllib.parse import urlencode
 
 import botocore.exceptions
+import espn_credentials
 import main
 import requests as http_requests
 import yahoo_oauth
@@ -44,6 +45,7 @@ from helpers import (
     get_nfl_state,
     is_job_in_progress,
     lookup_league,
+    owner_has_other_optedin_espn_leagues,
     owner_has_other_yahoo_leagues,
     publish_failure,
     record_league_access,
@@ -58,6 +60,7 @@ from main import (
     S3_BUCKET,
     AcceptInvitePayload,
     APIResponse,
+    AutoRefreshPayload,
     ClaimOwnershipPayload,
     EspnMembersPayload,
     MigratePayload,
@@ -187,6 +190,9 @@ def get_league(
             # last_refresh_at is absent until the league's first successful refresh.
             "last_refresh_at": metadata.get("last_refresh_at"),
             "onboarded_at": metadata.get("onboarded_at"),
+            # Drives the auto-refresh checkbox prefill / sidebar toggle
+            # (backend/scheduled-league-auto-refresh). Absent on older leagues → not enrolled.
+            "auto_refresh_enabled": bool(metadata.get("auto_refresh_enabled")),
         },
     )
 
@@ -705,6 +711,34 @@ def delete_league(
                     f"{canonical_league_id}: {e}"
                 )
 
+        # A user's stored ESPN cookies live in a single per-user item
+        # (USER#{id}/ESPN_CREDENTIALS) — one ESPN session backs all of that user's ESPN
+        # leagues — and are only kept while some ESPN league they own is opted into
+        # auto-refresh (backend/espn-credential-storage, backend/delete-league). Once the
+        # owner has no *other* opted-in ESPN league, remove the credential item. Same
+        # best-effort contract as the Yahoo cleanup above: the league data is already gone,
+        # so no error here may turn a successful delete into a failure.
+        if effective_platform == Platform.ESPN.value:
+            try:
+                if not owner_has_other_optedin_espn_leagues(
+                    clerk_user_id, exclude_canonical_league_id=canonical_league_id
+                ):
+                    espn_credentials.delete_credentials(clerk_user_id)
+                    logger.info(
+                        "Removed orphaned ESPN credentials after owner's last opted-in "
+                        "ESPN league delete"
+                    )
+            except Exception as e:  # noqa: BLE001 - cleanup must never fail the delete
+                logger.error(
+                    "ESPN credential cleanup failed after deleting league %s: %s",
+                    canonical_league_id,
+                    e,
+                )
+                publish_failure(
+                    "Failed to clean up ESPN credential item after deleting league "
+                    f"{canonical_league_id}: {e}"
+                )
+
         return APIResponse(
             detail="Successfully deleted league",
         )
@@ -714,6 +748,71 @@ def delete_league(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to delete league",
         )
+
+
+@router.put("/leagues/{leagueId}/auto-refresh", status_code=status.HTTP_200_OK)
+def set_auto_refresh(
+    leagueId: Annotated[
+        str, Path(description="The ID of the fantasy league", pattern=r"^\d+$")
+    ],
+    platform: Annotated[Platform, Query(description="The platform the league is on")],
+    payload: AutoRefreshPayload,
+    clerk_user_id: Annotated[str, Depends(get_authenticated_user)],
+) -> APIResponse:
+    """Enable or disable scheduled auto-refresh for a league (owner only).
+
+    Persists ``auto_refresh_enabled`` on the canonical league's METADATA
+    (backend/scheduled-league-auto-refresh). Disabling the owner's last opted-in ESPN league also
+    removes their stored ESPN cookies (backend/espn-credential-storage). Enabling ESPN auto-refresh
+    still requires fresh cookies, which the frontend supplies through the connect/refresh form; this
+    endpoint only records the flag.
+    """
+    canonical_league_id = lookup_league(league_id=leagueId, platform=platform)
+    metadata = get_league_metadata(canonical_league_id=canonical_league_id)
+    require_league_owner(canonical_league_id, clerk_user_id, metadata=metadata)
+
+    try:
+        main.table.update_item(
+            Key={"PK": f"LEAGUE#{canonical_league_id}", "SK": "METADATA"},
+            UpdateExpression="SET auto_refresh_enabled = :ar",
+            ExpressionAttributeValues={":ar": payload.enabled},
+        )
+    except botocore.exceptions.ClientError as e:
+        logger.error("Failed to set auto_refresh_enabled for %s: %s", leagueId, e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update auto-refresh setting",
+        )
+
+    # Turning off the owner's last opted-in ESPN league orphans their stored cookies, so remove
+    # them once no other opted-in ESPN league remains. Best-effort: a cleanup failure does not
+    # fail the setting change the user just made.
+    effective_platform = metadata.get("active_platform") or metadata.get("platform")
+    if not payload.enabled and effective_platform == Platform.ESPN.value:
+        try:
+            if not owner_has_other_optedin_espn_leagues(
+                clerk_user_id, exclude_canonical_league_id=canonical_league_id
+            ):
+                espn_credentials.delete_credentials(clerk_user_id)
+                logger.info(
+                    "Removed orphaned ESPN credentials after owner opted out of their "
+                    "last ESPN league"
+                )
+        except Exception as e:  # noqa: BLE001 - cleanup must never fail the setting change
+            logger.error(
+                "ESPN credential cleanup failed after opt-out for league %s: %s",
+                canonical_league_id,
+                e,
+            )
+            publish_failure(
+                "Failed to clean up ESPN credential item after opt-out for league "
+                f"{canonical_league_id}: {e}"
+            )
+
+    return APIResponse(
+        detail="Auto-refresh enabled" if payload.enabled else "Auto-refresh disabled",
+        data={"auto_refresh_enabled": payload.enabled},
+    )
 
 
 @router.get("/leagues/{leagueId}/query", status_code=status.HTTP_200_OK)

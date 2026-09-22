@@ -34,3 +34,8 @@ Feature: Landing page connect routing (frontend/landing-page / frontend/connect-
     Given onboarding a linked Yahoo league fails with a re-link signal and the authorize endpoint returns a consent URL
     When I connect a Yahoo league "45.l.678" from the landing page
     Then the Yahoo authorization is requested for that league
+
+  Scenario: Enabling auto-refresh when connecting a linked Yahoo league sends the opt-in
+    Given onboarding a linked Yahoo league completes successfully
+    When I connect a Yahoo league "45.l.678" with auto-refresh enabled
+    Then the Yahoo onboard request included auto-refresh

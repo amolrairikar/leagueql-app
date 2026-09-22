@@ -7,17 +7,17 @@ import pytest
 import requests
 
 
-def _query_side_effect(sleeper_pages=None, yahoo_pages=None):
+def _query_side_effect(sleeper_pages=None, yahoo_pages=None, espn_pages=None):
     """Build a ``query`` side_effect that responds per GSI2 ``platform`` partition.
 
-    ``sleeper_pages`` / ``yahoo_pages`` are lists of response dicts (each may carry a
-    ``LastEvaluatedKey`` to drive pagination); each platform's pages are returned in
-    order across successive queries. A platform with no configured pages returns an
-    empty page.
+    ``sleeper_pages`` / ``yahoo_pages`` / ``espn_pages`` are lists of response dicts (each may
+    carry a ``LastEvaluatedKey`` to drive pagination); each platform's pages are returned in
+    order across successive queries. A platform with no configured pages returns an empty page.
     """
     pages = {
         "SLEEPER": iter(sleeper_pages or [{"Items": []}]),
         "YAHOO": iter(yahoo_pages or [{"Items": []}]),
+        "ESPN": iter(espn_pages or [{"Items": []}]),
     }
 
     def _side_effect(**kwargs):
@@ -75,6 +75,7 @@ class TestGetLeaguesToRefreshSleeper:
                 "league_id": "lg-2024",
                 "canonical_league_id": "canonical-abc",
                 "owner_user_id": None,
+                "season": None,
             }
         ]
 
@@ -109,8 +110,8 @@ class TestGetLeaguesToRefreshSleeper:
         assert all(
             r["platform"] == "SLEEPER" and r["owner_user_id"] is None for r in result
         )
-        # Two Sleeper pages + one (empty) Yahoo query.
-        assert mock_ddb.query.call_count == 3
+        # Two Sleeper pages + one (empty) Yahoo query + one (empty) ESPN query.
+        assert mock_ddb.query.call_count == 4
 
     def test_returns_empty_list_when_no_items(self, league_refresh_utils):
         mock_ddb = MagicMock()
@@ -190,6 +191,7 @@ class TestGetLeaguesToRefreshSleeper:
                 "league_id": "lg-2026",
                 "canonical_league_id": "c1",
                 "owner_user_id": None,
+                "season": None,
             }
         ]
 
@@ -264,6 +266,7 @@ class TestGetLeaguesToRefreshSleeper:
                 "league_id": "lg-2026",
                 "canonical_league_id": "c1",
                 "owner_user_id": None,
+                "season": None,
             }
         ]
 
@@ -297,12 +300,51 @@ class TestGetLeaguesToRefreshSleeper:
                 "league_id": "lg-2026-pending",
                 "canonical_league_id": "c2",
                 "owner_user_id": None,
+                "season": None,
             }
         ]
 
 
 class TestGetLeaguesToRefreshYahoo:
-    def test_resolves_owner_from_metadata(self, league_refresh_utils):
+    def test_resolves_owner_when_opted_in(self, league_refresh_utils):
+        mock_ddb = MagicMock()
+        mock_ddb.query.side_effect = _query_side_effect(
+            yahoo_pages=[
+                {
+                    "Items": [
+                        {
+                            "canonical_league_id": {"S": "y-canon"},
+                            "league_id": {"S": "y-2026"},
+                            "seasons": {"SS": ["2026"]},
+                        }
+                    ]
+                }
+            ]
+        )
+        mock_ddb.get_item.return_value = {
+            "Item": {
+                "owner_user_id": {"S": "user-42"},
+                "auto_refresh_enabled": {"BOOL": True},
+            }
+        }
+        with patch.object(league_refresh_utils, "_dynamodb_client", mock_ddb):
+            result = league_refresh_utils.get_leagues_to_refresh(2026)
+        assert result == [
+            {
+                "platform": "YAHOO",
+                "league_id": "y-2026",
+                "canonical_league_id": "y-canon",
+                "owner_user_id": "user-42",
+                "season": None,
+            }
+        ]
+        # METADATA point read keyed by the canonical league.
+        get_key = mock_ddb.get_item.call_args.kwargs["Key"]
+        assert get_key["PK"]["S"] == "LEAGUE#y-canon"
+        assert get_key["SK"]["S"] == "METADATA"
+
+    def test_skips_yahoo_league_not_opted_in(self, league_refresh_utils):
+        # Owner present but auto_refresh_enabled absent/false → opt-in required, skipped.
         mock_ddb = MagicMock()
         mock_ddb.query.side_effect = _query_side_effect(
             yahoo_pages=[
@@ -320,21 +362,10 @@ class TestGetLeaguesToRefreshYahoo:
         mock_ddb.get_item.return_value = {"Item": {"owner_user_id": {"S": "user-42"}}}
         with patch.object(league_refresh_utils, "_dynamodb_client", mock_ddb):
             result = league_refresh_utils.get_leagues_to_refresh(2026)
-        assert result == [
-            {
-                "platform": "YAHOO",
-                "league_id": "y-2026",
-                "canonical_league_id": "y-canon",
-                "owner_user_id": "user-42",
-            }
-        ]
-        # METADATA point read keyed by the canonical league.
-        get_key = mock_ddb.get_item.call_args.kwargs["Key"]
-        assert get_key["PK"]["S"] == "LEAGUE#y-canon"
-        assert get_key["SK"]["S"] == "METADATA"
+        assert result == []
 
     def test_skips_yahoo_league_without_owner(self, league_refresh_utils):
-        # METADATA present but no owner_user_id (e.g. system-onboarded) → skipped.
+        # Opted in but no owner_user_id (e.g. system-onboarded) → skipped.
         mock_ddb = MagicMock()
         mock_ddb.query.side_effect = _query_side_effect(
             yahoo_pages=[
@@ -349,7 +380,9 @@ class TestGetLeaguesToRefreshYahoo:
                 }
             ]
         )
-        mock_ddb.get_item.return_value = {"Item": {"platform": {"S": "YAHOO"}}}
+        mock_ddb.get_item.return_value = {
+            "Item": {"platform": {"S": "YAHOO"}, "auto_refresh_enabled": {"BOOL": True}}
+        }
         with patch.object(league_refresh_utils, "_dynamodb_client", mock_ddb):
             result = league_refresh_utils.get_leagues_to_refresh(2026)
         assert result == []
@@ -396,7 +429,87 @@ class TestGetLeaguesToRefreshYahoo:
         assert result == []
         mock_ddb.get_item.assert_not_called()
 
-    def test_returns_both_platforms(self, league_refresh_utils):
+
+class TestGetLeaguesToRefreshEspn:
+    def test_selects_opted_in_espn_with_owner_and_season(self, league_refresh_utils):
+        mock_ddb = MagicMock()
+        mock_ddb.query.side_effect = _query_side_effect(
+            espn_pages=[
+                {
+                    "Items": [
+                        {
+                            "canonical_league_id": {"S": "e-canon"},
+                            "league_id": {"S": "e-2026"},
+                            "seasons": {"SS": ["2026"]},
+                        }
+                    ]
+                }
+            ]
+        )
+        mock_ddb.get_item.return_value = {
+            "Item": {
+                "owner_user_id": {"S": "user-7"},
+                "auto_refresh_enabled": {"BOOL": True},
+            }
+        }
+        with patch.object(league_refresh_utils, "_dynamodb_client", mock_ddb):
+            result = league_refresh_utils.get_leagues_to_refresh(2026)
+        assert result == [
+            {
+                "platform": "ESPN",
+                "league_id": "e-2026",
+                "canonical_league_id": "e-canon",
+                "owner_user_id": "user-7",
+                # ESPN carries the current season (its client needs a latest season).
+                "season": "2026",
+            }
+        ]
+
+    def test_skips_espn_league_not_opted_in(self, league_refresh_utils):
+        mock_ddb = MagicMock()
+        mock_ddb.query.side_effect = _query_side_effect(
+            espn_pages=[
+                {
+                    "Items": [
+                        {
+                            "canonical_league_id": {"S": "e-canon"},
+                            "league_id": {"S": "e-2026"},
+                            "seasons": {"SS": ["2026"]},
+                        }
+                    ]
+                }
+            ]
+        )
+        mock_ddb.get_item.return_value = {"Item": {"owner_user_id": {"S": "user-7"}}}
+        with patch.object(league_refresh_utils, "_dynamodb_client", mock_ddb):
+            result = league_refresh_utils.get_leagues_to_refresh(2026)
+        assert result == []
+
+    def test_skips_opted_in_espn_without_owner(self, league_refresh_utils):
+        mock_ddb = MagicMock()
+        mock_ddb.query.side_effect = _query_side_effect(
+            espn_pages=[
+                {
+                    "Items": [
+                        {
+                            "canonical_league_id": {"S": "e-canon"},
+                            "league_id": {"S": "e-2026"},
+                            "seasons": {"SS": ["2026"]},
+                        }
+                    ]
+                }
+            ]
+        )
+        mock_ddb.get_item.return_value = {
+            "Item": {"auto_refresh_enabled": {"BOOL": True}}
+        }
+        with patch.object(league_refresh_utils, "_dynamodb_client", mock_ddb):
+            result = league_refresh_utils.get_leagues_to_refresh(2026)
+        assert result == []
+
+
+class TestGetLeaguesToRefreshAllPlatforms:
+    def test_returns_all_three_platforms(self, league_refresh_utils):
         mock_ddb = MagicMock()
         mock_ddb.query.side_effect = _query_side_effect(
             sleeper_pages=[
@@ -421,13 +534,34 @@ class TestGetLeaguesToRefreshYahoo:
                     ]
                 }
             ],
+            espn_pages=[
+                {
+                    "Items": [
+                        {
+                            "canonical_league_id": {"S": "e-canon"},
+                            "league_id": {"S": "e-2026"},
+                            "seasons": {"SS": ["2026"]},
+                        }
+                    ]
+                }
+            ],
         )
-        mock_ddb.get_item.return_value = {"Item": {"owner_user_id": {"S": "user-42"}}}
+        # Both credentialed leagues are owned + opted in.
+        mock_ddb.get_item.return_value = {
+            "Item": {
+                "owner_user_id": {"S": "user-42"},
+                "auto_refresh_enabled": {"BOOL": True},
+            }
+        }
         with patch.object(league_refresh_utils, "_dynamodb_client", mock_ddb):
             result = league_refresh_utils.get_leagues_to_refresh(2026)
         by_platform = {r["platform"]: r for r in result}
         assert by_platform["SLEEPER"]["owner_user_id"] is None
+        assert by_platform["SLEEPER"]["season"] is None
         assert by_platform["YAHOO"]["owner_user_id"] == "user-42"
+        assert by_platform["YAHOO"]["season"] is None
+        assert by_platform["ESPN"]["owner_user_id"] == "user-42"
+        assert by_platform["ESPN"]["season"] == "2026"
 
 
 class TestPacing:
@@ -477,6 +611,8 @@ class TestInvokeOnboarderLambda:
         payload = json.loads(mock_lambda.invoke.call_args[1]["Payload"])
         assert payload["body"]["leagueId"] == "league-123"
         assert payload["body"]["platform"] == "SLEEPER"
+        # Sleeper derives its own seasons; no season is sent.
+        assert "season" not in payload["body"]
         assert payload["canonicalLeagueId"] == "canonical-abc"
         assert payload["requestType"] == "REFRESH"
         assert payload["correlation_id"] == "test-corr-id"
@@ -495,8 +631,27 @@ class TestInvokeOnboarderLambda:
             )
         payload = json.loads(mock_lambda.invoke.call_args[1]["Payload"])
         assert payload["body"]["platform"] == "YAHOO"
+        assert "season" not in payload["body"]
         assert payload["ownerUserId"] == "user-42"
         assert payload["requestType"] == "REFRESH"
+
+    def test_invokes_lambda_successfully_espn_with_season(self, league_refresh_utils):
+        mock_lambda = MagicMock()
+        mock_lambda.invoke.return_value = {"StatusCode": 202}
+        with patch.object(league_refresh_utils, "_lambda_client", mock_lambda):
+            league_refresh_utils.invoke_onboarder_lambda(
+                "e-2026",
+                canonical_league_id="e-canon",
+                correlation_id="test-corr-id",
+                platform="ESPN",
+                owner_user_id="user-7",
+                season="2026",
+            )
+        payload = json.loads(mock_lambda.invoke.call_args[1]["Payload"])
+        assert payload["body"]["platform"] == "ESPN"
+        # ESPN carries the season so the onboarder's ESPN client has a latest season.
+        assert payload["body"]["season"] == "2026"
+        assert payload["ownerUserId"] == "user-7"
 
     def test_raises_when_status_not_202(self, league_refresh_utils):
         mock_lambda = MagicMock()

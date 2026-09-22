@@ -211,6 +211,59 @@ paths:
         uri: "arn:aws:apigateway:${aws_region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations"
         payloadFormatVersion: "2.0"   # use 2.0 for HTTP API (v2)
 
+  /leagues/{leagueId}/auto-refresh:
+    put:
+      summary: Enable or disable scheduled auto-refresh for a league
+      description: >
+        Sets the league's scheduled auto-refresh opt-in (backend/scheduled-league-auto-refresh).
+        Owner only. Disabling the owner's last opted-in ESPN league also removes their stored ESPN
+        cookies (backend/espn-credential-storage). Enabling ESPN auto-refresh still requires fresh
+        cookies, supplied through the onboard/refresh form; this endpoint only records the flag.
+      operationId: setAutoRefresh
+      parameters:
+        - name: leagueId
+          in: path
+          required: true
+          description: The ESPN, Sleeper, or Yahoo league ID
+          schema:
+            type: string
+            pattern: '^\d+$'
+            example: "12345678"
+        - name: platform
+          in: query
+          required: true
+          description: The name of the platform the fantasy football league is on
+          schema:
+            type: string
+            enum: [ESPN, SLEEPER, YAHOO]
+            example: "ESPN"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AutoRefreshRequest"
+      responses:
+        "200":
+          description: The auto-refresh setting was updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/APIResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/LeagueNotFoundError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      security:
+        - ClerkJWT: []
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        httpMethod: POST        # always POST for Lambda proxy, regardless of your route method
+        uri: "arn:aws:apigateway:${aws_region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations"
+        payloadFormatVersion: "2.0"   # use 2.0 for HTTP API (v2)
+
   /leagues:
     post:
       summary: Onboard a new league or refresh an existing league's data
@@ -815,6 +868,13 @@ components:
             the league's first refresh. The frontend derives data freshness as
             last_refresh_at ?? onboarded_at to drive the stale-league refresh reminder.
           example: "2025-08-24T12:00:00+00:00"
+        auto_refresh_enabled:
+          type: boolean
+          description: >
+            Whether the league is opted into scheduled auto-refresh
+            (backend/scheduled-league-auto-refresh). Drives the connect-form checkbox prefill and
+            the sidebar auto-refresh toggle. False (default) on leagues onboarded before opt-in.
+          example: false
 
     APIResponse:
       type: object
@@ -861,20 +921,40 @@ components:
             The most recent season the league was active for. Required for
             ESPN leagues only.
           example: "2025"
+        autoRefresh:
+          type: boolean
+          default: false
+          description: >
+            Opt this ESPN/Yahoo league into scheduled auto-refresh
+            (backend/scheduled-league-auto-refresh). When true for ESPN, the supplied cookies are
+            stored encrypted at rest so the weekly refresh can reuse them; when false they are not
+            stored. Ignored for Sleeper (always auto-refreshed).
+          example: false
         s2:
           type: string
           description: >
             ESPN espn_s2 cookie value. Required for private ESPN leagues only.
-            This value is only passed to the application for onboarding and is
-            never logged or stored in our database.
+            This value is never logged. It is stored (encrypted at rest) ONLY when
+            autoRefresh is true, so the scheduled refresh can reuse it; otherwise it is
+            used transiently for this request and not stored.
           example: "AEBxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
         swid:
           type: string
           description: >
             ESPN SWID cookie value. Required for private ESPN leagues only.
-            This value is only passed to the application for onboarding and is
-            never logged or stored in our database.
+            This value is never logged. It is stored (encrypted at rest) ONLY when
+            autoRefresh is true, so the scheduled refresh can reuse it; otherwise it is
+            used transiently for this request and not stored.
           example: "{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}"
+
+    AutoRefreshRequest:
+      type: object
+      required: [enabled]
+      properties:
+        enabled:
+          type: boolean
+          description: Whether scheduled auto-refresh should be enabled for the league.
+          example: true
 
     EspnMembersRequest:
       type: object

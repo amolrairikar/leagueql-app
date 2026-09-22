@@ -175,9 +175,11 @@ export default function ExtensionPrivacyPage() {
                 any purpose unrelated to the extension&apos;s single purpose.
               </li>
               <li>
-                Once the cookies reach LeagueQL, they are used only to fetch
-                your private league data and are not stored on our servers, as
-                described in our main{' '}
+                Once the cookies reach LeagueQL, they are used to fetch your
+                private league data. They are not stored on our servers unless
+                you enable automatic weekly refresh for that ESPN league, in
+                which case LeagueQL stores them encrypted at rest so it can
+                refresh the league on your behalf — as described in our main{' '}
                 <a
                   href="/privacy"
                   className="text-foreground underline underline-offset-4"

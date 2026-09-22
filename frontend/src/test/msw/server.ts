@@ -20,6 +20,7 @@ export function leagueMetadata(data: {
   is_owner?: boolean;
   onboarded_at?: string;
   last_refresh_at?: string | null;
+  auto_refresh_enabled?: boolean;
 }) {
   return http.get(`${API}/leagues/:id`, () =>
     HttpResponse.json({
@@ -30,6 +31,7 @@ export function leagueMetadata(data: {
         is_owner: data.is_owner ?? false,
         onboarded_at: data.onboarded_at ?? null,
         last_refresh_at: data.last_refresh_at ?? null,
+        auto_refresh_enabled: data.auto_refresh_enabled ?? false,
       },
     }),
   );

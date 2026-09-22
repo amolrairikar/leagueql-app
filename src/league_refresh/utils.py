@@ -14,12 +14,14 @@ SLEEPER_BASE_URL = "https://api.sleeper.app/v1"
 DYNAMODB_TABLE_NAME = os.environ["DYNAMODB_TABLE_NAME"]
 ONBOARDER_LAMBDA_NAME = os.environ["ONBOARDER_LAMBDA_NAME"]
 
-# Platforms auto-refreshed on a schedule. ESPN is excluded (it needs user-supplied
-# cookies). Sleeper is public (no owner); Yahoo needs the owner's OAuth token, which
-# the onboarder obtains from the owner_user_id passed in the invoke.
+# Platforms auto-refreshed on a schedule. Sleeper is public (no owner) and always refreshed.
+# Yahoo and ESPN are credentialed and opt-in: a league is selected only when its METADATA has
+# auto_refresh_enabled=true. Yahoo needs the owner's OAuth token and ESPN the owner's stored
+# cookies, which the onboarder obtains from the owner_user_id passed in the invoke.
 SLEEPER = "SLEEPER"
 YAHOO = "YAHOO"
-REFRESH_PLATFORMS = (SLEEPER, YAHOO)
+ESPN = "ESPN"
+REFRESH_PLATFORMS = (SLEEPER, YAHOO, ESPN)
 
 # Pacing between consecutive onboarder dispatches to the same platform. Because the
 # dispatch is an async ("Event") invoke, sleeping here staggers when each onboarder
@@ -141,12 +143,14 @@ def _pending_sleeper_renewals(items: list[dict], current_season: int) -> list[di
     return result
 
 
-def _get_league_owner(canonical_league_id: str) -> str | None:
+def _get_refresh_metadata(canonical_league_id: str) -> tuple[str | None, bool]:
     """
-    Read ``owner_user_id`` from a canonical league's METADATA item. Yahoo refreshes
-    need the owner's Clerk id so the onboarder can obtain/refresh that owner's OAuth
-    token; the field lives only on METADATA (not on the LEAGUE_LOOKUP items GSI2
-    returns). Returns None when the item or field is absent.
+    Read ``owner_user_id`` and ``auto_refresh_enabled`` from a canonical league's METADATA item.
+
+    Yahoo and ESPN refreshes need the owner's Clerk id so the onboarder can obtain that owner's
+    stored credentials (Yahoo OAuth token or ESPN cookies), and are opt-in via
+    ``auto_refresh_enabled``; both fields live only on METADATA (not on the LEAGUE_LOOKUP items
+    GSI2 returns). Returns ``(owner_user_id_or_None, auto_refresh_enabled)``.
     """
     response = _dynamodb_client.get_item(
         TableName=DYNAMODB_TABLE_NAME,
@@ -154,20 +158,25 @@ def _get_league_owner(canonical_league_id: str) -> str | None:
             "PK": {"S": f"LEAGUE#{canonical_league_id}"},
             "SK": {"S": "METADATA"},
         },
-        ProjectionExpression="owner_user_id",
+        ProjectionExpression="owner_user_id, auto_refresh_enabled",
     )
-    return response.get("Item", {}).get("owner_user_id", {}).get("S")
+    item = response.get("Item", {})
+    owner_user_id = item.get("owner_user_id", {}).get("S")
+    auto_refresh_enabled = item.get("auto_refresh_enabled", {}).get("BOOL", False)
+    return owner_user_id, auto_refresh_enabled
 
 
 def get_leagues_to_refresh(current_season: int) -> list[dict]:
     """
-    Enumerates the Sleeper and Yahoo leagues to refresh for the current NFL season.
+    Enumerates the Sleeper, Yahoo, and ESPN leagues to refresh for the current NFL season.
 
-    For each platform, queries DynamoDB GSI2, de-duplicates to the most recent
-    onboarded season per canonical league, and skips leagues whose newest season is
-    behind ``current_season``. Sleeper additionally polls pending renewals. Yahoo
-    leagues resolve their ``owner_user_id`` from METADATA and are skipped when it is
-    absent (they cannot be refreshed without an owner).
+    For each platform, queries DynamoDB GSI2, de-duplicates to the most recent onboarded season
+    per canonical league, and skips leagues whose newest season is behind ``current_season``.
+    Sleeper additionally polls pending renewals. Yahoo and ESPN are credentialed and opt-in: each
+    resolves its ``owner_user_id`` and ``auto_refresh_enabled`` from METADATA and is skipped when
+    the owner is absent or the league has not opted into automatic refresh. ESPN dispatches carry
+    ``season = current_season`` (its client requires a latest season) and no cookies — the
+    onboarder fetches the owner's stored cookies.
 
     Args:
         current_season: The current NFL season (year). Leagues and pending renewals
@@ -175,7 +184,7 @@ def get_leagues_to_refresh(current_season: int) -> list[dict]:
 
     Returns:
         list[dict]: dicts with ``platform``, ``league_id``, ``canonical_league_id``,
-            and ``owner_user_id`` (None for Sleeper).
+            ``owner_user_id`` (None for Sleeper), and ``season`` (set for ESPN, else None).
 
     Raises:
         Exception: If a DynamoDB query fails.
@@ -197,23 +206,36 @@ def get_leagues_to_refresh(current_season: int) -> list[dict]:
                         "league_id": league["league_id"],
                         "canonical_league_id": league["canonical_league_id"],
                         "owner_user_id": None,
+                        "season": None,
                     }
                 )
-        else:  # YAHOO
+        else:  # YAHOO or ESPN — credentialed, opt-in
             for league in leagues:
-                owner_user_id = _get_league_owner(league["canonical_league_id"])
+                owner_user_id, auto_refresh_enabled = _get_refresh_metadata(
+                    league["canonical_league_id"]
+                )
+                if not auto_refresh_enabled:
+                    logger.info(
+                        "Skipping %s league %s: auto-refresh not enabled",
+                        platform,
+                        league["league_id"],
+                    )
+                    continue
                 if not owner_user_id:
                     logger.info(
-                        "Skipping Yahoo league %s: no owner_user_id on METADATA",
+                        "Skipping %s league %s: no owner_user_id on METADATA",
+                        platform,
                         league["league_id"],
                     )
                     continue
                 result.append(
                     {
-                        "platform": YAHOO,
+                        "platform": platform,
                         "league_id": league["league_id"],
                         "canonical_league_id": league["canonical_league_id"],
                         "owner_user_id": owner_user_id,
+                        # ESPN's client needs a latest season; refresh the current one.
+                        "season": str(current_season) if platform == ESPN else None,
                     }
                 )
 
@@ -226,6 +248,7 @@ def invoke_onboarder_lambda(
     correlation_id: str,
     platform: str,
     owner_user_id: str | None = None,
+    season: str | None = None,
 ) -> None:
     """
     Invokes the onboarder lambda to refresh a specific league asynchronously.
@@ -234,17 +257,23 @@ def invoke_onboarder_lambda(
         league_id: The platform league ID to refresh.
         canonical_league_id: The canonical league ID, passed through to skip chain resolution.
         correlation_id: Correlation ID to propagate for request tracing.
-        platform: The platform (``SLEEPER`` or ``YAHOO``).
-        owner_user_id: Clerk user ID of the league owner, required for Yahoo so the
-            onboarder can obtain/refresh the owner's OAuth token; None for Sleeper.
+        platform: The platform (``SLEEPER``, ``YAHOO``, or ``ESPN``).
+        owner_user_id: Clerk user ID of the league owner, required for Yahoo (OAuth token) and
+            ESPN (stored cookies) so the onboarder can obtain the owner's credentials; None for
+            Sleeper.
+        season: The season to refresh, required for ESPN (its client needs a latest season);
+            None for Sleeper/Yahoo, which derive their own seasons.
 
     Raises:
         Exception: If lambda invocation fails.
     """
+    body: dict = {"leagueId": league_id, "platform": platform}
+    if season is not None:
+        body["season"] = season
     response = invoke_onboarder(
         lambda_client=_lambda_client,
         function_name=ONBOARDER_LAMBDA_NAME,
-        body={"leagueId": league_id, "platform": platform},
+        body=body,
         request_type="REFRESH",
         canonical_league_id=canonical_league_id,
         correlation_id=correlation_id,

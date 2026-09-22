@@ -404,6 +404,54 @@ def owner_has_other_yahoo_leagues(
     return False
 
 
+def owner_has_other_optedin_espn_leagues(
+    clerk_user_id: str, exclude_canonical_league_id: str
+) -> bool:
+    """Return whether ``clerk_user_id`` owns another ESPN league opted into auto-refresh.
+
+    Used to decide whether the owner's per-user ``ESPN_CREDENTIALS`` item is still needed: one
+    stored ESPN session backs all of that user's ESPN leagues, so the cookies must survive as
+    long as any *other* ESPN league they own is opted into automatic refresh
+    (backend/espn-credential-storage, backend/delete-league).
+
+    Queries GSI3 (the sparse all-METADATA index), filters to the caller's owned leagues, and
+    inspects each one's effective platform (``active_platform`` falling back to ``platform``). GSI3
+    does not project ``auto_refresh_enabled``, so for each *other* ESPN league it reads that item's
+    METADATA to check the flag. The league being deleted / opted out is skipped by PK.
+
+    Args:
+        clerk_user_id: The owner whose remaining opted-in ESPN leagues are counted.
+        exclude_canonical_league_id: Canonical id of the league being deleted / opted out.
+
+    Returns:
+        ``True`` if at least one *other* ESPN league owned by the user is opted into auto-refresh.
+    """
+    excluded_pk = f"LEAGUE#{exclude_canonical_league_id}"
+    kwargs: dict[str, Any] = {
+        "IndexName": "GSI3",
+        "KeyConditionExpression": Key("SK").eq("METADATA"),
+        "FilterExpression": Attr("owner_user_id").eq(clerk_user_id),
+    }
+    while True:
+        response = main.table.query(**kwargs)
+        for item in response.get("Items", []):
+            pk = item.get("PK")
+            if pk == excluded_pk:
+                continue
+            effective_platform = item.get("active_platform") or item.get("platform")
+            if effective_platform != main.Platform.ESPN.value:
+                continue
+            # auto_refresh_enabled is not projected into GSI3, so read the METADATA item.
+            full = main.table.get_item(Key={"PK": pk, "SK": "METADATA"}).get("Item", {})
+            if full.get("auto_refresh_enabled"):
+                return True
+        last_key = response.get("LastEvaluatedKey")
+        if not last_key:
+            break
+        kwargs["ExclusiveStartKey"] = last_key
+    return False
+
+
 def create_job_status(
     correlation_id: str,
     request_type: str,

@@ -540,3 +540,64 @@ def step_last_accessed_unchanged(context, canonical):
     assert item.get("last_accessed_at") == context.seeded_last_accessed, (
         "last_accessed_at was overwritten within the throttle window"
     )
+
+
+@given("an ESPN_CREDENTIALS item exists for the default user")
+def step_seed_espn_credentials(context):
+    # The delete/opt-out cleanup only reads/removes the item, so no real KMS ciphertext
+    # is needed (backend/espn-credential-storage).
+    put_item(
+        context,
+        {
+            "PK": f"USER#{context.default_user}",
+            "SK": "ESPN_CREDENTIALS",
+            "swid": "ciphertext-swid",
+            "espn_s2": "ciphertext-s2",
+            "updated_at": 1,
+        },
+    )
+
+
+@given(
+    'an onboarded ESPN league "{canonical}" opted into auto-refresh owned by the default user'
+)
+def step_seed_optedin_espn_league(context, canonical):
+    # A full METADATA item (with onboarded_at so it projects into GSI3) opted into
+    # auto-refresh, so the owner still has another opted-in ESPN league.
+    put_item(
+        context,
+        {
+            "PK": f"LEAGUE#{canonical}",
+            "SK": "METADATA",
+            "platform": "ESPN",
+            "league_name": "Other ESPN League",
+            "owner_user_id": context.default_user,
+            "onboarded_at": "2024-09-01T00:00:00Z",
+            "auto_refresh_enabled": True,
+        },
+    )
+
+
+@then("no ESPN_CREDENTIALS item exists for the default user")
+def step_assert_espn_credentials_absent(context):
+    item = get_item(context, f"USER#{context.default_user}", "ESPN_CREDENTIALS")
+    assert item is None, "expected the ESPN_CREDENTIALS item to be deleted"
+
+
+@then("an ESPN_CREDENTIALS item still exists for the default user")
+def step_assert_espn_credentials_present(context):
+    item = get_item(context, f"USER#{context.default_user}", "ESPN_CREDENTIALS")
+    assert item is not None, "expected the ESPN_CREDENTIALS item to be retained"
+
+
+@when('I PUT auto-refresh "{enabled}" for "{path}"')
+def step_put_auto_refresh(context, enabled, path):
+    context.response = context.api.put(path, json={"enabled": enabled == "true"})
+
+
+@then('the METADATA auto_refresh_enabled for league "{canonical}" is "{value}"')
+def step_assert_metadata_auto_refresh(context, canonical, value):
+    item = get_item(context, f"LEAGUE#{canonical}", "METADATA")
+    assert item is not None, "expected a METADATA item"
+    expected = value == "true"
+    assert bool(item.get("auto_refresh_enabled")) == expected, item

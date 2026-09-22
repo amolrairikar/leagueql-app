@@ -43,6 +43,7 @@ def step_seed_pending_renewal(context, league_id, canonical, season):
 
 @given('an onboarded ESPN league "{league_id}" canonical "{canonical}"')
 def step_seed_espn_league(context, league_id, canonical):
+    # No METADATA / opt-in flag: an ESPN league not enrolled in auto-refresh.
     put_item(
         context,
         {
@@ -52,6 +53,34 @@ def step_seed_espn_league(context, league_id, canonical):
             "seasons": {"2024"},
             "platform": "ESPN",
             "league_id": league_id,
+        },
+    )
+
+
+@given(
+    'an auto-refresh ESPN league "{league_id}" canonical "{canonical}" season "{season}" owner "{owner}"'
+)
+def step_seed_espn_league_optin(context, league_id, canonical, season, owner):
+    # An ESPN league opted into auto-refresh: LEAGUE_LOOKUP + METADATA with owner and the flag.
+    put_item(
+        context,
+        {
+            "PK": f"LEAGUE#{league_id}#PLATFORM#ESPN",
+            "SK": "LEAGUE_LOOKUP",
+            "canonical_league_id": canonical,
+            "seasons": {season},
+            "platform": "ESPN",
+            "league_id": league_id,
+        },
+    )
+    put_item(
+        context,
+        {
+            "PK": f"LEAGUE#{canonical}",
+            "SK": "METADATA",
+            "platform": "ESPN",
+            "owner_user_id": owner,
+            "auto_refresh_enabled": True,
         },
     )
 
@@ -71,6 +100,35 @@ def step_seed_yahoo_league(context, league_id, canonical, season, owner):
             "league_id": league_id,
         },
     )
+    # Yahoo auto-refresh is opt-in; this seeds an opted-in league.
+    put_item(
+        context,
+        {
+            "PK": f"LEAGUE#{canonical}",
+            "SK": "METADATA",
+            "platform": "YAHOO",
+            "owner_user_id": owner,
+            "auto_refresh_enabled": True,
+        },
+    )
+
+
+@given(
+    'a not-opted-in Yahoo league "{league_id}" canonical "{canonical}" season "{season}" owner "{owner}"'
+)
+def step_seed_yahoo_league_not_opted_in(context, league_id, canonical, season, owner):
+    put_item(
+        context,
+        {
+            "PK": f"LEAGUE#{league_id}#PLATFORM#YAHOO",
+            "SK": "LEAGUE_LOOKUP",
+            "canonical_league_id": canonical,
+            "seasons": {season},
+            "platform": "YAHOO",
+            "league_id": league_id,
+        },
+    )
+    # METADATA has an owner but no auto_refresh_enabled flag → opt-in required, not refreshed.
     put_item(
         context,
         {
@@ -97,12 +155,14 @@ def step_seed_yahoo_league_no_owner(context, league_id, canonical, season):
             "league_id": league_id,
         },
     )
+    # Opted in but no owner_user_id → cannot be refreshed without an owner, so skipped.
     put_item(
         context,
         {
             "PK": f"LEAGUE#{canonical}",
             "SK": "METADATA",
             "platform": "YAHOO",
+            "auto_refresh_enabled": True,
         },
     )
 
@@ -175,3 +235,22 @@ def step_invoke_for_with_owner(context, league_id, owner):
     call = match[0]
     assert call.kwargs.get("platform") == "YAHOO", call.kwargs
     assert call.kwargs.get("owner_user_id") == owner, call.kwargs
+
+
+@then(
+    'the onboarder was invoked for ESPN league "{league_id}" with owner "{owner}" and season "{season}"'
+)
+def step_invoke_for_espn(context, league_id, owner, season):
+    match = [
+        c
+        for c in context.invoke_mock.call_args_list
+        if c.args and c.args[0] == league_id
+    ]
+    assert match, f"onboarder not invoked for ESPN league {league_id}"
+    call = match[0]
+    assert call.kwargs.get("platform") == "ESPN", call.kwargs
+    assert call.kwargs.get("owner_user_id") == owner, call.kwargs
+    # ESPN dispatch carries the current season and NO cookies (the onboarder fetches the
+    # owner's stored cookies itself, backend/scheduled-league-auto-refresh).
+    assert call.kwargs.get("season") == season, call.kwargs
+    assert "s2" not in call.kwargs and "swid" not in call.kwargs, call.kwargs
