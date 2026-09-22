@@ -99,4 +99,30 @@ defineFeature(feature, (test) => {
       expect(screen.queryByText(label)).not.toBeInTheDocument();
     });
   });
+
+  test('An ESPN owner with auto-refresh enabled does not see Refresh League', ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    given(
+      'I am the owner of the current ESPN league with auto-refresh enabled',
+      () => {
+        server.use(
+          leagueMetadata({ is_owner: true, auto_refresh_enabled: true }),
+        );
+      },
+    );
+    when('I render the sidebar', () => renderSidebar(espnLeague));
+    then(/^I see the "(.*)" action$/, async (label) => {
+      expect(await screen.findByText(label)).toBeInTheDocument();
+    });
+    and(/^I see the "(.*)" action$/, async (label) => {
+      expect(await screen.findByText(label)).toBeInTheDocument();
+    });
+    and(/^I do not see the "(.*)" action$/, (label) => {
+      expect(screen.queryByText(label)).not.toBeInTheDocument();
+    });
+  });
 });

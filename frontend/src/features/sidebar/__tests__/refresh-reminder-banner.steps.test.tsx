@@ -159,4 +159,28 @@ defineFeature(feature, (test) => {
       expect(screen.queryByText(REMINDER)).not.toBeInTheDocument();
     });
   });
+
+  test('An auto-refresh-enabled ESPN league shows no reminder', ({
+    given,
+    when,
+    then,
+  }) => {
+    given(
+      'I am the owner of a stale ESPN league enrolled in auto-refresh',
+      () => {
+        server.use(
+          leagueMetadata({
+            is_owner: true,
+            last_refresh_at: daysAgo(10),
+            auto_refresh_enabled: true,
+          }),
+        );
+      },
+    );
+    when('I render the refresh reminder banner', () => renderBanner('ESPN'));
+    then('I do not see the refresh reminder', async () => {
+      await flush();
+      expect(screen.queryByText(REMINDER)).not.toBeInTheDocument();
+    });
+  });
 });

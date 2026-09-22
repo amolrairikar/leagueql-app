@@ -95,7 +95,7 @@ export function AppSidebar() {
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
   const [claimDialogOpen, setClaimDialogOpen] = useState(false);
 
-  const { isOwner } = useIsOwner();
+  const { isOwner, autoRefreshEnabled } = useIsOwner();
 
   const demoMode = isDemoMode();
 
@@ -226,10 +226,13 @@ export function AppSidebar() {
                     )}
                     {isOwner && (
                       <>
-                        {/* Refresh is ESPN-only: Sleeper leagues refresh
+                        {/* Manual refresh is for ESPN leagues that are not on the
+                            auto-refresh schedule: Sleeper leagues refresh
                             automatically (backend/scheduled-sleeper-auto-refresh),
-                            so there is nothing to refresh manually. */}
-                        {currentPlatform === 'ESPN' && (
+                            and an ESPN league opted into auto-refresh
+                            (auto_refresh_enabled) refreshes on its own, so in both
+                            cases there is nothing to refresh manually. */}
+                        {currentPlatform === 'ESPN' && !autoRefreshEnabled && (
                           <SidebarMenuItem>
                             <SidebarMenuButton
                               asChild

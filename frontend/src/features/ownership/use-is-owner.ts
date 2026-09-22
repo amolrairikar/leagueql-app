@@ -8,13 +8,22 @@ export interface OwnershipState {
   loading: boolean;
   /** Whether the authenticated caller owns the current league (backend/league-authorization / frontend/ownership-transfer). */
   isOwner: boolean;
+  /**
+   * Whether the current league is enrolled in scheduled auto-refresh
+   * (`auto_refresh_enabled`). Drives hiding the sidebar's manual Refresh League
+   * action and the refresh-reminder banner for auto-refreshed ESPN leagues.
+   * False for the bypass cases and on a failed fetch.
+   */
+  autoRefreshEnabled: boolean;
 }
 
 /**
- * Reads the current league's `is_owner` flag (from `GET /leagues/{id}`) so the
- * sidebar can show owner-only affordances only to the owner. Demo mode and the
- * "no league connected" case bypass the fetch (the demo sidebar uses a separate
- * branch); a failed request resolves to non-owner so owner actions stay hidden.
+ * Reads the current league's `is_owner` and `auto_refresh_enabled` flags (from
+ * `GET /leagues/{id}`) so the sidebar can show owner-only affordances only to the
+ * owner and hide the manual refresh action for auto-refreshed leagues. Demo mode
+ * and the "no league connected" case bypass the fetch (the demo sidebar uses a
+ * separate branch); a failed request resolves to non-owner / not-auto-refreshed so
+ * owner actions stay hidden.
  */
 export function useIsOwner(): OwnershipState {
   const demoMode = isDemoMode();
@@ -23,8 +32,8 @@ export function useIsOwner(): OwnershipState {
 
   const [state, setState] = useState<OwnershipState>(
     bypass
-      ? { loading: false, isOwner: true }
-      : { loading: true, isOwner: false },
+      ? { loading: false, isOwner: true, autoRefreshEnabled: false }
+      : { loading: true, isOwner: false, autoRefreshEnabled: false },
   );
 
   useEffect(() => {
@@ -33,10 +42,19 @@ export function useIsOwner(): OwnershipState {
     getLeague(leagueId, platform)
       .then((res) => {
         if (!cancelled)
-          setState({ loading: false, isOwner: res.data.is_owner === true });
+          setState({
+            loading: false,
+            isOwner: res.data.is_owner === true,
+            autoRefreshEnabled: res.data.auto_refresh_enabled === true,
+          });
       })
       .catch(() => {
-        if (!cancelled) setState({ loading: false, isOwner: false });
+        if (!cancelled)
+          setState({
+            loading: false,
+            isOwner: false,
+            autoRefreshEnabled: false,
+          });
       });
     return () => {
       cancelled = true;
