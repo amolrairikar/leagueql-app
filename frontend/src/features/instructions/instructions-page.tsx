@@ -345,8 +345,12 @@ export default function InstructionsPage() {
                   />
                 </div>
                 <Callout>
-                  Your SWID and ESPN S2 cookies are only transmitted once over
-                  HTTPS to fetch your data and are never stored by LeagueQL.
+                  Your SWID and ESPN S2 cookies are transmitted once over HTTPS
+                  to fetch your data. They are not stored by LeagueQL unless you
+                  enable automatic weekly refresh for the league, in which case
+                  they are stored encrypted so LeagueQL can refresh it for you
+                  (and removed when you turn auto-refresh off or delete the
+                  league).
                 </Callout>
 
                 <div className="mt-6">

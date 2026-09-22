@@ -185,21 +185,26 @@ export default function PrivacyPage() {
                     Yahoo OAuth tokens are stored, but encrypted at rest, and
                     used only to fetch and refresh your Yahoo league data
                   </li>
-                  <li>
-                    We offer an optional Chrome extension, &quot;LeagueQL ESPN
-                    Cookie Helper,&quot; that auto-fills your ESPN cookies into
-                    our onboarding and refresh forms. The extension does not
-                    store or transmit your cookies to us; it only fills them
-                    into the form on your device. See the{' '}
-                    <a
-                      href="/extension-privacy"
-                      className="text-foreground underline underline-offset-4"
-                    >
-                      Chrome Extension Privacy Policy
-                    </a>{' '}
-                    for details.
-                  </li>
                 </ul>
+              </div>
+              <div>
+                <h3 className="font-semibold text-foreground mb-2">
+                  ESPN Chrome Extension:
+                </h3>
+                <p>
+                  We offer an optional Chrome extension, &quot;LeagueQL ESPN
+                  Cookie Helper,&quot; that auto-fills your ESPN cookies into
+                  our onboarding and refresh forms. The extension does not store
+                  or transmit your cookies to us; it only fills them into the
+                  form on your device. See the{' '}
+                  <a
+                    href="/extension-privacy"
+                    className="text-foreground underline underline-offset-4"
+                  >
+                    Chrome Extension Privacy Policy
+                  </a>{' '}
+                  for details.
+                </p>
               </div>
             </div>
           </section>

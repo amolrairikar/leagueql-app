@@ -30,3 +30,31 @@ league weekly during the season and that cookies can expire, occasionally requir
 
 - **WHEN** the user submits the ESPN form
 - **THEN** the automatic-refresh opt-in choice is included in the `POST /leagues` request body
+
+## MODIFIED Requirements
+
+### Requirement: Private ESPN credentials handling
+
+Private ESPN onboarding SHALL accept `s2`/`swid` via extension auto-fill or manual entry, transmit
+them once over HTTPS, clear them from the browser on success, and never log them or keep them in
+browser storage. The backend persists them (encrypted at rest) only when the user opts into
+automatic refresh (backend/espn-credential-storage); without opt-in they are used only for the
+request and not stored.
+
+#### Scenario: Cookies via extension or manual
+
+- **WHEN** a private ESPN league is onboarded
+- **THEN** cookies can be auto-filled by the extension or entered manually, and are cleared
+  (`clearEspnCookies`) on success
+
+#### Scenario: Extension detection
+
+- **WHEN** the extension is detected
+- **THEN** an "Autofill cookies from ESPN" button is shown; when not detected, an inline Chrome Web
+  Store install link is shown instead
+
+#### Scenario: Credentials never persisted
+
+- **WHEN** ESPN cookies are submitted
+- **THEN** they appear in no logs and are not kept in browser storage; on the server they are stored
+  (encrypted at rest) only when the user enabled automatic refresh, and are otherwise not persisted
