@@ -452,7 +452,7 @@ export default function InstructionsPage() {
                   authorization is ever revoked or expires, LeagueQL will prompt
                   you to reconnect.
                 </Callout>
-                <p className="text-muted-foreground leading-relaxed mb-3">
+                <p className="text-muted-foreground leading-relaxed mt-4 mb-3">
                   LeagueQL never sees your Yahoo password. It stores only the
                   OAuth tokens Yahoo issues, encrypted at rest, and uses them
                   solely to fetch and refresh your league data. See the{' '}
