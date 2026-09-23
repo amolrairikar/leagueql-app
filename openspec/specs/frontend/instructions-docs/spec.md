@@ -17,11 +17,29 @@ The public `/docs` page provides user-facing instructions for using LeagueQL: ho
 - **THEN** the Yahoo subsection documents the OAuth connect flow (select Yahoo and enter the league ID, authorize LeagueQL on Yahoo's consent screen, onboarding resumes automatically on return) and its league-ID form field, and notes that an already-linked user connects in place without revisiting the consent screen
 
 ### Requirement: Document managing a league
-`/docs` SHALL document refreshing under a "Managing Your League" section that splits ESPN and Sleeper refresh into their own level-3 TOC sub-subsections, with the Sleeper one divided into Midseason and New Season labels.
+
+`/docs` SHALL document refreshing under a "Managing Your League" section that splits ESPN, Sleeper,
+and Yahoo refresh into their own level-3 TOC sub-subsections, with the Sleeper one divided into
+Midseason and New Season labels. The ESPN and Yahoo sub-subsections SHALL document that automatic
+weekly in-season refresh is opt-in per league — enabled via the auto-refresh checkbox on the connect
+form (ESPN/Yahoo) or the sidebar auto-refresh toggle — that enabling ESPN auto-refresh stores the
+ESPN cookies encrypted and those cookies can expire and occasionally need re-entering, and that
+manual refresh remains available.
 
 #### Scenario: Refresh instructions
+
 - **WHEN** the Managing Your League section renders
-- **THEN** the "Refreshing League Data" subsection splits ESPN and Sleeper into their own level-3 TOC entries, and the Sleeper sub-subsection is further divided into "Midseason Refreshes" and "New Season Refreshes" labels (not TOC entries)
+- **THEN** the "Refreshing League Data" subsection splits ESPN, Sleeper, and Yahoo into their own
+  level-3 TOC entries, and the Sleeper sub-subsection is further divided into "Midseason Refreshes"
+  and "New Season Refreshes" labels (not TOC entries)
+
+#### Scenario: Opt-in auto-refresh documented
+
+- **WHEN** the ESPN and Yahoo refresh sub-subsections render
+- **THEN** they explain that automatic weekly in-season refresh is opt-in per league (via the
+  connect-form checkbox or the sidebar toggle), that enabling ESPN auto-refresh stores the ESPN
+  cookies encrypted and cookies can expire and need re-entering, and that manual refresh remains
+  available
 
 ### Requirement: Document ownership & access
 `/docs` SHALL include an Ownership & Access section covering the owner model, joining a private ESPN league via membership verification, and one-time-token ownership transfer, and its owner-actions list SHALL mark the actions that are available only for ESPN leagues (Refresh League, Invite Leaguemates) as ESPN only.
