@@ -495,6 +495,7 @@ export default function InstructionsPage() {
                 </p>
                 <ul className="list-disc pl-6 space-y-2 text-muted-foreground leading-relaxed mb-3">
                   <li>Refresh League (ESPN only)</li>
+                  <li>Turn Off Auto-Refresh (ESPN only)</li>
                   <li>Migrate League</li>
                   <li>Transfer Ownership</li>
                   <li>Invite Leaguemates (ESPN only)</li>
@@ -642,14 +643,14 @@ export default function InstructionsPage() {
                 <MinorHeading>Automatic Weekly Refresh (opt-in)</MinorHeading>
                 <p className="text-muted-foreground leading-relaxed mb-4">
                   On the connection page you can check{' '}
-                  <Kbd>Enable automatic weekly refresh</Kbd> (or use the
-                  Auto-Refresh toggle in the sidebar). When enabled, LeagueQL
-                  securely stores your ESPN cookies, encrypted, and refreshes
-                  your league automatically each week during the season, so you
-                  do not have to re-enter them. ESPN cookies expire
-                  periodically; when they do, we ask you to re-enter them to
-                  keep automatic refresh working. You can turn it off anytime,
-                  which removes your stored cookies.
+                  <Kbd>Enable automatic weekly refresh</Kbd>. When enabled,
+                  LeagueQL securely stores your ESPN cookies, encrypted, and
+                  refreshes your league automatically each week during the
+                  season, so you do not have to re-enter them. ESPN cookies
+                  expire periodically; when they do, we ask you to re-enter them
+                  to keep automatic refresh working. You can turn it off anytime
+                  with <Kbd>Turn Off Auto-Refresh</Kbd> in the sidebar, which
+                  removes your stored cookies.
                 </p>
                 <SubSubHeading id="refresh-sleeper">Sleeper</SubSubHeading>
                 <MinorHeading>Midseason Refreshes</MinorHeading>
@@ -668,12 +669,10 @@ export default function InstructionsPage() {
                 <SubSubHeading id="refresh-yahoo">Yahoo</SubSubHeading>
                 <p className="text-muted-foreground leading-relaxed">
                   Yahoo auto-refresh is opt-in. Enable it when you connect your
-                  Yahoo league, or flip the Auto-Refresh toggle in the sidebar
-                  settings anytime. Because your Yahoo connection is already
-                  stored, no extra credentials are needed — LeagueQL refreshes
-                  your league automatically each week during the season using
-                  your existing Yahoo authorization. Turn it off anytime from
-                  the same toggle.
+                  Yahoo league. Because your Yahoo connection is already stored,
+                  no extra credentials are needed — LeagueQL refreshes your
+                  league automatically each week during the season using your
+                  existing Yahoo authorization.
                 </p>
               </div>
 

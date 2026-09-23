@@ -10,6 +10,7 @@ Feature: Owner-gated sidebar actions (backend/league-authorization / frontend/ow
     And I see the "Delete League" action
     And I see the "Transfer Ownership" action
     And I do not see the "Claim Ownership" action
+    And I do not see the "Turn Off Auto-Refresh" action
 
   Scenario: A non-owner sees no owner actions
     Given I am not the owner of the current ESPN league
@@ -19,16 +20,18 @@ Feature: Owner-gated sidebar actions (backend/league-authorization / frontend/ow
     And I do not see the "Delete League" action
     And I do not see the "Transfer Ownership" action
 
-  Scenario: A Sleeper owner does not see Refresh League
+  Scenario: A Sleeper owner does not see Refresh League or Turn Off Auto-Refresh
     Given I am the owner of the current Sleeper league
     When I render the sidebar
     Then I see the "Delete League" action
     And I see the "Transfer Ownership" action
     And I do not see the "Refresh League" action
+    And I do not see the "Turn Off Auto-Refresh" action
 
-  Scenario: An ESPN owner with auto-refresh enabled does not see Refresh League
+  Scenario: An ESPN owner with auto-refresh enabled sees Turn Off Auto-Refresh instead of Refresh League
     Given I am the owner of the current ESPN league with auto-refresh enabled
     When I render the sidebar
-    Then I see the "Delete League" action
+    Then I see the "Turn Off Auto-Refresh" action
+    And I see the "Delete League" action
     And I see the "Transfer Ownership" action
     And I do not see the "Refresh League" action

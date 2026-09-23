@@ -23,13 +23,13 @@ export const CHANGELOG: ChangelogRelease[] = [
       {
         title: 'Added',
         items: [
-          'Automatic weekly refresh for ESPN and Yahoo leagues (opt-in). Enable it when you connect a league, or with the new Auto-Refresh toggle in the sidebar, and LeagueQL keeps your league up to date each week during the season. For ESPN, your cookies are stored encrypted so you no longer have to re-enter them each week (until they expire); Yahoo uses your existing connection.',
+          'Automatic weekly refresh for ESPN and Yahoo leagues (opt-in). Enable it when you connect a league and LeagueQL keeps your league up to date each week during the season. For ESPN, your cookies are stored encrypted so you no longer have to re-enter them each week (until they expire); Yahoo uses your existing connection. ESPN owners can turn it back off anytime with "Turn Off Auto-Refresh" in the sidebar.',
         ],
       },
       {
         title: 'Changed',
         items: [
-          'Auto-refresh is now opt-in for Yahoo leagues. Existing Yahoo leagues will not auto-refresh until you enable it from the Auto-Refresh toggle in the sidebar.',
+          'Auto-refresh is now opt-in for Yahoo leagues. Existing Yahoo leagues will not auto-refresh until you enable it when connecting the league.',
         ],
       },
     ],
