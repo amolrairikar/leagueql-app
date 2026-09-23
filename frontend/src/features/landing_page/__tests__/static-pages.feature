@@ -34,6 +34,7 @@ Feature: Public pages render (frontend/landing-page, frontend/instructions-docs,
   Scenario: The docs page renders
     When I open the docs page
     Then I see "Refresh League (ESPN only)"
+    And I see "Turn Off Auto-Refresh (ESPN only)"
 
   Scenario: The docs page documents connecting a Yahoo league
     When I open the docs page

@@ -138,11 +138,14 @@ defineFeature(feature, (test) => {
     });
   });
 
-  test('The docs page renders', ({ when, then }) => {
+  test('The docs page renders', ({ when, then, and }) => {
     when('I open the docs page', async () => {
       await renderRoute(<InstructionsPage />, { route: '/docs' });
     });
     then(/^I see "(.*)"$/, async (text) => {
+      expect((await screen.findAllByText(text)).length).toBeGreaterThan(0);
+    });
+    and(/^I see "(.*)"$/, async (text) => {
       expect((await screen.findAllByText(text)).length).toBeGreaterThan(0);
     });
   });

@@ -8,6 +8,7 @@ import {
   LogIn,
   LogOut,
   RefreshCw,
+  RefreshCwOff,
   Repeat,
   Scroll,
   Search,
@@ -52,6 +53,7 @@ import { InviteLinkDialog } from '@/features/ownership/invite-link-dialog';
 import { TransferOwnershipDialog } from '@/features/ownership/transfer-ownership-dialog';
 import { useIsOwner } from '@/features/ownership/use-is-owner';
 import { deleteLeague } from '@/features/sidebar/api-calls';
+import { DisableAutoRefreshDialog } from '@/features/sidebar/disable-auto-refresh-dialog';
 import { clearApiCache } from '@/lib/api-client';
 import {
   clearAllLeagueCookies,
@@ -94,6 +96,7 @@ export function AppSidebar() {
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
   const [claimDialogOpen, setClaimDialogOpen] = useState(false);
+  const [disableAutoRefreshOpen, setDisableAutoRefreshOpen] = useState(false);
 
   const { isOwner, autoRefreshEnabled } = useIsOwner();
 
@@ -249,6 +252,26 @@ export function AppSidebar() {
                             </SidebarMenuButton>
                           </SidebarMenuItem>
                         )}
+                        {/* The complement of Refresh League: an ESPN league opted
+                            into auto-refresh refreshes on a schedule, so the owner
+                            gets a way to opt back out (backend/scheduled-league-auto-refresh).
+                            Turning it off removes the owner's stored ESPN cookies
+                            when it was their last opted-in ESPN league. */}
+                        {currentPlatform === 'ESPN' && autoRefreshEnabled && (
+                          <SidebarMenuItem>
+                            <SidebarMenuButton
+                              tooltip="Turn Off Auto-Refresh"
+                              className="cursor-pointer"
+                              onClick={() => {
+                                closeMobileSidebar();
+                                setDisableAutoRefreshOpen(true);
+                              }}
+                            >
+                              <RefreshCwOff />
+                              <span>Turn Off Auto-Refresh</span>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        )}
                         <SidebarMenuItem>
                           <SidebarMenuButton
                             asChild
@@ -386,6 +409,10 @@ export function AppSidebar() {
       <ClaimOwnershipDialog
         open={claimDialogOpen}
         onOpenChange={setClaimDialogOpen}
+      />
+      <DisableAutoRefreshDialog
+        open={disableAutoRefreshOpen}
+        onOpenChange={setDisableAutoRefreshOpen}
       />
     </>
   );

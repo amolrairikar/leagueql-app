@@ -58,6 +58,9 @@ defineFeature(feature, (test) => {
     and(/^I do not see the "(.*)" action$/, (label) => {
       expect(screen.queryByText(label)).not.toBeInTheDocument();
     });
+    and(/^I do not see the "(.*)" action$/, (label) => {
+      expect(screen.queryByText(label)).not.toBeInTheDocument();
+    });
   });
 
   test('A non-owner sees no owner actions', ({ given, when, then, and }) => {
@@ -79,7 +82,7 @@ defineFeature(feature, (test) => {
     });
   });
 
-  test('A Sleeper owner does not see Refresh League', ({
+  test('A Sleeper owner does not see Refresh League or Turn Off Auto-Refresh', ({
     given,
     when,
     then,
@@ -98,9 +101,12 @@ defineFeature(feature, (test) => {
     and(/^I do not see the "(.*)" action$/, (label) => {
       expect(screen.queryByText(label)).not.toBeInTheDocument();
     });
+    and(/^I do not see the "(.*)" action$/, (label) => {
+      expect(screen.queryByText(label)).not.toBeInTheDocument();
+    });
   });
 
-  test('An ESPN owner with auto-refresh enabled does not see Refresh League', ({
+  test('An ESPN owner with auto-refresh enabled sees Turn Off Auto-Refresh instead of Refresh League', ({
     given,
     when,
     then,
@@ -116,6 +122,9 @@ defineFeature(feature, (test) => {
     );
     when('I render the sidebar', () => renderSidebar(espnLeague));
     then(/^I see the "(.*)" action$/, async (label) => {
+      expect(await screen.findByText(label)).toBeInTheDocument();
+    });
+    and(/^I see the "(.*)" action$/, async (label) => {
       expect(await screen.findByText(label)).toBeInTheDocument();
     });
     and(/^I see the "(.*)" action$/, async (label) => {
