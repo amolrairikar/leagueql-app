@@ -770,7 +770,26 @@ class TestOnboardLeagueEndpoint:
     def test_payload_league_id_too_long_returns_422(self, client):
         response = client.post(
             "/leagues",
-            json={"leagueId": "123", "platform": "SLEEPER", "season": "x" * 101},
+            json={"leagueId": "1" * 101, "platform": "SLEEPER"},
+        )
+        assert response.status_code == 422
+
+    @pytest.mark.parametrize("bad_league_id", ["abc", "12/3", "1?x=2", "12 3", ""])
+    def test_payload_non_digit_league_id_returns_422(self, client, bad_league_id):
+        # SEC-04: leagueId is interpolated into upstream ESPN/Sleeper request URLs, so a
+        # non-digit value (path/query injection characters) is rejected before onboarding.
+        response = client.post(
+            "/leagues",
+            json={"leagueId": bad_league_id, "platform": "SLEEPER"},
+        )
+        assert response.status_code == 422
+
+    @pytest.mark.parametrize("bad_season", ["20xy", "202", "20255", "2025?x=1"])
+    def test_payload_non_four_digit_season_returns_422(self, client, bad_season):
+        # SEC-04: season is interpolated into the ESPN seasons URL; only a 4-digit year passes.
+        response = client.post(
+            "/leagues",
+            json={"leagueId": "123", "platform": "ESPN", "season": bad_season},
         )
         assert response.status_code == 422
 
@@ -1292,6 +1311,25 @@ class TestMigrateLeagueEndpoint:
         assert response.status_code == 202
         assert "migration started" in response.json()["detail"].lower()
         assert "correlation_id" in response.json()["data"]
+
+    @pytest.mark.parametrize("bad_league_id", ["abc", "45/6", "4?x=1", ""])
+    def test_non_digit_new_platform_league_id_returns_422(self, client, bad_league_id):
+        # SEC-04: the destination league id is interpolated into the destination-platform
+        # request URLs, so a non-digit value is rejected before any migration setup.
+        response = client.post(
+            "/leagues/123/migrate?platform=SLEEPER",
+            json={**self._PAYLOAD, "newPlatformLeagueId": bad_league_id},
+        )
+        assert response.status_code == 422
+
+    @pytest.mark.parametrize("bad_season", ["20xy", "202", "2025?x=1"])
+    def test_non_four_digit_season_returns_422(self, client, bad_season):
+        # SEC-04: only a 4-digit season year passes into the destination request URLs.
+        response = client.post(
+            "/leagues/123/migrate?platform=SLEEPER",
+            json={**self._PAYLOAD, "season": bad_season},
+        )
+        assert response.status_code == 422
 
     def test_yahoo_destination_without_link_returns_403(
         self, client, mock_table, league_lookup_item, league_metadata_item

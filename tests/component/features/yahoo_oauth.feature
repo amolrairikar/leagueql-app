@@ -5,12 +5,12 @@ Feature: Yahoo OAuth linking (backend/yahoo-oauth)
   (the Yahoo data client resolves the owner's token from there).
 
   Scenario: Linking a Yahoo account and then onboarding invokes the onboarder
-    When I start the Yahoo authorization for league "45.l.678"
+    When I start the Yahoo authorization for league "678"
     Then the API responds with status 200
     When Yahoo redirects back to the callback with a valid code
     Then the callback redirects with the linked marker
     And a YAHOO_OAUTH token item exists for the default user with encrypted tokens
-    When I POST an ONBOARD of league "45.l.678" on "YAHOO"
+    When I POST an ONBOARD of league "678" on "YAHOO"
     Then the API responds with status 201
     And the onboarder Lambda was invoked
 
@@ -19,6 +19,6 @@ Feature: Yahoo OAuth linking (backend/yahoo-oauth)
     Then the callback redirects with the not-linked marker
 
   Scenario: Onboarding a Yahoo league without a linked account is rejected
-    When I POST an ONBOARD of league "45.l.678" on "YAHOO"
+    When I POST an ONBOARD of league "678" on "YAHOO"
     Then the API responds with status 403
     And the API response detail contains "Link your Yahoo account first"
