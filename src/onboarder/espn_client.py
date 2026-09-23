@@ -7,7 +7,7 @@ import aiohttp
 import requests
 from utils import (
     V2_CUTOFF,
-    fetch_with_retry,
+    fetch_one,
     logger,
     matchup_weeks,
     run_fetches,
@@ -356,8 +356,8 @@ class ESPNClient:
         Returns:
             Mapping containing season, data type, and API response object.
         """
-        season, data_type, url = url_data
-        headers = {}
+        season, data_type, _ = url_data
+        headers: dict[str, str] = {}
         if data_type == "player_scoring_totals":
             filter_val = {
                 "players": {
@@ -370,16 +370,14 @@ class ESPNClient:
                 }
             }
             headers["X-Fantasy-Filter"] = json.dumps(filter_val)
-        async with semaphore:
-            try:
-                data = await fetch_with_retry(session=session, url=url, headers=headers)
-                logger.info("Successfully fetched url: %s", url)
-                if isinstance(data, list):
-                    data = data[0]
-                return {"season": season, "data_type": data_type, "data": data}
-            except Exception as e:  # noqa: BLE001 — isolate one request's failure
-                logger.error("Failed request for url: %s, error: %s", url, e)
-                return {"season": season, "data_type": data_type, "data": None}
+
+        # ESPN wraps some season endpoints in a single-element list; unwrap to the object.
+        def _unwrap(data: Any, _data_type: str) -> Any:
+            return data[0] if isinstance(data, list) else data
+
+        return await fetch_one(
+            session, semaphore, url_data, headers=headers, transform=_unwrap
+        )
 
     def _process_api_results(
         self,

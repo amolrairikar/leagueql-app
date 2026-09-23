@@ -1,7 +1,8 @@
-import { queryLeague } from '@/components/api/leagues';
-import type { Platform, MatchupItem } from '@/components/api/types';
+import { getSeasonMatchups, queryLeague } from '@/components/api/leagues';
+import type { Platform } from '@/components/api/types';
 
 export type { PlayerStat, MatchupItem } from '@/components/api/types';
+export { getSeasonMatchups };
 
 export interface WeeklyStandingItem {
   season: string;
@@ -26,12 +27,4 @@ export function getSeasonWeeklyStandings(
     platform,
     `WEEKLY_STANDINGS#${season}`,
   );
-}
-
-export function getSeasonMatchups(
-  leagueId: string,
-  platform: Platform,
-  season: string,
-): Promise<{ data: MatchupItem[] }> {
-  return queryLeague<MatchupItem>(leagueId, platform, `MATCHUPS#${season}#`);
 }

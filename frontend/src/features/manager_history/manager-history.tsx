@@ -39,8 +39,9 @@ import {
   type ManagerStandingsItem,
   type MatchupItem,
 } from '@/features/manager_history/api-calls';
-import { avatarColor } from '@/lib/color-constants';
 import {
+  assignAvatarColors,
+  avatarColor,
   NEMESIS_COLORS,
   POSITION_COLORS,
   UI_COLORS,
@@ -351,7 +352,7 @@ function processData(
     })
     .sort((a, b) => a.username.localeCompare(b.username));
 
-  const colorMap = new Map(owners.map((o, i) => [o.ownerId, avatarColor(i)]));
+  const colorMap = assignAvatarColors(owners.map((o) => o.ownerId));
 
   const ownerUsernames = new Map<string, string>();
   const ownerCurrentTeams = new Map<string, string>();

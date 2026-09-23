@@ -15,7 +15,7 @@ import { Switch } from '@/components/ui/switch';
 import { getManagerHistoryData } from '@/features/manager_history/api-calls';
 import type { ManagerStandingsItem } from '@/features/manager_history/api-calls';
 import type { MatchupItem } from '@/features/matchups/api-calls';
-import { avatarColor } from '@/lib/color-constants';
+import { assignAvatarColors, avatarColor } from '@/lib/color-constants';
 import { getLeagueCookies } from '@/lib/cookie-handler';
 import { ErrorAlert } from '@/lib/error-alert';
 import { isUnplayedMatchup } from '@/lib/matchups';
@@ -137,7 +137,7 @@ function buildChartData(
     })
     .sort((a, b) => a.username.localeCompare(b.username));
 
-  const colorMap = new Map(owners.map((o, i) => [o.ownerId, avatarColor(i)]));
+  const colorMap = assignAvatarColors(owners.map((o) => o.ownerId));
   const allSeasons = [...new Set(standings.map((s) => s.season))].sort();
 
   const chartData = allSeasons.map((season) => {
@@ -411,7 +411,7 @@ function AllTimeStandingsTable({
     const sorted = [...ownerMeta.entries()].sort((a, b) =>
       a[1].owner_username.localeCompare(b[1].owner_username),
     );
-    return new Map(sorted.map(([id], i) => [id, avatarColor(i)]));
+    return assignAvatarColors(sorted.map(([id]) => id));
   }, [standings, migrationMapping]);
 
   const rows = useMemo(

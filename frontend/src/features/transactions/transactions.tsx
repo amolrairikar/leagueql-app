@@ -30,7 +30,8 @@ import {
 } from '@/features/transactions/api-calls';
 import { avatarColor } from '@/lib/color-constants';
 import { getLeagueCookies } from '@/lib/cookie-handler';
-import { type Result, toResult } from '@/lib/result';
+import { type Result } from '@/lib/result';
+import { latestSeason, seasonQuery } from '@/lib/season';
 import { cn } from '@/lib/utils';
 
 type TransactionsResult = Result<TransactionItem[]>;
@@ -781,9 +782,7 @@ function TableSkeleton() {
 export default function Transactions() {
   const { leagueId, platform, seasons } = useMemo(() => getLeagueCookies(), []);
 
-  const defaultSeason =
-    [...seasons].sort((a, b) => Number(b) - Number(a))[0] ?? '';
-  const [selectedSeason, setSelectedSeason] = useState(defaultSeason);
+  const [selectedSeason, setSelectedSeason] = useState(latestSeason(seasons));
 
   // ESPN produces no trades, so its filter offers only Waivers / Free Agents and
   // defaults to Free Agents (a Trades default would render an always-empty wire).
@@ -798,14 +797,11 @@ export default function Transactions() {
 
   const transactionsPromise = useMemo(
     (): Promise<TransactionsResult> =>
-      leagueId && selectedSeason
-        ? toResult(
-            getTransactions(leagueId, platform, selectedSeason).then(
-              (res) => res.data,
-            ),
-            'Failed to load transactions.',
-          )
-        : Promise.resolve({ ok: true as const, data: [] }),
+      seasonQuery(
+        Boolean(leagueId && selectedSeason),
+        () => getTransactions(leagueId, platform, selectedSeason),
+        'Failed to load transactions.',
+      ),
     [leagueId, platform, selectedSeason],
   );
 
@@ -813,14 +809,11 @@ export default function Transactions() {
   // load is tolerated — the summary falls back to index-based colors and initials.
   const standingsPromise = useMemo(
     (): Promise<StandingsResult> =>
-      leagueId && selectedSeason
-        ? toResult(
-            getSeasonStandings(leagueId, platform, selectedSeason).then(
-              (res) => res.data,
-            ),
-            'Failed to load standings.',
-          )
-        : Promise.resolve({ ok: true as const, data: [] }),
+      seasonQuery(
+        Boolean(leagueId && selectedSeason),
+        () => getSeasonStandings(leagueId, platform, selectedSeason),
+        'Failed to load standings.',
+      ),
     [leagueId, platform, selectedSeason],
   );
 
@@ -829,14 +822,11 @@ export default function Transactions() {
   // without the points additions), so it never blocks or errors the wire.
   const matchupsPromise = useMemo(
     (): Promise<MatchupsResult> =>
-      leagueId && selectedSeason
-        ? toResult(
-            getSeasonMatchups(leagueId, platform, selectedSeason).then(
-              (res) => res.data,
-            ),
-            'Failed to load matchups.',
-          )
-        : Promise.resolve({ ok: true as const, data: [] }),
+      seasonQuery(
+        Boolean(leagueId && selectedSeason),
+        () => getSeasonMatchups(leagueId, platform, selectedSeason),
+        'Failed to load matchups.',
+      ),
     [leagueId, platform, selectedSeason],
   );
 

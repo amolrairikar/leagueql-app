@@ -75,6 +75,15 @@ export function getAllMatchups(
   return queryLeague<MatchupItem>(leagueId, platform, 'MATCHUPS#');
 }
 
+/** Regular-season + playoff matchups for a single season. */
+export function getSeasonMatchups(
+  leagueId: string,
+  platform: Platform,
+  season: string,
+): Promise<{ data: MatchupItem[] }> {
+  return queryLeague<MatchupItem>(leagueId, platform, `MATCHUPS#${season}#`);
+}
+
 export interface InviteTokenResponse {
   detail: string;
   data: { token: string };

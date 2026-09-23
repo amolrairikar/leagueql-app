@@ -470,13 +470,13 @@ class TestSleeperClientFetch:
         with patch("requests.get", return_value=http_resp):
             return mod.SleeperClient("lg")
 
-    async def test_fetch_returns_data(self, onboarder_sleeper_client):
+    async def test_fetch_returns_data(self, onboarder_sleeper_client, onboarder_utils):
         import asyncio
         from unittest.mock import AsyncMock
 
         client = self._client(onboarder_sleeper_client)
         with patch.object(
-            onboarder_sleeper_client,
+            onboarder_utils,
             "fetch_with_retry",
             AsyncMock(return_value=[{"user_id": "u1"}]),
         ):
@@ -491,13 +491,15 @@ class TestSleeperClientFetch:
             "data": [{"user_id": "u1"}],
         }
 
-    async def test_fetch_returns_none_on_error(self, onboarder_sleeper_client):
+    async def test_fetch_returns_none_on_error(
+        self, onboarder_sleeper_client, onboarder_utils
+    ):
         import asyncio
         from unittest.mock import AsyncMock
 
         client = self._client(onboarder_sleeper_client)
         with patch.object(
-            onboarder_sleeper_client,
+            onboarder_utils,
             "fetch_with_retry",
             AsyncMock(side_effect=RuntimeError("boom")),
         ):
@@ -510,7 +512,7 @@ class TestSleeperClientFetch:
 
     @pytest.mark.parametrize("data_type", ["playoff_bracket", "losers_bracket"])
     async def test_fetch_normalizes_null_bracket_to_empty_list(
-        self, onboarder_sleeper_client, data_type
+        self, onboarder_sleeper_client, onboarder_utils, data_type
     ):
         import asyncio
         from unittest.mock import AsyncMock
@@ -520,7 +522,7 @@ class TestSleeperClientFetch:
         # treated as a fetch failure by validate_api_results).
         client = self._client(onboarder_sleeper_client)
         with patch.object(
-            onboarder_sleeper_client,
+            onboarder_utils,
             "fetch_with_retry",
             AsyncMock(return_value=None),
         ):
@@ -533,7 +535,7 @@ class TestSleeperClientFetch:
 
     @pytest.mark.parametrize("data_type", ["playoff_bracket", "losers_bracket"])
     async def test_fetch_returns_none_when_bracket_fetch_errors(
-        self, onboarder_sleeper_client, data_type
+        self, onboarder_sleeper_client, onboarder_utils, data_type
     ):
         import asyncio
         from unittest.mock import AsyncMock
@@ -542,7 +544,7 @@ class TestSleeperClientFetch:
         # validate_api_results raises rather than silently dropping the bracket.
         client = self._client(onboarder_sleeper_client)
         with patch.object(
-            onboarder_sleeper_client,
+            onboarder_utils,
             "fetch_with_retry",
             AsyncMock(side_effect=RuntimeError("boom")),
         ):

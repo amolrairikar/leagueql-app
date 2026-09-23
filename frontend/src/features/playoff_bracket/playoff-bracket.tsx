@@ -17,6 +17,7 @@ import SeasonSelect from '@/features/season_select/season-select';
 import { AVATAR_COLORS, UI_COLORS } from '@/lib/color-constants';
 import { getLeagueCookies, isDemoMode } from '@/lib/cookie-handler';
 import { type Result, toResult } from '@/lib/result';
+import { latestSeason } from '@/lib/season';
 import { cn } from '@/lib/utils';
 
 interface Team {
@@ -383,8 +384,8 @@ export default function PlayoffBracket() {
 
   // Only the most recent season can still be in progress (playoffs not yet
   // decided); any earlier season is complete.
-  const latestSeason = useMemo(
-    () => [...allSeasons].sort((a, b) => Number(b) - Number(a))[0] ?? '',
+  const mostRecentSeason = useMemo(
+    () => latestSeason(allSeasons),
     [allSeasons],
   );
 
@@ -429,7 +430,7 @@ export default function PlayoffBracket() {
             platform={platform}
             leagueId={leagueId}
             season={selectedSeason}
-            isLatestSeason={selectedSeason === latestSeason}
+            isLatestSeason={selectedSeason === mostRecentSeason}
             selectedMatchId={selectedMatchId}
             onSelectMatch={setSelectedMatchId}
           />

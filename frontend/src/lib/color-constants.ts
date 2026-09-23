@@ -71,6 +71,17 @@ export function avatarColor(index: number): string {
   return AVATAR_COLORS[index % AVATAR_COLORS.length];
 }
 
+/**
+ * Assigns a stable avatar color to each id in a pre-sorted list, in order. Pass
+ * ids sorted by a deterministic key (e.g. display name) so the same entity keeps
+ * the same color across renders and features.
+ */
+export function assignAvatarColors(
+  sortedIds: readonly string[],
+): Map<string, string> {
+  return new Map(sortedIds.map((id, i) => [id, avatarColor(i)]));
+}
+
 // ── UI Status Colors ───────────────────────────────────────────────────────────
 
 export const UI_COLORS = {

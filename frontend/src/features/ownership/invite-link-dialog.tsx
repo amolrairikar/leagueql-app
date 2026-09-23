@@ -15,6 +15,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { getLeagueCookies } from '@/lib/cookie-handler';
 import { ErrorAlert } from '@/lib/error-alert';
+import { useCopyToClipboard } from '@/lib/use-copy-to-clipboard';
 
 /**
  * Owner-side invite link (backend/league-authorization / frontend/ownership-transfer).
@@ -38,7 +39,7 @@ export function InviteLinkDialog({
     url: string;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const { copied, copy, resetCopied } = useCopyToClipboard();
   const [justGenerated, setJustGenerated] = useState(false);
 
   // The plaintext link is only returned once (the server keeps just its hash), so
@@ -51,21 +52,14 @@ export function InviteLinkDialog({
   // Cleared on close; the remembered link is intentionally kept.
   function clearTransient() {
     setError(null);
-    setCopied(false);
+    resetCopied();
     setJustGenerated(false);
-  }
-
-  function handleCopy(value: string) {
-    void navigator.clipboard?.writeText(value).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
   }
 
   async function handleGenerate() {
     setLoading(true);
     setError(null);
-    setCopied(false);
+    resetCopied();
     setJustGenerated(false);
     try {
       const res = await createInviteToken(leagueId, platform);
@@ -109,7 +103,7 @@ export function InviteLinkDialog({
             <Button
               variant="outline"
               className="cursor-pointer"
-              onClick={() => handleCopy(link)}
+              onClick={() => copy(link)}
             >
               {copied ? (
                 <>
