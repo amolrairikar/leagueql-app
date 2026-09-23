@@ -21,6 +21,11 @@ import botocore.exceptions
 from utils import build_retry_session, logger
 
 from common.secrets import get_secret_from_env_param
+from common.yahoo_members import (
+    _collection_items,
+    _flatten,
+    _league_subresource,
+)
 from common.yahoo_tokens import from_env as yahoo_tokens_from_env
 
 s3_client = boto3.client("s3")
@@ -34,40 +39,10 @@ PAGE_SIZE = 25
 TARGET_INTERVAL = 0.25
 
 
-# --------------------------------------------------------------------------------------
-# Minimal Yahoo JSON normalization (kept local so this task deploys independently)
-# --------------------------------------------------------------------------------------
-def _flatten(node: Any) -> dict[str, Any]:
-    if isinstance(node, dict):
-        return node
-    merged: dict[str, Any] = {}
-    if isinstance(node, list):
-        for element in node:
-            if isinstance(element, dict):
-                merged.update(element)
-            elif isinstance(element, list):
-                merged.update(_flatten(element))
-    return merged
-
-
-def _collection_items(container: Any, inner_key: str) -> list[Any]:
-    if not isinstance(container, dict):
-        return []
-    items, index = [], 0
-    while str(index) in container:
-        entry = container[str(index)]
-        index += 1
-        if isinstance(entry, dict) and inner_key in entry:
-            items.append(entry[inner_key])
-    return items
-
-
-def _league_subresource(payload: dict[str, Any], key: str) -> Any:
-    league = payload.get("fantasy_content", {}).get("league", [])
-    for element in league[1:] if isinstance(league, list) else []:
-        if isinstance(element, dict) and key in element:
-            return element[key]
-    return None
+# The Yahoo JSON normalization helpers (``_flatten`` / ``_collection_items`` /
+# ``_league_subresource``) are imported from ``common.yahoo_members`` — the single source of
+# truth. ``common`` is vendored into this task's image, so there is no reason to re-implement
+# them here (earlier local copies had drifted from the canonical versions).
 
 
 def _get_json(url: str, access_token: str) -> dict[str, Any]:

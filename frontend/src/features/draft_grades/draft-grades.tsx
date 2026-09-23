@@ -1,7 +1,8 @@
 import { ChevronDown, Gem, Info, X } from 'lucide-react';
 import { Fragment, Suspense, use, useCallback, useMemo, useState } from 'react';
 
-import { type DraftPickItem, getDraftData } from './api-calls';
+import { type DraftPickItem } from './api-calls';
+import { type DraftResult, useDraftData } from './use-draft-data';
 
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
@@ -12,8 +13,6 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { POSITION_COLORS, positionColorMeta } from '@/lib/color-constants';
-import { getLeagueCookies, isDemoMode } from '@/lib/cookie-handler';
-import { type Result, toResult } from '@/lib/result';
 
 // ── Local color overrides (brighter than shared UI_COLORS for this page) ──────
 
@@ -25,8 +24,6 @@ const RED_BG = '#fee2e2';
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-
-type DraftResult = Result<DraftPickItem[]>;
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -725,30 +722,15 @@ function DraftGradesContent({
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function DraftGrades() {
-  const { leagueId, platform, seasons } = useMemo(() => getLeagueCookies(), []);
-  const isDemo = useMemo(() => isDemoMode(), []);
-
-  const defaultSeason =
-    [...seasons].sort((a, b) => Number(b) - Number(a))[0] ?? '';
-  const [selectedSeason, setSelectedSeason] = useState(defaultSeason);
-  // Demo-only toggle: selects the separate DRAFT_AUCTION dataset.
-  const [demoAuction, setDemoAuction] = useState(false);
-
-  const draftPromise = useMemo(
-    (): Promise<DraftResult> =>
-      leagueId && selectedSeason
-        ? toResult(
-            getDraftData(
-              leagueId,
-              platform,
-              selectedSeason,
-              isDemo && demoAuction,
-            ).then((res) => res.data),
-            'Failed to load draft data.',
-          )
-        : Promise.resolve({ ok: true as const, data: [] }),
-    [leagueId, platform, selectedSeason, isDemo, demoAuction],
-  );
+  const {
+    seasons,
+    isDemo,
+    selectedSeason,
+    setSelectedSeason,
+    demoAuction,
+    setDemoAuction,
+    draftPromise,
+  } = useDraftData();
 
   return (
     <div className="flex flex-1 flex-col p-6 overflow-auto">

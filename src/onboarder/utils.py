@@ -138,6 +138,49 @@ async def fetch_with_retry(
     raise RuntimeError(f"Exhausted retries for {url}")
 
 
+async def fetch_one(
+    session: aiohttp.ClientSession,
+    semaphore: asyncio.Semaphore,
+    url_data: tuple[str, str, str],
+    *,
+    headers: dict[str, str] | None = None,
+    transform: Callable[[Any, str], Any] | None = None,
+) -> dict[str, Any]:
+    """Fetch one ``(season, data_type, url)`` with the shared client plumbing.
+
+    Captures the per-request scaffolding common to the ESPN and Sleeper clients: acquire the
+    shared ``semaphore``, ``fetch_with_retry``, log success/failure, and shape the result as
+    ``{"season", "data_type", "data"}`` (``data`` is ``None`` on any failure so
+    ``validate_api_results`` flags it rather than mistaking it for a valid empty body).
+
+    Per-platform specifics stay with the caller via two hooks: ``headers`` (request headers,
+    e.g. ESPN's ``X-Fantasy-Filter``) and ``transform`` — a ``(data, data_type) -> data``
+    callback applied to a *successful* body (e.g. unwrap ESPN's single-element list, normalize
+    Sleeper's null preseason brackets to ``[]``).
+
+    Args:
+        session: The aiohttp session to fetch with.
+        semaphore: Concurrency bound shared across the batch.
+        url_data: The (season, data_type, url) tuple to fetch.
+        headers: Optional request headers.
+        transform: Optional post-fetch shaping of a successful body.
+
+    Returns:
+        Mapping containing season, data type, and the (possibly transformed) response body.
+    """
+    season, data_type, url = url_data
+    async with semaphore:
+        try:
+            data = await fetch_with_retry(session=session, url=url, headers=headers)
+            logger.info("Successfully fetched url: %s", url)
+            if transform is not None:
+                data = transform(data, data_type)
+            return {"season": season, "data_type": data_type, "data": data}
+        except Exception as e:  # noqa: BLE001 — isolate one request's failure
+            logger.error("Failed request for url: %s, error: %s", url, e)
+            return {"season": season, "data_type": data_type, "data": None}
+
+
 def validate_api_results(
     results: Sequence[dict[str, Any] | BaseException],
 ) -> list[dict[str, Any]]:

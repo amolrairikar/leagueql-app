@@ -15,6 +15,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { getLeagueCookies } from '@/lib/cookie-handler';
 import { ErrorAlert } from '@/lib/error-alert';
+import { useCopyToClipboard } from '@/lib/use-copy-to-clipboard';
 
 /**
  * Owner-side ownership transfer (backend/league-authorization / frontend/ownership-transfer). Mints a one-time token the
@@ -32,19 +33,12 @@ export function TransferOwnershipDialog({
   const [loading, setLoading] = useState(false);
   const [token, setToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const { copied, copy, resetCopied } = useCopyToClipboard();
 
   function reset() {
     setToken(null);
     setError(null);
-    setCopied(false);
-  }
-
-  function handleCopy(value: string) {
-    void navigator.clipboard?.writeText(value).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
+    resetCopied();
   }
 
   async function handleGenerate() {
@@ -85,7 +79,7 @@ export function TransferOwnershipDialog({
             <Button
               variant="outline"
               className="cursor-pointer"
-              onClick={() => handleCopy(token)}
+              onClick={() => copy(token)}
             >
               {copied ? (
                 <>

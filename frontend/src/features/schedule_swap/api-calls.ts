@@ -1,13 +1,2 @@
-import { queryLeague } from '@/components/api/leagues';
-import type { MatchupItem, Platform } from '@/components/api/types';
-
+export { getSeasonMatchups } from '@/components/api/leagues';
 export type { MatchupItem } from '@/components/api/types';
-
-/** Regular-season + playoff matchups for one season (filtered to regular season in compute). */
-export function getSeasonMatchups(
-  leagueId: string,
-  platform: Platform,
-  season: string,
-): Promise<{ data: MatchupItem[] }> {
-  return queryLeague<MatchupItem>(leagueId, platform, `MATCHUPS#${season}#`);
-}

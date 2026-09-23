@@ -484,13 +484,13 @@ class TestESPNClientFetch:
     def _client(self, mod):
         return mod.ESPNClient(league_id="123", latest_season="2024", is_refresh=True)
 
-    async def test_fetch_returns_data(self, onboarder_espn_client):
+    async def test_fetch_returns_data(self, onboarder_espn_client, onboarder_utils):
         import asyncio
         from unittest.mock import AsyncMock
 
         client = self._client(onboarder_espn_client)
         with patch.object(
-            onboarder_espn_client,
+            onboarder_utils,
             "fetch_with_retry",
             AsyncMock(return_value={"members": []}),
         ):
@@ -505,13 +505,15 @@ class TestESPNClientFetch:
             "data": {"members": []},
         }
 
-    async def test_fetch_unwraps_list_response(self, onboarder_espn_client):
+    async def test_fetch_unwraps_list_response(
+        self, onboarder_espn_client, onboarder_utils
+    ):
         import asyncio
         from unittest.mock import AsyncMock
 
         client = self._client(onboarder_espn_client)
         with patch.object(
-            onboarder_espn_client,
+            onboarder_utils,
             "fetch_with_retry",
             AsyncMock(return_value=[{"first": 1}, {"second": 2}]),
         ):
@@ -523,14 +525,14 @@ class TestESPNClientFetch:
         assert result["data"] == {"first": 1}  # first element of the list
 
     async def test_fetch_player_scoring_totals_sets_filter_header(
-        self, onboarder_espn_client
+        self, onboarder_espn_client, onboarder_utils
     ):
         import asyncio
         from unittest.mock import AsyncMock
 
         client = self._client(onboarder_espn_client)
         mock_fetch = AsyncMock(return_value={"players": []})
-        with patch.object(onboarder_espn_client, "fetch_with_retry", mock_fetch):
+        with patch.object(onboarder_utils, "fetch_with_retry", mock_fetch):
             await client._fetch(
                 session=MagicMock(),
                 semaphore=asyncio.Semaphore(1),
@@ -539,13 +541,15 @@ class TestESPNClientFetch:
         headers = mock_fetch.call_args[1]["headers"]
         assert "X-Fantasy-Filter" in headers
 
-    async def test_fetch_returns_none_on_error(self, onboarder_espn_client):
+    async def test_fetch_returns_none_on_error(
+        self, onboarder_espn_client, onboarder_utils
+    ):
         import asyncio
         from unittest.mock import AsyncMock
 
         client = self._client(onboarder_espn_client)
         with patch.object(
-            onboarder_espn_client,
+            onboarder_utils,
             "fetch_with_retry",
             AsyncMock(side_effect=RuntimeError("boom")),
         ):

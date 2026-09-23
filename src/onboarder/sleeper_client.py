@@ -8,7 +8,7 @@ import boto3
 import botocore.exceptions
 import requests
 from utils import (
-    fetch_with_retry,
+    fetch_one,
     logger,
     matchup_weeks,
     run_fetches,
@@ -374,18 +374,13 @@ class SleeperClient:
         Returns:
             Mapping containing season, data type, and API response object.
         """
-        season, data_type, url = url_data
-        async with semaphore:
-            try:
-                data = await fetch_with_retry(session=session, url=url)
-                logger.info("Successfully fetched url: %s", url)
-                # Sleeper legitimately returns a null body for winners_bracket /
-                # losers_bracket before a season reaches the playoffs. Normalize that
-                # to an empty list so it is not mistaken for a fetch failure by
-                # validate_api_results; genuine failures raise below and keep data None.
-                if data is None and data_type in ("playoff_bracket", "losers_bracket"):
-                    data = []
-                return {"season": season, "data_type": data_type, "data": data}
-            except Exception as e:  # noqa: BLE001 — isolate one request's failure
-                logger.error("Failed request for url: %s, error: %s", url, e)
-                return {"season": season, "data_type": data_type, "data": None}
+
+        # Sleeper legitimately returns a null body for winners_bracket / losers_bracket before
+        # a season reaches the playoffs. Normalize that to an empty list so it is not mistaken
+        # for a fetch failure by validate_api_results; genuine failures keep data None.
+        def _normalize(data: Any, data_type: str) -> Any:
+            if data is None and data_type in ("playoff_bracket", "losers_bracket"):
+                return []
+            return data
+
+        return await fetch_one(session, semaphore, url_data, transform=_normalize)

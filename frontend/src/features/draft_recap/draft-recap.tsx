@@ -22,15 +22,14 @@ import {
   type DraftPickItem,
   getDraftData,
 } from '@/features/draft_grades/api-calls';
+import {
+  type DraftResult,
+  useDraftData,
+} from '@/features/draft_grades/use-draft-data';
 import SeasonSelect from '@/features/season_select/season-select';
 import { avatarColor } from '@/lib/color-constants';
 import { positionColorMeta } from '@/lib/color-constants';
-import { getLeagueCookies, isDemoMode } from '@/lib/cookie-handler';
-import { type Result, toResult } from '@/lib/result';
-
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-type DraftResult = Result<DraftPickItem[]>;
+import { toResult } from '@/lib/result';
 
 interface BoardTeam {
   id: string;
@@ -585,30 +584,17 @@ export function DraftValueScatter({
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function DraftRecap() {
-  const { leagueId, platform, seasons } = useMemo(() => getLeagueCookies(), []);
-  const isDemo = useMemo(() => isDemoMode(), []);
-
-  const defaultSeason =
-    [...seasons].sort((a, b) => Number(b) - Number(a))[0] ?? '';
-  const [selectedSeason, setSelectedSeason] = useState(defaultSeason);
-  // Demo-only toggle: selects the separate DRAFT_AUCTION dataset.
-  const [demoAuction, setDemoAuction] = useState(false);
-
-  const draftPromise = useMemo(
-    (): Promise<DraftResult> =>
-      leagueId && selectedSeason
-        ? toResult(
-            getDraftData(
-              leagueId,
-              platform,
-              selectedSeason,
-              isDemo && demoAuction,
-            ).then((res) => res.data),
-            'Failed to load draft data.',
-          )
-        : Promise.resolve({ ok: true as const, data: [] }),
-    [leagueId, platform, selectedSeason, isDemo, demoAuction],
-  );
+  const {
+    leagueId,
+    platform,
+    seasons,
+    isDemo,
+    selectedSeason,
+    setSelectedSeason,
+    demoAuction,
+    setDemoAuction,
+    draftPromise,
+  } = useDraftData();
 
   return (
     <div className="flex flex-1 flex-col p-6 overflow-auto">

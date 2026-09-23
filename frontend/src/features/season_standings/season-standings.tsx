@@ -34,7 +34,8 @@ import { noChampionAward } from '@/features/season_standings/season-champion-awa
 import { avatarColor } from '@/lib/color-constants';
 import { POSITION_COLORS, UI_COLORS } from '@/lib/color-constants';
 import { getLeagueCookies } from '@/lib/cookie-handler';
-import { type Result, toResult } from '@/lib/result';
+import { type Result } from '@/lib/result';
+import { latestSeason, seasonQuery } from '@/lib/season';
 
 type StandingsResult = Result<SeasonStandingsItem[]>;
 
@@ -490,46 +491,36 @@ export default function SeasonStandings() {
 
   // The most recent season is the only one that can still be in progress (playoffs not
   // yet decided); any earlier season is complete.
-  const latestSeason =
-    [...seasons].sort((a, b) => Number(b) - Number(a))[0] ?? '';
-  const [selectedSeason, setSelectedSeason] = useState(latestSeason);
+  const defaultSeason = latestSeason(seasons);
+  const [selectedSeason, setSelectedSeason] = useState(defaultSeason);
 
   const standingsPromise = useMemo(
     (): Promise<StandingsResult> =>
-      leagueId && selectedSeason
-        ? toResult(
-            getSeasonStandings(leagueId, platform, selectedSeason).then(
-              (res) => res.data,
-            ),
-            'Failed to load standings.',
-          )
-        : Promise.resolve({ ok: true as const, data: [] }),
+      seasonQuery(
+        Boolean(leagueId && selectedSeason),
+        () => getSeasonStandings(leagueId, platform, selectedSeason),
+        'Failed to load standings.',
+      ),
     [leagueId, platform, selectedSeason],
   );
 
   const matchupsPromise = useMemo(
     (): Promise<MatchupsResult> =>
-      leagueId && selectedSeason
-        ? toResult(
-            getSeasonMatchups(leagueId, platform, selectedSeason).then(
-              (res) => res.data,
-            ),
-            'Failed to load matchups.',
-          )
-        : Promise.resolve({ ok: true as const, data: [] }),
+      seasonQuery(
+        Boolean(leagueId && selectedSeason),
+        () => getSeasonMatchups(leagueId, platform, selectedSeason),
+        'Failed to load matchups.',
+      ),
     [leagueId, platform, selectedSeason],
   );
 
   const weeklyStandingsPromise = useMemo(
     (): Promise<WeeklyResult> =>
-      leagueId && selectedSeason
-        ? toResult(
-            getSeasonWeeklyStandings(leagueId, platform, selectedSeason).then(
-              (res) => res.data,
-            ),
-            'Failed to load weekly standings.',
-          )
-        : Promise.resolve({ ok: true as const, data: [] }),
+      seasonQuery(
+        Boolean(leagueId && selectedSeason),
+        () => getSeasonWeeklyStandings(leagueId, platform, selectedSeason),
+        'Failed to load weekly standings.',
+      ),
     [leagueId, platform, selectedSeason],
   );
 
@@ -553,7 +544,7 @@ export default function SeasonStandings() {
         <Suspense fallback={<SkeletonAwards />}>
           <AwardsGrid
             promise={standingsPromise}
-            isLatestSeason={selectedSeason === latestSeason}
+            isLatestSeason={selectedSeason === defaultSeason}
           />
         </Suspense>
 

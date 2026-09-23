@@ -16,6 +16,7 @@ import { avatarColor } from '@/lib/color-constants';
 import { MATCHUP_STATUS_COLORS } from '@/lib/color-constants';
 import { getLeagueCookies, type Platform } from '@/lib/cookie-handler';
 import { type Result, toResult } from '@/lib/result';
+import { latestSeason } from '@/lib/season';
 
 interface TeamSide {
   teamId: string;
@@ -424,9 +425,7 @@ function MatchupsContent({
 export default function Matchups() {
   const { leagueId, platform, seasons } = useMemo(() => getLeagueCookies(), []);
 
-  const defaultSeason =
-    [...seasons].sort((a, b) => Number(b) - Number(a))[0] ?? '';
-  const [selectedSeason, setSelectedSeason] = useState(defaultSeason);
+  const [selectedSeason, setSelectedSeason] = useState(latestSeason(seasons));
   const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
   const [selectedMatchup, setSelectedMatchup] = useState<number | null>(null);
 

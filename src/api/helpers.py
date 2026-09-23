@@ -7,6 +7,7 @@ SNS failure alerting lives in the shared ``common.sns`` module.
 """
 
 import time
+from collections.abc import Iterator
 from datetime import datetime, timezone
 from decimal import Decimal
 from functools import partial
@@ -361,6 +362,41 @@ def delete_all_league_items(canonical_league_id: str, max_attempts: int = 4) -> 
         )
 
 
+def _iter_owner_other_league_metadata(
+    clerk_user_id: str, exclude_canonical_league_id: str
+) -> Iterator[dict]:
+    """Yield every METADATA item owned by ``clerk_user_id`` except the excluded league's.
+
+    Scans GSI3 (the sparse all-METADATA index) with pagination, filtered to the caller's owned
+    leagues, and skips the league being deleted / opted out by PK. Shared by the per-platform
+    "does the user still own another …" checks so the GSI3 query shape and pagination loop live
+    in exactly one place.
+
+    Args:
+        clerk_user_id: The owner whose other leagues are enumerated.
+        exclude_canonical_league_id: Canonical id of the league to skip.
+
+    Yields:
+        The full METADATA item for each of the user's other owned leagues.
+    """
+    excluded_pk = f"LEAGUE#{exclude_canonical_league_id}"
+    kwargs: dict[str, Any] = {
+        "IndexName": "GSI3",
+        "KeyConditionExpression": Key("SK").eq("METADATA"),
+        "FilterExpression": Attr("owner_user_id").eq(clerk_user_id),
+    }
+    while True:
+        response = main.table.query(**kwargs)
+        for item in response.get("Items", []):
+            if item.get("PK") == excluded_pk:
+                continue
+            yield item
+        last_key = response.get("LastEvaluatedKey")
+        if not last_key:
+            return
+        kwargs["ExclusiveStartKey"] = last_key
+
+
 def owner_has_other_yahoo_leagues(
     clerk_user_id: str, exclude_canonical_league_id: str
 ) -> bool:
@@ -383,24 +419,12 @@ def owner_has_other_yahoo_leagues(
     Returns:
         ``True`` if at least one *other* Yahoo league is owned by the user.
     """
-    excluded_pk = f"LEAGUE#{exclude_canonical_league_id}"
-    kwargs: dict[str, Any] = {
-        "IndexName": "GSI3",
-        "KeyConditionExpression": Key("SK").eq("METADATA"),
-        "FilterExpression": Attr("owner_user_id").eq(clerk_user_id),
-    }
-    while True:
-        response = main.table.query(**kwargs)
-        for item in response.get("Items", []):
-            if item.get("PK") == excluded_pk:
-                continue
-            effective_platform = item.get("active_platform") or item.get("platform")
-            if effective_platform == main.Platform.YAHOO.value:
-                return True
-        last_key = response.get("LastEvaluatedKey")
-        if not last_key:
-            break
-        kwargs["ExclusiveStartKey"] = last_key
+    for item in _iter_owner_other_league_metadata(
+        clerk_user_id, exclude_canonical_league_id
+    ):
+        effective_platform = item.get("active_platform") or item.get("platform")
+        if effective_platform == main.Platform.YAHOO.value:
+            return True
     return False
 
 
@@ -426,29 +450,17 @@ def owner_has_other_optedin_espn_leagues(
     Returns:
         ``True`` if at least one *other* ESPN league owned by the user is opted into auto-refresh.
     """
-    excluded_pk = f"LEAGUE#{exclude_canonical_league_id}"
-    kwargs: dict[str, Any] = {
-        "IndexName": "GSI3",
-        "KeyConditionExpression": Key("SK").eq("METADATA"),
-        "FilterExpression": Attr("owner_user_id").eq(clerk_user_id),
-    }
-    while True:
-        response = main.table.query(**kwargs)
-        for item in response.get("Items", []):
-            pk = item.get("PK")
-            if pk == excluded_pk:
-                continue
-            effective_platform = item.get("active_platform") or item.get("platform")
-            if effective_platform != main.Platform.ESPN.value:
-                continue
-            # auto_refresh_enabled is not projected into GSI3, so read the METADATA item.
-            full = main.table.get_item(Key={"PK": pk, "SK": "METADATA"}).get("Item", {})
-            if full.get("auto_refresh_enabled"):
-                return True
-        last_key = response.get("LastEvaluatedKey")
-        if not last_key:
-            break
-        kwargs["ExclusiveStartKey"] = last_key
+    for item in _iter_owner_other_league_metadata(
+        clerk_user_id, exclude_canonical_league_id
+    ):
+        effective_platform = item.get("active_platform") or item.get("platform")
+        if effective_platform != main.Platform.ESPN.value:
+            continue
+        # auto_refresh_enabled is not projected into GSI3, so read the METADATA item.
+        pk = item["PK"]
+        full = main.table.get_item(Key={"PK": pk, "SK": "METADATA"}).get("Item", {})
+        if full.get("auto_refresh_enabled"):
+            return True
     return False
 
 

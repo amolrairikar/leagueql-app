@@ -13,10 +13,9 @@ import {
   getAllMatchups,
   type MatchupItem,
 } from '@/features/player_records/api-calls';
-import { avatarColor } from '@/lib/color-constants';
 import { POSITION_COLORS, UI_COLORS } from '@/lib/color-constants';
 import { getLeagueCookies, type Platform } from '@/lib/cookie-handler';
-import { isUnplayedMatchup } from '@/lib/matchups';
+import { buildTeamColorMap, isUnplayedMatchup } from '@/lib/matchups';
 import { POS_NORMALIZE } from '@/lib/position-constants';
 import { type Result, toResult } from '@/lib/result';
 import { initials } from '@/lib/utils';
@@ -35,18 +34,6 @@ interface ScoringRecord {
 const POS_ORDER = ['QB', 'WR', 'RB', 'TE', 'DEF', 'K'];
 const POS_SET = new Set(POS_ORDER);
 const EMPTY_MATCHUPS: MatchupItem[] = [];
-
-function buildColorMap(matchups: MatchupItem[]): Map<string, string> {
-  const uniqueTeams = new Map<string, string>();
-  for (const m of matchups) {
-    uniqueTeams.set(m.team_a_id, m.team_a_display_name ?? '');
-    uniqueTeams.set(m.team_b_id, m.team_b_display_name ?? '');
-  }
-  const sortedIds = [...uniqueTeams.entries()]
-    .sort((a, b) => a[1].localeCompare(b[1]))
-    .map(([id]) => id);
-  return new Map(sortedIds.map((id, i) => [id, avatarColor(i)]));
-}
 
 function extractEntries(
   matchups: MatchupItem[],
@@ -310,7 +297,7 @@ function PlayerRecordsContent({
   const result = use(promise);
 
   const matchups = result.ok ? result.data : EMPTY_MATCHUPS;
-  const colorMap = useMemo(() => buildColorMap(matchups), [matchups]);
+  const colorMap = useMemo(() => buildTeamColorMap(matchups), [matchups]);
   const allRecords = useMemo(
     () => extractEntries(matchups, colorMap),
     [matchups, colorMap],
