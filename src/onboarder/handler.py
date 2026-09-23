@@ -49,7 +49,9 @@ def _record_failure(
     )
     if failure_code in SYSTEMIC_FAILURE_CODES:
         publish_failure(
-            error_detail or f"{request_type or 'ONBOARD'} failed: {failure_code}"
+            error_detail or f"{request_type or 'ONBOARD'} failed: {failure_code}",
+            platform=body.get("platform"),
+            league_id=str(league_id) if league_id else None,
         )
 
 

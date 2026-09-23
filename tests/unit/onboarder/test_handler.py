@@ -626,6 +626,9 @@ class TestLambdaHandlerSystemicAlerting:
             onboarder_handler.lambda_handler(event, MagicMock())
         mock_pub.assert_called_once()
         assert "S3 error" in mock_pub.call_args.args[0]
+        # Platform and league ID from the event body ride along for triage.
+        assert mock_pub.call_args.kwargs["platform"] == "SLEEPER"
+        assert mock_pub.call_args.kwargs["league_id"] == "123"
 
     def test_record_failure_systemic_without_detail_uses_fallback(
         self, onboarder_handler
