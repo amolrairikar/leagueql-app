@@ -908,7 +908,12 @@ components:
       properties:
         leagueId:
           type: string
-          description: The ESPN or Sleeper league ID
+          maxLength: 100
+          pattern: '^\d+$'
+          description: >
+            The numeric ESPN, Sleeper, or Yahoo league ID (digits only). It is
+            interpolated into the upstream platform request URLs, so non-digit
+            characters are rejected (SEC-04).
           example: "12345678"
         platform:
           type: string
@@ -917,9 +922,10 @@ components:
           example: "ESPN"
         season:
           type: string
+          pattern: '^\d{4}$'
           description: >
-            The most recent season the league was active for. Required for
-            ESPN leagues only.
+            The most recent season the league was active for (4-digit year).
+            Required for ESPN leagues only.
           example: "2025"
         autoRefresh:
           type: boolean
@@ -993,7 +999,12 @@ components:
       properties:
         newPlatformLeagueId:
           type: string
-          description: The league ID on the destination platform
+          maxLength: 100
+          pattern: '^\d+$'
+          description: >
+            The numeric league ID on the destination platform (digits only). It is
+            interpolated into the destination-platform request URLs, so non-digit
+            characters are rejected (SEC-04).
           example: "87654321"
         newPlatform:
           type: string
@@ -1002,7 +1013,8 @@ components:
           example: "ESPN"
         season:
           type: string
-          description: Latest season (required for ESPN destination)
+          pattern: '^\d{4}$'
+          description: Latest season, 4-digit year (required for ESPN destination)
           example: "2025"
         s2:
           type: string

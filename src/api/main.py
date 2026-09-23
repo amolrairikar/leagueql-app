@@ -54,9 +54,13 @@ class QueryResponse(BaseModel):
 
 
 class OnboardingPayload(BaseModel):
-    leagueId: str = Field(max_length=100)
+    # leagueId/season are digit-constrained (SEC-04): both are string-interpolated into
+    # upstream ESPN/Sleeper request URLs by the onboarder, so restricting them to digits
+    # keeps attacker-controlled characters (``?``, ``&``, ``/``, ``#``, ``..``) out of the
+    # request path/query — matching the constraints on the path params and the members proxy.
+    leagueId: str = Field(max_length=100, pattern=r"^\d+$")
     platform: str = Field(max_length=100)
-    season: str | None = Field(default=None, max_length=100)
+    season: str | None = Field(default=None, pattern=r"^\d{4}$")
     s2: str | None = Field(default=None)
     swid: str | None = Field(default=None, max_length=100)
     # Per-league scheduled auto-refresh opt-in (backend/scheduled-league-auto-refresh).
@@ -144,9 +148,11 @@ class ManagerMappingEntry(BaseModel):
 
 
 class MigratePayload(BaseModel):
-    newPlatformLeagueId: str = Field(max_length=100)
+    # Digit-constrained for the same reason as OnboardingPayload (SEC-04): the destination
+    # league id + season are interpolated into the destination-platform request URLs.
+    newPlatformLeagueId: str = Field(max_length=100, pattern=r"^\d+$")
     newPlatform: Platform
-    season: str | None = Field(default=None, max_length=10)
+    season: str | None = Field(default=None, pattern=r"^\d{4}$")
     s2: str | None = Field(default=None)
     swid: str | None = Field(default=None, max_length=100)
     managerMapping: list[ManagerMappingEntry] = Field(

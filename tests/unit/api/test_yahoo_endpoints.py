@@ -217,9 +217,11 @@ class TestYahooCallbackEndpoint:
 
 class TestYahooOnboardGate:
     def test_unlinked_returns_403(self, client):
+        # The entered Yahoo league id is the numeric current-season id (the dotted
+        # league_key is resolved server-side); onboard payloads are digit-constrained (SEC-04).
         with patch("yahoo_oauth.has_valid_link", return_value=False):
             response = client.post(
-                "/leagues", json={"leagueId": "45.l.678", "platform": "YAHOO"}
+                "/leagues", json={"leagueId": "678", "platform": "YAHOO"}
             )
         assert response.status_code == 403
         assert "Link your Yahoo account first" in response.json()["detail"]
