@@ -18,6 +18,11 @@ from common.sns import publish_failure as _publish_failure
 V2_CUTOFF = 2018
 EXTENDED_SEASON_CUTOFF = 2021
 
+# Cap the response body we log on an HTTP error so a large upstream payload
+# can't blow up CloudWatch volume; error bodies from the platform APIs fit well
+# within this.
+_MAX_LOGGED_BODY_CHARS = 2000
+
 publish_failure = partial(_publish_failure, subject="LeagueQL Onboarder Failure")
 
 
@@ -80,6 +85,8 @@ async def fetch_with_retry(
 
     Retries on connection errors, timeouts, and retryable HTTP status codes
     (429, 500, 502, 503, 504). Raises immediately on permanent client errors (4xx).
+    On any HTTP error status, logs the status code and (truncated) response body
+    before raising, since ``raise_for_status()`` discards the body.
 
     Args:
         session: aiohttp client session to use for the request.
@@ -105,6 +112,16 @@ async def fetch_with_retry(
                     )
                     await asyncio.sleep(base_delay * (2**attempt))
                     continue
+                if response.status >= 400:
+                    # Read the body before raise_for_status() discards it, so the
+                    # upstream status + payload are diagnosable from the log alone.
+                    body = await response.text()
+                    logger.error(
+                        "HTTP error for url: %s status=%s body=%s",
+                        url,
+                        response.status,
+                        body[:_MAX_LOGGED_BODY_CHARS],
+                    )
                 response.raise_for_status()
                 return await response.json()
         except (aiohttp.ClientConnectionError, asyncio.TimeoutError) as e:

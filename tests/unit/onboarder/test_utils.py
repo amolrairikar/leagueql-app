@@ -10,11 +10,12 @@ import aiohttp
 import pytest
 
 
-def _make_async_cm(status: int, json_data, raise_for_status=None):
+def _make_async_cm(status: int, json_data, raise_for_status=None, text_data=""):
     """Create an async context manager mock that simulates an aiohttp response."""
     mock_resp = MagicMock()
     mock_resp.status = status
     mock_resp.json = AsyncMock(return_value=json_data)
+    mock_resp.text = AsyncMock(return_value=text_data)
     if raise_for_status is not None:
         mock_resp.raise_for_status = MagicMock(side_effect=raise_for_status)
     else:
@@ -106,6 +107,63 @@ class TestFetchWithRetry:
             await onboarder_utils.fetch_with_retry(
                 session=session, url="http://test.com", base_delay=0
             )
+
+    async def test_logs_status_and_body_on_http_error(
+        self, onboarder_utils, monkeypatch
+    ):
+        # A 4xx must log the upstream status + raw body before raise_for_status()
+        # discards the body, then still propagate the error unchanged.
+        mock_logger = MagicMock()
+        monkeypatch.setattr(onboarder_utils, "logger", mock_logger)
+        session = MagicMock()
+        error = aiohttp.ClientResponseError(None, None)
+        error.status = 404
+        resp_404 = _make_async_cm(
+            404, None, raise_for_status=error, text_data='{"error":"not found"}'
+        )
+        session.get.return_value = resp_404
+
+        with pytest.raises(aiohttp.ClientResponseError):
+            await onboarder_utils.fetch_with_retry(
+                session=session, url="http://test.com", base_delay=0
+            )
+
+        mock_logger.error.assert_called_once()
+        args = mock_logger.error.call_args[0]
+        assert args[2] == 404
+        assert args[3] == '{"error":"not found"}'
+
+    async def test_truncates_logged_body(self, onboarder_utils, monkeypatch):
+        mock_logger = MagicMock()
+        monkeypatch.setattr(onboarder_utils, "logger", mock_logger)
+        session = MagicMock()
+        error = aiohttp.ClientResponseError(None, None)
+        error.status = 500
+        long_body = "x" * (onboarder_utils._MAX_LOGGED_BODY_CHARS + 500)
+        resp_500 = _make_async_cm(
+            500, None, raise_for_status=error, text_data=long_body
+        )
+        session.get.return_value = resp_500
+
+        with pytest.raises(aiohttp.ClientResponseError):
+            await onboarder_utils.fetch_with_retry(
+                session=session, url="http://test.com", max_retries=0, base_delay=0
+            )
+
+        logged_body = mock_logger.error.call_args[0][3]
+        assert len(logged_body) == onboarder_utils._MAX_LOGGED_BODY_CHARS
+
+    async def test_success_does_not_log_error(self, onboarder_utils, monkeypatch):
+        mock_logger = MagicMock()
+        monkeypatch.setattr(onboarder_utils, "logger", mock_logger)
+        session = MagicMock()
+        session.get.return_value = _make_async_cm(200, {"key": "val"})
+
+        result = await onboarder_utils.fetch_with_retry(
+            session=session, url="http://test.com"
+        )
+        assert result == {"key": "val"}
+        mock_logger.error.assert_not_called()
 
     async def test_retries_on_connection_error(self, onboarder_utils):
         session = MagicMock()
