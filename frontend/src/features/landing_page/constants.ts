@@ -19,6 +19,7 @@ import managerHistoryScreenshot from '@/assets/manager-history-screenshot.png';
 import matchupBoxscoreScreenshot from '@/assets/matchup-boxscore-screenshot.png';
 import matchupsScreenshot from '@/assets/matchups-screenshot.png';
 import playerRecordsScreenshot from '@/assets/player-records-screenshot.png';
+import playoffRaceScreenshot from '@/assets/playoff-race-screenshot.png';
 import sleeperLogo from '@/assets/sleeper-logo.svg';
 import standingsScreenshot from '@/assets/standings-screenshot.png';
 import yahooLogo from '@/assets/yahoo-logo.svg';
@@ -83,6 +84,12 @@ export const SLIDES: Slide[] = [
     url: 'leagueql.app/draft_recap',
     caption: 'Draft picks and their season performance',
     image: draftRecapScreenshot,
+  },
+  {
+    title: 'Playoff Race Simulator',
+    url: 'leagueql.app/playoff_bracket',
+    caption: 'Simulate the playoff race and project final standings',
+    image: playoffRaceScreenshot,
   },
 ];
 

@@ -27,6 +27,39 @@ def test_publish_failure_publishes_when_configured():
     assert "Correlation ID" in kwargs["Message"]
 
 
+def test_publish_failure_includes_platform_and_league_id():
+    mock_client = MagicMock()
+    with (
+        patch.object(sns, "_sns_client", mock_client),
+        patch.object(sns, "_sns_topic_arn", "arn:aws:sns:us-east-1:123:test-topic"),
+    ):
+        sns.publish_failure(
+            "something broke",
+            subject="LeagueQL Onboarder Failure",
+            platform="espn",
+            league_id="123456",
+        )
+
+    message = mock_client.publish.call_args.kwargs["Message"]
+    # Platform / League ID sit on their own lines, in order, above the Error line.
+    assert message == (
+        "Correlation ID: \nPlatform: espn\nLeague ID: 123456\nError: something broke"
+    )
+
+
+def test_publish_failure_omits_platform_and_league_id_when_absent():
+    mock_client = MagicMock()
+    with (
+        patch.object(sns, "_sns_client", mock_client),
+        patch.object(sns, "_sns_topic_arn", "arn:aws:sns:us-east-1:123:test-topic"),
+    ):
+        sns.publish_failure("something broke", subject="LeagueQL API Failure")
+
+    message = mock_client.publish.call_args.kwargs["Message"]
+    assert "Platform:" not in message
+    assert "League ID:" not in message
+
+
 def test_publish_failure_swallows_publish_errors():
     mock_client = MagicMock()
     mock_client.publish.side_effect = Exception("boom")

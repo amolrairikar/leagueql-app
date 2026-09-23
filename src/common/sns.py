@@ -18,21 +18,34 @@ _sns_topic_arn = os.environ.get("SNS_TOPIC_ARN")
 _sns_client = boto3.client("sns", config=_retry_config) if _sns_topic_arn else None
 
 
-def publish_failure(error_message: str, subject: str) -> None:
+def publish_failure(
+    error_message: str,
+    subject: str,
+    platform: str | None = None,
+    league_id: str | None = None,
+) -> None:
     """
     Publish a failure alert to SNS; no-op when SNS is not configured.
 
     Args:
         error_message: The error detail to include in the alert body.
         subject: The SNS subject line identifying the failing service.
+        platform: Optional platform (e.g. ``espn``); rendered on its own line when set.
+        league_id: Optional league ID; rendered on its own line when set.
     """
     if not _sns_client:
         return
+    lines = [f"Correlation ID: {correlation_id_var.get()}"]
+    if platform:
+        lines.append(f"Platform: {platform}")
+    if league_id:
+        lines.append(f"League ID: {league_id}")
+    lines.append(f"Error: {error_message}")
     try:
         _sns_client.publish(
             TopicArn=_sns_topic_arn,
             Subject=subject,
-            Message=f"Correlation ID: {correlation_id_var.get()}\nError: {error_message}",
+            Message="\n".join(lines),
         )
     except Exception:  # noqa: BLE001 — notification is best-effort, never raise
         logger.warning("Failed to publish SNS failure notification", exc_info=True)
