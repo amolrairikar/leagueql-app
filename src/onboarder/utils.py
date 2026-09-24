@@ -85,8 +85,10 @@ async def fetch_with_retry(
 
     Retries on connection errors, timeouts, and retryable HTTP status codes
     (429, 500, 502, 503, 504). Raises immediately on permanent client errors (4xx).
-    On any HTTP error status, logs the status code and (truncated) response body
-    before raising, since ``raise_for_status()`` discards the body.
+    On any HTTP error status, reads the response body (which ``raise_for_status()``
+    would otherwise discard) and attaches it, truncated, to the raised
+    ``ClientResponseError`` as ``upstream_body`` so the batch-level handler can log
+    the status + body in a single diagnostic line (see ``describe_fetch_error``).
 
     Args:
         session: aiohttp client session to use for the request.
@@ -113,16 +115,16 @@ async def fetch_with_retry(
                     await asyncio.sleep(base_delay * (2**attempt))
                     continue
                 if response.status >= 400:
-                    # Read the body before raise_for_status() discards it, so the
-                    # upstream status + payload are diagnosable from the log alone.
+                    # Read the body before raise_for_status() discards it and attach
+                    # it to the raised error, so the batch-level handler can log the
+                    # upstream status + payload in a single line rather than us
+                    # emitting a second, near-duplicate error line here.
                     body = await response.text()
-                    logger.error(
-                        "HTTP error for url: %s status=%s body=%s",
-                        url,
-                        response.status,
-                        body[:_MAX_LOGGED_BODY_CHARS],
-                    )
-                response.raise_for_status()
+                    try:
+                        response.raise_for_status()
+                    except aiohttp.ClientResponseError as e:
+                        e.upstream_body = body[:_MAX_LOGGED_BODY_CHARS]
+                        raise
                 return await response.json()
         except (aiohttp.ClientConnectionError, asyncio.TimeoutError) as e:
             if attempt == max_retries:
@@ -136,6 +138,27 @@ async def fetch_with_retry(
             )
             await asyncio.sleep(base_delay * (2**attempt))
     raise RuntimeError(f"Exhausted retries for {url}")
+
+
+def describe_fetch_error(exc: BaseException) -> str:
+    """Render a failed-fetch exception for a single diagnostic log line.
+
+    For an HTTP error carrying an ``upstream_body`` (attached by ``fetch_with_retry``),
+    include the upstream status and truncated body — the payload ``raise_for_status()``
+    would otherwise discard. For any other failure (connection error after retries are
+    exhausted, the exhausted-retries ``RuntimeError``, a ``transform`` callback error),
+    fall back to the exception repr, which is the only useful detail available.
+
+    Args:
+        exc: The exception raised while fetching/shaping one request.
+
+    Returns:
+        A log-ready string describing the failure.
+    """
+    body = getattr(exc, "upstream_body", None)
+    if isinstance(exc, aiohttp.ClientResponseError) and body is not None:
+        return f"status={exc.status} body={body}"
+    return f"error={exc!r}"
 
 
 async def fetch_one(
@@ -177,7 +200,13 @@ async def fetch_one(
                 data = transform(data, data_type)
             return {"season": season, "data_type": data_type, "data": data}
         except Exception as e:  # noqa: BLE001 — isolate one request's failure
-            logger.error("Failed request for url: %s, error: %s", url, e)
+            logger.error(
+                "Failed request for url: %s season=%s data_type=%s %s",
+                url,
+                season,
+                data_type,
+                describe_fetch_error(e),
+            )
             return {"season": season, "data_type": data_type, "data": None}
 
 

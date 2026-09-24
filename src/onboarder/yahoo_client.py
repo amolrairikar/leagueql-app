@@ -23,7 +23,13 @@ from typing import Any
 
 import aiohttp
 import requests
-from utils import fetch_with_retry, logger, run_fetches, validate_api_results
+from utils import (
+    describe_fetch_error,
+    fetch_with_retry,
+    logger,
+    run_fetches,
+    validate_api_results,
+)
 
 # The pure Yahoo JSON-normalization helpers live in a shared module so the API Lambda's
 # Yahoo-members proxy can reuse them without importing this onboarding client.
@@ -442,7 +448,13 @@ class YahooClient:
                 logger.info("Successfully fetched url: %s", url)
                 return {"season": season, "data_type": data_type, "data": data}
             except Exception as e:  # noqa: BLE001 — isolate one request's failure
-                logger.error("Failed request for url: %s, error: %s", url, e)
+                logger.error(
+                    "Failed request for url: %s season=%s data_type=%s %s",
+                    url,
+                    season,
+                    data_type,
+                    describe_fetch_error(e),
+                )
                 return {"season": season, "data_type": data_type, "data": None}
 
     async def _fetch_with_auth_retry(
