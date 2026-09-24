@@ -4,7 +4,8 @@ JSON logging (``JsonFormatter`` / ``setup_logger``) is shared code now exercised
 ``tests/unit/common/test_logging_utils.py``.
 """
 
-from unittest.mock import AsyncMock, MagicMock
+import asyncio
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import aiohttp
 import pytest
@@ -108,11 +109,12 @@ class TestFetchWithRetry:
                 session=session, url="http://test.com", base_delay=0
             )
 
-    async def test_logs_status_and_body_on_http_error(
+    async def test_attaches_body_to_error_without_logging(
         self, onboarder_utils, monkeypatch
     ):
-        # A 4xx must log the upstream status + raw body before raise_for_status()
-        # discards the body, then still propagate the error unchanged.
+        # A 4xx must read the raw body before raise_for_status() discards it and
+        # attach it to the raised error (so the batch handler can log it), without
+        # emitting its own error line.
         mock_logger = MagicMock()
         monkeypatch.setattr(onboarder_utils, "logger", mock_logger)
         session = MagicMock()
@@ -123,19 +125,15 @@ class TestFetchWithRetry:
         )
         session.get.return_value = resp_404
 
-        with pytest.raises(aiohttp.ClientResponseError):
+        with pytest.raises(aiohttp.ClientResponseError) as excinfo:
             await onboarder_utils.fetch_with_retry(
                 session=session, url="http://test.com", base_delay=0
             )
 
-        mock_logger.error.assert_called_once()
-        args = mock_logger.error.call_args[0]
-        assert args[2] == 404
-        assert args[3] == '{"error":"not found"}'
+        assert excinfo.value.upstream_body == '{"error":"not found"}'
+        mock_logger.error.assert_not_called()
 
-    async def test_truncates_logged_body(self, onboarder_utils, monkeypatch):
-        mock_logger = MagicMock()
-        monkeypatch.setattr(onboarder_utils, "logger", mock_logger)
+    async def test_truncates_attached_body(self, onboarder_utils):
         session = MagicMock()
         error = aiohttp.ClientResponseError(None, None)
         error.status = 500
@@ -145,13 +143,14 @@ class TestFetchWithRetry:
         )
         session.get.return_value = resp_500
 
-        with pytest.raises(aiohttp.ClientResponseError):
+        with pytest.raises(aiohttp.ClientResponseError) as excinfo:
             await onboarder_utils.fetch_with_retry(
                 session=session, url="http://test.com", max_retries=0, base_delay=0
             )
 
-        logged_body = mock_logger.error.call_args[0][3]
-        assert len(logged_body) == onboarder_utils._MAX_LOGGED_BODY_CHARS
+        assert (
+            len(excinfo.value.upstream_body) == onboarder_utils._MAX_LOGGED_BODY_CHARS
+        )
 
     async def test_success_does_not_log_error(self, onboarder_utils, monkeypatch):
         mock_logger = MagicMock()
@@ -214,6 +213,98 @@ class TestFetchWithRetry:
         )
         call_kwargs = session.get.call_args[1]
         assert call_kwargs["headers"] == {"X-Test": "1"}
+
+
+class TestDescribeFetchError:
+    def test_http_error_with_body_includes_status_and_body(self, onboarder_utils):
+        err = aiohttp.ClientResponseError(None, None)
+        err.status = 401
+        err.upstream_body = '{"messages":["not authorized"]}'
+        msg = onboarder_utils.describe_fetch_error(err)
+        assert "status=401" in msg
+        assert '{"messages":["not authorized"]}' in msg
+
+    def test_http_error_without_body_falls_back_to_repr(self, onboarder_utils):
+        # A ClientResponseError that never passed through fetch_with_retry carries no
+        # upstream_body, so we render its repr rather than a bare status.
+        err = aiohttp.ClientResponseError(None, None)
+        err.status = 401
+        msg = onboarder_utils.describe_fetch_error(err)
+        assert msg.startswith("error=")
+
+    def test_non_http_error_uses_repr(self, onboarder_utils):
+        msg = onboarder_utils.describe_fetch_error(RuntimeError("Exhausted retries"))
+        assert msg.startswith("error=")
+        assert "Exhausted retries" in msg
+
+
+class TestFetchOne:
+    async def test_success_returns_shaped_result(self, onboarder_utils):
+        with patch.object(
+            onboarder_utils, "fetch_with_retry", AsyncMock(return_value={"ok": 1})
+        ):
+            result = await onboarder_utils.fetch_one(
+                session=MagicMock(),
+                semaphore=asyncio.Semaphore(1),
+                url_data=("2024", "users", "http://x"),
+            )
+        assert result == {"season": "2024", "data_type": "users", "data": {"ok": 1}}
+
+    async def test_applies_transform_to_successful_body(self, onboarder_utils):
+        with patch.object(
+            onboarder_utils, "fetch_with_retry", AsyncMock(return_value=None)
+        ):
+            result = await onboarder_utils.fetch_one(
+                session=MagicMock(),
+                semaphore=asyncio.Semaphore(1),
+                url_data=("2024", "brackets", "http://x"),
+                transform=lambda data, dt: data if data is not None else [],
+            )
+        assert result["data"] == []
+
+    async def test_logs_single_line_with_status_and_body_on_error(
+        self, onboarder_utils, monkeypatch
+    ):
+        # One consolidated ERROR carrying season, data_type, status, and the body
+        # attached upstream — no separate line from fetch_with_retry.
+        mock_logger = MagicMock()
+        monkeypatch.setattr(onboarder_utils, "logger", mock_logger)
+        err = aiohttp.ClientResponseError(None, None)
+        err.status = 401
+        err.upstream_body = '{"messages":["not authorized"]}'
+        with patch.object(
+            onboarder_utils, "fetch_with_retry", AsyncMock(side_effect=err)
+        ):
+            result = await onboarder_utils.fetch_one(
+                session=MagicMock(),
+                semaphore=asyncio.Semaphore(1),
+                url_data=("2023", "matchups_12", "http://x"),
+            )
+
+        assert result == {"season": "2023", "data_type": "matchups_12", "data": None}
+        mock_logger.error.assert_called_once()
+        args = mock_logger.error.call_args[0]
+        assert args[2] == "2023"
+        assert args[3] == "matchups_12"
+        assert "status=401" in args[4]
+        assert "not authorized" in args[4]
+
+    async def test_logs_repr_for_non_http_failure(self, onboarder_utils, monkeypatch):
+        mock_logger = MagicMock()
+        monkeypatch.setattr(onboarder_utils, "logger", mock_logger)
+        with patch.object(
+            onboarder_utils,
+            "fetch_with_retry",
+            AsyncMock(side_effect=RuntimeError("Exhausted retries")),
+        ):
+            result = await onboarder_utils.fetch_one(
+                session=MagicMock(),
+                semaphore=asyncio.Semaphore(1),
+                url_data=("2024", "users", "http://x"),
+            )
+
+        assert result["data"] is None
+        assert "Exhausted retries" in mock_logger.error.call_args[0][4]
 
 
 class TestValidateApiResults:
