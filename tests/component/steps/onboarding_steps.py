@@ -7,6 +7,7 @@ transforms — runs for real against the moto-backed stack.
 """
 
 import json
+import sys
 import uuid
 from unittest.mock import MagicMock, patch
 
@@ -17,10 +18,14 @@ from common_steps import get_item, load_fixture
 class _FakeClient:
     """Stand-in for ESPNClient/SleeperClient returning canned fixture data."""
 
-    def __init__(self, raw_data, pending_season=None):
+    def __init__(self, raw_data, pending_season=None, validate=False):
         self._raw = raw_data
         self._seasons = sorted({str(item["season"]) for item in raw_data})
         self._pending_season = pending_season
+        # When True, fetch_all runs the real validate_api_results so a season with a
+        # failed fetch (``data: None``) is dropped — exactly as the real clients do —
+        # exercising the per-season resilience (backend/league-onboarding).
+        self._validate = validate
 
     def get_seasons(self):
         return self._seasons
@@ -29,14 +34,18 @@ class _FakeClient:
         return self._pending_season
 
     async def fetch_all(self):
+        if self._validate:
+            return sys.modules["onboarder.utils"].validate_api_results(self._raw)
         return self._raw
 
 
-def _patch_build_client(context, raw_data, pending_season=None):
+def _patch_build_client(context, raw_data, pending_season=None, validate=False):
     patcher = patch.object(
         context.onboarding_service_mod.OnboardingService,
         "_build_client",
-        lambda self, **kwargs: _FakeClient(raw_data, pending_season=pending_season),
+        lambda self, **kwargs: _FakeClient(
+            raw_data, pending_season=pending_season, validate=validate
+        ),
     )
     patcher.start()
     context._patches.append(patcher)
@@ -127,6 +136,37 @@ def step_seed_player_cache_no_stats(context):
 def step_onboard(context, platform, league_id, fixture):
     raw_data = load_fixture(*fixture.split("/"))
     _patch_build_client(context, raw_data)
+    _run_onboarder(context, platform, league_id, "ONBOARD")
+
+
+@when(
+    'the onboarder runs an ONBOARD for "{platform}" league "{league_id}" '
+    'with fixture "{fixture}" where season "{season}" fails'
+)
+def step_onboard_season_fails(context, platform, league_id, fixture, season):
+    # Simulate a failed API call for one season by nulling one of its results' data —
+    # exactly what fetch_one produces on a fetch error. The validating fake client then
+    # drops that whole season while the fully-successful seasons still onboard.
+    raw_data = load_fixture(*fixture.split("/"))
+    for item in raw_data:
+        if str(item["season"]) == season:
+            item["data"] = None
+            break
+    _patch_build_client(context, raw_data, validate=True)
+    _run_onboarder(context, platform, league_id, "ONBOARD")
+
+
+@when(
+    'the onboarder runs an ONBOARD for "{platform}" league "{league_id}" '
+    'with fixture "{fixture}" where every season fails'
+)
+def step_onboard_all_seasons_fail(context, platform, league_id, fixture):
+    # Every season has a failed API call, so validate_api_results raises and the whole
+    # onboard fails (the existing UPSTREAM/502 path) with nothing written.
+    raw_data = load_fixture(*fixture.split("/"))
+    for item in raw_data:
+        item["data"] = None
+    _patch_build_client(context, raw_data, validate=True)
     _run_onboarder(context, platform, league_id, "ONBOARD")
 
 

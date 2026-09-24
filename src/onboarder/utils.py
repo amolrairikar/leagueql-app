@@ -214,26 +214,53 @@ def validate_api_results(
     results: Sequence[dict[str, Any] | BaseException],
 ) -> list[dict[str, Any]]:
     """
-    Validates raw asyncio.gather results, raising on any exception or None data.
+    Validate raw asyncio.gather results with per-season resilience.
+
+    A failed fetch is isolated as ``data: None`` by ``fetch_one``. Rather than failing the
+    whole onboard on the first ``None``, this groups results by season and keeps only the
+    seasons whose every fetch succeeded — a season with any failed fetch is dropped so its
+    accessible siblings can still onboard (backend/league-onboarding: "Onboard seasons
+    resiliently"). Dropped seasons are logged. Onboarding fails as a whole (``RuntimeError``,
+    surfaced by the handler as ``UPSTREAM``/502) only when *every* season failed. Empty input
+    returns ``[]``.
 
     Args:
         results: Raw results from asyncio.gather, which may include BaseException instances.
 
     Returns:
-        List of validated result dicts, guaranteed to have non-None data fields.
+        List of validated result dicts (non-None data) for the fully-successful seasons,
+        in input order.
     """
-    validated = []
+    failed_seasons: set[str] = set()
+    seen_seasons: set[str] = set()
     for result in results:
         if isinstance(result, BaseException):
             logger.error("Unhandled exception in gather: %s", result)
-            # A gathered BaseException signals a fetch failure, not an invalid
-            # argument type, so RuntimeError (not TypeError) is correct here.
+            # A gathered BaseException (e.g. cancellation) is not attributable to a
+            # single season, so it is treated as a hard failure. It signals a fetch
+            # failure, not an invalid argument type, so RuntimeError (not TypeError).
             raise RuntimeError(  # noqa: TRY004
                 f"Unexpected error occurred while fetching data: {result}"
             )
+        season = result["season"]
+        seen_seasons.add(season)
         if result["data"] is None:
-            raise RuntimeError(
-                f"Failed to get data for season {result['season']} and data type {result['data_type']}"
-            )
-        validated.append(result)
-    return validated
+            failed_seasons.add(season)
+
+    if failed_seasons:
+        logger.warning(
+            "Skipping seasons with at least one failed API call: %s",
+            sorted(failed_seasons),
+        )
+
+    if seen_seasons and seen_seasons <= failed_seasons:
+        raise RuntimeError(
+            f"Failed to get data for all seasons: {sorted(failed_seasons)}"
+        )
+
+    return [
+        result
+        for result in results
+        if not isinstance(result, BaseException)
+        and result["season"] not in failed_seasons
+    ]

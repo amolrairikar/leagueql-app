@@ -233,6 +233,51 @@ class TestOnboardingServiceRun:
         mock_ddb.assert_called_once()
         mock_s3.assert_called_once()
 
+    def test_run_records_only_onboarded_seasons(
+        self,
+        onboarder_onboarding_service,
+        monkeypatch,
+    ):
+        # backend/league-onboarding "Onboard seasons resiliently": a season dropped by
+        # fetch_all (a failed API call) must not appear in the recorded seasons set. The
+        # set is derived from the fetched raw_data, not the resolved season list.
+        monkeypatch.setenv("S3_BUCKET_NAME", "test-bucket")
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = {"status": {"previousSeasons": []}}
+        with patch("requests.get", return_value=mock_resp):
+            svc = onboarder_onboarding_service.OnboardingService(
+                league_id="123",
+                platform="ESPN",
+                request_type="ONBOARD",
+                latest_season="2024",
+            )
+
+        # Season resolution found 2022-2024, but 2022 failed to fetch and was dropped.
+        svc.client.get_seasons = lambda: ["2022", "2023", "2024"]
+        surviving = [
+            {"season": "2024", "data_type": "users", "data": {}},
+            {"season": "2023", "data_type": "users", "data": {}},
+        ]
+
+        async def fake_fetch():
+            return surviving
+
+        svc.client.fetch_all = fake_fetch
+
+        with (
+            patch.object(
+                onboarder_onboarding_service, "write_league_records"
+            ) as mock_ddb,
+            patch.object(
+                onboarder_onboarding_service, "upload_results_to_s3"
+            ) as mock_s3,
+        ):
+            svc.run()
+
+        assert mock_ddb.call_args.kwargs["seasons"] == ["2023", "2024"]
+        assert mock_s3.call_args.kwargs["results"] == surviving
+
     def test_run_forwards_owner_user_id(
         self,
         onboarder_onboarding_service,

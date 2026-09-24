@@ -461,6 +461,22 @@ class TestSleeperClientBuildDraftPickUrlsNonList:
         results = [{"data_type": "drafts", "season": "2024", "data": None}]
         assert client._build_draft_pick_urls(results) == []
 
+    def test_gathered_exception_skipped(self, onboarder_sleeper_client):
+        # _build_draft_pick_urls reads the raw gathered results, which may include a
+        # gathered exception; it must skip those rather than subscripting them.
+        http_resp = _mock_http_response(
+            {"season": "2024", "league_id": "lg", "previous_league_id": "0"}
+        )
+        with patch("requests.get", return_value=http_resp):
+            client = onboarder_sleeper_client.SleeperClient("lg")
+        results = [
+            RuntimeError("fetch failed"),
+            {"data_type": "drafts", "season": "2024", "data": [{"draft_id": "d1"}]},
+        ]
+        urls = client._build_draft_pick_urls(results)
+        assert len(urls) == 1
+        assert urls[0][0] == "2024"
+
 
 class TestSleeperClientFetch:
     def _client(self, mod):
@@ -610,3 +626,35 @@ class TestSleeperClientFetchAll:
             processed = await client.fetch_all()
         assert processed[0]["data_type"] == "users"
         assert mock_run.call_count == 1  # no draft picks -> single fetch round
+
+    async def test_fetch_all_drops_season_when_draft_pick_fetch_fails(
+        self, onboarder_sleeper_client
+    ):
+        from unittest.mock import AsyncMock
+
+        client = self._client(onboarder_sleeper_client)
+        session_cm = MagicMock()
+        session_cm.__aenter__ = AsyncMock(return_value=MagicMock())
+        session_cm.__aexit__ = AsyncMock(return_value=False)
+
+        # Both seasons' main fetches succeed, but 2023's draft-pick round fails. Validating
+        # once over main + pick results must drop *all* of 2023 (including its main data),
+        # while 2024 (whose picks succeed) is kept whole.
+        main_results = [
+            {"season": "2024", "data_type": "users", "data": [{"id": 1}]},
+            {"season": "2024", "data_type": "drafts", "data": [{"draft_id": "d24"}]},
+            {"season": "2023", "data_type": "users", "data": [{"id": 2}]},
+            {"season": "2023", "data_type": "drafts", "data": [{"draft_id": "d23"}]},
+        ]
+        pick_results = [
+            {"season": "2024", "data_type": "draft_picks", "data": [{"pick": 1}]},
+            {"season": "2023", "data_type": "draft_picks", "data": None},
+        ]
+        mock_run = AsyncMock(side_effect=[main_results, pick_results])
+        with (
+            patch("aiohttp.ClientSession", return_value=session_cm),
+            patch.object(onboarder_sleeper_client, "run_fetches", mock_run),
+        ):
+            processed = await client.fetch_all()
+        assert {r["season"] for r in processed} == {"2024"}
+        assert {r["data_type"] for r in processed} == {"users", "drafts", "draft_picks"}

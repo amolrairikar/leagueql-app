@@ -1,6 +1,6 @@
 import asyncio
 import os
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from typing import Any
 
 import aiohttp
@@ -316,29 +316,40 @@ class SleeperClient:
             timeout=aiohttp.ClientTimeout(total=30)
         ) as session:
             results = await run_fetches(session, self.request_urls, self._fetch)
-            processed_results = validate_api_results(results=results)
 
-            draft_pick_urls = self._build_draft_pick_urls(processed_results)
+            # Build the second-round draft-pick URLs from the *raw* main results (before
+            # validation): _build_draft_pick_urls skips seasons whose ``drafts`` fetch
+            # failed via its isinstance(list) guard. Validating once over main + pick
+            # results keeps per-season resilience whole — a pick failure drops that season
+            # together with its main data, rather than leaving a season with main data but
+            # no picks (backend/league-onboarding: "Onboard seasons resiliently").
+            draft_pick_urls = self._build_draft_pick_urls(results)
+            pick_results: list[Any] = []
             if draft_pick_urls:
                 pick_results = await run_fetches(session, draft_pick_urls, self._fetch)
-                processed_results.extend(validate_api_results(results=pick_results))
 
-            return processed_results
+            return validate_api_results(results=list(results) + list(pick_results))
 
     def _build_draft_pick_urls(
-        self, results: list[dict[str, Any]]
+        self, results: Sequence[dict[str, Any] | BaseException]
     ) -> list[tuple[str, str, str]]:
         """
         Builds pick URLs from draft metadata results.
 
+        Accepts the *raw* gathered main results (pre-validation), so it skips gathered
+        exceptions and only reads seasons whose ``drafts`` fetch returned a list — a failed
+        ``drafts`` fetch (``data: None``) naturally yields no pick URLs for that season.
+
         Args:
-            results: Processed API results containing draft metadata.
+            results: Raw gathered API results containing draft metadata.
 
         Returns:
             List of tuples containing the season, data type, and pick URL for each draft.
         """
         urls = []
         for result in results:
+            if isinstance(result, BaseException):
+                continue
             if result["data_type"] == "drafts":
                 season = result["season"]
                 drafts_data = result["data"]

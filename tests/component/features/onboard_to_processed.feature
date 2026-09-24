@@ -121,6 +121,27 @@ Feature: Onboard-to-processed pipeline (backend/league-onboarding, backend/data-
     When I GET "/leagues/810/query?platform=ESPN&queryType=TRANSACTIONS#2024"
     Then the API responds with status 404
 
+  Scenario: An ESPN league onboards its accessible seasons and skips a season whose fetch failed (backend/league-onboarding)
+    # The user can access 2024 but not 2023 (a 401 nulls one of 2023's fetches). The
+    # fully-successful 2024 season onboards while 2023 is dropped — no S3 payload, no
+    # processed views — and the onboard still succeeds.
+    When the onboarder runs an ONBOARD for "ESPN" league "820" with fixture "espn/raw_data_multiseason.json" where season "2023" fails
+    Then the onboarder returns status 200
+    And the default caller is a member of the onboarded league
+    When the processor processes the onboarded league
+    Then a JOB_STATUS "COMPLETED" exists for the job
+    And the league has at least one "STANDINGS#2024" item
+    And the league has exactly 0 "STANDINGS#2023" item(s)
+
+  Scenario: An ESPN onboard where every season's fetch fails records a FAILED job and writes no METADATA (backend/league-onboarding)
+    # When no season can be fetched, the onboard fails as a whole (the existing UPSTREAM/502
+    # path) and writes nothing.
+    When the onboarder runs an ONBOARD for "ESPN" league "830" with fixture "espn/raw_data_2024.json" where every season fails
+    Then the onboarder returns status 502
+    And a JOB_STATUS "FAILED" exists for the job
+    And the JOB_STATUS failure_code is "UPSTREAM"
+    And no METADATA item exists for the onboarded league
+
   Scenario: Onboarding a renewed Sleeper season reuses the existing league without a duplicate METADATA (backend/league-onboarding)
     # A Sleeper league renews under a new league ID linked by previous_league_id. Onboarding
     # it must fold into the existing canonical league, registering the new ID's LEAGUE_LOOKUP

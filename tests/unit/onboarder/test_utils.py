@@ -322,6 +322,7 @@ class TestValidateApiResults:
             onboarder_utils.validate_api_results(results)
 
     def test_raises_when_data_is_none(self, onboarder_utils):
+        # A single season whose only fetch failed is the all-seasons-failed case.
         results = [{"season": "2024", "data_type": "users", "data": None}]
         with pytest.raises(RuntimeError, match="Failed to get data"):
             onboarder_utils.validate_api_results(results)
@@ -330,3 +331,49 @@ class TestValidateApiResults:
         results = [KeyError("missing")]
         with pytest.raises(RuntimeError):
             onboarder_utils.validate_api_results(results)
+
+    def test_returns_empty_for_empty_input(self, onboarder_utils):
+        assert onboarder_utils.validate_api_results([]) == []
+
+    def test_drops_failed_season_keeps_good_season(self, onboarder_utils):
+        results = [
+            {"season": "2024", "data_type": "users", "data": [{"id": 1}]},
+            {"season": "2024", "data_type": "settings", "data": {"ok": True}},
+            {"season": "2022", "data_type": "users", "data": [{"id": 2}]},
+            {"season": "2022", "data_type": "settings", "data": None},
+        ]
+        validated = onboarder_utils.validate_api_results(results)
+        assert {r["season"] for r in validated} == {"2024"}
+        # Every result for the surviving season is kept, in input order.
+        assert validated == [
+            {"season": "2024", "data_type": "users", "data": [{"id": 1}]},
+            {"season": "2024", "data_type": "settings", "data": {"ok": True}},
+        ]
+
+    def test_single_surviving_season_among_failures_kept(self, onboarder_utils):
+        results = [
+            {"season": "2022", "data_type": "users", "data": None},
+            {"season": "2023", "data_type": "users", "data": None},
+            {"season": "2024", "data_type": "users", "data": [{"id": 1}]},
+        ]
+        validated = onboarder_utils.validate_api_results(results)
+        assert {r["season"] for r in validated} == {"2024"}
+
+    def test_raises_when_all_seasons_fail(self, onboarder_utils):
+        results = [
+            {"season": "2022", "data_type": "users", "data": None},
+            {"season": "2023", "data_type": "settings", "data": None},
+        ]
+        with pytest.raises(RuntimeError, match="all seasons"):
+            onboarder_utils.validate_api_results(results)
+
+    def test_skipped_seasons_logged(self, onboarder_utils, monkeypatch):
+        mock_logger = MagicMock()
+        monkeypatch.setattr(onboarder_utils, "logger", mock_logger)
+        results = [
+            {"season": "2024", "data_type": "users", "data": [{"id": 1}]},
+            {"season": "2022", "data_type": "users", "data": None},
+        ]
+        onboarder_utils.validate_api_results(results)
+        mock_logger.warning.assert_called_once()
+        assert ["2022"] in mock_logger.warning.call_args[0]
