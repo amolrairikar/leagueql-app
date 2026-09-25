@@ -376,6 +376,63 @@ paths:
         uri: "arn:aws:apigateway:${aws_region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations"
         payloadFormatVersion: "2.0"   # use 2.0 for HTTP API (v2)
 
+  /leagues/{leagueId}/export:
+    get:
+      summary: Export processed league views for selected seasons
+      description: >
+        Returns the processed views for the requested seasons bundled by season and
+        view name, for a member of the league (same membership gate as the query
+        endpoint: ESPN/Yahoo restricted to owner + members, Sleeper open). Each
+        season object contains the available views (standings, weekly_standings,
+        matchups, draft, transactions, playoff_bracket, league_settings, teams);
+        a view with no stored data for a season is omitted. The frontend downloads
+        this as a ZIP of one JSON file per view per season.
+      operationId: exportLeague
+      parameters:
+        - name: leagueId
+          in: path
+          required: true
+          description: The ESPN, Sleeper, or Yahoo league ID
+          schema:
+            type: string
+            pattern: '^\d+$'
+            example: "12345678"
+        - name: platform
+          in: query
+          required: true
+          description: The name of the platform the fantasy football league is on
+          schema:
+            type: string
+            enum: [ESPN, SLEEPER, YAHOO]
+            example: "ESPN"
+        - name: seasons
+          in: query
+          required: true
+          description: >
+            Comma-separated list of season years to export. Seasons the league does
+            not have are ignored; a request with no valid season returns 400.
+          schema:
+            type: string
+            example: "2023,2024"
+      responses:
+        "200":
+          $ref: "#/components/responses/ExportSuccessResponse"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/LeagueNotFoundError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      security:
+        - ClerkJWT: []
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        httpMethod: POST        # always POST for Lambda proxy, regardless of your route method
+        uri: "arn:aws:apigateway:${aws_region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations"
+        payloadFormatVersion: "2.0"   # use 2.0 for HTTP API (v2)
+
   /leagues/{leagueId}/espn_members:
     post:
       summary: Fetch ESPN league members
@@ -1038,6 +1095,30 @@ components:
           items:
             type: object
 
+    ExportResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          description: >
+            Processed views keyed by season, then by view name. Each view value is an
+            array of result objects whose shape matches the corresponding query view.
+            Views with no data for a season are omitted.
+          additionalProperties:
+            type: object
+            additionalProperties:
+              type: array
+              items:
+                type: object
+          example:
+            "2024":
+              standings: [{}]
+              matchups: [{}]
+              teams: [{}]
+            "2023":
+              standings: [{}]
+
     ErrorResponse:
       type: object
       required: [error]
@@ -1103,6 +1184,19 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/QueryResponse"
+
+    ExportSuccessResponse:
+      description: Processed views exported successfully
+      headers:
+        Cache-Control:
+          description: Instructs the browser to cache the response privately for 5 minutes
+          schema:
+            type: string
+            example: "private, max-age=300"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ExportResponse"
 
     JobStatusSuccessResponse:
       description: Job status returned successfully

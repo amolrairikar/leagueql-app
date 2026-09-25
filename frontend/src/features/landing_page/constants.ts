@@ -131,7 +131,7 @@ export const HOW_STEPS: HowStep[] = [
     step: 'STEP 1',
     icon: Link2,
     title: 'Connect your league',
-    desc: "Paste your Sleeper or ESPN league ID. Private ESPN leagues need a quick one-time access step; we'll walk you through it.",
+    desc: "Paste your Sleeper, ESPN, or Yahoo league ID. ESPN and Yahoo leagues need a quick one-time access step; we'll walk you through it.",
   },
   {
     step: 'STEP 2',

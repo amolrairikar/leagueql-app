@@ -1,4 +1,9 @@
-import type { Platform, MatchupItem, GetLeagueResponse } from './types';
+import type {
+  Platform,
+  MatchupItem,
+  GetLeagueResponse,
+  ExportLeagueResponse,
+} from './types';
 
 import { apiClient } from '@/lib/api-client';
 import { isDemoMode } from '@/lib/cookie-handler';
@@ -82,6 +87,24 @@ export function getSeasonMatchups(
   season: string,
 ): Promise<{ data: MatchupItem[] }> {
   return queryLeague<MatchupItem>(leagueId, platform, `MATCHUPS#${season}#`);
+}
+
+/**
+ * Fetch the processed views for the given seasons as a per-season/per-view bundle
+ * (backend/league-export). `skipCache` avoids holding a potentially large export
+ * payload in the shared GET cache.
+ */
+export function exportLeague(
+  leagueId: string,
+  platform: Platform,
+  seasons: string[],
+): Promise<ExportLeagueResponse> {
+  const params = new URLSearchParams({ platform, seasons: seasons.join(',') });
+  return apiClient.get<ExportLeagueResponse>(
+    `/leagues/${leagueId}/export?${params}`,
+    undefined,
+    { skipCache: true },
+  );
 }
 
 export interface InviteTokenResponse {

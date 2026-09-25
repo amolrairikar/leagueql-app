@@ -53,6 +53,12 @@ class QueryResponse(BaseModel):
     data: list[Any]
 
 
+class ExportResponse(BaseModel):
+    # Processed views bundled by season, then by view name:
+    # {"2024": {"standings": [...], "matchups": [...], ...}, ...}.
+    data: dict[str, dict[str, list[Any]]]
+
+
 class OnboardingPayload(BaseModel):
     # leagueId/season are digit-constrained (SEC-04): both are string-interpolated into
     # upstream ESPN/Sleeper request URLs by the onboarder, so restricting them to digits
@@ -124,6 +130,21 @@ QUERY_TYPE_TO_SK_BASE = {
 # get_item. The prefix (no trailing "#") also matches any legacy single-key item written
 # before chunking, so already-onboarded leagues resolve without a rewrite.
 PREFIX_READ_QUERY_TYPES = {QueryType.TRANSACTIONS}
+
+# Season-scoped views included in a league export, mapped to their (QueryType, use_prefix).
+# `use_prefix` is True for views stored across multiple items per season — per-week matchups
+# and chunked transactions — which resolve via a season-prefix begins_with scan; the rest are
+# a single item per season read by exact sort key. TEAMS is excluded here because it is stored
+# once across all seasons (SK "TEAMS") and is read separately, then filtered per season.
+EXPORT_SEASON_VIEWS = {
+    "standings": (QueryType.SEASON_STANDINGS, False),
+    "weekly_standings": (QueryType.WEEKLY_STANDINGS, False),
+    "matchups": (QueryType.MATCHUPS, True),
+    "draft": (QueryType.DRAFT, False),
+    "transactions": (QueryType.TRANSACTIONS, True),
+    "playoff_bracket": (QueryType.PLAYOFF_BRACKET, False),
+    "league_settings": (QueryType.LEAGUE_SETTINGS, False),
+}
 
 
 class EspnMembersPayload(BaseModel):
@@ -281,6 +302,7 @@ from helpers import (  # noqa: F401
     owner_has_other_optedin_espn_leagues,
     owner_has_other_yahoo_leagues,
     publish_failure,
+    read_view,
     record_league_access,
     require_league_member,
     require_league_owner,

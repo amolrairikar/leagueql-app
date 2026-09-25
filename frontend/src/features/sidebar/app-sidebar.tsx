@@ -1,6 +1,7 @@
 import { UserButton } from '@clerk/react';
 import {
   ArrowLeftRight,
+  Download,
   GraduationCap,
   History,
   Home,
@@ -48,6 +49,7 @@ import {
   SidebarSeparator,
   useSidebar,
 } from '@/components/ui/sidebar';
+import { ExportLeagueDialog } from '@/features/export_league/export-league-dialog';
 import { ClaimOwnershipDialog } from '@/features/ownership/claim-ownership-dialog';
 import { InviteLinkDialog } from '@/features/ownership/invite-link-dialog';
 import { TransferOwnershipDialog } from '@/features/ownership/transfer-ownership-dialog';
@@ -97,6 +99,7 @@ export function AppSidebar() {
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
   const [claimDialogOpen, setClaimDialogOpen] = useState(false);
   const [disableAutoRefreshOpen, setDisableAutoRefreshOpen] = useState(false);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
 
   const { isOwner, autoRefreshEnabled } = useIsOwner();
 
@@ -208,6 +211,22 @@ export function AppSidebar() {
                           <Search />
                           <span>View Another League</span>
                         </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                    {/* Exporting reads processed league data, so it is available to
+                        every member (not owner-gated), matching the read gate on the
+                        query endpoint (backend/league-export / frontend/export-league-data). */}
+                    <SidebarMenuItem>
+                      <SidebarMenuButton
+                        tooltip="Export League Data"
+                        className="cursor-pointer"
+                        onClick={() => {
+                          closeMobileSidebar();
+                          setExportDialogOpen(true);
+                        }}
+                      >
+                        <Download />
+                        <span>Export League Data</span>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                     {/* Non-owners (shared league-mates) see the dashboard but
@@ -413,6 +432,10 @@ export function AppSidebar() {
       <DisableAutoRefreshDialog
         open={disableAutoRefreshOpen}
         onOpenChange={setDisableAutoRefreshOpen}
+      />
+      <ExportLeagueDialog
+        open={exportDialogOpen}
+        onOpenChange={setExportDialogOpen}
       />
     </>
   );

@@ -116,6 +116,15 @@ export interface TransactionItem {
   waiver_bid: number | null;
 }
 
+/**
+ * Response of `GET /leagues/{id}/export` (backend/league-export): processed views
+ * bundled by season, then by view name. Each view value is an array of rows whose
+ * shape matches the corresponding query view; views with no data are omitted.
+ */
+export interface ExportLeagueResponse {
+  data: Record<string, Record<string, unknown[]>>;
+}
+
 export interface GetLeagueResponse {
   detail: string;
   data: {

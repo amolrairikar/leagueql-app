@@ -118,6 +118,68 @@ def get_league_metadata(canonical_league_id: str) -> dict:
     return item
 
 
+def read_view(
+    canonical_league_id: str,
+    sk_base: str,
+    suffix: str | None,
+    *,
+    use_prefix: bool,
+) -> list[Any] | None:
+    """
+    Read a single precomputed view's rows for a league.
+
+    A view is stored either as one item read by exact sort key (``use_prefix`` False)
+    or as several items sharing an SK prefix whose ``data`` lists are concatenated in
+    sort-key order across all result pages (``use_prefix`` True — used for chunked or
+    multi-item views such as transactions and per-week matchups). The sort key is
+    ``{sk_base}#{suffix}`` when a suffix is given, else ``{sk_base}#`` (a bare prefix
+    for collection reads). This is the shared read behind ``query_league`` and
+    ``export_league``.
+
+    Args:
+        canonical_league_id: The canonical league ID.
+        sk_base: The sort-key base for the view (e.g. ``STANDINGS``, ``MATCHUPS``).
+        suffix: The suffix appended after ``{sk_base}#`` (e.g. a season), or None.
+        use_prefix: Whether to resolve via a paginated ``begins_with`` prefix scan
+            (True) or an exact ``get_item`` (False).
+
+    Returns:
+        The concatenated ``data`` list, or None when no matching item exists.
+    """
+    pk = f"LEAGUE#{canonical_league_id}"
+    sk = f"{sk_base}#{suffix}" if suffix is not None else f"{sk_base}#"
+    try:
+        if use_prefix:
+            items: list[Any] = []
+            kwargs: dict[str, Any] = {
+                "KeyConditionExpression": Key("PK").eq(pk) & Key("SK").begins_with(sk),
+            }
+            while True:
+                db_response = main.table.query(**kwargs)
+                items.extend(db_response.get("Items", []))
+                last_key = db_response.get("LastEvaluatedKey")
+                if not last_key:
+                    break
+                kwargs["ExclusiveStartKey"] = last_key
+            if not items:
+                return None
+            all_data: list[Any] = []
+            for item in items:
+                all_data.extend(item.get("data", []))
+            return all_data
+        db_response = main.table.get_item(Key={"PK": pk, "SK": sk}, ConsistentRead=True)
+        item = db_response.get("Item")
+        if not item:
+            return None
+        return item.get("data", [])
+    except botocore.exceptions.ClientError as e:
+        logger.error("Boto error occurred: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve league data",
+        )
+
+
 def get_nfl_state() -> dict | None:
     """
     Fetches the current NFL state from Sleeper.

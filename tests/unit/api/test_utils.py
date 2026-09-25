@@ -126,6 +126,78 @@ class TestGetLeagueMetadata:
         assert exc_info.value.status_code == 500
 
 
+class TestReadView:
+    def test_exact_read_returns_item_data(self, mock_table):
+        from main import read_view
+
+        mock_table.get_item.return_value = {
+            "Item": {"SK": "STANDINGS#2024", "data": [{"team": "A"}]}
+        }
+        result = read_view("canonical-abc", "STANDINGS", "2024", use_prefix=False)
+        assert result == [{"team": "A"}]
+        # Season-scoped single-item reads use a strongly-consistent exact get_item.
+        _, kwargs = mock_table.get_item.call_args
+        assert kwargs["Key"] == {"PK": "LEAGUE#canonical-abc", "SK": "STANDINGS#2024"}
+        assert kwargs["ConsistentRead"] is True
+
+    def test_exact_read_returns_none_when_missing(self, mock_table):
+        from main import read_view
+
+        mock_table.get_item.return_value = {}
+        assert read_view("canonical-abc", "DRAFT", "2024", use_prefix=False) is None
+
+    def test_exact_read_defaults_missing_data_to_empty_list(self, mock_table):
+        from main import read_view
+
+        mock_table.get_item.return_value = {"Item": {"SK": "DRAFT#2024"}}
+        assert read_view("canonical-abc", "DRAFT", "2024", use_prefix=False) == []
+
+    def test_prefix_read_concatenates_items(self, mock_table):
+        from main import read_view
+
+        mock_table.query.return_value = {
+            "Items": [{"data": [{"t": 1}]}, {"data": [{"t": 2}]}]
+        }
+        result = read_view("canonical-abc", "TRANSACTIONS", "2024", use_prefix=True)
+        assert result == [{"t": 1}, {"t": 2}]
+
+    def test_prefix_read_paginates(self, mock_table):
+        from main import read_view
+
+        mock_table.query.side_effect = [
+            {
+                "Items": [{"data": [{"t": 1}]}],
+                "LastEvaluatedKey": {"PK": "x", "SK": "y"},
+            },
+            {"Items": [{"data": [{"t": 2}]}]},
+        ]
+        result = read_view("canonical-abc", "MATCHUPS", "2024", use_prefix=True)
+        assert result == [{"t": 1}, {"t": 2}]
+
+    def test_prefix_read_returns_none_when_no_items(self, mock_table):
+        from main import read_view
+
+        mock_table.query.return_value = {"Items": []}
+        assert read_view("canonical-abc", "MATCHUPS", "2024", use_prefix=True) is None
+
+    def test_no_suffix_builds_bare_prefix(self, mock_table):
+        from main import read_view
+
+        mock_table.query.return_value = {"Items": [{"data": [{"week": 1}]}]}
+        result = read_view("canonical-abc", "MATCHUPS", None, use_prefix=True)
+        assert result == [{"week": 1}]
+
+    def test_raises_500_on_boto_error(self, mock_table):
+        from main import read_view
+
+        mock_table.get_item.side_effect = botocore.exceptions.ClientError(
+            {"Error": {"Code": "InternalError", "Message": "fail"}}, "GetItem"
+        )
+        with pytest.raises(HTTPException) as exc_info:
+            read_view("canonical-abc", "STANDINGS", "2024", use_prefix=False)
+        assert exc_info.value.status_code == 500
+
+
 class TestGetLeagueSeasons:
     def test_returns_sorted_seasons(self, mock_table):
         from main import get_league_seasons

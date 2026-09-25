@@ -17,6 +17,18 @@ export interface ChangelogRelease {
 // Newest release first.
 export const CHANGELOG: ChangelogRelease[] = [
   {
+    version: '1.10.0',
+    date: 'September 25, 2026',
+    sections: [
+      {
+        title: 'Added',
+        items: [
+          'Export your league\'s data. A new "Export League Data" action in the sidebar lets any league member pick which seasons to export and download a ZIP of the processed data — standings, matchups, drafts, transactions, playoff brackets, league settings, and teams — as one JSON file per view per season.',
+        ],
+      },
+    ],
+  },
+  {
     version: '1.9.0',
     date: 'September 24, 2026',
     sections: [
