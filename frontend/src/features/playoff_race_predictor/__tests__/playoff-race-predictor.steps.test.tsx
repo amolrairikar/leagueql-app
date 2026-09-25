@@ -1,4 +1,4 @@
-import { fireEvent, screen } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { defineFeature, loadFeature } from 'jest-cucumber';
 
 import type { MatchupItem } from '@/components/api/types';
@@ -80,6 +80,15 @@ const FINISHED: MatchupItem[] = [
 const PLAYED_PLAYOFF: MatchupItem[] = [
   ...FINISHED,
   game('t1', 'alice', 't3', 'carol', 3, 120, 100, 'WINNERS_BRACKET'),
+];
+
+// Both regular-season weeks still unplayed: nothing is mathematically decided yet,
+// so no clinching scenario qualifies and the section stays hidden.
+const NOTHING_DECISIVE: MatchupItem[] = [
+  game('t1', 'alice', 't2', 'bob', 1),
+  game('t3', 'carol', 't4', 'dave', 1),
+  game('t1', 'alice', 't3', 'carol', 2),
+  game('t2', 'bob', 't4', 'dave', 2),
 ];
 
 defineFeature(feature, (test) => {
@@ -215,6 +224,83 @@ defineFeature(feature, (test) => {
     when('I open the playoff bracket page', open);
     then(/^I see "(.*)"$/, async (text) => {
       expect((await screen.findAllByText(text)).length).toBeGreaterThan(0);
+    });
+  });
+
+  const inProgress = (given: (s: string, cb: () => void) => void) =>
+    given('an in-progress season with unplayed regular-season games', () => {
+      server.use(
+        leagueQuery({
+          PLAYOFF_BRACKET: [],
+          MATCHUPS: IN_PROGRESS,
+          WEEKLY_STANDINGS: [],
+          LEAGUE_SETTINGS: SETTINGS,
+        }),
+      );
+    });
+
+  test('Clinching scenarios appear when a game is decisive', ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    inProgress(given);
+    when('I open the playoff bracket page', open);
+    then(/^I see "(.*)"$/, async (text) => {
+      expect((await screen.findAllByText(text)).length).toBeGreaterThan(0);
+    });
+    and(/^I see "(.*)"$/, async (text) => {
+      expect((await screen.findAllByText(text)).length).toBeGreaterThan(0);
+    });
+    and(/^I see "(.*)"$/, async (text) => {
+      expect((await screen.findAllByText(text)).length).toBeGreaterThan(0);
+    });
+  });
+
+  test('Clinching scenarios update when I pick a winner', ({
+    given,
+    when,
+    then,
+  }) => {
+    inProgress(given);
+    when('I open the playoff bracket page', open);
+    then(/^I see "(.*)"$/, async (text) => {
+      expect((await screen.findAllByText(text)).length).toBeGreaterThan(0);
+    });
+    when(/^I pick the winner "(.*)"$/, async (owner) => {
+      const card = (
+        await screen.findAllByRole('button', { name: new RegExp(owner, 'i') })
+      )[0];
+      fireEvent.click(card);
+    });
+    then(/^I no longer see "(.*)"$/, async (text) => {
+      await waitFor(() => expect(screen.queryByText(text)).toBeNull());
+    });
+  });
+
+  test('No clinching scenarios when nothing is decided', ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    given('an early season with nothing decided', () => {
+      server.use(
+        leagueQuery({
+          PLAYOFF_BRACKET: [],
+          MATCHUPS: NOTHING_DECISIVE,
+          WEEKLY_STANDINGS: [],
+          LEAGUE_SETTINGS: SETTINGS,
+        }),
+      );
+    });
+    when('I open the playoff bracket page', open);
+    then(/^I see "(.*)"$/, async (text) => {
+      expect((await screen.findAllByText(text)).length).toBeGreaterThan(0);
+    });
+    and(/^I do not see "(.*)"$/, (text) => {
+      expect(screen.queryByText(text)).toBeNull();
     });
   });
 });

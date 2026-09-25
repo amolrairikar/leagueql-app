@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildPredictorModel,
+  computeClinchScenarios,
   computePlayoffOdds,
   projectStandings,
   recordEnteringWeek,
   totalPickableMatchups,
   type Picks,
+  type PredictorModel,
 } from '../compute-projection';
 
 import type { LeagueSettingsItem, MatchupItem } from '@/components/api/types';
@@ -301,5 +303,246 @@ describe('settings fallbacks', () => {
     const model = buildPredictorModel(liveMatchups(), null, 'live');
     expect(model.numPlayoffTeams).toBe(6);
     expect(model.numPlayoffTeamsAssumed).toBe(true);
+  });
+});
+
+/** Build a PredictorModel directly, to control win totals and points-for exactly. */
+function mkModel(
+  teams: { id: string; wins: number; pf: number }[],
+  weeks: { week: number; games: [string, string][] }[],
+  numPlayoffTeams: number,
+): PredictorModel {
+  return {
+    teams: new Map(
+      teams.map((t) => [
+        t.id,
+        {
+          teamId: t.id,
+          ownerUsername: `owner-${t.id}`,
+          teamName: t.id,
+          teamLogo: null,
+        },
+      ]),
+    ),
+    baseline: new Map(
+      teams.map((t) => [t.id, { wins: t.wins, losses: 0, ties: 0, pf: t.pf }]),
+    ),
+    weeks: weeks.map((w) => ({
+      week: w.week,
+      matchups: w.games.map(([a, b], i) => ({
+        key: `${w.week}:${i}`,
+        week: w.week,
+        teamAId: a,
+        teamBId: b,
+      })),
+    })),
+    numPlayoffTeams,
+    numPlayoffTeamsAssumed: false,
+    regularSeasonWeeks: Math.max(...weeks.map((w) => w.week)),
+    hasPlayedPlayoffMatchup: false,
+  };
+}
+
+describe('computeClinchScenarios', () => {
+  // Verified final-week cluster (see scratchpad/rigorous.mjs): top 6 of 10.
+  // Sharks/Foxes/Bears clinch by record; Colts/Mules/Newts are out by record; the
+  // four 8-5 teams each "win & in" with a loss-branch points-for tiebreak.
+  const clusterModel = () =>
+    mkModel(
+      [
+        { id: 'Sharks', wins: 12, pf: 1720 },
+        { id: 'Foxes', wins: 11, pf: 1665 },
+        { id: 'Bears', wins: 10, pf: 1600 },
+        { id: 'Wolves', wins: 8, pf: 1540 },
+        { id: 'Hawks', wins: 8, pf: 1525 },
+        { id: 'Rams', wins: 8, pf: 1510 },
+        { id: 'Owls', wins: 8, pf: 1500 },
+        { id: 'Colts', wins: 6, pf: 1450 },
+        { id: 'Mules', wins: 4, pf: 1370 },
+        { id: 'Newts', wins: 3, pf: 1300 },
+      ],
+      [
+        {
+          week: 14,
+          games: [
+            ['Sharks', 'Newts'],
+            ['Foxes', 'Mules'],
+            ['Bears', 'Colts'],
+            ['Wolves', 'Hawks'],
+            ['Rams', 'Owls'],
+          ],
+        },
+      ],
+      6,
+    );
+
+  it('lists only contending teams; clinched and eliminated are excluded', () => {
+    const res = computeClinchScenarios(clusterModel(), {})!;
+    expect(res).not.toBeNull();
+    expect(res.scenarios.map((s) => s.team.teamId)).toEqual([
+      'Wolves',
+      'Hawks',
+      'Rams',
+      'Owls',
+    ]);
+    expect(res.scenarios.every((s) => s.category === 'win-and-in')).toBe(true);
+  });
+
+  it('attaches the points-for margin for a loss-branch tie', () => {
+    const res = computeClinchScenarios(clusterModel(), {})!;
+    const wolves = res.scenarios.find((s) => s.team.teamId === 'Wolves')!;
+    expect(wolves.opponent!.teamId).toBe('Hawks');
+    expect(wolves.tieMargins.map((m) => [m.rival.teamId, m.gap])).toEqual([
+      ['Rams', 30],
+      ['Owls', 40],
+    ]);
+    const owls = res.scenarios.find((s) => s.team.teamId === 'Owls')!;
+    expect(owls.tieMargins.map((m) => [m.rival.teamId, m.gap])).toEqual([
+      ['Wolves', -40],
+      ['Hawks', -25],
+    ]);
+  });
+
+  it('detects controls-its-own-destiny (win in, lose out) with no tie margin', () => {
+    // top 2 of 4: A clinched, D eliminated, B vs C a play-in for seed 2.
+    const model = mkModel(
+      [
+        { id: 'A', wins: 3, pf: 300 },
+        { id: 'B', wins: 2, pf: 260 },
+        { id: 'C', wins: 2, pf: 250 },
+        { id: 'D', wins: 0, pf: 150 },
+      ],
+      [
+        {
+          week: 2,
+          games: [
+            ['A', 'D'],
+            ['B', 'C'],
+          ],
+        },
+      ],
+      2,
+    );
+    const res = computeClinchScenarios(model, {})!;
+    const ids = res.scenarios.map((s) => s.team.teamId);
+    expect(ids).toContain('B');
+    expect(ids).toContain('C');
+    expect(ids).not.toContain('A'); // clinched by record
+    expect(ids).not.toContain('D'); // eliminated
+    const b = res.scenarios.find((s) => s.team.teamId === 'B')!;
+    expect(b.category).toBe('controls-destiny');
+    expect(b.tieMargins).toEqual([]);
+  });
+
+  it('detects must-win with the win-branch tiebreak margin', () => {
+    // top 1 of 4: A/B/C each must win, and even a win only ties for the seat.
+    const model = mkModel(
+      [
+        { id: 'A', wins: 2, pf: 250 },
+        { id: 'B', wins: 2, pf: 240 },
+        { id: 'C', wins: 2, pf: 230 },
+        { id: 'D', wins: 1, pf: 200 },
+      ],
+      [
+        {
+          week: 2,
+          games: [
+            ['A', 'D'],
+            ['B', 'C'],
+          ],
+        },
+      ],
+      1,
+    );
+    const res = computeClinchScenarios(model, {})!;
+    const a = res.scenarios.find((s) => s.team.teamId === 'A')!;
+    expect(a.category).toBe('must-win');
+    expect(a.opponent!.teamId).toBe('D');
+    expect(a.tieMargins.map((m) => [m.rival.teamId, m.gap])).toEqual([
+      ['B', 10],
+      ['C', 20],
+    ]);
+  });
+
+  it('returns null when the outcome space is too large to enumerate', () => {
+    const teams = ['t1', 't2', 't3', 't4', 't5', 't6'];
+    const matchups: MatchupItem[] = [];
+    for (let week = 1; week <= 8; week++) {
+      matchups.push(game(teams[0], teams[1], week));
+      matchups.push(game(teams[2], teams[3], week));
+      matchups.push(game(teams[4], teams[5], week));
+    }
+    const model = buildPredictorModel(
+      matchups,
+      settings({ num_playoff_teams: 4, regular_season_weeks: 8 }),
+      'live',
+    );
+    expect(computeClinchScenarios(model, {})).toBeNull();
+  });
+
+  it('returns null when nothing is decisive yet', () => {
+    // 4 teams, top 2, two full weeks left, no baseline edge.
+    const model = mkModel(
+      [
+        { id: 'A', wins: 0, pf: 0 },
+        { id: 'B', wins: 0, pf: 0 },
+        { id: 'C', wins: 0, pf: 0 },
+        { id: 'D', wins: 0, pf: 0 },
+      ],
+      [
+        {
+          week: 1,
+          games: [
+            ['A', 'B'],
+            ['C', 'D'],
+          ],
+        },
+        {
+          week: 2,
+          games: [
+            ['A', 'C'],
+            ['B', 'D'],
+          ],
+        },
+      ],
+      2,
+    );
+    expect(computeClinchScenarios(model, {})).toBeNull();
+  });
+
+  it('is conditional on picks: a pick narrows who is still fighting', () => {
+    const model = mkModel(
+      [
+        { id: 'A', wins: 2, pf: 250 },
+        { id: 'B', wins: 2, pf: 240 },
+        { id: 'C', wins: 2, pf: 230 },
+        { id: 'D', wins: 1, pf: 200 },
+      ],
+      [
+        {
+          week: 2,
+          games: [
+            ['A', 'D'],
+            ['B', 'C'],
+          ],
+        },
+      ],
+      1,
+    );
+    const before = computeClinchScenarios(model, {})!;
+    expect(before.scenarios.map((s) => s.team.teamId).sort()).toEqual([
+      'A',
+      'B',
+      'C',
+    ]);
+    // Lock in B over C: C's game is decided (and lost), so only A is still fighting,
+    // now needing only to hold off B on the tiebreak.
+    const after = computeClinchScenarios(model, { '2:1': 'B' })!;
+    expect(after.scenarios.map((s) => s.team.teamId)).toEqual(['A']);
+    const a = after.scenarios[0];
+    expect(a.category).toBe('must-win');
+    expect(a.tieMargins.map((m) => [m.rival.teamId, m.gap])).toEqual([
+      ['B', 10],
+    ]);
   });
 });
