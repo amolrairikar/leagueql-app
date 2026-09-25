@@ -983,7 +983,9 @@ def _register_espn_raw_data(
                     record["position"]
                 )
                 all_player_scoring_totals.append(record_copy)
-        elif item["data_type"] == "transactions":
+        elif item["data_type"].startswith("transactions"):
+            # ESPN transactions are fetched per scoring period (transactions_week{N}),
+            # so collect every per-week item into the season's transaction list.
             for record in item["data"].get("transactions", []):
                 raw_transactions.append((record, item["season"]))
 

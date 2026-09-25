@@ -358,6 +358,14 @@ class TestESPNClientConstructRequestUrl:
         url = client._construct_request_url(self._base, "transactions")
         assert "mTransactions2" in url
 
+    def test_transactions_url_with_week(self, onboarder_espn_client):
+        # A mTransactions2 request without a scoringPeriodId returns only the
+        # current period's transactions, so each week is requested by number.
+        client = self._get_client(onboarder_espn_client)
+        url = client._construct_request_url(self._base, "transactions", week=3)
+        assert "mTransactions2" in url
+        assert "scoringPeriodId=3" in url
+
     def test_invalid_data_type_raises(self, onboarder_espn_client):
         client = self._get_client(onboarder_espn_client)
         with pytest.raises(ValueError, match="Invalid data_type"):
@@ -407,8 +415,10 @@ class TestESPNClientBuildAllRequestUrls:
         assert any("leagueHistory" in url for url in urls)
 
     def test_transactions_fetched_for_latest_season_only(self, onboarder_espn_client):
-        # A multi-season onboard: transactions are requested exactly once, for the
-        # latest season only (past seasons return no transaction data on this endpoint).
+        # A multi-season onboard: transactions are requested for the latest season
+        # only (past seasons return no transaction data on this endpoint), expanded
+        # per scoring period so the whole season is captured, not just the current
+        # week.
         mock_resp = MagicMock()
         mock_resp.json.return_value = {
             "status": {"previousSeasons": [2022, 2023]},
@@ -419,11 +429,17 @@ class TestESPNClientBuildAllRequestUrls:
             client = onboarder_espn_client.ESPNClient(
                 league_id="123", latest_season="2024"
             )
-        txn_urls = [u for u in client.request_urls if u[1] == "transactions"]
-        assert len(txn_urls) == 1
-        season, _data_type, url = txn_urls[0]
-        assert season == "2024"
-        assert "seasons/2024" in url and "mTransactions2" in url
+        txn_urls = [u for u in client.request_urls if u[1].startswith("transactions")]
+        # 2024 runs an 18-week schedule, so one transactions request per week.
+        assert len(txn_urls) == 18
+        assert {u[0] for u in txn_urls} == {"2024"}
+        assert {u[1] for u in txn_urls} == {
+            f"transactions_week{week}" for week in range(1, 19)
+        }
+        for _season, _data_type, url in txn_urls:
+            assert "seasons/2024" in url
+            assert "mTransactions2" in url
+            assert "scoringPeriodId=" in url
 
 
 class TestESPNClientGetSeasonsList:
@@ -464,6 +480,41 @@ class TestESPNClientProcessApiResults:
         ]
         processed = client._process_api_results(results)
         assert "matchups" in processed[0]["data"]
+
+    def test_process_transactions_week_data(self, onboarder_espn_client):
+        # A per-week transactions payload (transactions_week{N}) resolves to the
+        # transactions filter and keeps only EXECUTED waiver/free-agent moves.
+        client = onboarder_espn_client.ESPNClient(
+            league_id="123", latest_season="2024", is_refresh=True
+        )
+        results = [
+            {
+                "season": "2024",
+                "data_type": "transactions_week3",
+                "data": {
+                    "transactions": [
+                        {
+                            "id": "t1",
+                            "type": "WAIVER",
+                            "status": "EXECUTED",
+                            "scoringPeriodId": 3,
+                            "bidAmount": 5,
+                            "teamId": 1,
+                            "items": [{"type": "ADD", "playerId": 99, "toTeamId": 1}],
+                        },
+                        {
+                            "id": "t2",
+                            "type": "ROSTER",
+                            "status": "EXECUTED",
+                            "items": [],
+                        },
+                    ]
+                },
+            }
+        ]
+        processed = client._process_api_results(results)
+        kept = processed[0]["data"]["transactions"]
+        assert [txn["id"] for txn in kept] == ["t1"]
 
     def test_raises_on_invalid_data_type(self, onboarder_espn_client):
         client = onboarder_espn_client.ESPNClient(
