@@ -12,7 +12,7 @@ import os
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Annotated, Any, Literal
+from typing import Annotated, Literal
 from urllib.parse import urlencode
 
 import botocore.exceptions
@@ -20,7 +20,6 @@ import espn_credentials
 import main
 import requests as http_requests
 import yahoo_oauth
-from boto3.dynamodb.conditions import Key
 from fastapi import (
     APIRouter,
     Depends,
@@ -48,12 +47,14 @@ from helpers import (
     owner_has_other_optedin_espn_leagues,
     owner_has_other_yahoo_leagues,
     publish_failure,
+    read_view,
     record_league_access,
     require_league_member,
     require_league_owner,
     set_active_job,
 )
 from main import (
+    EXPORT_SEASON_VIEWS,
     PREFIX_READ_QUERY_TYPES,
     QUERY_TYPE_TO_SK_BASE,
     REFRESH_COOLDOWN_DAYS,
@@ -63,6 +64,7 @@ from main import (
     AutoRefreshPayload,
     ClaimOwnershipPayload,
     EspnMembersPayload,
+    ExportResponse,
     MigratePayload,
     OnboardingPayload,
     Platform,
@@ -870,51 +872,100 @@ def query_league(
     require_league_member(
         canonical_league_id, clerk_user_id, platform, metadata=metadata
     )
-    pk = f"LEAGUE#{canonical_league_id}"
 
+    data = read_view(canonical_league_id, sk_base, suffix, use_prefix=use_prefix_query)
+    if data is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No data found for the requested query",
+        )
+    response.headers["Cache-Control"] = "private, max-age=300"
+    return QueryResponse(data=convert_decimals(data))
+
+
+@router.get("/leagues/{leagueId}/export", status_code=status.HTTP_200_OK)
+def export_league(
+    leagueId: Annotated[
+        str, Path(description="The ID of the fantasy league", pattern=r"^\d+$")
+    ],
+    platform: Annotated[Platform, Query(description="The platform the league is on")],
+    seasons: Annotated[
+        str, Query(description="Comma-separated season years to export, e.g. 2023,2024")
+    ],
+    response: Response,
+    clerk_user_id: Annotated[str, Depends(get_authenticated_user)],
+) -> ExportResponse:
+    """Export processed views for the selected seasons as a per-season/per-view bundle.
+
+    ESPN/Yahoo exports are member-gated (backend/league-authorization); Sleeper stays open.
+    The bundle omits any view with no stored data for a season. Reads reuse the same
+    single-item vs. prefix-concat logic as the query endpoint via ``read_view``.
+    """
+    requested_seasons = [s.strip() for s in seasons.split(",") if s.strip()]
+    if not requested_seasons:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="At least one season must be specified.",
+        )
+
+    canonical_league_id = lookup_league(league_id=leagueId, platform=platform)
+    metadata = get_league_metadata(canonical_league_id=canonical_league_id)
+    require_league_member(
+        canonical_league_id, clerk_user_id, platform, metadata=metadata
+    )
+
+    available_seasons = set(get_league_seasons(canonical_league_id))
+    if not available_seasons:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No data found for the requested seasons",
+        )
+    selected_seasons = [s for s in requested_seasons if s in available_seasons]
+    if not selected_seasons:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="None of the requested seasons exist for this league.",
+        )
+
+    # TEAMS is stored once for the whole league (SK "TEAMS", no season suffix), so it is
+    # read a single time here and filtered per season below rather than through read_view.
     try:
-        if use_prefix_query:
-            items: list[Any] = []
-            kwargs: dict[str, Any] = {
-                "KeyConditionExpression": Key("PK").eq(pk) & Key("SK").begins_with(sk),
-            }
-            while True:
-                db_response = main.table.query(**kwargs)
-                items.extend(db_response.get("Items", []))
-                last_key = db_response.get("LastEvaluatedKey")
-                if not last_key:
-                    break
-                kwargs["ExclusiveStartKey"] = last_key
-            if not items:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="No data found for the requested query",
-                )
-            all_data: list[Any] = []
-            for item in items:
-                all_data.extend(item.get("data", []))
-            response.headers["Cache-Control"] = "private, max-age=300"
-            return QueryResponse(data=convert_decimals(all_data))
-        else:
-            db_response = main.table.get_item(
-                Key={"PK": pk, "SK": sk}, ConsistentRead=True
-            )
-            item = db_response.get("Item")
-            if not item:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="No data found for the requested query",
-                )
-            response.headers["Cache-Control"] = "private, max-age=300"
-            return QueryResponse(data=convert_decimals(item.get("data", [])))
-    except HTTPException:
-        raise
+        teams_response = main.table.get_item(
+            Key={"PK": f"LEAGUE#{canonical_league_id}", "SK": "TEAMS"},
+            ConsistentRead=True,
+        )
     except botocore.exceptions.ClientError as e:
         logger.error("Boto error occurred: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve league data",
         )
+    teams_rows = (teams_response.get("Item") or {}).get("data") or []
+
+    bundle: dict[str, dict[str, list]] = {}
+    for season in selected_seasons:
+        season_views: dict[str, list] = {}
+        for view_name, (query_type, use_prefix) in EXPORT_SEASON_VIEWS.items():
+            sk_base = QUERY_TYPE_TO_SK_BASE[query_type]
+            view_data = read_view(
+                canonical_league_id, sk_base, season, use_prefix=use_prefix
+            )
+            if view_data:
+                season_views[view_name] = view_data
+        season_teams = [r for r in teams_rows if str(r.get("season")) == season]
+        if season_teams:
+            season_views["teams"] = season_teams
+        if season_views:
+            bundle[season] = season_views
+
+    if not bundle:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No data found for the requested seasons",
+        )
+
+    response.headers["Cache-Control"] = "private, max-age=300"
+    return ExportResponse(data=convert_decimals(bundle))
 
 
 # How long an outstanding ownership-transfer token stays valid before it expires.

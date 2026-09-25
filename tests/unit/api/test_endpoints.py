@@ -2211,6 +2211,237 @@ class TestQueryLeagueMemberGate:
         assert response.status_code == 200
 
 
+def _begins_with_target(cond):
+    """Extract the SK ``begins_with`` prefix from a boto3 KeyConditionExpression."""
+    expr = cond.get_expression()
+    operator = expr.get("operator")
+    if operator == "begins_with":
+        return expr["values"][1]
+    if operator == "AND":
+        for value in expr["values"]:
+            target = _begins_with_target(value)
+            if target is not None:
+                return target
+    return None
+
+
+def _export_get_item(lookup_item, metadata_item, items_by_sk):
+    """Route export get_item calls by SK so tests are order-independent."""
+
+    def _fn(*args, **kwargs):
+        sk = kwargs["Key"]["SK"]
+        if sk == "LEAGUE_LOOKUP":
+            return {"Item": lookup_item}
+        if sk == "METADATA":
+            return {"Item": metadata_item}
+        if sk in items_by_sk:
+            return {"Item": items_by_sk[sk]}
+        return {}
+
+    return _fn
+
+
+def _export_query(seasons_items, items_by_prefix):
+    """Route export query calls: GSI1 -> seasons, begins_with -> the matching prefix."""
+
+    def _fn(*args, **kwargs):
+        if kwargs.get("IndexName") == "GSI1":
+            return {"Items": seasons_items}
+        target = _begins_with_target(kwargs["KeyConditionExpression"])
+        return {"Items": items_by_prefix.get(target, [])}
+
+    return _fn
+
+
+class TestExportLeagueEndpoint:
+    """export_league bundles processed views per season (backend/league-export)."""
+
+    def test_bundles_seasons_and_views(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        items_by_sk = {
+            "TEAMS": {
+                "data": [
+                    {"team_id": "1", "season": "2024"},
+                    {"team_id": "9", "season": "2023"},
+                ]
+            },
+            "STANDINGS#2024": {"data": [{"team": "A", "wins": 10}]},
+            "WEEKLY_STANDINGS#2024": {"data": [{"week": 1}]},
+            "DRAFT#2024": {"data": [{"pick": 1}]},
+            "PLAYOFF_BRACKET#2024": {"data": [{"round": 1}]},
+            "LEAGUE_SETTINGS#2024": {"data": [{"num_playoff_teams": 6}]},
+            "STANDINGS#2023": {"data": [{"team": "A", "wins": 8}]},
+        }
+        mock_table.get_item.side_effect = _export_get_item(
+            league_lookup_item, league_metadata_item, items_by_sk
+        )
+        mock_table.query.side_effect = _export_query(
+            [league_lookup_item],
+            {
+                "MATCHUPS#2024": [{"data": [{"week": 1}]}],
+                "TRANSACTIONS#2024": [{"data": [{"txn": 1}]}],
+            },
+        )
+        response = client.get("/leagues/123/export?platform=SLEEPER&seasons=2023,2024")
+        assert response.status_code == 200
+        data = response.json()["data"]
+        assert set(data.keys()) == {"2023", "2024"}
+        assert data["2024"]["standings"] == [{"team": "A", "wins": 10}]
+        assert data["2024"]["weekly_standings"] == [{"week": 1}]
+        assert data["2024"]["matchups"] == [{"week": 1}]
+        assert data["2024"]["draft"] == [{"pick": 1}]
+        assert data["2024"]["transactions"] == [{"txn": 1}]
+        assert data["2024"]["playoff_bracket"] == [{"round": 1}]
+        assert data["2024"]["league_settings"] == [{"num_playoff_teams": 6}]
+        # TEAMS is filtered to each requested season.
+        assert data["2024"]["teams"] == [{"team_id": "1", "season": "2024"}]
+        assert data["2023"]["teams"] == [{"team_id": "9", "season": "2023"}]
+        assert data["2023"]["standings"] == [{"team": "A", "wins": 8}]
+        # Views with no data for a season are omitted.
+        assert "matchups" not in data["2023"]
+        assert "transactions" not in data["2023"]
+        assert "weekly_standings" not in data["2023"]
+
+    def test_cache_control_header_set(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        mock_table.get_item.side_effect = _export_get_item(
+            league_lookup_item,
+            league_metadata_item,
+            {"STANDINGS#2024": {"data": [{"team": "A"}]}},
+        )
+        mock_table.query.side_effect = _export_query([league_lookup_item], {})
+        response = client.get("/leagues/123/export?platform=SLEEPER&seasons=2024")
+        assert response.status_code == 200
+        assert response.headers["cache-control"] == "private, max-age=300"
+
+    def test_omits_empty_data_views(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        # STANDINGS present but empty -> omitted; DRAFT has rows -> kept.
+        items_by_sk = {
+            "STANDINGS#2024": {"data": []},
+            "DRAFT#2024": {"data": [{"pick": 1}]},
+        }
+        mock_table.get_item.side_effect = _export_get_item(
+            league_lookup_item, league_metadata_item, items_by_sk
+        )
+        mock_table.query.side_effect = _export_query([league_lookup_item], {})
+        response = client.get("/leagues/123/export?platform=SLEEPER&seasons=2024")
+        assert response.status_code == 200
+        season = response.json()["data"]["2024"]
+        assert "standings" not in season
+        assert season["draft"] == [{"pick": 1}]
+        assert "teams" not in season
+
+    def test_transactions_chunks_concatenated(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        mock_table.get_item.side_effect = _export_get_item(
+            league_lookup_item, league_metadata_item, {}
+        )
+        mock_table.query.side_effect = _export_query(
+            [league_lookup_item],
+            {"TRANSACTIONS#2024": [{"data": [{"t": 1}]}, {"data": [{"t": 2}]}]},
+        )
+        response = client.get("/leagues/123/export?platform=SLEEPER&seasons=2024")
+        assert response.status_code == 200
+        assert response.json()["data"]["2024"]["transactions"] == [{"t": 1}, {"t": 2}]
+
+    def test_converts_decimals(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        from decimal import Decimal
+
+        items_by_sk = {"STANDINGS#2024": {"data": [{"pf": Decimal("120.5")}]}}
+        mock_table.get_item.side_effect = _export_get_item(
+            league_lookup_item, league_metadata_item, items_by_sk
+        )
+        mock_table.query.side_effect = _export_query([league_lookup_item], {})
+        response = client.get("/leagues/123/export?platform=SLEEPER&seasons=2024")
+        assert response.status_code == 200
+        pf = response.json()["data"]["2024"]["standings"][0]["pf"]
+        assert isinstance(pf, float)
+        assert pf == 120.5
+
+    def test_missing_seasons_param_returns_422(self, client, mock_table):
+        # seasons is a required query param, so its absence is a 422 from FastAPI.
+        response = client.get("/leagues/123/export?platform=SLEEPER")
+        assert response.status_code == 422
+
+    def test_blank_seasons_param_returns_400(
+        self, client, mock_table, league_lookup_item
+    ):
+        mock_table.get_item.return_value = {"Item": league_lookup_item}
+        response = client.get("/leagues/123/export?platform=SLEEPER&seasons=%20%2C%20")
+        assert response.status_code == 400
+
+    def test_unknown_seasons_returns_400(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        mock_table.get_item.side_effect = _export_get_item(
+            league_lookup_item, league_metadata_item, {}
+        )
+        # league has {2023, 2024}; caller asks only for a season it does not have.
+        mock_table.query.side_effect = _export_query([league_lookup_item], {})
+        response = client.get("/leagues/123/export?platform=SLEEPER&seasons=1999")
+        assert response.status_code == 400
+
+    def test_no_available_seasons_returns_404(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        mock_table.get_item.side_effect = _export_get_item(
+            league_lookup_item, league_metadata_item, {}
+        )
+        # LEAGUE_LOOKUP item present but carrying no seasons.
+        mock_table.query.side_effect = _export_query(
+            [{"canonical_league_id": "canonical-abc"}], {}
+        )
+        response = client.get("/leagues/123/export?platform=SLEEPER&seasons=2024")
+        assert response.status_code == 404
+
+    def test_no_data_for_requested_seasons_returns_404(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        # Season is valid but every view (and teams) is empty -> nothing to export.
+        mock_table.get_item.side_effect = _export_get_item(
+            league_lookup_item, league_metadata_item, {}
+        )
+        mock_table.query.side_effect = _export_query([league_lookup_item], {})
+        response = client.get("/leagues/123/export?platform=SLEEPER&seasons=2024")
+        assert response.status_code == 404
+
+    def test_espn_non_member_returns_403(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+        ]
+        _as_user("stranger")
+        response = client.get("/leagues/123/export?platform=ESPN&seasons=2024")
+        assert response.status_code == 403
+
+    def test_boto_error_returns_500(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        def _get_item(*args, **kwargs):
+            sk = kwargs["Key"]["SK"]
+            if sk == "LEAGUE_LOOKUP":
+                return {"Item": league_lookup_item}
+            if sk == "METADATA":
+                return {"Item": league_metadata_item}
+            raise botocore.exceptions.ClientError(
+                {"Error": {"Code": "InternalError", "Message": "fail"}}, "GetItem"
+            )
+
+        mock_table.get_item.side_effect = _get_item
+        mock_table.query.side_effect = _export_query([league_lookup_item], {})
+        response = client.get("/leagues/123/export?platform=SLEEPER&seasons=2024")
+        assert response.status_code == 500
+
+
 class TestOnboardThreadsOwner:
     def test_onboard_passes_owner_to_invoke(
         self, client, mock_table, mock_lambda_client

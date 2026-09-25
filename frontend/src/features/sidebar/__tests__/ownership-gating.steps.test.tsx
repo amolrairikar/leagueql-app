@@ -106,6 +106,20 @@ defineFeature(feature, (test) => {
     });
   });
 
+  test('A non-owner member sees the Export League Data action', ({
+    given,
+    when,
+    then,
+  }) => {
+    given('I am not the owner of the current ESPN league', () => {
+      server.use(leagueMetadata({ is_owner: false }));
+    });
+    when('I render the sidebar', () => renderSidebar(espnLeague));
+    then(/^I see the "(.*)" action$/, async (label) => {
+      expect(await screen.findByText(label)).toBeInTheDocument();
+    });
+  });
+
   test('An ESPN owner with auto-refresh enabled sees Turn Off Auto-Refresh instead of Refresh League', ({
     given,
     when,

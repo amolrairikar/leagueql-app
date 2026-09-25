@@ -45,6 +45,41 @@ def step_seed_view(context, canonical, sk, count):
     )
 
 
+@given('league "{canonical}" has team rows for seasons "{seasons}"')
+def step_seed_teams(context, canonical, seasons):
+    # TEAMS is stored once across all seasons; each row carries its own season so the
+    # export can filter it per requested season (backend/league-export).
+    rows = [
+        {"team_id": str(i + 1), "season": season}
+        for i, season in enumerate(s.strip() for s in seasons.split(","))
+    ]
+    put_item(
+        context,
+        {"PK": f"LEAGUE#{canonical}", "SK": "TEAMS", "data": rows},
+    )
+
+
+@then('the export response has season "{season}"')
+def step_export_has_season(context, season):
+    data = context.response.json()["data"]
+    assert season in data, context.response.text
+
+
+@then('the export season "{season}" has view "{view}" with {count:d} row(s)')
+def step_export_view_rows(context, season, view, count):
+    data = context.response.json()["data"]
+    assert season in data, context.response.text
+    assert view in data[season], f"{view} missing in {season}: {context.response.text}"
+    actual = len(data[season][view])
+    assert actual == count, f"expected {count} {view} rows, got {actual}"
+
+
+@then('the export season "{season}" has no view "{view}"')
+def step_export_no_view(context, season, view):
+    data = context.response.json()["data"]
+    assert view not in data.get(season, {}), context.response.text
+
+
 @given('a JOB_STATUS "{status}" exists for job "{job_id}"')
 def step_seed_job(context, status, job_id):
     item = {

@@ -28,6 +28,11 @@ Feature: Owner-gated sidebar actions (backend/league-authorization / frontend/ow
     And I do not see the "Refresh League" action
     And I do not see the "Turn Off Auto-Refresh" action
 
+  Scenario: A non-owner member sees the Export League Data action
+    Given I am not the owner of the current ESPN league
+    When I render the sidebar
+    Then I see the "Export League Data" action
+
   Scenario: An ESPN owner with auto-refresh enabled sees Turn Off Auto-Refresh instead of Refresh League
     Given I am the owner of the current ESPN league with auto-refresh enabled
     When I render the sidebar

@@ -73,6 +73,22 @@ export function leagueQueryError(status = 500) {
   );
 }
 
+/** A `GET /leagues/:id/export` handler returning a bundle keyed by season → view. */
+export function leagueExport(
+  bundle: Record<string, Record<string, unknown[]>>,
+) {
+  return http.get(`${API}/leagues/:id/export`, () =>
+    HttpResponse.json({ data: bundle }),
+  );
+}
+
+/** A `GET /leagues/:id/export` handler that fails with a status. */
+export function leagueExportError(status = 500) {
+  return http.get(`${API}/leagues/:id/export`, () =>
+    HttpResponse.json({ detail: 'Internal Server Error' }, { status }),
+  );
+}
+
 /** A `POST` handler returning a JSON body with a status code. */
 export function postJson(path: string, body: JsonBodyType, status = 200) {
   return http.post(`${API}${path}`, () => HttpResponse.json(body, { status }));
