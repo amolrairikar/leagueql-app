@@ -75,6 +75,7 @@ defineFeature(feature, (test) => {
     given,
     when,
     then,
+    and,
   }) => {
     // Uses the committed demo dataset (no MSW): the 2025 demo season is completed,
     // so the bracket renders and the demo-only toggle can switch to the predictor.
@@ -109,6 +110,13 @@ defineFeature(feature, (test) => {
     });
     then(/^I see the predictor heading "(.*)"$/, async (text) => {
       expect((await screen.findAllByText(text)).length).toBeGreaterThan(0);
+    });
+    // The 2025 demo season's final weeks include decisive games, so the
+    // clinching-scenarios section is shown below the projected standings.
+    and('I see the clinching-scenarios section', async () => {
+      expect(
+        (await screen.findAllByText('Clinching scenarios')).length,
+      ).toBeGreaterThan(0);
     });
   });
 

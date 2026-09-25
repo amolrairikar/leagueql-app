@@ -434,3 +434,216 @@ export function computePlayoffOdds(
   for (let i = 0; i < n; i++) odds.set(ids[i], counts[i] / scenarios);
   return odds;
 }
+
+export type ClinchCategory = 'win-and-in' | 'must-win' | 'controls-destiny';
+
+export interface TieMargin {
+  rival: PredictorTeam;
+  /** team.pf − rival.pf: positive = the team leads by this many points-for. */
+  gap: number;
+}
+
+export interface ClinchScenario {
+  team: PredictorTeam;
+  category: ClinchCategory;
+  /** The team's next un-picked opponent (the decisive game), if any. */
+  opponent: PredictorTeam | null;
+  /** Rivals whose same-record tie could decide the seat, with the current PF gap. */
+  tieMargins: TieMargin[];
+}
+
+export interface ClinchScenarios {
+  scenarios: ClinchScenario[];
+  numPlayoffTeams: number;
+  numPlayoffTeamsAssumed: boolean;
+}
+
+/**
+ * Plain-language clinching scenarios for teams still in contention: who clinches with
+ * a win ("win-and-in"), is eliminated with a loss ("must-win"), or both
+ * ("controls-destiny") in their next un-picked game. Computed exactly over the same
+ * enumeration of un-picked outcomes as {@link computePlayoffOdds} and conditional on
+ * the user's picks (a team's decisive game is its earliest un-picked matchup).
+ *
+ * Tiebreaks are handled rigorously: because points-for keeps accruing in the games
+ * still to play, a same-record tie is never assumed decided. A berth therefore counts
+ * as clinched only when record alone secures it, and clinched/eliminated teams are
+ * omitted here (the standings convey them). When a listed team's seat can come down to
+ * a same-record tie, the current points-for gap to each rival it must hold off is
+ * attached as a {@link TieMargin}.
+ *
+ * Returns `null` when the un-picked space is too large to enumerate exactly (guarantees
+ * can't be proven by sampling) or when no contending team has a decisive next game.
+ */
+export function computeClinchScenarios(
+  model: PredictorModel,
+  picks: Picks,
+): ClinchScenarios | null {
+  const ids = [...model.teams.keys()];
+  const n = ids.length;
+  const index = new Map(ids.map((id, i) => [id, i]));
+
+  // Fixed base: baseline wins plus every picked result; points-for is season-to-date.
+  const baseWins = new Int32Array(n);
+  const pf = new Float64Array(n);
+  for (let i = 0; i < n; i++) {
+    const base = model.baseline.get(ids[i]) ?? emptyRecord();
+    baseWins[i] = base.wins;
+    pf[i] = base.pf;
+  }
+
+  // Un-picked matchups become free win/loss bits (in ascending week order).
+  const freeA: number[] = [];
+  const freeB: number[] = [];
+  for (const group of model.weeks) {
+    for (const pm of group.matchups) {
+      const winner = picks[pm.key];
+      if (winner) {
+        baseWins[index.get(winner)!]++;
+      } else {
+        freeA.push(index.get(pm.teamAId)!);
+        freeB.push(index.get(pm.teamBId)!);
+      }
+    }
+  }
+  const numFree = freeA.length;
+  if (numFree === 0 || numFree > MAX_EXACT_MATCHUPS) return null;
+
+  // Each team's next un-picked game = the earliest free bit it appears in.
+  const nextBit = new Int32Array(n).fill(-1);
+  const nextOpp = new Int32Array(n).fill(-1);
+  for (let b = 0; b < numFree; b++) {
+    if (nextBit[freeA[b]] === -1) {
+      nextBit[freeA[b]] = b;
+      nextOpp[freeA[b]] = freeB[b];
+    }
+    if (nextBit[freeB[b]] === -1) {
+      nextBit[freeB[b]] = b;
+      nextOpp[freeB[b]] = freeA[b];
+    }
+  }
+
+  const numPlayoff = model.numPlayoffTeams;
+
+  // Per-team accumulators over every 2^numFree win/loss combination.
+  const inAll = new Uint8Array(n).fill(1); // record-guaranteed in every combo (clinched)
+  const outAll = new Uint8Array(n).fill(1); // out in every combo (eliminated)
+  const winCount = new Int32Array(n);
+  const winInAll = new Uint8Array(n).fill(1);
+  const winOutCount = new Int32Array(n);
+  const loseCount = new Int32Array(n);
+  const loseOutAll = new Uint8Array(n).fill(1);
+  const loseOutCount = new Int32Array(n);
+  const winTieRivals: Set<number>[] = Array.from(
+    { length: n },
+    () => new Set(),
+  );
+  const loseTieRivals: Set<number>[] = Array.from(
+    { length: n },
+    () => new Set(),
+  );
+
+  const wins = new Int32Array(n);
+  const total = 2 ** numFree;
+  for (let mask = 0; mask < total; mask++) {
+    wins.set(baseWins);
+    for (let b = 0; b < numFree; b++) {
+      wins[(mask >> b) & 1 ? freeB[b] : freeA[b]]++;
+    }
+    for (let i = 0; i < n; i++) {
+      const wi = wins[i];
+      let strictlyBetter = 0;
+      let tied = 0;
+      for (let j = 0; j < n; j++) {
+        if (j === i) continue;
+        if (wins[j] > wi) strictlyBetter++;
+        else if (wins[j] === wi) tied++;
+      }
+      const seats = numPlayoff - strictlyBetter;
+      const isOut = seats <= 0;
+      const isIn = !isOut && tied + 1 <= seats;
+      const isTie = !isOut && !isIn;
+      if (!isIn) inAll[i] = 0;
+      if (!isOut) outAll[i] = 0;
+
+      const nb = nextBit[i];
+      if (nb === -1) continue;
+      const iWon = (mask >> nb) & 1 ? freeB[nb] === i : freeA[nb] === i;
+      if (iWon) {
+        winCount[i]++;
+        if (!isIn) winInAll[i] = 0;
+        if (isOut) winOutCount[i]++;
+        if (isTie) {
+          for (let j = 0; j < n; j++) {
+            if (j !== i && wins[j] === wi) winTieRivals[i].add(j);
+          }
+        }
+      } else {
+        loseCount[i]++;
+        if (!isOut) loseOutAll[i] = 0;
+        if (isOut) loseOutCount[i]++;
+        if (isTie) {
+          for (let j = 0; j < n; j++) {
+            if (j !== i && wins[j] === wi) loseTieRivals[i].add(j);
+          }
+        }
+      }
+    }
+  }
+
+  const scenarios: ClinchScenario[] = [];
+  for (let i = 0; i < n; i++) {
+    if (inAll[i] || outAll[i]) continue; // clinched / eliminated → shown in the standings
+    if (nextBit[i] === -1) continue;
+    const winClinch = winCount[i] > 0 && winInAll[i] === 1;
+    const lossElim = loseCount[i] > 0 && loseOutAll[i] === 1;
+    if (!winClinch && !lossElim) continue;
+
+    let category: ClinchCategory;
+    let rivals: Set<number>;
+    if (winClinch && lossElim) {
+      category = 'controls-destiny';
+      rivals = new Set(); // clean both ways — no tiebreak needed
+    } else if (winClinch) {
+      category = 'win-and-in';
+      // Attach margins only when a loss is purely tiebreak-dependent (never out).
+      rivals = loseOutCount[i] === 0 ? loseTieRivals[i] : new Set();
+    } else {
+      category = 'must-win';
+      // Attach margins only when a win is purely tiebreak-dependent (never out).
+      rivals = winOutCount[i] === 0 ? winTieRivals[i] : new Set();
+    }
+
+    const tieMargins: TieMargin[] = [...rivals]
+      .map((j) => ({ rival: model.teams.get(ids[j])!, gap: pf[i] - pf[j] }))
+      .sort((a, b) => a.gap - b.gap);
+
+    scenarios.push({
+      team: model.teams.get(ids[i])!,
+      category,
+      opponent:
+        nextOpp[i] >= 0 ? (model.teams.get(ids[nextOpp[i]]) ?? null) : null,
+      tieMargins,
+    });
+  }
+
+  if (scenarios.length === 0) return null;
+
+  const catOrder: Record<ClinchCategory, number> = {
+    'controls-destiny': 0,
+    'win-and-in': 1,
+    'must-win': 2,
+  };
+  scenarios.sort(
+    (a, b) =>
+      catOrder[a.category] - catOrder[b.category] ||
+      (model.baseline.get(b.team.teamId)?.pf ?? 0) -
+        (model.baseline.get(a.team.teamId)?.pf ?? 0),
+  );
+
+  return {
+    scenarios,
+    numPlayoffTeams: model.numPlayoffTeams,
+    numPlayoffTeamsAssumed: model.numPlayoffTeamsAssumed,
+  };
+}

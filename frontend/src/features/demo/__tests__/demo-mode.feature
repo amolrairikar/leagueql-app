@@ -18,6 +18,7 @@ Feature: Demo mode (frontend/demo-mode)
     Then I see the "Playoff Race" toggle
     When I switch to the Playoff Race view
     Then I see the predictor heading "Playoff Picture"
+    And I see the clinching-scenarios section
 
   Scenario: Returning to the landing page exits demo mode
     Given demo mode is active

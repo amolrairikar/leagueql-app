@@ -17,6 +17,24 @@ export interface ChangelogRelease {
 // Newest release first.
 export const CHANGELOG: ChangelogRelease[] = [
   {
+    version: '1.9.0',
+    date: 'September 24, 2026',
+    sections: [
+      {
+        title: 'Added',
+        items: [
+          'Playoff clinching scenarios on the Playoff Bracket page: below the projected standings, LeagueQL now spells out what each still-contending team needs down the stretch — a win that clinches a playoff berth ("win and in"), a loss that would knock them out ("must win"), or a single game that decides both. When a spot could come down to a tie, it shows the points-for margin a rival would have to make up. Scenarios update as you pick winners.',
+        ],
+      },
+      {
+        title: 'Changed',
+        items: [
+          "Connecting a league no longer fails when some seasons can't be read. LeagueQL now onboards every season it can access and skips only the ones it can't (for example, older ESPN seasons you no longer have access to) instead of failing the whole connection; the onboard only fails if no season could be loaded.",
+        ],
+      },
+    ],
+  },
+  {
     version: '1.8.0',
     date: 'September 21, 2026',
     sections: [
