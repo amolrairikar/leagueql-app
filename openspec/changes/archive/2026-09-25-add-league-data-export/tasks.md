@@ -68,5 +68,5 @@
   from `frontend/`: `npm run format:fix && npm run lint`.
 - [x] 6.3 Full test suites pass: `pipenv run pytest tests/unit`, `pipenv run behave tests/component`,
   and from `frontend/` `npm run test`.
-- [ ] 6.4 Manual end-to-end: run the app, open a connected league, click "Export League Data", select
+- [x] 6.4 Manual end-to-end: run the app, open a connected league, click "Export League Data", select
   seasons, and confirm a `.zip` downloads containing the expected per-view-per-season JSON.
