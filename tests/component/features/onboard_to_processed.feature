@@ -101,7 +101,10 @@ Feature: Onboard-to-processed pipeline (backend/league-onboarding, backend/data-
     # ESPN transactions are fetched per scoring period (transactions_week{N}); EXECUTED
     # waivers/free agents from every week are compiled into TRANSACTIONS#{season} items
     # and round-trip through the query API, with players/teams resolved. The fixture
-    # carries a week-1 waiver and a week-2 free agent to prove multi-week collection.
+    # carries a week-1 waiver and a week-2 free agent to prove multi-week collection,
+    # plus a duplicate of the free agent in a later week (ESPN echoes the current
+    # period's transactions for requests at or beyond it) to prove dedup — the query
+    # returns 2 distinct rows, not 3.
     When the onboarder runs an ONBOARD for "ESPN" league "800" with fixture "espn/raw_data_2024.json"
     Then the onboarder returns status 200
     And the default caller is a member of the onboarded league

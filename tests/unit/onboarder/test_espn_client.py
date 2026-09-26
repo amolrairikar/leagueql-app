@@ -417,11 +417,11 @@ class TestESPNClientBuildAllRequestUrls:
     def test_transactions_fetched_for_latest_season_only(self, onboarder_espn_client):
         # A multi-season onboard: transactions are requested for the latest season
         # only (past seasons return no transaction data on this endpoint), expanded
-        # per scoring period so the whole season is captured, not just the current
-        # week.
+        # per scoring period up to the current one so the whole season is captured
+        # without duplicating the current week's transactions.
         mock_resp = MagicMock()
         mock_resp.json.return_value = {
-            "status": {"previousSeasons": [2022, 2023]},
+            "status": {"previousSeasons": [2022, 2023], "latestScoringPeriod": 3},
             "draftDetail": {"drafted": True},
         }
         mock_resp.raise_for_status = MagicMock()
@@ -430,16 +430,36 @@ class TestESPNClientBuildAllRequestUrls:
                 league_id="123", latest_season="2024"
             )
         txn_urls = [u for u in client.request_urls if u[1].startswith("transactions")]
-        # 2024 runs an 18-week schedule, so one transactions request per week.
-        assert len(txn_urls) == 18
+        # Current scoring period is 3, so weeks 1-3 only (not the full 18-week
+        # schedule): requesting weeks >= the current period would duplicate week 3.
+        assert len(txn_urls) == 3
         assert {u[0] for u in txn_urls} == {"2024"}
         assert {u[1] for u in txn_urls} == {
-            f"transactions_week{week}" for week in range(1, 19)
+            f"transactions_week{week}" for week in range(1, 4)
         }
         for _season, _data_type, url in txn_urls:
             assert "seasons/2024" in url
             assert "mTransactions2" in url
             assert "scoringPeriodId=" in url
+
+    def test_transactions_fall_back_to_full_range_without_current_period(
+        self, onboarder_espn_client
+    ):
+        # If the status omits latestScoringPeriod, the per-week fetch falls back to the
+        # full week range (the processor dedupes any overlap defensively).
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {
+            "status": {"previousSeasons": []},
+            "draftDetail": {"drafted": True},
+        }
+        mock_resp.raise_for_status = MagicMock()
+        with patch("requests.get", return_value=mock_resp):
+            client = onboarder_espn_client.ESPNClient(
+                league_id="123", latest_season="2024"
+            )
+        txn_urls = [u for u in client.request_urls if u[1].startswith("transactions")]
+        # 2024 runs an 18-week schedule.
+        assert len(txn_urls) == 18
 
 
 class TestESPNClientGetSeasonsList:
