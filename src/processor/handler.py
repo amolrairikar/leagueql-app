@@ -803,7 +803,16 @@ def compile_espn_transactions(
         List of resolved transaction row dicts.
     """
     rows = []
+    # Transactions are fetched per scoring period; a transaction can be returned by
+    # more than one per-week request (ESPN echoes the current period's transactions
+    # for any scoringPeriodId at or beyond it), so dedupe by (season, id) defensively
+    # to guarantee each transaction is stored once regardless of fetch overlap.
+    seen: set[tuple[str, str | None]] = set()
     for txn, season in raw_transactions:
+        txn_key = (season, txn.get("id"))
+        if txn_key in seen:
+            continue
+        seen.add(txn_key)
         season_teams = team_map.get(season, {})
         team_id = str(txn.get("teamId"))
         team_info = season_teams.get(team_id, {})
@@ -983,7 +992,9 @@ def _register_espn_raw_data(
                     record["position"]
                 )
                 all_player_scoring_totals.append(record_copy)
-        elif item["data_type"] == "transactions":
+        elif item["data_type"].startswith("transactions"):
+            # ESPN transactions are fetched per scoring period (transactions_week{N}),
+            # so collect every per-week item into the season's transaction list.
             for record in item["data"].get("transactions", []):
                 raw_transactions.append((record, item["season"]))
 

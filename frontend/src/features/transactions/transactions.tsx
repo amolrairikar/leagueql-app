@@ -843,6 +843,14 @@ export default function Transactions() {
           )}
         </div>
 
+        {isEspn && (
+          <p className="text-[12px] text-muted-foreground mb-4">
+            <span aria-hidden="true">*</span> The ESPN API does not return
+            historical transactions, so only transactions from the 2026 fantasy
+            season and onward are stored.
+          </p>
+        )}
+
         <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-2.5">
           Summary
         </p>

@@ -97,9 +97,14 @@ Feature: Onboard-to-processed pipeline (backend/league-onboarding, backend/data-
     Then the API responds with status 200
     And the query response has 2 row(s)
 
-  Scenario: An ESPN league onboards and builds current-season transactions (backend/espn-transactions)
-    # ESPN current-season EXECUTED waivers/free agents are compiled into TRANSACTIONS#{season}
-    # items and round-trip through the query API, with players/teams resolved.
+  Scenario: An ESPN league onboards and builds current-season transactions across every week (backend/espn-transactions)
+    # ESPN transactions are fetched per scoring period (transactions_week{N}); EXECUTED
+    # waivers/free agents from every week are compiled into TRANSACTIONS#{season} items
+    # and round-trip through the query API, with players/teams resolved. The fixture
+    # carries a week-1 waiver and a week-2 free agent to prove multi-week collection,
+    # plus a duplicate of the free agent in a later week (ESPN echoes the current
+    # period's transactions for requests at or beyond it) to prove dedup — the query
+    # returns 2 distinct rows, not 3.
     When the onboarder runs an ONBOARD for "ESPN" league "800" with fixture "espn/raw_data_2024.json"
     Then the onboarder returns status 200
     And the default caller is a member of the onboarded league
@@ -111,6 +116,8 @@ Feature: Onboard-to-processed pipeline (backend/league-onboarding, backend/data-
     And the query response has 2 row(s)
     And a query response row has "type" equal to "free_agent"
     And a query response row has "type" equal to "waiver"
+    And a query response row has "week" equal to "1"
+    And a query response row has "week" equal to "2"
 
   Scenario: An ESPN league with no current-season transactions writes no TRANSACTIONS item (backend/espn-transactions)
     When the onboarder runs an ONBOARD for "ESPN" league "810" with fixture "espn/raw_data_no_transactions_2024.json"

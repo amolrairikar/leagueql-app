@@ -107,7 +107,27 @@
   },
   {
     "season": "2024",
-    "data_type": "transactions",
+    "data_type": "transactions_week1",
+    "data": {
+      "transactions": [
+        {
+          "id": "w1",
+          "type": "WAIVER",
+          "scoringPeriodId": 1,
+          "proposedDate": 1788332899704,
+          "processDate": 1788332899722,
+          "bidAmount": 17,
+          "teamId": 2,
+          "items": [
+            { "type": "ADD", "playerId": 333, "fromTeamId": 0, "toTeamId": 2 }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "season": "2024",
+    "data_type": "transactions_week2",
     "data": {
       "transactions": [
         {
@@ -121,17 +141,25 @@
             { "type": "ADD", "playerId": 111, "fromTeamId": 0, "toTeamId": 1 },
             { "type": "DROP", "playerId": 222, "fromTeamId": 1, "toTeamId": 0 }
           ]
-        },
+        }
+      ]
+    }
+  },
+  {
+    "season": "2024",
+    "data_type": "transactions_week3",
+    "data": {
+      "transactions": [
         {
-          "id": "w1",
-          "type": "WAIVER",
-          "scoringPeriodId": 1,
-          "proposedDate": 1788332899704,
-          "processDate": 1788332899722,
-          "bidAmount": 17,
-          "teamId": 2,
+          "id": "fa1",
+          "type": "FREEAGENT",
+          "scoringPeriodId": 2,
+          "proposedDate": 1788619307883,
+          "bidAmount": 0,
+          "teamId": 1,
           "items": [
-            { "type": "ADD", "playerId": 333, "fromTeamId": 0, "toTeamId": 2 }
+            { "type": "ADD", "playerId": 111, "fromTeamId": 0, "toTeamId": 1 },
+            { "type": "DROP", "playerId": 222, "fromTeamId": 1, "toTeamId": 0 }
           ]
         }
       ]

@@ -130,7 +130,6 @@ _ESPN_DATA_FILTERS = {
     "settings": _filter_settings,
     "draft_picks": _filter_draft_picks,
     "player_scoring_totals": _filter_player_scoring_totals,
-    "transactions": _filter_transactions,
 }
 
 
@@ -174,6 +173,10 @@ class ESPNClient:
         self.league_id = league_id
         self.s2 = s2
         self.swid = swid
+        # The latest season's current scoring period, resolved from the status call in
+        # _get_league_seasons; bounds the per-week transaction fetch. Defaulted here so
+        # it is always defined even when _get_league_seasons is stubbed in tests.
+        self.latest_scoring_period: int | None = None
         self.seasons = self._get_league_seasons(
             latest_season=latest_season, is_refresh=is_refresh
         )
@@ -224,6 +227,12 @@ class ESPNClient:
             raise
 
         body = response.json()
+        # The latest season's current scoring period bounds the per-week transaction
+        # fetch: mTransactions2 returns the CURRENT period's transactions for any
+        # scoringPeriodId at or beyond it, so requesting future weeks would return
+        # (and duplicate) the current week's data. May be absent for a not-yet-started
+        # season; _build_all_request_urls falls back to the full week range.
+        self.latest_scoring_period = body.get("status", {}).get("latestScoringPeriod")
         latest_drafted = body.get("draftDetail", {}).get("drafted", False)
         if is_refresh:
             all_seasons = [latest_season] if latest_drafted else []
@@ -269,7 +278,10 @@ class ESPNClient:
         if data_type not in param_map:
             raise ValueError(f"Invalid data_type: {data_type}")
         params = param_map[data_type]
-        if data_type == "matchups" and week:
+        # Matchups and transactions are both fetched per scoring period: a
+        # mTransactions2 request without a scoringPeriodId returns only the
+        # current period's transactions, so each week must be requested by number.
+        if data_type in ("matchups", "transactions") and week:
             params["scoringPeriodId"] = str(week)
         return str(url.update_query(params))
 
@@ -283,8 +295,13 @@ class ESPNClient:
         urls = []
         # Transactions are only fetched for the current (latest) season: ESPN's
         # mTransactions2 view returns no data for past seasons, so requesting them
-        # would be wasted calls. A single call returns the whole season (no per-week
-        # expansion, unlike matchups).
+        # would be wasted calls. Within the latest season they are expanded per
+        # scoring period (a mTransactions2 request without a scoringPeriodId returns
+        # only the current period's transactions), but bounded to the current period:
+        # for any scoringPeriodId at or beyond the current one ESPN returns the
+        # current period's transactions, so requesting future weeks would duplicate
+        # that week's data. A not-yet-started season leaves latest_scoring_period
+        # unset; fall back to the full week range in that case.
         latest_season = max((int(s) for s in self.seasons), default=None)
         for season in self.seasons:
             season_int = int(season)
@@ -295,8 +312,11 @@ class ESPNClient:
                     api_base_url = f"https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/leagueHistory/{self.league_id}?seasonId={season}"
                 else:
                     api_base_url = f"https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/{season}/segments/0/leagues/{self.league_id}"
-                if data_type == "matchups":
-                    weeks = matchup_weeks(season_int)
+                if data_type in ("matchups", "transactions"):
+                    if data_type == "transactions" and self.latest_scoring_period:
+                        weeks = range(1, int(self.latest_scoring_period) + 1)
+                    else:
+                        weeks = matchup_weeks(season_int)
                     for week in weeks:
                         full_url = self._construct_request_url(
                             base_url=api_base_url, data_type=data_type, week=week
@@ -400,6 +420,8 @@ class ESPNClient:
 
             if data_type.startswith("matchups"):
                 filter_fn = _filter_matchups
+            elif data_type.startswith("transactions"):
+                filter_fn = _filter_transactions
             else:
                 filter_fn = _ESPN_DATA_FILTERS.get(data_type)
                 if filter_fn is None:

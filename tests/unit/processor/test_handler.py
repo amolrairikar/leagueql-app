@@ -375,6 +375,98 @@ class TestRegisterESPNRawDataMatchups:
         assert row["teams"][0]["team_name"] == "Team Nine"
         assert row["teams"][0]["display_name"] == "user9"
 
+    def test_transactions_collected_across_all_weeks(self, processor_handler):
+        # ESPN transactions are fetched per scoring period (transactions_week{N});
+        # records from every week must be collected into the season's view, not just
+        # the most recent week.
+        raw = [
+            {
+                "season": "2024",
+                "data_type": "users",
+                "data": {"members": [], "teams": []},
+            },
+            {
+                "season": "2024",
+                "data_type": "player_scoring_totals",
+                "data": {"player_scoring_totals": []},
+            },
+            {
+                "season": "2024",
+                "data_type": "transactions_week1",
+                "data": {
+                    "transactions": [
+                        {
+                            "id": "w1",
+                            "type": "WAIVER",
+                            "scoringPeriodId": 1,
+                            "proposedDate": 100,
+                            "bidAmount": 3,
+                            "teamId": 5,
+                            "items": [{"type": "ADD", "playerId": 1, "toTeamId": 5}],
+                        }
+                    ]
+                },
+            },
+            {
+                "season": "2024",
+                "data_type": "transactions_week3",
+                "data": {
+                    "transactions": [
+                        {
+                            "id": "w3",
+                            "type": "FREEAGENT",
+                            "scoringPeriodId": 3,
+                            "proposedDate": 300,
+                            "bidAmount": 0,
+                            "teamId": 6,
+                            "items": [{"type": "ADD", "playerId": 2, "toTeamId": 6}],
+                        }
+                    ]
+                },
+            },
+        ]
+        result = processor_handler._register_espn_raw_data(raw)
+        txn_ids = {row["transaction_id"] for row in result["transactions"]}
+        assert txn_ids == {"w1", "w3"}
+
+    def test_transactions_deduped_across_overlapping_weeks(self, processor_handler):
+        # ESPN echoes the current period's transactions for any scoringPeriodId at or
+        # beyond it, so the same transaction id can arrive from multiple per-week
+        # requests; it must be stored exactly once.
+        dup_txn = {
+            "id": "dup",
+            "type": "FREEAGENT",
+            "scoringPeriodId": 3,
+            "proposedDate": 300,
+            "bidAmount": 0,
+            "teamId": 6,
+            "items": [{"type": "ADD", "playerId": 2, "toTeamId": 6}],
+        }
+        raw = [
+            {
+                "season": "2024",
+                "data_type": "users",
+                "data": {"members": [], "teams": []},
+            },
+            {
+                "season": "2024",
+                "data_type": "player_scoring_totals",
+                "data": {"player_scoring_totals": []},
+            },
+            {
+                "season": "2024",
+                "data_type": "transactions_week3",
+                "data": {"transactions": [dict(dup_txn)]},
+            },
+            {
+                "season": "2024",
+                "data_type": "transactions_week4",
+                "data": {"transactions": [dict(dup_txn)]},
+            },
+        ]
+        result = processor_handler._register_espn_raw_data(raw)
+        assert [row["transaction_id"] for row in result["transactions"]] == ["dup"]
+
 
 class TestTraceSleeperChampionshipPathContinue:
     def test_skips_unknown_and_revisited_match_ids(self, processor_handler):
