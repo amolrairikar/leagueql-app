@@ -27,7 +27,11 @@ resource "aws_apigatewayv2_stage" "default" {
   auto_deploy = true
 
   default_route_settings {
-    detailed_metrics_enabled = true
+    # Per-route CloudWatch metrics are billed as custom metrics ($0.30/metric-month each,
+    # ~5 per route). Per-route latency/status/count is already covered by OTel tracing to
+    # Better Stack (backend/otel-tracing), so these are redundant. Free stage-level metrics
+    # (per ApiId) remain available and back the api_gw_5xx alarm.
+    detailed_metrics_enabled = false
     throttling_burst_limit   = 5
     throttling_rate_limit    = 5
   }
