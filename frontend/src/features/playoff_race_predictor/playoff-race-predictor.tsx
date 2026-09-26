@@ -642,9 +642,6 @@ function ClinchScenarios({
         <span className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
           Clinching scenarios
         </span>
-        <span className="text-[11px] text-muted-foreground">
-          Odds show how likely; scenarios show what&apos;s locked
-        </span>
       </div>
       <ul className="flex flex-col p-1.5">
         {result.scenarios.map((s) => (
@@ -655,13 +652,11 @@ function ClinchScenarios({
           />
         ))}
       </ul>
-      <div className="px-4 py-2.5 border-t border-border/50 text-[11px] text-muted-foreground">
-        Same-record ties come down to points-for — including points still to be
-        scored
-        {result.numPlayoffTeamsAssumed &&
-          `. Assumes ${result.numPlayoffTeams} playoff teams`}
-        .
-      </div>
+      {result.numPlayoffTeamsAssumed && (
+        <div className="px-4 py-2.5 border-t border-border/50 text-[11px] text-muted-foreground">
+          Assumes {result.numPlayoffTeams} playoff teams.
+        </div>
+      )}
     </div>
   );
 }
