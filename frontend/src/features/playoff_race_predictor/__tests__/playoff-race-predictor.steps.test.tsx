@@ -182,6 +182,34 @@ defineFeature(feature, (test) => {
     });
   });
 
+  test('The projected standings break down per-seed odds and drop Win %', ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    given('an in-progress season with unplayed regular-season games', () => {
+      server.use(
+        leagueQuery({
+          PLAYOFF_BRACKET: [],
+          MATCHUPS: IN_PROGRESS,
+          WEEKLY_STANDINGS: [],
+          LEAGUE_SETTINGS: SETTINGS,
+        }),
+      );
+    });
+    when('I open the playoff bracket page', open);
+    then(/^I see "(.*)"$/, async (text) => {
+      expect((await screen.findAllByText(text)).length).toBeGreaterThan(0);
+    });
+    and(/^I see "(.*)"$/, async (text) => {
+      expect((await screen.findAllByText(text)).length).toBeGreaterThan(0);
+    });
+    and(/^I do not see "(.*)"$/, (text) => {
+      expect(screen.queryByText(text)).toBeNull();
+    });
+  });
+
   test('A finished regular season with no bracket shows the empty state', ({
     given,
     when,

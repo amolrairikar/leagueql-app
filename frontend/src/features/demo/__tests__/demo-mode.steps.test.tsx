@@ -111,6 +111,12 @@ defineFeature(feature, (test) => {
     then(/^I see the predictor heading "(.*)"$/, async (text) => {
       expect((await screen.findAllByText(text)).length).toBeGreaterThan(0);
     });
+    // The per-seed odds columns render in the standings in demo replay too.
+    and('I see the per-seed odds columns', async () => {
+      expect((await screen.findAllByText('Seed odds')).length).toBeGreaterThan(
+        0,
+      );
+    });
     // The 2025 demo season's final weeks include decisive games, so the
     // clinching-scenarios section is shown below the projected standings.
     and('I see the clinching-scenarios section', async () => {

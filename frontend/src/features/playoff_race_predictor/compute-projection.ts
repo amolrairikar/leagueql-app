@@ -331,24 +331,28 @@ function mulberry32(seed: number): () => number {
 }
 
 /**
- * Each team's chance (0..1) of finishing in a top-`numPlayoffTeams` seed across
- * every possible result of the remaining *unpicked* matchups, treating each such
- * matchup as an equally likely 50/50 coin flip. Picked matchups are locked to
- * their result (folded into the fixed base), so odds are conditional on picks;
- * with no picks the base view enumerates all outcomes.
+ * Each team's probability (0..1) of finishing in *each* seed across every possible
+ * result of the remaining *unpicked* matchups, treating each such matchup as an
+ * equally likely 50/50 coin flip. The returned map gives every team a length-`n`
+ * array where index `k` is the chance of finishing in seed `k + 1` (1-based).
+ * Picked matchups are locked to their result (folded into the fixed base), so the
+ * distribution is conditional on picks; with no picks the base view enumerates all
+ * outcomes.
  *
  * Points-for is never simulated — it is fixed at its season-to-date value and
  * only breaks ties — so each matchup contributes a single win/loss bit and the
  * outcome space is exactly 2^N. Seeding per scenario uses the same rule as
- * {@link projectStandings} (wins desc, then points-for desc, then team id).
+ * {@link projectStandings} (wins desc, then points-for desc, then team id), which
+ * assigns every team a unique rank, so in the exact path each team's array sums to
+ * exactly 1 (to ~1 under sampling).
  *
  * Computed exactly by enumerating all 2^N combinations when N is small
  * ({@link MAX_EXACT_MATCHUPS}); otherwise estimated by Monte Carlo sampling.
  */
-export function computePlayoffOdds(
+export function computeSeedProbabilities(
   model: PredictorModel,
   picks: Picks,
-): Map<string, number> {
+): Map<string, number[]> {
   const ids = [...model.teams.keys()];
   const n = ids.length;
   const index = new Map(ids.map((id, i) => [id, i]));
@@ -387,11 +391,11 @@ export function computePlayoffOdds(
       tieRank[idx] = pos;
     });
 
-  const numPlayoff = model.numPlayoffTeams;
   const wins = new Int32Array(n);
-  const counts = new Float64Array(n);
+  // Row-major team × seed histogram: seedCounts[i * n + rank] for finishing rank.
+  const seedCounts = new Float64Array(n * n);
 
-  // Tally, for the current `wins`, which teams land in a top-numPlayoff seed.
+  // Tally each team's exact finishing seed (rank) for the current `wins`.
   const tallyScenario = (): void => {
     for (let i = 0; i < n; i++) {
       const wi = wins[i];
@@ -402,7 +406,7 @@ export function computePlayoffOdds(
         const wj = wins[j];
         if (wj > wi || (wj === wi && tieRank[j] < ri)) above++;
       }
-      if (above < numPlayoff) counts[i]++;
+      seedCounts[i * n + above]++;
     }
   };
 
@@ -430,8 +434,33 @@ export function computePlayoffOdds(
     }
   }
 
+  const probs = new Map<string, number[]>();
+  for (let i = 0; i < n; i++) {
+    const dist = new Array<number>(n);
+    for (let k = 0; k < n; k++) dist[k] = seedCounts[i * n + k] / scenarios;
+    probs.set(ids[i], dist);
+  }
+  return probs;
+}
+
+/**
+ * Each team's chance (0..1) of finishing in a top-`numPlayoffTeams` seed across
+ * every possible result of the remaining *unpicked* matchups — the sum of the
+ * team's top-`numPlayoffTeams` seed probabilities from
+ * {@link computeSeedProbabilities}, so the two views are always consistent.
+ */
+export function computePlayoffOdds(
+  model: PredictorModel,
+  picks: Picks,
+): Map<string, number> {
+  const seedProbs = computeSeedProbabilities(model, picks);
+  const numPlayoff = model.numPlayoffTeams;
   const odds = new Map<string, number>();
-  for (let i = 0; i < n; i++) odds.set(ids[i], counts[i] / scenarios);
+  for (const [id, dist] of seedProbs) {
+    let sum = 0;
+    for (let k = 0; k < numPlayoff && k < dist.length; k++) sum += dist[k];
+    odds.set(id, sum);
+  }
   return odds;
 }
 

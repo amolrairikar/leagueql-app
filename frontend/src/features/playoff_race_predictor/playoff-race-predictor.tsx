@@ -12,7 +12,7 @@ import { getLeagueSettings, getMatchups } from './api-calls';
 import {
   buildPredictorModel,
   computeClinchScenarios,
-  computePlayoffOdds,
+  computeSeedProbabilities,
   projectStandings,
   recordEnteringWeek,
   type ClinchScenario,
@@ -127,6 +127,13 @@ function PredictorTool({
     return map;
   }, [model]);
 
+  // Per-team seed distribution over the remaining outcomes, enumerated once and
+  // shared by the standings odds column and the seed-probability table below.
+  const seedProbs = useMemo(
+    () => (model ? computeSeedProbabilities(model, picks) : null),
+    [model, picks],
+  );
+
   if (!result.ok) {
     return (
       <div className="text-center py-12">
@@ -183,7 +190,12 @@ function PredictorTool({
         </div>
       </div>
 
-      <StandingsTable model={model} picks={picks} colorByTeam={colorByTeam} />
+      <StandingsTable
+        model={model}
+        picks={picks}
+        colorByTeam={colorByTeam}
+        seedProbs={seedProbs!}
+      />
 
       <ClinchScenarios model={model} picks={picks} colorByTeam={colorByTeam} />
     </div>
@@ -393,15 +405,28 @@ function StandingsTable({
   model,
   picks,
   colorByTeam,
+  seedProbs,
 }: {
   model: PredictorModel;
   picks: Picks;
   colorByTeam: Map<string, string>;
+  seedProbs: Map<string, number[]>;
 }) {
   const rows = useMemo(() => projectStandings(model, picks), [model, picks]);
 
-  // Playoff odds = share of remaining outcomes each team makes the top-N seed.
-  const odds = useMemo(() => computePlayoffOdds(model, picks), [model, picks]);
+  // Playoff odds = share of remaining outcomes each team makes the top-N seed,
+  // i.e. the sum of its top-numPlayoffTeams seed probabilities.
+  const odds = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const [id, dist] of seedProbs) {
+      let sum = 0;
+      for (let k = 0; k < model.numPlayoffTeams && k < dist.length; k++) {
+        sum += dist[k];
+      }
+      map.set(id, sum);
+    }
+    return map;
+  }, [seedProbs, model.numPlayoffTeams]);
 
   // Games left = pickable matchups still involving each team.
   const gamesLeft = useMemo(() => {
@@ -415,6 +440,11 @@ function StandingsTable({
     }
     return counts;
   }, [model, picks]);
+
+  const seeds = Array.from({ length: model.numPlayoffTeams }, (_, i) => i + 1);
+  const metaHeadClass =
+    'text-right text-[10px] font-medium uppercase tracking-[0.07em] text-muted-foreground px-3.5 py-2 border-b border-border/50 bg-muted';
+  const minWidth = 560 + seeds.length * 52;
 
   return (
     <div className="bg-card border border-border/50 rounded-lg overflow-hidden">
@@ -430,28 +460,47 @@ function StandingsTable({
       <div className="overflow-x-auto">
         <table
           className="w-full border-collapse text-[13px]"
-          style={{ minWidth: '640px' }}
+          style={{ minWidth: `${minWidth}px` }}
         >
           <thead>
             <tr>
-              <th className="text-left text-[10px] font-medium uppercase tracking-[0.07em] text-muted-foreground px-3.5 py-2 border-b border-border/50 bg-muted">
+              <th
+                rowSpan={2}
+                className="text-left text-[10px] font-medium uppercase tracking-[0.07em] text-muted-foreground px-3.5 py-2 border-b border-border/50 bg-muted align-bottom"
+              >
                 Seed · Owner
               </th>
-              <th className="text-right text-[10px] font-medium uppercase tracking-[0.07em] text-muted-foreground px-3.5 py-2 border-b border-border/50 bg-muted">
+              <th rowSpan={2} className={cn(metaHeadClass, 'align-bottom')}>
                 Proj. record
               </th>
-              <th className="text-right text-[10px] font-medium uppercase tracking-[0.07em] text-muted-foreground px-3.5 py-2 border-b border-border/50 bg-muted">
+              <th rowSpan={2} className={cn(metaHeadClass, 'align-bottom')}>
                 Playoff odds
               </th>
-              <th className="text-right text-[10px] font-medium uppercase tracking-[0.07em] text-muted-foreground px-3.5 py-2 border-b border-border/50 bg-muted">
-                Win %
-              </th>
-              <th className="text-right text-[10px] font-medium uppercase tracking-[0.07em] text-muted-foreground px-3.5 py-2 border-b border-border/50 bg-muted">
+              <th rowSpan={2} className={cn(metaHeadClass, 'align-bottom')}>
                 PF
               </th>
-              <th className="text-right text-[10px] font-medium uppercase tracking-[0.07em] text-muted-foreground px-3.5 py-2 border-b border-border/50 bg-muted">
+              <th rowSpan={2} className={cn(metaHeadClass, 'align-bottom')}>
                 Games left
               </th>
+              <th
+                colSpan={seeds.length}
+                className="text-center text-[10px] font-medium uppercase tracking-[0.07em] text-muted-foreground px-3.5 py-2 border-b border-border/50 border-l border-dashed border-primary/40 bg-muted"
+              >
+                Seed odds
+              </th>
+            </tr>
+            <tr>
+              {seeds.map((s) => (
+                <th
+                  key={s}
+                  className={cn(
+                    metaHeadClass,
+                    s === 1 && 'border-l border-dashed border-primary/40',
+                  )}
+                >
+                  {s}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
@@ -459,10 +508,12 @@ function StandingsTable({
               <StandingRowView
                 key={row.team.teamId}
                 row={row}
+                numPlayoffTeams={model.numPlayoffTeams}
                 showLineAbove={i === model.numPlayoffTeams}
                 color={colorByTeam.get(row.team.teamId) ?? avatarColor(i)}
                 gamesLeft={gamesLeft.get(row.team.teamId) ?? 0}
                 playoffOdds={odds.get(row.team.teamId) ?? null}
+                dist={seedProbs.get(row.team.teamId) ?? null}
               />
             ))}
           </tbody>
@@ -484,22 +535,36 @@ function formatOdds(odds: number | null): string {
 
 function StandingRowView({
   row,
+  numPlayoffTeams,
   showLineAbove,
   color,
   gamesLeft,
   playoffOdds,
+  dist,
 }: {
   row: ReturnType<typeof projectStandings>[number];
+  numPlayoffTeams: number;
   showLineAbove: boolean;
   color: string;
   gamesLeft: number;
   playoffOdds: number | null;
+  dist: number[] | null;
 }) {
+  // One cell per playoff seed; emphasize the team's single most-likely seed.
+  const seedValues = Array.from(
+    { length: numPlayoffTeams },
+    (_, k) => dist?.[k] ?? 0,
+  );
+  let modal = 0;
+  for (let k = 1; k < seedValues.length; k++) {
+    if (seedValues[k] > seedValues[modal]) modal = k;
+  }
+
   return (
     <>
       {showLineAbove && (
         <tr>
-          <td colSpan={6} className="p-0">
+          <td colSpan={5 + numPlayoffTeams} className="p-0">
             <div className="flex items-center gap-2.5 px-3.5 py-1.5 border-y border-dashed border-primary">
               <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-primary whitespace-nowrap">
                 Playoff line
@@ -585,14 +650,27 @@ function StandingRowView({
           </span>
         </td>
         <td className="px-3.5 py-2.5 text-right tabular-nums text-muted-foreground">
-          {row.winPct.toFixed(3)}
-        </td>
-        <td className="px-3.5 py-2.5 text-right tabular-nums text-muted-foreground">
           {Math.round(row.pf)}
         </td>
         <td className="px-3.5 py-2.5 text-right tabular-nums text-muted-foreground">
           {gamesLeft}
         </td>
+        {seedValues.map((value, k) => (
+          <td
+            key={k}
+            className={cn(
+              'px-3.5 py-2.5 text-right tabular-nums',
+              k === 0 && 'border-l border-dashed border-primary/40',
+              modal === k
+                ? 'font-semibold text-foreground'
+                : value < 0.01
+                  ? 'text-muted-foreground/60'
+                  : 'text-muted-foreground',
+            )}
+          >
+            {formatOdds(value)}
+          </td>
+        ))}
       </tr>
     </>
   );

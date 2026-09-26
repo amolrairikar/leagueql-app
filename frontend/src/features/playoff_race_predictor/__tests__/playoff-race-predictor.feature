@@ -22,6 +22,13 @@ Feature: Playoff-race predictor (frontend/playoff-race-predictor)
     Then I see "Playoff odds"
     And I see "100%"
 
+  Scenario: The projected standings break down per-seed odds and drop Win %
+    Given an in-progress season with unplayed regular-season games
+    When I open the playoff bracket page
+    Then I see "Seed odds"
+    And I see "Playoff odds"
+    And I do not see "Win %"
+
   Scenario: A finished regular season with no bracket shows the empty state
     Given the latest season's regular season is finished with no bracket
     When I open the playoff bracket page
