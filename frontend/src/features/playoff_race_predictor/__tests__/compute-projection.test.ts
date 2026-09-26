@@ -4,6 +4,7 @@ import {
   buildPredictorModel,
   computeClinchScenarios,
   computePlayoffOdds,
+  computeSeedProbabilities,
   projectStandings,
   recordEnteringWeek,
   totalPickableMatchups,
@@ -295,6 +296,91 @@ describe('computePlayoffOdds', () => {
       expect(v).toBeLessThanOrEqual(1);
     }
     expect(sum(first)).toBeCloseTo(4, 10);
+  });
+});
+
+describe('computeSeedProbabilities', () => {
+  it('gives an exact per-seed distribution for a single deciding game', () => {
+    // A vs B decides seeds 1 and 2; C is locked into last. Two equally likely
+    // outcomes: A wins (A1 B2 C3) or B wins (B1 A2 C3).
+    const model = mkModel(
+      [
+        { id: 'A', wins: 1, pf: 300 },
+        { id: 'B', wins: 1, pf: 200 },
+        { id: 'C', wins: 0, pf: 100 },
+      ],
+      [{ week: 1, games: [['A', 'B']] }],
+      2,
+    );
+    const probs = computeSeedProbabilities(model, {});
+    expect(probs.get('A')).toEqual([0.5, 0.5, 0]);
+    expect(probs.get('B')).toEqual([0.5, 0.5, 0]);
+    expect(probs.get('C')).toEqual([0, 0, 1]);
+  });
+
+  it('breaks equal records by fixed points-for when no games remain', () => {
+    // No free games: one deterministic seeding, ordered by points-for.
+    const model = mkModel(
+      [
+        { id: 'A', wins: 2, pf: 300 },
+        { id: 'B', wins: 2, pf: 200 },
+      ],
+      [],
+      1,
+    );
+    const probs = computeSeedProbabilities(model, {});
+    expect(probs.get('A')).toEqual([1, 0]);
+    expect(probs.get('B')).toEqual([0, 1]);
+  });
+
+  it('yields distributions that sum to 1 for every team', () => {
+    const model = buildPredictorModel(liveMatchups(), settings(), 'live');
+    const probs = computeSeedProbabilities(model, {});
+    for (const dist of probs.values()) {
+      expect(dist.reduce((a, b) => a + b, 0)).toBeCloseTo(1, 10);
+    }
+  });
+
+  it('agrees with computePlayoffOdds: top-N seeds sum to the playoff odds', () => {
+    const model = buildPredictorModel(liveMatchups(), settings(), 'live');
+    const picks: Picks = { '3:1': 't3' };
+    const probs = computeSeedProbabilities(model, picks);
+    const odds = computePlayoffOdds(model, picks);
+    for (const [id, dist] of probs) {
+      const topN = dist
+        .slice(0, model.numPlayoffTeams)
+        .reduce((a, b) => a + b, 0);
+      expect(topN).toBeCloseTo(odds.get(id)!, 10);
+    }
+  });
+
+  it('estimates distributions by seeded sampling for a large outcome space', () => {
+    // 6 teams over 8 unplayed weeks = 24 free matchups (> the exact cap).
+    const teams = ['t1', 't2', 't3', 't4', 't5', 't6'];
+    const matchups: MatchupItem[] = [];
+    for (let week = 1; week <= 8; week++) {
+      matchups.push(game(teams[0], teams[1], week));
+      matchups.push(game(teams[2], teams[3], week));
+      matchups.push(game(teams[4], teams[5], week));
+    }
+    const model = buildPredictorModel(
+      matchups,
+      settings({ num_playoff_teams: 4, regular_season_weeks: 8 }),
+      'live',
+    );
+    expect(totalPickableMatchups(model)).toBe(24);
+    const first = computeSeedProbabilities(model, {});
+    const second = computeSeedProbabilities(model, {});
+    // Seeded RNG => identical results across runs.
+    for (const id of teams) expect(second.get(id)).toEqual(first.get(id));
+    // Sampled distributions stay in range and (approximately) normalize.
+    for (const dist of first.values()) {
+      for (const p of dist) {
+        expect(p).toBeGreaterThanOrEqual(0);
+        expect(p).toBeLessThanOrEqual(1);
+      }
+      expect(dist.reduce((a, b) => a + b, 0)).toBeCloseTo(1, 10);
+    }
   });
 });
 
