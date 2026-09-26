@@ -384,6 +384,121 @@ describe('computeSeedProbabilities', () => {
   });
 });
 
+describe('scoring-distribution-weighted odds', () => {
+  const sum = (odds: Map<string, number>) =>
+    [...odds.values()].reduce((a, b) => a + b, 0);
+
+  it('favors the stronger-scoring team in a lone deciding game', () => {
+    // A and B both enter 3-0 (only C/D between them); the single unplayed A-vs-B
+    // game decides the one playoff seat. A scores ~102 (σ≈7), B ~98 (σ≈7), so A is
+    // favored above 50% rather than an even split. C/D are 0-3 and never contend.
+    const matchups: MatchupItem[] = [
+      game('A', 'C', 1, 95, 60),
+      game('B', 'D', 1, 91, 55),
+      game('A', 'D', 2, 102, 60),
+      game('B', 'C', 2, 98, 58),
+      game('A', 'C', 3, 109, 60),
+      game('B', 'D', 3, 105, 57),
+      game('A', 'B', 4), // the deciding game
+      game('C', 'D', 4),
+    ];
+    const model = buildPredictorModel(
+      matchups,
+      settings({ num_playoff_teams: 1, regular_season_weeks: 4 }),
+      'live',
+    );
+    const odds = computePlayoffOdds(model, {});
+    expect(odds.get('A')!).toBeGreaterThan(0.5);
+    expect(odds.get('B')!).toBeLessThan(0.5);
+    expect(odds.get('A')!).toBeGreaterThan(odds.get('B')!);
+    // Only one seat is contested, so the two odds still sum to num_playoff_teams.
+    expect(sum(odds)).toBeCloseTo(1, 10);
+    expect(odds.get('C')!).toBeCloseTo(0, 10);
+    expect(odds.get('D')!).toBeCloseTo(0, 10);
+  });
+
+  it('treats matchups as 50/50 when there is no scoring history', () => {
+    // No played games => no scoring distributions => the fallback coin flip, so a
+    // lone deciding game splits the single seat evenly (matches the old behavior).
+    const model = buildPredictorModel(
+      [game('t1', 't2', 1)],
+      settings({ num_playoff_teams: 1, regular_season_weeks: 1 }),
+      'live',
+    );
+    expect(model.teamScoring).toBeUndefined();
+    const probs = computeSeedProbabilities(model, {});
+    expect(probs.get('t1')).toEqual([0.5, 0.5]);
+    expect(probs.get('t2')).toEqual([0.5, 0.5]);
+  });
+
+  it('falls back to the league-wide sigma when a team has too few games', () => {
+    // A and B each have only two played games with identical scores, so their own
+    // standard deviation is 0. Without the league-wide fallback the combined spread
+    // would be 0 and the odds would collapse to an even split; with it, A's higher
+    // mean makes it the favorite while staying strictly between 0 and 1.
+    const matchups: MatchupItem[] = [
+      game('A', 'C', 1, 100, 60),
+      game('B', 'D', 1, 90, 50),
+      game('A', 'C', 2, 100, 80),
+      game('B', 'D', 2, 90, 70),
+      game('A', 'B', 3), // deciding game
+      game('C', 'D', 3),
+    ];
+    const model = buildPredictorModel(
+      matchups,
+      settings({ num_playoff_teams: 1, regular_season_weeks: 3 }),
+      'live',
+    );
+    // Two games each => own sigma is ignored in favor of the league-wide sigma.
+    expect(model.teamScoring!.get('A')!.games).toBe(2);
+    const oddsA = computePlayoffOdds(model, {}).get('A')!;
+    expect(oddsA).toBeGreaterThan(0.5);
+    expect(oddsA).toBeLessThan(1);
+    // Not the degenerate coin flip a zero combined spread would have produced.
+    expect(oddsA).not.toBeCloseTo(0.5, 2);
+  });
+
+  it('is deterministic under weighted sampling for a large outcome space', () => {
+    // 6 teams, weeks 1-2 played (establishing distinct distributions), weeks 3-10
+    // unplayed = 24 free matchups (> the exact cap), forcing weighted Monte Carlo.
+    const pairs: [string, string][] = [
+      ['t1', 't2'],
+      ['t3', 't4'],
+      ['t5', 't6'],
+    ];
+    const matchups: MatchupItem[] = [];
+    for (let week = 1; week <= 10; week++) {
+      pairs.forEach(([a, b], p) => {
+        if (week <= 2) {
+          // Distinct per-team scores so win probabilities are not all 0.5.
+          matchups.push(game(a, b, week, 100 + p * 6 + week, 80 + p * 4));
+        } else {
+          matchups.push(game(a, b, week));
+        }
+      });
+    }
+    const model = buildPredictorModel(
+      matchups,
+      settings({ num_playoff_teams: 4, regular_season_weeks: 10 }),
+      'live',
+    );
+    expect(totalPickableMatchups(model)).toBe(24);
+    expect(model.teamScoring).toBeDefined();
+    const first = computeSeedProbabilities(model, {});
+    const second = computeSeedProbabilities(model, {});
+    for (const id of ['t1', 't2', 't3', 't4', 't5', 't6']) {
+      expect(second.get(id)).toEqual(first.get(id)); // seeded RNG => identical
+    }
+    for (const dist of first.values()) {
+      for (const p of dist) {
+        expect(p).toBeGreaterThanOrEqual(0);
+        expect(p).toBeLessThanOrEqual(1);
+      }
+      expect(dist.reduce((a, b) => a + b, 0)).toBeCloseTo(1, 10);
+    }
+  });
+});
+
 describe('settings fallbacks', () => {
   it('defaults to 6 assumed playoff teams when settings are absent', () => {
     const model = buildPredictorModel(liveMatchups(), null, 'live');

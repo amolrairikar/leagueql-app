@@ -43,6 +43,18 @@ interface BaseRecord {
   pf: number;
 }
 
+/**
+ * A team's regular-season scoring distribution, used to weight the win
+ * probability of each remaining matchup. `std` is already resolved: a team's own
+ * sample standard deviation when it has enough games, otherwise a league-wide
+ * fallback (see {@link buildPredictorModel}).
+ */
+export interface TeamScoring {
+  mean: number;
+  std: number;
+  games: number;
+}
+
 export interface PredictorModel {
   teams: Map<string, PredictorTeam>;
   /** Record + points-for entering the pickable window. */
@@ -54,6 +66,12 @@ export interface PredictorModel {
   regularSeasonWeeks: number;
   /** True once any postseason game has actually been played (gates the live tool). */
   hasPlayedPlayoffMatchup: boolean;
+  /**
+   * Per-team regular-season scoring distribution, used to weight each remaining
+   * matchup's win probability. Absent (or missing a team) when there is no
+   * scoring history to build it from — callers then treat the matchup as 50/50.
+   */
+  teamScoring?: Map<string, TeamScoring>;
 }
 
 /** Maps a matchup key to the picked winning team id. */
@@ -193,7 +211,109 @@ export function buildPredictorModel(
     numPlayoffTeamsAssumed,
     regularSeasonWeeks,
     hasPlayedPlayoffMatchup,
+    teamScoring: buildTeamScoring(regMatchups),
   };
+}
+
+/** Minimum games before a team's own standard deviation is trusted over the league's. */
+const MIN_GAMES_FOR_OWN_STD = 3;
+/** Standard deviations at or below this are treated as no spread (fall back to the league). */
+const STD_EPSILON = 1e-9;
+
+/**
+ * Per-team regular-season scoring distribution built from played games only
+ * (0-0 placeholders excluded). Each team's `mean` is its own average score, while
+ * `std` is its own sample standard deviation once it has {@link MIN_GAMES_FOR_OWN_STD}
+ * games with a non-trivial spread, and otherwise a shared league-wide standard
+ * deviation (the pooled within-team residual std). Returns `undefined` when no games
+ * have been played, so callers fall back to an even 50/50 matchup weight.
+ */
+function buildTeamScoring(
+  playedRegMatchups: MatchupItem[],
+): Map<string, TeamScoring> | undefined {
+  const scores = new Map<string, number[]>();
+  const add = (id: string, score: number): void => {
+    const list = scores.get(id);
+    if (list) list.push(score);
+    else scores.set(id, [score]);
+  };
+  for (const m of playedRegMatchups) {
+    if (isUnplayedMatchup(m)) continue;
+    add(m.team_a_id, Number(m.team_a_score));
+    add(m.team_b_id, Number(m.team_b_score));
+  }
+  if (scores.size === 0) return undefined;
+
+  const means = new Map<string, number>();
+  for (const [id, list] of scores) {
+    means.set(id, list.reduce((a, b) => a + b, 0) / list.length);
+  }
+
+  // League-wide σ = pooled within-team residual std across every game score.
+  let residualSq = 0;
+  let residualDof = 0;
+  for (const [id, list] of scores) {
+    const mean = means.get(id)!;
+    for (const s of list) residualSq += (s - mean) ** 2;
+    residualDof += list.length - 1;
+  }
+  const leagueStd = residualDof > 0 ? Math.sqrt(residualSq / residualDof) : 0;
+
+  const ownStd = (list: number[], mean: number): number => {
+    if (list.length < 2) return 0;
+    const variance =
+      list.reduce((a, s) => a + (s - mean) ** 2, 0) / (list.length - 1);
+    return Math.sqrt(variance);
+  };
+
+  const teamScoring = new Map<string, TeamScoring>();
+  for (const [id, list] of scores) {
+    const mean = means.get(id)!;
+    const own = ownStd(list, mean);
+    const std =
+      list.length >= MIN_GAMES_FOR_OWN_STD && own > STD_EPSILON
+        ? own
+        : leagueStd;
+    teamScoring.set(id, { mean, std, games: list.length });
+  }
+  return teamScoring;
+}
+
+/** Standard normal CDF via the Abramowitz & Stegun 7.1.26 erf approximation. */
+function normalCdf(z: number): number {
+  const sign = z < 0 ? -1 : 1;
+  const x = Math.abs(z) / Math.SQRT2;
+  const t = 1 / (1 + 0.3275911 * x);
+  const y =
+    1 -
+    ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) *
+      t +
+      0.254829592) *
+      t *
+      Math.exp(-x * x);
+  return 0.5 * (1 + sign * y);
+}
+
+/**
+ * Probability that `aId` beats `bId` in a single game, from the two teams' scoring
+ * distributions: with each score modeled as `N(mean, std)` and the teams
+ * independent, the margin is `N(meanA - meanB, sqrt(stdA^2 + stdB^2))`, so the win
+ * probability is `Φ((meanA - meanB) / σ_diff)`. Falls back to a coin flip (0.5) when
+ * scoring data is missing for either team or the combined spread is ~0.
+ */
+function matchupWinProb(
+  model: PredictorModel,
+  aId: string,
+  bId: string,
+): number {
+  const scoring = model.teamScoring;
+  if (!scoring) return 0.5;
+  const a = scoring.get(aId);
+  const b = scoring.get(bId);
+  if (!a || !b || a.games < 1 || b.games < 1) return 0.5;
+  const sigma = Math.sqrt(a.std * a.std + b.std * b.std);
+  if (sigma <= STD_EPSILON) return 0.5;
+  return normalCdf((a.mean - b.mean) / sigma);
 }
 
 /** Total number of pickable matchups in the model. */
@@ -332,22 +452,24 @@ function mulberry32(seed: number): () => number {
 
 /**
  * Each team's probability (0..1) of finishing in *each* seed across every possible
- * result of the remaining *unpicked* matchups, treating each such matchup as an
- * equally likely 50/50 coin flip. The returned map gives every team a length-`n`
- * array where index `k` is the chance of finishing in seed `k + 1` (1-based).
- * Picked matchups are locked to their result (folded into the fixed base), so the
- * distribution is conditional on picks; with no picks the base view enumerates all
- * outcomes.
+ * result of the remaining *unpicked* matchups. Each such matchup is weighted by the
+ * probability that each team wins it, derived from the two teams' scoring
+ * distributions via {@link matchupWinProb} (a coin flip when scoring history is
+ * absent). The returned map gives every team a length-`n` array where index `k` is
+ * the chance of finishing in seed `k + 1` (1-based). Picked matchups are locked to
+ * their result (folded into the fixed base), so the distribution is conditional on
+ * picks; with no picks the base view enumerates all outcomes.
  *
  * Points-for is never simulated — it is fixed at its season-to-date value and
  * only breaks ties — so each matchup contributes a single win/loss bit and the
  * outcome space is exactly 2^N. Seeding per scenario uses the same rule as
  * {@link projectStandings} (wins desc, then points-for desc, then team id), which
- * assigns every team a unique rank, so in the exact path each team's array sums to
- * exactly 1 (to ~1 under sampling).
+ * assigns every team a unique rank, so each team's array sums to exactly 1 (to ~1
+ * under sampling).
  *
- * Computed exactly by enumerating all 2^N combinations when N is small
- * ({@link MAX_EXACT_MATCHUPS}); otherwise estimated by Monte Carlo sampling.
+ * Computed exactly by enumerating all 2^N combinations — each weighted by its
+ * probability — when N is small ({@link MAX_EXACT_MATCHUPS}); otherwise estimated by
+ * Monte Carlo sampling that draws each matchup at its win probability.
  */
 export function computeSeedProbabilities(
   model: PredictorModel,
@@ -366,8 +488,10 @@ export function computeSeedProbabilities(
     pf[i] = base.pf;
   }
   // Unpicked matchups become free win/loss bits; picked ones lock into baseWins.
+  // pFree[b] is the probability that freeA[b] (team A) wins that matchup.
   const freeA: number[] = [];
   const freeB: number[] = [];
+  const pFree: number[] = [];
   for (const group of model.weeks) {
     for (const pm of group.matchups) {
       const winner = picks[pm.key];
@@ -376,6 +500,7 @@ export function computeSeedProbabilities(
       } else {
         freeA.push(index.get(pm.teamAId)!);
         freeB.push(index.get(pm.teamBId)!);
+        pFree.push(matchupWinProb(model, pm.teamAId, pm.teamBId));
       }
     }
   }
@@ -395,8 +520,9 @@ export function computeSeedProbabilities(
   // Row-major team × seed histogram: seedCounts[i * n + rank] for finishing rank.
   const seedCounts = new Float64Array(n * n);
 
-  // Tally each team's exact finishing seed (rank) for the current `wins`.
-  const tallyScenario = (): void => {
+  // Tally each team's exact finishing seed (rank) for the current `wins`, adding
+  // this scenario's probability weight (1 per sample on the Monte Carlo path).
+  const tallyScenario = (weight: number): void => {
     for (let i = 0; i < n; i++) {
       const wi = wins[i];
       const ri = tieRank[i];
@@ -406,38 +532,52 @@ export function computeSeedProbabilities(
         const wj = wins[j];
         if (wj > wi || (wj === wi && tieRank[j] < ri)) above++;
       }
-      seedCounts[i * n + above]++;
+      seedCounts[i * n + above] += weight;
     }
   };
 
-  let scenarios: number;
+  // Total accumulated weight to normalize by: the summed combination weights on the
+  // exact path (analytically 1), or the sample count under Monte Carlo.
+  let norm: number;
   if (numFree <= MAX_EXACT_MATCHUPS) {
-    // Exact enumeration of all 2^numFree combinations (covers numFree === 0).
-    scenarios = 2 ** numFree;
-    for (let mask = 0; mask < scenarios; mask++) {
+    // Exact enumeration of all 2^numFree combinations (covers numFree === 0), each
+    // weighted by the product of its per-matchup win probabilities.
+    const combos = 2 ** numFree;
+    let totalWeight = 0;
+    for (let mask = 0; mask < combos; mask++) {
       wins.set(baseWins);
+      let weight = 1;
       for (let b = 0; b < numFree; b++) {
-        wins[(mask >> b) & 1 ? freeB[b] : freeA[b]]++;
+        if ((mask >> b) & 1) {
+          wins[freeB[b]]++;
+          weight *= 1 - pFree[b];
+        } else {
+          wins[freeA[b]]++;
+          weight *= pFree[b];
+        }
       }
-      tallyScenario();
+      totalWeight += weight;
+      tallyScenario(weight);
     }
+    norm = totalWeight;
   } else {
-    // Monte Carlo: sample random outcomes with a fixed seed for determinism.
-    scenarios = MONTE_CARLO_SAMPLES;
+    // Monte Carlo: draw each matchup at its win probability with a fixed seed.
+    const samples = MONTE_CARLO_SAMPLES;
     const rand = mulberry32(0x9e3779b1);
-    for (let s = 0; s < scenarios; s++) {
+    for (let s = 0; s < samples; s++) {
       wins.set(baseWins);
       for (let b = 0; b < numFree; b++) {
-        wins[rand() < 0.5 ? freeA[b] : freeB[b]]++;
+        wins[rand() < pFree[b] ? freeA[b] : freeB[b]]++;
       }
-      tallyScenario();
+      tallyScenario(1);
     }
+    norm = samples;
   }
 
   const probs = new Map<string, number[]>();
   for (let i = 0; i < n; i++) {
     const dist = new Array<number>(n);
-    for (let k = 0; k < n; k++) dist[k] = seedCounts[i * n + k] / scenarios;
+    for (let k = 0; k < n; k++) dist[k] = seedCounts[i * n + k] / norm;
     probs.set(ids[i], dist);
   }
   return probs;
