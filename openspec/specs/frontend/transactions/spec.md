@@ -1,7 +1,7 @@
 # transactions Specification
 
 ## Purpose
-The `/transactions` page lists a season's completed transactions — waivers, trades, and free-agent moves — for the connected league, newest first, with per-team adds (green) and drops (red). Below the season selector, a per-owner summary table breaks down activity for the selected season. Available for both Sleeper (waivers/trades/free agents, all seasons) and ESPN (waivers/free agents, current season only) leagues; the type filter is platform-aware (ESPN offers no Trades).
+The `/transactions` page lists a season's completed transactions — waivers, trades, and free-agent moves — for the connected league, newest first, with per-team adds (green) and drops (red). Below the season selector, a per-owner summary table breaks down activity for the selected season. Available for both Sleeper (waivers/trades/free agents, all seasons) and ESPN (waivers/free agents, 2026 season onward only — the ESPN API returns no historical transactions, so the page carries a disclaimer to that effect) leagues; the type filter is platform-aware (ESPN offers no Trades).
 
 ## Requirements
 
@@ -52,6 +52,17 @@ defaults to Free Agents. There is no "All" option on either platform.
 #### Scenario: Narrow to another type
 - **WHEN** a different available filter (Waivers, Free Agents, or — for Sleeper — Trades) is selected
 - **THEN** the wire narrows to only that type's transactions
+
+### Requirement: ESPN historical-transactions disclaimer
+The `/transactions` page SHALL display a disclaimer at the top for ESPN leagues only, marked with an asterisk, stating that the ESPN API does not return historical transactions so only transactions from the 2026 fantasy season and onward are stored. The disclaimer SHALL NOT appear for non-ESPN (e.g. Sleeper) leagues.
+
+#### Scenario: Disclaimer shown for ESPN
+- **WHEN** the connected league's platform is `ESPN` and the `/transactions` page is viewed
+- **THEN** an asterisked disclaimer is shown at the top explaining that the ESPN API does not return historical transactions and only 2026-and-onward transactions are stored
+
+#### Scenario: No disclaimer for Sleeper
+- **WHEN** the connected league's platform is `SLEEPER` and the `/transactions` page is viewed
+- **THEN** no such disclaimer is shown
 
 ### Requirement: Empty and error states
 A season with no transactions SHALL show an empty state and a load error SHALL show an inline error (no global banner).

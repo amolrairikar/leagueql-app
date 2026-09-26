@@ -953,6 +953,42 @@ defineFeature(feature, (test) => {
     });
   });
 
+  test('ESPN shows the historical-transactions disclaimer', ({
+    given,
+    when,
+    then,
+  }) => {
+    given('ESPN transactions data is available', () => {
+      server.use(leagueQuery({ TRANSACTIONS: ESPN_TRANSACTIONS }));
+    });
+    when('I open the transactions page for an ESPN league', async () => {
+      await renderRoute(<Transactions />, {
+        route: '/transactions',
+        league: espnLeague,
+      });
+    });
+    then(/^I see the disclaimer "(.*)"$/, async (text) => {
+      expect(
+        (await screen.findAllByText(text, { exact: false })).length,
+      ).toBeGreaterThan(0);
+    });
+  });
+
+  test('Sleeper does not show the ESPN disclaimer', ({ given, when, then }) => {
+    given('transactions data is available', () => {
+      server.use(leagueQuery({ TRANSACTIONS }));
+    });
+    when('I open the transactions page', async () => {
+      await renderRoute(<Transactions />, { route: '/transactions', league });
+    });
+    then(/^I do not see the disclaimer "(.*)"$/, async (text) => {
+      // Wait for the page to render (the summary label always appears) before
+      // asserting the ESPN-only disclaimer is absent.
+      await screen.findByText('Summary');
+      expect(screen.queryByText(text, { exact: false })).toBeNull();
+    });
+  });
+
   test('A season with no transactions shows an empty state', ({
     given,
     when,

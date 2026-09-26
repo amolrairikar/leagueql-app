@@ -128,6 +128,16 @@ Feature: Transactions (frontend/transactions)
     Then the summary table has no "Trades" column
     And the summary table has a "Free Agents" column
 
+  Scenario: ESPN shows the historical-transactions disclaimer
+    Given ESPN transactions data is available
+    When I open the transactions page for an ESPN league
+    Then I see the disclaimer "The ESPN API does not return historical transactions"
+
+  Scenario: Sleeper does not show the ESPN disclaimer
+    Given transactions data is available
+    When I open the transactions page
+    Then I do not see the disclaimer "The ESPN API does not return historical transactions"
+
   Scenario: A season with no transactions shows an empty state
     Given the league has no transactions
     When I open the transactions page
