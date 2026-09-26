@@ -650,7 +650,7 @@ function StandingRowView({
           </span>
         </td>
         <td className="px-3.5 py-2.5 text-right tabular-nums text-muted-foreground">
-          {Math.round(row.pf)}
+          {row.pf.toFixed(2)}
         </td>
         <td className="px-3.5 py-2.5 text-right tabular-nums text-muted-foreground">
           {gamesLeft}
