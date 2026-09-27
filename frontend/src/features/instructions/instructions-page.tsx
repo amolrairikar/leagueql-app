@@ -1,7 +1,6 @@
 import { Info, TriangleAlert } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
-import espnOnboardFormScreenshot from '@/assets/espn-onboard-form-screenshot.png';
 import { Kbd } from '@/components/ui/kbd';
 import { ESPN_EXTENSION_URL } from '@/lib/espn-extension';
 
@@ -304,15 +303,12 @@ export default function InstructionsPage() {
                   <SectionLink id="joining-an-espn-league">
                     Joining an ESPN League
                   </SectionLink>{' '}
-                  ). If not, you are taken to a separate form to enter your ESPN
-                  credentials and complete onboarding.
+                  ). If not, SWID and ESPN S2 fields appear right on the landing
+                  page next to the league ID, and onboarding completes there —
+                  no separate form. The season is detected automatically, so you
+                  never enter it.
                 </p>
-                <img
-                  src={espnOnboardFormScreenshot}
-                  alt="The ESPN Onboard/Refresh League form with fields for League ID, Latest Season, SWID, and ESPN S2"
-                  className="mb-4 w-full rounded-md border border-border"
-                />
-                <SubSubHeading id="espn-form-fields">Form Fields</SubSubHeading>
+                <SubSubHeading id="espn-form-fields">Fields</SubSubHeading>
                 <div className="mb-4">
                   <DocTable
                     headers={['Field', 'Description']}
@@ -323,10 +319,6 @@ export default function InstructionsPage() {
                           The numeric ID in your ESPN fantasy URL (e.g.{' '}
                           <Kbd>?leagueId=12345</Kbd>)
                         </>,
-                      ],
-                      [
-                        'Latest Season',
-                        'The most recent year your league was active',
                       ],
                       [
                         'SWID Cookie',
@@ -383,7 +375,8 @@ export default function InstructionsPage() {
                     in another browser tab.
                   </li>
                   <li>
-                    On the Onboard/Refresh League form, click{' '}
+                    Wherever the SWID and ESPN S2 fields appear — connecting on
+                    the landing page, or the Refresh League dialog — click{' '}
                     <Kbd>Autofill cookies from ESPN</Kbd>. The extension reads
                     your ESPN cookies and populates the SWID and ESPN S2 fields
                     automatically.
@@ -635,14 +628,16 @@ export default function InstructionsPage() {
                 <SubSubHeading id="refresh-espn">ESPN</SubSubHeading>
                 <MinorHeading>Manual Refresh</MinorHeading>
                 <p className="text-muted-foreground leading-relaxed mb-4">
-                  Click the Refresh League button in the sidebar. This navigates
-                  you to the league connection page where you can submit your
-                  credentials again. The system detects the league already
-                  exists and fetches the latest data for your league.
+                  Click the <Kbd>Refresh League</Kbd> button in the sidebar. A
+                  dialog opens where you re-enter your ESPN cookies (or autofill
+                  them with the Chrome extension) and LeagueQL fetches the
+                  latest data for your league in place. The season is detected
+                  automatically, so you never enter it.
                 </p>
                 <MinorHeading>Automatic Weekly Refresh (opt-in)</MinorHeading>
                 <p className="text-muted-foreground leading-relaxed mb-4">
-                  On the connection page you can check{' '}
+                  When you first connect an ESPN league on the landing page, or
+                  in the <Kbd>Refresh League</Kbd> dialog, you can check{' '}
                   <Kbd>Enable automatic weekly refresh</Kbd>. When enabled,
                   LeagueQL securely stores your ESPN cookies, encrypted, and
                   refreshes your league automatically each week during the

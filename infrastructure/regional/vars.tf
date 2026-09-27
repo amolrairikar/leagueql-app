@@ -29,7 +29,7 @@ variable "clerk_jwt_audience" {
 # app for this environment; the return URL is the frontend page the callback bounces back to),
 # so they are supplied per env. Defaults are the prod values; dev overrides them (dev has no
 # api.leagueql.com custom domain — pass the dev API's public callback URL and the dev
-# frontend's /connect_league URL, matching the Yahoo dev app registration).
+# frontend's landing-page URL, matching the Yahoo dev app registration).
 variable "yahoo_redirect_uri" {
   description = "Yahoo OAuth redirect_uri (must match the callback registered in the Yahoo app)"
   type        = string
@@ -37,7 +37,7 @@ variable "yahoo_redirect_uri" {
 }
 
 variable "yahoo_connect_return_url" {
-  description = "Frontend /connect_league URL the Yahoo callback 302s back to"
+  description = "Frontend landing-page URL the ONBOARD-flow Yahoo callback 302s back to (resumes onboarding inline)"
   type        = string
-  default     = "https://leagueql.app/connect_league"
+  default     = "https://leagueql.app/"
 }

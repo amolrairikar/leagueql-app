@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { getLeagueCookies, isDemoMode } from '@/lib/cookie-handler';
+import { currentFantasySeason } from '@/lib/season';
 
 export interface SeasonStalenessState {
   /**
@@ -9,17 +10,6 @@ export interface SeasonStalenessState {
    * with no onboarded seasons (frontend/sleeper-stale-season-banner).
    */
   isStaleSeason: boolean;
-}
-
-/**
- * Returns the current fantasy season (NFL season year) from `now`. The NFL
- * season flips in September, so before September the current fantasy season is
- * still the prior calendar year — this mirrors the backend's current-season
- * gate (`nfl_state["season"]`, src/sleeper_refresh).
- */
-function currentFantasySeason(now: Date): number {
-  const year = now.getFullYear();
-  return now.getMonth() >= 8 ? year : year - 1;
 }
 
 /**

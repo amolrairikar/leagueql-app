@@ -61,8 +61,9 @@ paths:
       summary: Start the Yahoo OAuth link
       description: >
         Clerk-authenticated (backend/yahoo-oauth). Mints a single-use state bound to the
-        caller (carrying the pending leagueId) and returns the Yahoo consent URL the SPA
-        full-page-redirects to. The client secret never leaves the backend.
+        caller (carrying the pending leagueId, return-context flow, and display mode) and
+        returns the Yahoo consent URL the SPA opens — in a popup for display=popup, else a
+        full-page redirect. The client secret never leaves the backend.
       operationId: yahooAuthorize
       parameters:
         - name: leagueId
@@ -76,12 +77,24 @@ paths:
           in: query
           required: false
           description: >
-            Return context. ONBOARD (default) returns the callback to /connect_league;
-            MIGRATE returns it to /migrate_league so the migration wizard resumes.
+            Return context. ONBOARD (default) returns the callback to the landing page,
+            which resumes onboarding inline; MIGRATE returns it to /migrate_league so the
+            migration wizard resumes.
           schema:
             type: string
             enum: [ONBOARD, MIGRATE]
             default: ONBOARD
+        - name: display
+          in: query
+          required: false
+          description: >
+            How the callback hands the result back. page (default) 302-redirects to the return
+            page; popup returns an HTML page that postMessages the opener and closes, so the
+            connect page never reloads.
+          schema:
+            type: string
+            enum: [page, popup]
+            default: page
       responses:
         "200":
           description: Yahoo consent URL generated
@@ -102,7 +115,10 @@ paths:
         Public — no Clerk authorizer (backend/yahoo-oauth). Yahoo redirects the browser here
         with no JWT after the user authorizes. Validates and single-use-consumes the state,
         exchanges the code for tokens (PKCE public client, no secret), stores an encrypted per-user token item,
-        and 302-redirects to the frontend /connect_league page with a linked/declined marker.
+        and hands the linked/declined result back in the way the state's display selects:
+        page 302-redirects to the flow's return page (ONBOARD -> the landing page, which resumes
+        onboarding inline; MIGRATE -> /migrate_league); popup returns an HTML page that
+        postMessages the opener and closes so the connect page never reloads.
       operationId: yahooCallback
       parameters:
         - name: code

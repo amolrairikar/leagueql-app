@@ -1,20 +1,35 @@
 # connect-league Specification
 
 ## Purpose
-The `/connect_league` flow lets a signed-in user onboard a new league or refresh an existing one. The user selects a platform, enters a league ID (and latest season + ESPN cookies for private ESPN leagues), submits to `POST /leagues`, and polls `GET /jobs/{jobId}` until the job completes or fails. The flow is ownership/membership aware: a non-member of a private league (ESPN or Yahoo) is directed to an owner's invite link rather than onboarding.
+The connect/refresh flow lets a signed-in user onboard a new league or refresh an existing one. The user selects a platform and enters a league ID (and, for private ESPN leagues, the owner's ESPN cookies — the season is derived automatically, never entered), submits to `POST /leagues`, and polls `GET /jobs/{jobId}` until the job completes or fails. ESPN onboarding of a not-yet-onboarded league begins inline on the landing page and refreshing an existing ESPN league happens through an in-dashboard dialog, while `/connect_league` still handles the Yahoo OAuth return. The flow is ownership/membership aware: a non-member of a private league (ESPN or Yahoo) is directed to an owner's invite link rather than onboarding.
 
 ## Requirements
 
 ### Requirement: Onboard a league
-A user SHALL be able to onboard a public Sleeper or ESPN league with platform + league ID (+ season for ESPN), with pre-filled platform/league-ID fields locked.
+A user SHALL be able to onboard a public Sleeper or ESPN league with platform + league ID. For ESPN, the season is derived automatically (see "Derive the ESPN season automatically") rather than entered by the user. ESPN onboarding of a not-yet-onboarded league begins inline on the landing page (frontend/landing-page), and refreshing an existing ESPN league happens through the in-dashboard Refresh League dialog (frontend/navigation-sidebar); both derive the season automatically. There is no standalone ESPN/Sleeper onboard/refresh form.
 
 #### Scenario: Onboard a public league
-- **WHEN** a user submits a valid platform and league ID (plus season for ESPN)
-- **THEN** the league is onboarded via `POST /leagues`
+- **WHEN** a user submits a valid platform and league ID
+- **THEN** the league is onboarded via `POST /leagues`, with the ESPN `season` supplied automatically
 
 #### Scenario: Pre-filled fields locked
-- **WHEN** the user arrives with a known platform + league ID
-- **THEN** those fields are locked against edits
+- **WHEN** the Refresh League dialog opens for the currently-viewed league
+- **THEN** it is scoped to that league — there are no editable platform/league-ID fields to change
+
+### Requirement: Derive the ESPN season automatically
+The ESPN `season` sent with `POST /leagues` SHALL be derived automatically rather than entered by the user: the flow SHALL fetch the current NFL season from the Sleeper NFL-state endpoint (`https://api.sleeper.app/v1/state/nfl`) and fall back to a clock-derived current fantasy season when that fetch fails. There SHALL be no user-facing season input in the connect/refresh flow.
+
+#### Scenario: Season fetched from Sleeper
+- **WHEN** an ESPN onboard/refresh is submitted and the Sleeper NFL-state endpoint responds
+- **THEN** the `season` sent with `POST /leagues` is the `season` value from that response
+
+#### Scenario: Season fetch falls back to the clock
+- **WHEN** an ESPN onboard/refresh is submitted and the Sleeper NFL-state fetch fails (non-OK, network error, or unparseable body)
+- **THEN** the `season` sent with `POST /leagues` is the clock-derived current fantasy season and the submit is not blocked
+
+#### Scenario: No season input shown
+- **WHEN** the ESPN connect/refresh form renders
+- **THEN** no "Latest Season" input is shown
 
 ### Requirement: Private ESPN credentials handling
 
@@ -68,13 +83,6 @@ The initial `getLeague` check SHALL route by outcome so a non-owner is not sent 
 - **WHEN** the lookup returns `403` for a Yahoo league
 - **THEN** the flow surfaces the same private-league invite-link guidance and does not ask for platform credentials
 
-### Requirement: Validate season input live
-The ESPN latest-season field SHALL accept any number of digits and surface an inline validation error live as the user types when the value is not exactly a 4-digit year.
-
-#### Scenario: Non-4-digit season
-- **WHEN** the user types a value that is not exactly a 4-digit year
-- **THEN** an inline error ("Latest season must be a 4-digit number (e.g. 2026)") appears live without blocking further input; a missing value shows "Latest season is required"
-
 ### Requirement: Surface errors inline and refresh cache on success
 A non-404 lookup failure or an exhausted submit failure SHALL be surfaced inline (no global banner), and a successful onboard/refresh SHALL clear the API cache before routing into the app. A `429` refresh cooldown response, and a `409` already-up-to-date / in-progress response, SHALL be surfaced as a benign notice using the backend `detail` message — a neutral title without a contact-support prompt — rather than a generic failure.
 
@@ -96,31 +104,26 @@ A non-404 lookup failure or an exhausted submit failure SHALL be surfaced inline
 
 ### Requirement: Opt an ESPN league into automatic refresh
 
-The ESPN connect/refresh form SHALL present an "enable automatic weekly refresh" checkbox with an
-explanatory tooltip, defaulting to off for a new onboard and prefilled from the league's current
-enrollment when refreshing an existing league. When checked, the form SHALL send the opt-in with the
-`POST /leagues` submit so the owner's cookies are stored for reuse; when unchecked, it SHALL send the
-opt-out. The tooltip SHALL explain that enabling stores the ESPN cookies encrypted to refresh the
-league weekly during the season and that cookies can expire, occasionally requiring re-entry.
+The ESPN landing-page onboard and the in-dashboard Refresh League dialog SHALL each present an "enable automatic weekly refresh" checkbox with an explanatory tooltip, defaulting to off. When checked, the opt-in SHALL be sent with the `POST /leagues` submit so the owner's cookies are stored for reuse; when unchecked, the opt-out SHALL be sent. The tooltip SHALL explain that enabling stores the ESPN cookies encrypted to refresh the league weekly during the season and that cookies can expire, occasionally requiring re-entry.
 
 #### Scenario: Checkbox present with tooltip
 
-- **WHEN** the ESPN connect/refresh form renders
+- **WHEN** the ESPN landing-page onboard or the Refresh League dialog renders
 - **THEN** an "enable automatic weekly refresh" checkbox is shown with a tooltip explaining that the
   ESPN cookies are stored encrypted, the league is refreshed weekly during the season, and cookies
   can expire and occasionally need re-entering
 
 #### Scenario: Default off for a new onboard
 
-- **WHEN** a user onboards a new ESPN league
+- **WHEN** a user onboards a new ESPN league on the landing page
 - **THEN** the automatic-refresh checkbox defaults to unchecked (opt-in)
 
 #### Scenario: Prefilled from current enrollment on refresh
 
-- **WHEN** the form opens for an existing ESPN league the caller owns
-- **THEN** the checkbox reflects that league's current `auto_refresh_enabled` state
+- **WHEN** the Refresh League dialog opens for an existing ESPN league the caller owns
+- **THEN** the checkbox reflects that league's current `auto_refresh_enabled` state — which, because the dialog is only shown for a not-enrolled league, defaults to unchecked
 
 #### Scenario: Choice sent with submit
 
-- **WHEN** the user submits the ESPN form
+- **WHEN** the user submits the ESPN landing-page onboard or the Refresh League dialog
 - **THEN** the automatic-refresh opt-in choice is included in the `POST /leagues` request body

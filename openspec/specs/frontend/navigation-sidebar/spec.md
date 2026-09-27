@@ -14,12 +14,29 @@ The sidebar SHALL link to all ten analytics pages and route to them correctly, w
 
 ### Requirement: Refresh the current league
 The sidebar SHALL expose a refresh action, shown only for ESPN leagues that are not enrolled in
-auto-refresh (`auto_refresh_enabled` false or absent), pre-filled and locked to the current league
-and surfacing the backend cooldown/up-to-date/in-progress responses.
+auto-refresh (`auto_refresh_enabled` false or absent). Triggering it SHALL open an in-dashboard
+dialog (not a separate page) in which the owner enters their ESPN `swid`/`espn_s2` cookies —
+autofilled by the Chrome extension when present, or entered manually with the same per-field
+tooltips — and the league is refreshed in place via `POST /leagues` (`requestType=REFRESH`). The
+dialog SHALL also present an "enable automatic weekly refresh" opt-in checkbox (defaulting off,
+since the action only appears for a not-yet-enrolled league); when checked, the opt-in SHALL be
+sent with the refresh so the league enrolls in scheduled auto-refresh. The season SHALL be derived
+automatically (frontend/connect-league) and never entered. ESPN cookies SHALL be transmitted once
+and cleared from the browser on success; the dialog SHALL surface the backend
+cooldown/up-to-date/in-progress (`429`/`409`) responses as a benign notice and refresh the
+dashboard's data on success.
 
 #### Scenario: Sidebar refresh
 - **WHEN** an ESPN league owner of a league not enrolled in auto-refresh triggers the sidebar refresh
-- **THEN** the form is pre-filled and locked to the currently-viewed league, and `429`/`409` cooldown/up-to-date/in-progress responses are surfaced
+- **THEN** an in-dashboard dialog opens with SWID/espn_s2 inputs (extension autofill or manual entry with tooltips) and an "enable automatic weekly refresh" opt-in defaulting off, the season is derived automatically, and on submit the league is refreshed in place without navigating to a separate connect/refresh page
+
+#### Scenario: Enroll in auto-refresh from the dialog
+- **WHEN** the owner checks "enable automatic weekly refresh" in the dialog and submits
+- **THEN** the opt-in is included in the `POST /leagues` refresh request so the league enrolls in scheduled auto-refresh
+
+#### Scenario: Refresh cooldown surfaced in the dialog
+- **WHEN** the refresh submit returns `429` (weekly cooldown) or `409` (already up to date / in progress)
+- **THEN** the dialog surfaces the backend message as a benign notice and does not treat it as a failure
 
 #### Scenario: No refresh for Sleeper
 - **WHEN** the sidebar renders for a Sleeper league

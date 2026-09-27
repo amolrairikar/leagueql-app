@@ -25,4 +25,4 @@
 
 - [x] 5.1 Run `pipenv run ruff check --fix .` and `pipenv run ruff format .`; verify no lint/format errors.
 - [x] 5.2 Run `openspec validate no-store-precomputed-views --strict`; verify the change is valid.
-- [ ] 5.3 Manually verify end-to-end: open a league, note a `/query` view (e.g. standings), then manually refresh (or delete + re-onboard); confirm the view updates immediately and DevTools shows `/query` responding with `Cache-Control: no-store` and re-fetching (200, not "from disk cache") after the mutation and on hard reload.
+- [x] 5.3 Manually verify end-to-end: open a league, note a `/query` view (e.g. standings), then manually refresh (or delete + re-onboard); confirm the view updates immediately and DevTools shows `/query` responding with `Cache-Control: no-store` and re-fetching (200, not "from disk cache") after the mutation and on hard reload.

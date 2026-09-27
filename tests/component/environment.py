@@ -61,7 +61,7 @@ _ENV = {
     # after the moto key is created).
     "YAHOO_CLIENT_ID_SSM_PARAM": "/leagueql/test/yahoo/client_id",
     "YAHOO_REDIRECT_URI": "https://api.test/leagues/yahoo/oauth/callback",
-    "YAHOO_CONNECT_RETURN_URL": "https://app.test/connect_league",
+    "YAHOO_CONNECT_RETURN_URL": "https://app.test/",
     "AWS_DEFAULT_REGION": REGION,
     "AWS_ACCESS_KEY_ID": "testing",
     "AWS_SECRET_ACCESS_KEY": "testing",

@@ -57,12 +57,14 @@ The API SHALL convert DynamoDB `Decimal` values to native JSON numbers before se
 - **WHEN** a stored view contains `Decimal` values
 - **THEN** they are converted to JSON-safe numbers in the response (`convert_decimals`)
 
-### Requirement: Cache successful query responses
-The API SHALL set `Cache-Control: private, max-age=300` on successful query responses.
+### Requirement: Query responses are not browser-cacheable
+The API SHALL set `Cache-Control: no-store` on successful query responses, so a browser never
+independently re-serves precomputed-view data captured before a league was deleted, re-onboarded,
+manually refreshed, or auto-refreshed.
 
 #### Scenario: Cache header set
 - **WHEN** a query succeeds
-- **THEN** the response sets `Cache-Control: private, max-age=300`
+- **THEN** the response sets `Cache-Control: no-store`
 
 ### Requirement: Member-gated ESPN queries
 The API SHALL gate ESPN queries to league members and leave Sleeper queries open to any authenticated caller.
