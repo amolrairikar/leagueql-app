@@ -1,5 +1,7 @@
 """Unit tests for the Yahoo OAuth API routes and the onboarding gate."""
 
+import json
+import re
 from unittest.mock import patch
 
 import pytest
@@ -183,9 +185,11 @@ class TestYahooCallbackEndpoint:
         assert "yahoo-oauth" in body
         assert '"yahooLinked": "1"' in body
         assert "45.l.678" in body
-        # The message targets the frontend origin exactly, never a wildcard.
-        assert "https://app.test" in body
-        assert "*" not in body.split("postMessage")[1].split(")")[0]
+        # The postMessage target origin is parsed and compared exactly (never a substring
+        # match, never a wildcard) — the message must target the frontend origin precisely.
+        target = re.search(r"postMessage\(msg,\s*(\"[^\"]*\")\)", body)
+        assert target is not None
+        assert json.loads(target.group(1)) == "https://app.test"
         # A nonce CSP is set on the response so only this inline script can run.
         csp = response.headers["content-security-policy"]
         assert "script-src 'nonce-" in csp
