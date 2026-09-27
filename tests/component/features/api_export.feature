@@ -13,7 +13,7 @@ Feature: Export league data API (backend/league-export)
     And league "canon-1" has team rows for seasons "2023,2024"
     When I GET "/leagues/100/export?platform=SLEEPER&seasons=2023,2024"
     Then the API responds with status 200
-    And the response has Cache-Control "private, max-age=300"
+    And the response has Cache-Control "no-store"
     And the export response has season "2024"
     And the export response has season "2023"
     And the export season "2024" has view "standings" with 2 row(s)

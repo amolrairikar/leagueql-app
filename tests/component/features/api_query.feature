@@ -10,7 +10,7 @@ Feature: Query precomputed views API (backend/query-precomputed-views)
     When I GET "/leagues/100/query?platform=SLEEPER&queryType=MATCHUPS"
     Then the API responds with status 200
     And the query response has 3 row(s)
-    And the response has Cache-Control "private, max-age=300"
+    And the response has Cache-Control "no-store"
 
   Scenario: A suffixed query returns a single item's data
     Given league "canon-1" has a "STANDINGS#2024" view with 2 row(s)

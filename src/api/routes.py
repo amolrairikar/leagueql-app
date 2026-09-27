@@ -879,7 +879,7 @@ def query_league(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No data found for the requested query",
         )
-    response.headers["Cache-Control"] = "private, max-age=300"
+    response.headers["Cache-Control"] = "no-store"
     return QueryResponse(data=convert_decimals(data))
 
 
@@ -964,7 +964,7 @@ def export_league(
             detail="No data found for the requested seasons",
         )
 
-    response.headers["Cache-Control"] = "private, max-age=300"
+    response.headers["Cache-Control"] = "no-store"
     return ExportResponse(data=convert_decimals(bundle))
 
 

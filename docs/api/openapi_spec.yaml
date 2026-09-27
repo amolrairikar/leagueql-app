@@ -1176,10 +1176,10 @@ components:
       description: Precomputed view returned successfully
       headers:
         Cache-Control:
-          description: Instructs the browser to cache the response privately for 5 minutes
+          description: Instructs the browser not to cache the response, so it is never re-served stale after a league is deleted, re-onboarded, or refreshed
           schema:
             type: string
-            example: "private, max-age=300"
+            example: "no-store"
       content:
         application/json:
           schema:
@@ -1189,10 +1189,10 @@ components:
       description: Processed views exported successfully
       headers:
         Cache-Control:
-          description: Instructs the browser to cache the response privately for 5 minutes
+          description: Instructs the browser not to cache the response, so it is never re-served stale after a league is deleted, re-onboarded, or refreshed
           schema:
             type: string
-            example: "private, max-age=300"
+            example: "no-store"
       content:
         application/json:
           schema:
