@@ -8,7 +8,7 @@ pull-based Streamlit admin dashboard (``scripts/admin_dashboard/``) with a push-
 nightly summary.
 
 The digest reports total leagues onboarded, active leagues (accessed in the last 14
-days), stale leagues (not refreshed in the last year), the ESPN-vs-SLEEPER split, and
+days), stale leagues (not refreshed in the last year), the ESPN / SLEEPER / YAHOO split, and
 new onboards in the last 24h / 7d / 30d.
 
 The webhook URL is a SecureString SSM parameter fetched at cold start by *name* (the
@@ -94,8 +94,11 @@ def _build_embed(items: list[dict], now: datetime) -> dict:
                 "inline": True,
             },
             {
-                "name": "ESPN / SLEEPER",
-                "value": f"{platforms['ESPN']:,} / {platforms['SLEEPER']:,}",
+                "name": "ESPN / SLEEPER / YAHOO",
+                "value": (
+                    f"{platforms['ESPN']:,} / {platforms['SLEEPER']:,} "
+                    f"/ {platforms['YAHOO']:,}"
+                ),
                 "inline": True,
             },
             {

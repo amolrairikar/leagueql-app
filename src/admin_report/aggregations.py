@@ -5,7 +5,7 @@ They operate on the ``METADATA`` items returned by a GSI3 query (partition key
 ``SK = "METADATA"``), read via the DynamoDB resource ``Table`` interface (native Python
 dicts). The relevant attributes are:
 
-  * ``platform``          — enum ``ESPN`` / ``SLEEPER`` (the onboarding platform)
+  * ``platform``          — enum ``ESPN`` / ``SLEEPER`` / ``YAHOO`` (the onboarding platform)
   * ``active_platform``   — enum, present only after an ESPN->Sleeper migration; when set
                             it is the authoritative current platform
   * ``onboarded_at``      — ISO 8601 (UTC) onboard timestamp (GSI3 sort key)
@@ -23,7 +23,7 @@ from datetime import datetime, timedelta, timezone
 _DEFAULT_ACTIVE_DAYS = 14
 # A league is stale when it has not been refreshed in over this many days.
 _DEFAULT_STALE_DAYS = 365
-_PLATFORMS = ("ESPN", "SLEEPER")
+_PLATFORMS = ("ESPN", "SLEEPER", "YAHOO")
 # New-onboard windows reported in the digest, in days.
 _NEW_ONBOARD_WINDOWS = {"24h": 1, "7d": 7, "30d": 30}
 
@@ -101,7 +101,7 @@ def count_stale(
 
 
 def platform_counts(items: list[dict]) -> dict[str, int]:
-    """Count leagues per effective platform, always including ESPN and SLEEPER keys."""
+    """Count leagues per effective platform, always including ESPN, SLEEPER, and YAHOO keys."""
     counts = {platform: 0 for platform in _PLATFORMS}
     for item in items:
         platform = effective_platform(item)
