@@ -177,7 +177,7 @@ class TestCountStale:
 
 class TestPlatformCounts:
     def test_empty_has_zero_defaults(self, agg):
-        assert agg.platform_counts([]) == {"ESPN": 0, "SLEEPER": 0}
+        assert agg.platform_counts([]) == {"ESPN": 0, "SLEEPER": 0, "YAHOO": 0}
 
     def test_counts_split_with_migration(self, agg):
         items = [
@@ -185,16 +185,17 @@ class TestPlatformCounts:
             {"platform": "ESPN"},
             {"platform": "SLEEPER"},
             {"platform": "ESPN", "active_platform": "SLEEPER"},  # migrated -> SLEEPER
+            {"platform": "YAHOO"},
         ]
-        assert agg.platform_counts(items) == {"ESPN": 2, "SLEEPER": 2}
+        assert agg.platform_counts(items) == {"ESPN": 2, "SLEEPER": 2, "YAHOO": 1}
 
     def test_none_or_unknown_platform_ignored(self, agg):
         items = [
             {},  # no platform -> None
-            {"platform": "YAHOO"},  # unknown -> ignored
+            {"platform": "FLEAFLICKER"},  # unknown -> ignored
             {"platform": "SLEEPER"},
         ]
-        assert agg.platform_counts(items) == {"ESPN": 0, "SLEEPER": 1}
+        assert agg.platform_counts(items) == {"ESPN": 0, "SLEEPER": 1, "YAHOO": 0}
 
 
 # ---- new_onboards -------------------------------------------------------------

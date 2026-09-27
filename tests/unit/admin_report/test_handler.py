@@ -37,6 +37,7 @@ class TestDigest:
                     "last_accessed_at": recent,
                 },
                 {"platform": "SLEEPER", "onboarded_at": old},  # never accessed
+                {"platform": "YAHOO", "onboarded_at": old},  # never accessed
             ]
         }
 
@@ -45,10 +46,10 @@ class TestDigest:
         embed = _posted_embed(mock_post)
         assert embed["color"] == handler._COLOR_GREEN
         fields = _fields(embed)
-        assert fields["Total onboarded"] == "3"
+        assert fields["Total onboarded"] == "4"
         assert fields[f"Active ({handler.ACTIVE_DAYS}d)"] == "2"
         assert fields["Stale (1y)"] == "0"  # all onboarded/refreshed within the year
-        assert fields["ESPN / SLEEPER"] == "1 / 2"
+        assert fields["ESPN / SLEEPER / YAHOO"] == "1 / 2 / 1"
         assert "Last 24h: **2**" in fields["New onboards"]
 
     def test_reports_stale_count(self, handler, mock_table, mock_post):
@@ -88,7 +89,7 @@ class TestDigest:
 
         fields = _fields(_posted_embed(mock_post))
         assert fields["Total onboarded"] == "0"
-        assert fields["ESPN / SLEEPER"] == "0 / 0"
+        assert fields["ESPN / SLEEPER / YAHOO"] == "0 / 0 / 0"
 
     def test_paginates_all_pages(self, handler, mock_table, mock_post):
         now = handler.datetime.now(handler.timezone.utc).isoformat()
