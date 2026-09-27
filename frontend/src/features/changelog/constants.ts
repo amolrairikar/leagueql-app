@@ -17,6 +17,18 @@ export interface ChangelogRelease {
 // Newest release first.
 export const CHANGELOG: ChangelogRelease[] = [
   {
+    version: '1.11.0',
+    date: 'September 26, 2026',
+    sections: [
+      {
+        title: 'Added',
+        items: [
+          "Matchup previews for the live week. On the Matchups page, this week's not-yet-played games now open a pre-game preview instead of an empty box score: each team's win probability and projected score, a projected-score distribution, a head-to-head comparison (win %, average points for and against, scoring consistency, and ceiling), recent form, a points-by-week trend against the league average, and each team's top scorers this season. Past weeks still open the full box score.",
+        ],
+      },
+    ],
+  },
+  {
     version: '1.10.0',
     date: 'September 25, 2026',
     sections: [

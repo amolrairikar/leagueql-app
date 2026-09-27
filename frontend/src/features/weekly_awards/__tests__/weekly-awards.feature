@@ -19,3 +19,9 @@ Feature: Weekly awards & superlatives (frontend/weekly-awards)
     Given the matchup data fails to load
     When I open the weekly awards
     Then I see "Failed to load weekly awards."
+
+  Scenario: An unplayed week hides the award cards but keeps the tally
+    Given a season with a played week and an unplayed current week
+    When I open the weekly awards on the unplayed week
+    Then I do not see "No award this week"
+    And I see the tally heading "Manager"
