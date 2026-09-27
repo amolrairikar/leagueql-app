@@ -100,7 +100,7 @@ def step_seed_yahoo_league(context, league_id, canonical, season, owner):
             "league_id": league_id,
         },
     )
-    # Yahoo auto-refresh is opt-in; this seeds an opted-in league.
+    # Seeds a Yahoo league with the (legacy) opt-in flag set; Yahoo refreshes regardless of it.
     put_item(
         context,
         {
@@ -128,7 +128,8 @@ def step_seed_yahoo_league_not_opted_in(context, league_id, canonical, season, o
             "league_id": league_id,
         },
     )
-    # METADATA has an owner but no auto_refresh_enabled flag → opt-in required, not refreshed.
+    # METADATA has an owner but no auto_refresh_enabled flag; Yahoo is still refreshed (the flag
+    # gates ESPN only).
     put_item(
         context,
         {

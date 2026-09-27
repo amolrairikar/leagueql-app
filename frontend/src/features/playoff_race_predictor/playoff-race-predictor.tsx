@@ -175,8 +175,16 @@ function PredictorTool({
         onSelect={setActiveWeekIdx}
       />
 
-      <div className="bg-card border border-border/50 rounded-lg overflow-hidden mb-5">
-        <div className="p-3 flex flex-col gap-2">
+      {/* On narrow screens, long owner/team names can exceed the viewport, so
+          the card scrolls horizontally instead of clipping them. Sizing the
+          rows at max-content (never narrower than the card) makes each row's
+          1fr tracks resolve equally to the widest team card, so every team
+          card stays the same width on mobile as on desktop. */}
+      <div
+        className="bg-card border border-border/50 rounded-lg overflow-x-auto mb-5"
+        data-testid="predictor-matchups"
+      >
+        <div className="p-3 flex w-max min-w-full flex-col gap-2">
           {activeWeek.matchups.map((m) => (
             <MatchupRow
               key={m.key}
@@ -466,7 +474,7 @@ function StandingsTable({
             <tr>
               <th
                 rowSpan={2}
-                className="text-left text-[10px] font-medium uppercase tracking-[0.07em] text-muted-foreground px-3.5 py-2 border-b border-border/50 bg-muted align-bottom"
+                className="text-left text-[10px] font-medium uppercase tracking-[0.07em] text-muted-foreground px-3.5 py-2 border-b border-border/50 bg-muted align-bottom sticky left-0 z-10 w-67 sm:w-auto"
               >
                 Seed · Owner
               </th>
@@ -566,7 +574,9 @@ function StandingRowView({
         <tr>
           <td colSpan={5 + numPlayoffTeams} className="p-0">
             <div className="flex items-center gap-2.5 px-3.5 py-1.5 border-y border-dashed border-primary">
-              <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-primary whitespace-nowrap">
+              {/* Pinned like the frozen Seed · Owner column so the label stays
+                  in view when the table scrolls horizontally. */}
+              <span className="sticky left-3.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-primary whitespace-nowrap">
                 Playoff line
               </span>
               <span className="flex-1 h-px bg-primary/35" />
@@ -580,11 +590,24 @@ function StandingRowView({
           row.inPlayoffs && 'bg-primary/10',
         )}
       >
-        <td className="px-3.5 py-2.5">
+        {/* Frozen when the table scrolls horizontally. A sticky cell needs an
+            opaque background, so playoff rows layer the row's translucent tint
+            over bg-card instead of letting scrolled cells show through. */}
+        <td
+          className={cn(
+            'px-3.5 py-2.5 sticky left-0 z-10 bg-card w-67 sm:w-auto',
+            row.inPlayoffs && 'bg-linear-to-r from-primary/10 to-primary/10',
+          )}
+        >
+          {/* On mobile the frozen column is a fixed w-67 (268px, matching
+              Season Standings' 38%-of-720px owner column) and long names wrap,
+              so it can't crowd out the scrolling columns. A max-width here
+              alone isn't enough: auto table layout hands the table's spare
+              width to this column too. Natural width from sm up. */}
           <div className="flex items-center gap-2">
             <span
               className={cn(
-                'w-5 text-right text-[12px] font-semibold',
+                'w-5 shrink-0 text-right text-[12px] font-semibold',
                 row.inPlayoffs ? 'text-primary' : 'text-muted-foreground',
               )}
             >
@@ -596,17 +619,17 @@ function StandingRowView({
               ownerUsername={row.team.ownerUsername}
               color={color}
             />
-            <div className="flex flex-col leading-tight min-w-0">
+            <div className="flex flex-col leading-tight min-w-0 [overflow-wrap:anywhere]">
               <span className="text-[13px] font-medium inline-flex items-center gap-1.5">
                 {row.team.ownerUsername}
                 {row.clinched && (
                   <Check
-                    className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400"
+                    className="w-3.5 h-3.5 shrink-0 text-emerald-600 dark:text-emerald-400"
                     aria-label="Clinched a playoff spot"
                   />
                 )}
               </span>
-              <span className="text-[11px] text-muted-foreground truncate">
+              <span className="text-[11px] text-muted-foreground sm:truncate">
                 {row.team.teamName || `Team ${row.team.ownerUsername}`}
               </span>
             </div>

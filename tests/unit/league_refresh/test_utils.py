@@ -306,7 +306,7 @@ class TestGetLeaguesToRefreshSleeper:
 
 
 class TestGetLeaguesToRefreshYahoo:
-    def test_resolves_owner_when_opted_in(self, league_refresh_utils):
+    def test_resolves_owner(self, league_refresh_utils):
         mock_ddb = MagicMock()
         mock_ddb.query.side_effect = _query_side_effect(
             yahoo_pages=[
@@ -343,8 +343,22 @@ class TestGetLeaguesToRefreshYahoo:
         assert get_key["PK"]["S"] == "LEAGUE#y-canon"
         assert get_key["SK"]["S"] == "METADATA"
 
-    def test_skips_yahoo_league_not_opted_in(self, league_refresh_utils):
-        # Owner present but auto_refresh_enabled absent/false → opt-in required, skipped.
+    @pytest.mark.parametrize(
+        "metadata",
+        [
+            {"owner_user_id": {"S": "user-42"}},
+            {
+                "owner_user_id": {"S": "user-42"},
+                "auto_refresh_enabled": {"BOOL": False},
+            },
+        ],
+        ids=["flag-absent", "flag-false"],
+    )
+    def test_selects_yahoo_league_regardless_of_opt_in(
+        self, league_refresh_utils, metadata
+    ):
+        # Yahoo is always refreshed: owner present but auto_refresh_enabled absent/false
+        # still selects the league (the flag gates ESPN only).
         mock_ddb = MagicMock()
         mock_ddb.query.side_effect = _query_side_effect(
             yahoo_pages=[
@@ -359,13 +373,21 @@ class TestGetLeaguesToRefreshYahoo:
                 }
             ]
         )
-        mock_ddb.get_item.return_value = {"Item": {"owner_user_id": {"S": "user-42"}}}
+        mock_ddb.get_item.return_value = {"Item": metadata}
         with patch.object(league_refresh_utils, "_dynamodb_client", mock_ddb):
             result = league_refresh_utils.get_leagues_to_refresh(2026)
-        assert result == []
+        assert result == [
+            {
+                "platform": "YAHOO",
+                "league_id": "y-2026",
+                "canonical_league_id": "y-canon",
+                "owner_user_id": "user-42",
+                "season": None,
+            }
+        ]
 
     def test_skips_yahoo_league_without_owner(self, league_refresh_utils):
-        # Opted in but no owner_user_id (e.g. system-onboarded) → skipped.
+        # No owner_user_id (e.g. system-onboarded) → skipped even when the flag is set.
         mock_ddb = MagicMock()
         mock_ddb.query.side_effect = _query_side_effect(
             yahoo_pages=[

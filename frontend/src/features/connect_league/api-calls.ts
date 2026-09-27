@@ -102,16 +102,15 @@ export interface YahooOnboardResponse {
  * Onboard a linked Yahoo league. A fresh onboard returns a `correlation_id` the caller polls
  * to completion (the same async flow as ESPN/Sleeper); an already-onboarded league returns a
  * null `data` so the caller can route straight into the existing league. A 403 means the link
- * was lost and the user must reconnect. No Yahoo tokens ever reach the browser.
+ * was lost and the user must reconnect. No Yahoo tokens ever reach the browser. No
+ * auto-refresh opt-in is sent: Yahoo leagues are always auto-refreshed in season.
  */
 export function onboardYahooLeague(
   leagueId: string,
-  autoRefresh = false,
 ): Promise<YahooOnboardResponse> {
   const params = new URLSearchParams({ requestType: 'ONBOARD' });
   return apiClient.post<YahooOnboardResponse>(`/leagues?${params}`, {
     leagueId,
     platform: 'YAHOO',
-    autoRefresh,
   });
 }

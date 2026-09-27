@@ -7,7 +7,6 @@ import { afterEach, expect, vi } from 'vitest';
 
 import LeagueQLLanding from '../landing-page';
 
-import { setYahooAutoRefreshPref } from '@/features/connect_league/yahoo-auto-refresh-pref';
 import {
   API,
   leagueMetadataError,
@@ -167,10 +166,7 @@ function swapLocationWithConnect() {
  * Interactions run on real timers; the click and the ensuing onboard/poll run under
  * fake timers so `pollForCompletion`'s 1s interval can be fast-forwarded.
  */
-async function connectYahooLeague(
-  leagueId: string,
-  opts: { autoRefresh?: boolean } = {},
-) {
+async function connectYahooLeague(leagueId: string) {
   const user = userEvent.setup();
   await renderRoute(
     <Routes>
@@ -182,9 +178,6 @@ async function connectYahooLeague(
   await user.click(await screen.findByRole('combobox'));
   await user.click(await screen.findByRole('option', { name: 'Yahoo' }));
   await user.type(screen.getByPlaceholderText('League ID'), leagueId);
-  if (opts.autoRefresh) {
-    await user.click(screen.getByRole('checkbox'));
-  }
   vi.useFakeTimers();
   await act(async () => {
     fireEvent.click(screen.getByRole('button', { name: /^connect$/i }));
@@ -815,17 +808,43 @@ defineFeature(feature, (test) => {
     });
   });
 
-  test('Enabling auto-refresh when connecting a linked Yahoo league sends the opt-in', ({
+  test('Selecting Yahoo shows no auto-refresh checkbox or note', ({
+    when,
+    then,
+    and,
+  }) => {
+    when('I select Yahoo on the landing page', async () => {
+      const user = userEvent.setup();
+      await renderRoute(
+        <Routes>
+          <Route path="/" element={<LeagueQLLanding />} />
+        </Routes>,
+        { route: '/' },
+      );
+      await user.click(await screen.findByRole('combobox'));
+      await user.click(await screen.findByRole('option', { name: 'Yahoo' }));
+    });
+    then('no auto-refresh checkbox is shown', () => {
+      expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    });
+    and('no auto-refresh note is shown', () => {
+      expect(
+        screen.queryByText(/refresh automatically/i),
+      ).not.toBeInTheDocument();
+    });
+  });
+
+  test('Connecting a linked Yahoo league sends no auto-refresh opt-in', ({
     given,
     when,
     then,
   }) => {
-    let capturedBody: { autoRefresh?: boolean } | null = null;
+    let capturedBody: Record<string, unknown> | null = null;
     given('onboarding a linked Yahoo league completes successfully', () => {
       server.use(
         getLeagueOk,
         http.post(`${API}/leagues`, async ({ request }) => {
-          capturedBody = (await request.json()) as { autoRefresh?: boolean };
+          capturedBody = (await request.json()) as Record<string, unknown>;
           return HttpResponse.json(
             {
               detail: 'Successfully triggered onboarding',
@@ -838,13 +857,15 @@ defineFeature(feature, (test) => {
       );
     });
     when(
-      /^I connect a Yahoo league "(.*)" with auto-refresh enabled$/,
+      /^I connect a Yahoo league "(.*)" from the landing page$/,
       async (leagueId) => {
-        await connectYahooLeague(leagueId, { autoRefresh: true });
+        await connectYahooLeague(leagueId);
       },
     );
-    then('the Yahoo onboard request included auto-refresh', () => {
-      expect(capturedBody?.autoRefresh).toBe(true);
+    then('the Yahoo onboard request carried no auto-refresh opt-in', () => {
+      expect(capturedBody).not.toBeNull();
+      expect(capturedBody).toMatchObject({ platform: 'YAHOO' });
+      expect(capturedBody).not.toHaveProperty('autoRefresh');
     });
   });
 
@@ -888,18 +909,17 @@ defineFeature(feature, (test) => {
     });
   });
 
-  test('The auto-refresh opt-in chosen before the redirect is applied on return', ({
+  test('Returning from Yahoo sends no auto-refresh opt-in', ({
     given,
-    and,
     when,
     then,
   }) => {
-    let capturedBody: { autoRefresh?: boolean } | null = null;
+    let capturedBody: Record<string, unknown> | null = null;
     given('onboarding a linked Yahoo league completes successfully', () => {
       server.use(
         getLeagueOk,
         http.post(`${API}/leagues`, async ({ request }) => {
-          capturedBody = (await request.json()) as { autoRefresh?: boolean };
+          capturedBody = (await request.json()) as Record<string, unknown>;
           return HttpResponse.json(
             {
               detail: 'Successfully triggered onboarding',
@@ -911,19 +931,16 @@ defineFeature(feature, (test) => {
         jobStatus('COMPLETED'),
       );
     });
-    and('the Yahoo auto-refresh opt-in was stashed before the redirect', () => {
-      // The opt-in is chosen before the consent redirect and stashed in sessionStorage;
-      // the return leg consumes it (takeYahooAutoRefreshPref) and applies it on onboard.
-      setYahooAutoRefreshPref(true);
-    });
     when(
       /^I return from Yahoo to the landing page with a linked account for league "(.*)"$/,
       async (leagueId) => {
         await returnFromYahoo({ yahooLinked: '1', leagueId });
       },
     );
-    then('the Yahoo onboard request included auto-refresh', () => {
-      expect(capturedBody?.autoRefresh).toBe(true);
+    then('the Yahoo onboard request carried no auto-refresh opt-in', () => {
+      expect(capturedBody).not.toBeNull();
+      expect(capturedBody).toMatchObject({ platform: 'YAHOO' });
+      expect(capturedBody).not.toHaveProperty('autoRefresh');
     });
   });
 

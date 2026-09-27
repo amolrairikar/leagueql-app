@@ -67,11 +67,20 @@ The preview SHALL chart each team's points scored per week alongside the league 
 
 ### Requirement: Top scorers
 The preview SHALL show each team's top scoring players this season, aggregated from the team's
-matchup starters.
+matchup starters. On narrow (mobile) viewports the two teams' lists SHALL be stacked vertically,
+the left team's above the right team's; on wider viewports they SHALL be shown side by side.
 
 #### Scenario: Top players per team
 - **WHEN** the preview is shown for teams with played games
 - **THEN** each team's top scoring players for the season are listed with their position and points
+
+#### Scenario: Stacked on mobile
+- **WHEN** the preview is shown on a viewport narrower than the `sm` breakpoint
+- **THEN** the left team's top scorers are listed above the right team's, separated by a divider
+
+#### Scenario: Side by side on wider screens
+- **WHEN** the preview is shown on a viewport at or above the `sm` breakpoint
+- **THEN** the two teams' top scorers are shown in two side-by-side columns
 
 ### Requirement: Render gracefully with insufficient data
 The preview SHALL render without error when there is little or no scoring history (for example the
@@ -82,3 +91,29 @@ content rather than failing.
 - **WHEN** the preview is shown for a week in which neither team has any played games this season
 - **THEN** the preview renders with a 50/50 win probability and empty trend/form/top-scorer
   sections, without error
+
+### Requirement: Horizontally scroll overflowing preview content
+Each matchup preview card SHALL scroll horizontally on its own when its content (for example a
+long team or owner name on a narrow mobile viewport) is wider than the available width, rather
+than clipping the content off-screen. A card whose content fits SHALL stay at the available width,
+so one overflowing card never widens the others. The Recent Form card's usernames SHALL wrap so
+that card always fits the viewport. The preview's close button SHALL remain visible and fixed to
+the preview's corner, outside every scrolling card.
+
+#### Scenario: Long names scroll instead of clipping
+- **WHEN** the preview is shown on a viewport too narrow to fit a team's long owner or team name
+- **THEN** the card containing that name can be scrolled horizontally to reveal the full name, and
+  no text is clipped
+
+#### Scenario: Cards that fit do not scroll or widen
+- **WHEN** one preview card overflows the available width but another card's content fits
+- **THEN** only the overflowing card scrolls; the fitting card stays at the available width with no
+  horizontal scrollbar or extra whitespace
+
+#### Scenario: Recent form fits on mobile
+- **WHEN** the preview is shown on a narrow viewport for a team with a long username
+- **THEN** the Recent Form card wraps the username and fits the viewport without scrolling
+
+#### Scenario: Close button stays reachable
+- **WHEN** a preview card is horizontally scrollable
+- **THEN** the close button remains visible at the preview's corner and is not scrolled or clipped

@@ -1,5 +1,5 @@
 import { Info, TriangleAlert } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { Kbd } from '@/components/ui/kbd';
 import { ESPN_EXTENSION_URL } from '@/lib/espn-extension';
@@ -17,7 +17,11 @@ const TOC_ITEMS = [
   { id: 'yahoo-leagues', label: 'Yahoo', level: 2 },
   { id: 'yahoo-form-fields', label: 'Form Fields', level: 3 },
   { id: 'league-ownership', label: 'League Ownership', level: 2 },
-  { id: 'joining-an-espn-league', label: 'Joining an ESPN League', level: 3 },
+  {
+    id: 'joining-a-private-league',
+    label: 'Joining a Private League',
+    level: 3,
+  },
   { id: 'transferring-ownership', label: 'Transferring Ownership', level: 3 },
   { id: 'navigation', label: 'Navigation', level: 1 },
   { id: 'managing-your-league', label: 'Managing Your League', level: 1 },
@@ -182,26 +186,41 @@ function DocTable({
 
 export default function InstructionsPage() {
   const [activeId, setActiveId] = useState('getting-started');
+  const contentRef = useRef<HTMLDivElement>(null);
   const tocItems = TOC_ITEMS;
 
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
 
+  // Scroll-spy against the content's own scroll container (not the viewport):
+  // the active section is the last heading scrolled to within the
+  // `scroll-mt-24` (96px) jump offset, so a TOC click highlights its target.
+  // At the bottom of the content, the last heading in view wins, since
+  // trailing short sections can never scroll up to the offset.
   useEffect(() => {
-    const headings = document.querySelectorAll('[data-section]');
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            setActiveId(entry.target.id);
-          }
-        }
-      },
-      { rootMargin: '-10% 0% -80% 0%' },
+    const container = contentRef.current;
+    if (!container) return;
+    const headings = Array.from(
+      container.querySelectorAll<HTMLElement>('[data-section]'),
     );
-    headings.forEach((h) => observer.observe(h));
-    return () => observer.disconnect();
+    const updateActive = () => {
+      const containerRect = container.getBoundingClientRect();
+      const atBottom =
+        container.scrollTop + container.clientHeight >=
+        container.scrollHeight - 2;
+      let current = headings[0]?.id;
+      for (const heading of headings) {
+        const top = heading.getBoundingClientRect().top - containerRect.top;
+        const threshold = atBottom ? container.clientHeight : 100;
+        if (top <= threshold) current = heading.id;
+        else break;
+      }
+      if (current) setActiveId(current);
+    };
+    updateActive();
+    container.addEventListener('scroll', updateActive, { passive: true });
+    return () => container.removeEventListener('scroll', updateActive);
   }, []);
 
   return (
@@ -241,7 +260,10 @@ export default function InstructionsPage() {
           </nav>
         </aside>
 
-        <div className="min-w-0 flex-1 space-y-12 overflow-y-auto overscroll-contain pb-8 pr-2">
+        <div
+          ref={contentRef}
+          className="min-w-0 flex-1 space-y-12 overflow-y-auto overscroll-contain pb-8 pr-2"
+        >
           {/* Getting Started */}
           <section>
             <SectionHeading id="getting-started">
@@ -253,8 +275,8 @@ export default function InstructionsPage() {
               reflect the web experience, your experience may vary on mobile
               devices. Currently, only redraft leagues are compatible with all
               functionalities of the app. If you have a dynasty league, you may
-              find the two draft pages do not make much sense as the
-              calculations are designed to evaluate redraft leagues.
+              find the draft pages do not make much sense as the calculations
+              are designed to evaluate redraft leagues.
             </p>
 
             <div className="space-y-6">
@@ -273,9 +295,9 @@ export default function InstructionsPage() {
                 <SubHeading id="authentication">Authentication</SubHeading>
                 <p className="text-muted-foreground leading-relaxed">
                   LeagueQL uses Clerk for authentication. From the landing page,
-                  click <Kbd>Connect Your League</Kbd> and use Clerk&apos;s form
-                  to sign in using your email and password or Google login.
-                  After signing in you are returned to the landing page.
+                  click <Kbd>Connect</Kbd> and use Clerk&apos;s form to sign in
+                  using your email and password or Google login. After signing
+                  in you are returned to the landing page.
                 </p>
               </div>
             </div>
@@ -297,16 +319,13 @@ export default function InstructionsPage() {
                 <SubHeading id="espn-leagues">ESPN</SubHeading>
                 <p className="text-muted-foreground leading-relaxed mb-4">
                   If the league has already been onboarded, you are taken
-                  straight to your dashboard (or, if you are not yet a member of
-                  the private league, told how to join it with an invite link
-                  from the owner; see{' '}
-                  <SectionLink id="joining-an-espn-league">
-                    Joining an ESPN League
+                  straight to your dashboard (or, for private leagues, told how
+                  to join it with an invite link from the owner; see{' '}
+                  <SectionLink id="joining-a-private-league">
+                    Joining a Private League
                   </SectionLink>{' '}
-                  ). If not, SWID and ESPN S2 fields appear right on the landing
-                  page next to the league ID, and onboarding completes there —
-                  no separate form. The season is detected automatically, so you
-                  never enter it.
+                  ). If not, SWID and ESPN S2 fields appear on the landing page
+                  for you to enter and connect your league.
                 </p>
                 <SubSubHeading id="espn-form-fields">Fields</SubSubHeading>
                 <div className="mb-4">
@@ -375,8 +394,7 @@ export default function InstructionsPage() {
                     in another browser tab.
                   </li>
                   <li>
-                    Wherever the SWID and ESPN S2 fields appear — connecting on
-                    the landing page, or the Refresh League dialog — click{' '}
+                    Wherever the SWID and ESPN S2 fields appear, click{' '}
                     <Kbd>Autofill cookies from ESPN</Kbd>. The extension reads
                     your ESPN cookies and populates the SWID and ESPN S2 fields
                     automatically.
@@ -385,8 +403,9 @@ export default function InstructionsPage() {
                 <Callout>
                   The extension reads only your <code>espn_s2</code> and{' '}
                   <code>SWID</code> cookies from ESPN and passes them to the
-                  form; it never stores or transmits them anywhere else. If it
-                  is not installed, you can fill the cookie fields in manually.
+                  form; it never stores or transmits them anywhere else. If you
+                  do not wish to install it, you can fill those fields in
+                  manually.
                 </Callout>
               </div>
 
@@ -426,7 +445,7 @@ export default function InstructionsPage() {
                 </p>
                 <ol className="list-decimal pl-6 space-y-2 text-muted-foreground leading-relaxed mb-4">
                   <li>
-                    You are sent to Yahoo&apos;s consent screen. Sign in to
+                    A pop-up opens with Yahoo&apos;s consent screen. Sign in to
                     Yahoo (if you are not already) and click{' '}
                     <strong className="text-foreground">Agree</strong> to let
                     LeagueQL read your fantasy data.
@@ -447,8 +466,8 @@ export default function InstructionsPage() {
                 </Callout>
                 <p className="text-muted-foreground leading-relaxed mt-4 mb-3">
                   LeagueQL never sees your Yahoo password. It stores only the
-                  OAuth tokens Yahoo issues, encrypted at rest, and uses them
-                  solely to fetch and refresh your league data. See the{' '}
+                  OAuth tokens Yahoo issues, encrypted, and uses them solely to
+                  fetch and refresh your league data. See the{' '}
                   <a
                     href="/privacy"
                     className="text-primary underline underline-offset-2 hover:text-primary/80"
@@ -491,7 +510,7 @@ export default function InstructionsPage() {
                   <li>Turn Off Auto-Refresh (ESPN only)</li>
                   <li>Migrate League</li>
                   <li>Transfer Ownership</li>
-                  <li>Invite Leaguemates (ESPN only)</li>
+                  <li>Invite Leaguemates (ESPN and Yahoo only)</li>
                   <li>Delete League</li>
                 </ul>
                 <p className="text-muted-foreground leading-relaxed mb-8">
@@ -501,13 +520,15 @@ export default function InstructionsPage() {
 
                 <div className="space-y-8">
                   <div>
-                    <SubSubHeading id="joining-an-espn-league">
-                      Joining an ESPN League
+                    <SubSubHeading id="joining-a-private-league">
+                      Joining a Private League
                     </SubSubHeading>
                     <p className="text-muted-foreground leading-relaxed mb-3">
-                      Because ESPN league data is private, leaguemates other
-                      than the owner join through an invite link the owner
-                      shares.
+                      ESPN and Yahoo league data is private, so leaguemates
+                      other than the owner join through an invite link the owner
+                      shares. The steps are the same on both platforms. Sleeper
+                      leagues are public, so anyone can view them without an
+                      invite.
                     </p>
                     <ul className="list-disc pl-6 space-y-2 text-muted-foreground leading-relaxed mb-3">
                       <li>
@@ -656,18 +677,16 @@ export default function InstructionsPage() {
                 </p>
                 <MinorHeading>New Season Refreshes</MinorHeading>
                 <p className="text-muted-foreground leading-relaxed mb-4">
-                  If refreshing for a new season, enter your new Sleeper league
-                  ID as if you are connecting a new league (Sleeper league IDs
-                  change each season). The system automatically associates the
-                  new league ID with your existing history.
+                  When a new fantasy season starts, enter your new Sleeper
+                  league ID on the landing page as if you are connecting a new
+                  league (Sleeper league IDs change each season). The app
+                  automatically associates the new league ID with your existing
+                  history.
                 </p>
                 <SubSubHeading id="refresh-yahoo">Yahoo</SubSubHeading>
                 <p className="text-muted-foreground leading-relaxed">
-                  Yahoo auto-refresh is opt-in. Enable it when you connect your
-                  Yahoo league. Because your Yahoo connection is already stored,
-                  no extra credentials are needed — LeagueQL refreshes your
-                  league automatically each week during the season using your
-                  existing Yahoo authorization.
+                  Yahoo leagues refresh automatically each week during the
+                  season using your connected Yahoo account.
                 </p>
               </div>
 
@@ -677,7 +696,7 @@ export default function InstructionsPage() {
                 </SubHeading>
                 <p className="text-muted-foreground leading-relaxed mb-4">
                   Use this when your league moves from one platform to another
-                  in the offseason (ESPN → Sleeper or Sleeper → ESPN). Click
+                  in the offseason. Click
                   <Kbd>Migrate League</Kbd> in the sidebar settings.
                 </p>
                 <p className="text-muted-foreground mb-3">

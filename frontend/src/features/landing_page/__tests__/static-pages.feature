@@ -40,6 +40,11 @@ Feature: Public pages render (frontend/landing-page, frontend/instructions-docs,
     When I open the docs page
     Then I see "Yahoo redirects you back to LeagueQL, where onboarding resumes automatically. You will see the same progress bar as a Sleeper connect while we pull your league history, then land on your dashboard."
 
+  Scenario: The docs page says Yahoo leagues refresh automatically
+    When I open the docs page
+    Then I see "Yahoo leagues refresh automatically each week during the season using your connected Yahoo account."
+    And I do not see "Yahoo auto-refresh is opt-in"
+
   Scenario: The privacy policy discloses Yahoo OAuth token storage
     When I open the privacy page
     Then I see "Yahoo OAuth Tokens (for Yahoo leagues):"

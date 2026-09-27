@@ -15,9 +15,10 @@ DYNAMODB_TABLE_NAME = os.environ["DYNAMODB_TABLE_NAME"]
 ONBOARDER_LAMBDA_NAME = os.environ["ONBOARDER_LAMBDA_NAME"]
 
 # Platforms auto-refreshed on a schedule. Sleeper is public (no owner) and always refreshed.
-# Yahoo and ESPN are credentialed and opt-in: a league is selected only when its METADATA has
-# auto_refresh_enabled=true. Yahoo needs the owner's OAuth token and ESPN the owner's stored
-# cookies, which the onboarder obtains from the owner_user_id passed in the invoke.
+# Yahoo and ESPN are credentialed: Yahoo needs the owner's OAuth token and ESPN the owner's stored
+# cookies, which the onboarder obtains from the owner_user_id passed in the invoke. Yahoo is always
+# refreshed (its token is stored as part of connecting); ESPN is opt-in and selected only when its
+# METADATA has auto_refresh_enabled=true (opting in is what stores the cookies).
 SLEEPER = "SLEEPER"
 YAHOO = "YAHOO"
 ESPN = "ESPN"
@@ -148,8 +149,8 @@ def _get_refresh_metadata(canonical_league_id: str) -> tuple[str | None, bool]:
     Read ``owner_user_id`` and ``auto_refresh_enabled`` from a canonical league's METADATA item.
 
     Yahoo and ESPN refreshes need the owner's Clerk id so the onboarder can obtain that owner's
-    stored credentials (Yahoo OAuth token or ESPN cookies), and are opt-in via
-    ``auto_refresh_enabled``; both fields live only on METADATA (not on the LEAGUE_LOOKUP items
+    stored credentials (Yahoo OAuth token or ESPN cookies), and ESPN is opt-in via
+    ``auto_refresh_enabled`` (ignored for Yahoo); both fields live only on METADATA (not on the LEAGUE_LOOKUP items
     GSI2 returns). Returns ``(owner_user_id_or_None, auto_refresh_enabled)``.
     """
     response = _dynamodb_client.get_item(
@@ -172,9 +173,10 @@ def get_leagues_to_refresh(current_season: int) -> list[dict]:
 
     For each platform, queries DynamoDB GSI2, de-duplicates to the most recent onboarded season
     per canonical league, and skips leagues whose newest season is behind ``current_season``.
-    Sleeper additionally polls pending renewals. Yahoo and ESPN are credentialed and opt-in: each
-    resolves its ``owner_user_id`` and ``auto_refresh_enabled`` from METADATA and is skipped when
-    the owner is absent or the league has not opted into automatic refresh. ESPN dispatches carry
+    Sleeper additionally polls pending renewals. Yahoo and ESPN are credentialed: each resolves its
+    ``owner_user_id`` and ``auto_refresh_enabled`` from METADATA and is skipped when the owner is
+    absent. Yahoo is always refreshed otherwise; ESPN is opt-in and additionally skipped when the
+    league has not opted into automatic refresh. ESPN dispatches carry
     ``season = current_season`` (its client requires a latest season) and no cookies — the
     onboarder fetches the owner's stored cookies.
 
@@ -209,12 +211,12 @@ def get_leagues_to_refresh(current_season: int) -> list[dict]:
                         "season": None,
                     }
                 )
-        else:  # YAHOO or ESPN — credentialed, opt-in
+        else:  # YAHOO (always) or ESPN (opt-in) — credentialed, need an owner
             for league in leagues:
                 owner_user_id, auto_refresh_enabled = _get_refresh_metadata(
                     league["canonical_league_id"]
                 )
-                if not auto_refresh_enabled:
+                if platform == ESPN and not auto_refresh_enabled:
                     logger.info(
                         "Skipping %s league %s: auto-refresh not enabled",
                         platform,

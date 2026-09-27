@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { defineFeature, loadFeature } from 'jest-cucumber';
 
 import type { MatchupItem } from '@/components/api/types';
@@ -329,6 +329,99 @@ defineFeature(feature, (test) => {
     });
     and(/^I do not see "(.*)"$/, (text) => {
       expect(screen.queryByText(text)).toBeNull();
+    });
+  });
+  test("The week's matchups scroll horizontally with equal-width team cards", ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    inProgress(given);
+    when('I open the playoff bracket page', open);
+    then(
+      "the week's matchups are in a horizontally scrollable container",
+      async () => {
+        const card = await screen.findByTestId('predictor-matchups');
+        // jsdom has no layout, so assert the classes that enable it.
+        expect(card.className).toContain('overflow-x-auto');
+        expect(within(card).getAllByText('vs').length).toBeGreaterThan(0);
+      },
+    );
+    and(
+      'the matchup rows are sized so every team card is the same width',
+      () => {
+        // max-content sizing (floored at the card width) makes each row's 1fr
+        // team tracks resolve to the widest card instead of content-sized ones.
+        const rows = screen.getByTestId('predictor-matchups')
+          .firstElementChild as HTMLElement;
+        const classes = rows.className.split(' ');
+        expect(classes).toContain('w-max');
+        expect(classes).toContain('min-w-full');
+      },
+    );
+  });
+  test('The projected standings freeze the Seed · Owner column', ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    inProgress(given);
+    when('I open the playoff bracket page', open);
+    // jsdom has no layout, so assert the sticky/background classes.
+    const classesOf = (el: Element) => el.className.split(' ');
+    const ownerCells = () =>
+      Array.from(
+        screen
+          .getByText('Seed · Owner')
+          .closest('table')!
+          .querySelectorAll('tbody tr td:first-child:not([colspan])'),
+      );
+    then(
+      "the Seed · Owner header and every row's owner cell are frozen with an opaque background",
+      async () => {
+        const header = classesOf(await screen.findByText('Seed · Owner'));
+        expect(header).toEqual(
+          expect.arrayContaining(['sticky', 'left-0', 'bg-muted']),
+        );
+        const cells = ownerCells();
+        expect(cells).toHaveLength(4);
+        for (const cell of cells) {
+          expect(classesOf(cell)).toEqual(
+            expect.arrayContaining(['sticky', 'left-0', 'bg-card']),
+          );
+        }
+      },
+    );
+    and(
+      /^the frozen cells of the (\d+) playoff rows keep the playoff highlight$/,
+      (count: string) => {
+        const tinted = ownerCells().filter((c) =>
+          classesOf(c).includes('from-primary/10'),
+        );
+        expect(tinted).toHaveLength(Number(count));
+      },
+    );
+    and('the playoff line label is frozen', () => {
+      expect(classesOf(screen.getByText('Playoff line'))).toContain('sticky');
+    });
+    and('the frozen column is capped on mobile with wrapping names', () => {
+      const cells = [screen.getByText('Seed · Owner'), ...ownerCells()];
+      for (const cell of cells) {
+        expect(classesOf(cell)).toEqual(
+          expect.arrayContaining(['w-67', 'sm:w-auto']),
+        );
+      }
+      const names = screen
+        .getAllByText(/^Team /)
+        .filter((el) => el.closest('table'));
+      expect(names.length).toBeGreaterThan(0);
+      for (const name of names) {
+        expect(classesOf(name.parentElement!)).toContain(
+          '[overflow-wrap:anywhere]',
+        );
+      }
     });
   });
 });

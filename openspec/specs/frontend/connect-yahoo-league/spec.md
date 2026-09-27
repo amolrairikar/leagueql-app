@@ -13,22 +13,34 @@ The Connect-League platform selector SHALL offer Yahoo alongside ESPN and Sleepe
 - **THEN** the form shows the league-id field and a Connect button, and no ESPN cookie fields
 
 ### Requirement: Start the OAuth link on Connect
-Clicking Connect with Yahoo selected SHALL first attempt an in-place onboard (`POST /leagues` with `platform=YAHOO`) for the entered league id, and SHALL redirect the browser to Yahoo's consent screen only when the caller has no stored Yahoo link. An already-linked caller onboards in place (no consent redirect); a `403` "link first" response triggers the OAuth redirect via `GET /leagues/yahoo/oauth/authorize`.
+Clicking Connect with Yahoo selected SHALL first attempt an in-place onboard (`POST /leagues` with `platform=YAHOO`) for the entered league id, and SHALL start Yahoo's consent handshake only when the caller has no stored Yahoo link. An already-linked caller onboards in place (no consent step); a `403` "link first" response starts the OAuth step via `GET /leagues/yahoo/oauth/authorize`. The consent screen SHALL open in a popup window (`display=popup`) so the connect page stays mounted with its progress indicator, and the app SHALL resume onboarding inline when the popup reports a successful link — falling back to a full-page redirect to the consent URL only when the browser blocks the popup.
 
 #### Scenario: Already linked — no consent redirect
 - **WHEN** the user selects Yahoo, enters a league id, and clicks Connect while already linked (the onboard call returns a `correlation_id` or a `200` null-`data` "already onboarded")
-- **THEN** the league is onboarded in place and the browser is NOT redirected to Yahoo's consent screen
+- **THEN** the league is onboarded in place and no Yahoo consent window is opened
 
 #### Scenario: Begin consent
 - **WHEN** the user selects Yahoo, enters a league id, and clicks Connect while not linked (the onboard call returns `403` "Link your Yahoo account first")
-- **THEN** the form calls `GET /leagues/yahoo/oauth/authorize?leagueId=<id>` and navigates the browser (full-page redirect) to the returned Yahoo consent URL
+- **THEN** the form calls `GET /leagues/yahoo/oauth/authorize?leagueId=<id>&display=popup` and opens the returned Yahoo consent URL in a popup window, leaving the connect page mounted with its progress indicator
+
+#### Scenario: Resume inline after the popup links
+- **WHEN** the consent popup reports a successful link back to the opener (a linked result with a league id)
+- **THEN** the app resumes onboarding for that league id inline (no page reload) and closes/stops tracking the popup
+
+#### Scenario: Popup blocked falls back to redirect
+- **WHEN** the browser blocks the consent popup (the window fails to open)
+- **THEN** the app falls back to a full-page redirect to the Yahoo consent URL, and onboarding resumes on the return leg
+
+#### Scenario: Consent popup dismissed
+- **WHEN** the user closes the consent popup without completing the link
+- **THEN** the form stops the loading state and shows an inline retry message rather than waiting indefinitely
 
 ### Requirement: Handle the OAuth return
-Returning to `/connect_league?platform=YAHOO&yahooLinked=1` SHALL show the linked state and resume onboarding for the carried league id; a league that is already onboarded SHALL route the user into their existing league dashboard rather than erroring; a declined/failed link SHALL show an inline retry alert.
+Returning to the landing page `/?platform=YAHOO&yahooLinked=1` SHALL resume onboarding inline for the carried league id with the same hero progress UI used for ESPN/Sleeper; a league that is already onboarded SHALL route the user into their existing league dashboard rather than erroring; a declined/failed link SHALL show an inline retry alert with Yahoo preselected. The standalone `/connect_league` return page is retired: `/connect_league` SHALL forward any Yahoo return params to the landing page.
 
 #### Scenario: Linked return
-- **WHEN** the browser returns to `/connect_league` with `platform=YAHOO&yahooLinked=1` and a `leagueId`
-- **THEN** the page shows a "Yahoo account connected" state and resumes onboarding for that league id via `POST /leagues` with `platform=YAHOO`
+- **WHEN** the browser returns to the landing page `/` with `platform=YAHOO&yahooLinked=1` and a `leagueId`
+- **THEN** the landing page auto-opens the connect form with Yahoo selected and resumes onboarding for that league id inline via `POST /leagues` with `platform=YAHOO`, polling the job to completion with the hero progress bar and navigating to `/home` on success
 
 #### Scenario: Already onboarded league
 - **WHEN** the return resumes onboarding and `POST /leagues` responds `200 "League already onboarded"` with a null `data` (the league already exists)
@@ -36,7 +48,11 @@ Returning to `/connect_league?platform=YAHOO&yahooLinked=1` SHALL show the linke
 
 #### Scenario: Declined or failed
 - **WHEN** the return carries `yahooLinked=0`
-- **THEN** an inline retry alert ("Yahoo linking was cancelled or failed — try again") is shown with a retry CTA (no global banner, no hard error page)
+- **THEN** an inline retry alert ("Yahoo linking was cancelled or failed — try again") is shown on the landing page with Yahoo preselected (no global banner, no separate error page)
+
+#### Scenario: Return params forwarded from the retired page
+- **WHEN** the browser lands on `/connect_league` with `platform=YAHOO` return params (e.g. an in-flight OAuth callback or a stale bookmark)
+- **THEN** it redirects to the landing page `/` preserving the `platform`, `yahooLinked`, and `leagueId` params so the inline return handling runs
 
 ### Requirement: Onboard a linked Yahoo league
 Onboarding a linked Yahoo league SHALL start onboarding via `POST /leagues` with `platform=YAHOO`
@@ -65,26 +81,20 @@ Yahoo access/refresh tokens SHALL never appear in the frontend, and connecting (
 - **WHEN** the app is in demo mode
 - **THEN** connecting a Yahoo league and the OAuth redirect are disabled/redirected
 
-### Requirement: Opt a Yahoo league into automatic refresh
+### Requirement: No auto-refresh opt-in for Yahoo leagues
 
-The Yahoo connect flow SHALL present an "enable automatic weekly refresh" checkbox with an
-explanatory tooltip, defaulting to off, and SHALL record the owner's choice so the scheduled refresh
-honors it. Because Yahoo authorization is already stored, enabling only sets the league's opt-in; no
-additional credentials are collected. The tooltip SHALL explain that enabling refreshes the league
-weekly during the season using the existing Yahoo authorization.
+The Yahoo connect flow SHALL NOT offer an automatic-refresh opt-in (Yahoo leagues are always
+refreshed in season; backend/scheduled-league-auto-refresh), and the Yahoo onboard request SHALL NOT
+carry an automatic-refresh opt-in choice. The connect form SHALL NOT show any auto-refresh checkbox
+or note when Yahoo is selected.
 
-#### Scenario: Checkbox present with tooltip
+#### Scenario: No opt-in shown for Yahoo
 
-- **WHEN** the Yahoo connect flow renders for a league the caller will own
-- **THEN** an "enable automatic weekly refresh" checkbox is shown with a tooltip explaining the league
-  is refreshed weekly during the season using the stored Yahoo authorization
+- **WHEN** the user selects Yahoo in the connect form
+- **THEN** no "enable automatic weekly refresh" checkbox and no auto-refresh note are shown
 
-#### Scenario: Default off (opt-in)
+#### Scenario: No opt-in sent with the Yahoo onboard
 
-- **WHEN** the Yahoo connect flow renders
-- **THEN** the automatic-refresh checkbox defaults to unchecked
-
-#### Scenario: Choice recorded
-
-- **WHEN** the user completes the Yahoo connect flow with the checkbox checked
-- **THEN** the league is recorded as opted into automatic refresh
+- **WHEN** the user connects a Yahoo league (in place, or after the consent popup/redirect)
+- **THEN** the `POST /leagues` request for that Yahoo league carries no automatic-refresh opt-in
+  choice

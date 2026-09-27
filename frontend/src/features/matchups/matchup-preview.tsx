@@ -184,11 +184,15 @@ function RecentForm({
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-2 text-[12px] font-semibold">
         <span
-          className="h-2.5 w-2.5 rounded-full"
+          className="h-2.5 w-2.5 shrink-0 rounded-full"
           style={{ background: side.color }}
         />
-        {side.ownerUsername}
-        <span className="ml-auto text-[11px] font-medium text-muted-foreground">
+        {/* overflow-wrap:anywhere lets a long unbroken username wrap, so it
+            never forces this card wider than the viewport. */}
+        <span className="min-w-0 [overflow-wrap:anywhere]">
+          {side.ownerUsername}
+        </span>
+        <span className="ml-auto shrink-0 text-[11px] font-medium text-muted-foreground">
           {streakLabel(stats.recentForm)}
         </span>
       </div>
@@ -242,7 +246,8 @@ function TopScorersColumn({
       className={
         align === 'left'
           ? 'sm:border-r sm:border-border/50 sm:pr-3.5'
-          : 'sm:pl-3.5'
+          : // Stacked below the left team on mobile, so divide with a top rule.
+            'mt-3.5 border-t border-border/50 pt-3.5 sm:mt-0 sm:border-t-0 sm:pt-0 sm:pl-3.5'
       }
     >
       <div className="mb-2.5 flex items-center gap-1.5">
@@ -523,10 +528,15 @@ const Card = ({
   children: ReactNode;
   className?: string;
 }) => (
+  // Each card scrolls horizontally on its own: on narrow screens a long
+  // team/owner name widens only the card it's in (min-w-fit grows the content
+  // to its min-content width only when that exceeds the card), so cards whose
+  // content fits stay at the viewport width.
   <div
-    className={`bg-card border border-border/50 rounded-lg overflow-hidden ${className}`}
+    className={`bg-card border border-border/50 rounded-lg overflow-x-auto ${className}`}
+    data-testid="matchup-preview-card"
   >
-    {children}
+    <div className="min-w-fit">{children}</div>
   </div>
 );
 
@@ -677,7 +687,7 @@ export function MatchupPreviewCard({
       {/* Top scorers */}
       <Card className="p-4">
         <SecLabel>Top scorers this season</SecLabel>
-        <div className="grid grid-cols-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2">
           <TopScorersColumn side={left} stats={data.teamA} align="left" />
           <TopScorersColumn side={right} stats={data.teamB} align="right" />
         </div>

@@ -58,3 +58,17 @@ Feature: Playoff-race predictor (frontend/playoff-race-predictor)
     When I open the playoff bracket page
     Then I see "Playoff Picture"
     And I do not see "Clinching scenarios"
+
+  Scenario: The week's matchups scroll horizontally with equal-width team cards
+    Given an in-progress season with unplayed regular-season games
+    When I open the playoff bracket page
+    Then the week's matchups are in a horizontally scrollable container
+    And the matchup rows are sized so every team card is the same width
+
+  Scenario: The projected standings freeze the Seed · Owner column
+    Given an in-progress season with unplayed regular-season games
+    When I open the playoff bracket page
+    Then the Seed · Owner header and every row's owner cell are frozen with an opaque background
+    And the frozen cells of the 2 playoff rows keep the playoff highlight
+    And the playoff line label is frozen
+    And the frozen column is capped on mobile with wrapping names

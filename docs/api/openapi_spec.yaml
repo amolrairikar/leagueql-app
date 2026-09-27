@@ -232,7 +232,8 @@ paths:
       summary: Enable or disable scheduled auto-refresh for a league
       description: >
         Sets the league's scheduled auto-refresh opt-in (backend/scheduled-league-auto-refresh).
-        Owner only. Disabling the owner's last opted-in ESPN league also removes their stored ESPN
+        The flag gates scheduled refresh for ESPN leagues only; Sleeper and Yahoo leagues are
+        always auto-refreshed, so it has no effect for them. Owner only. Disabling the owner's last opted-in ESPN league also removes their stored ESPN
         cookies (backend/espn-credential-storage). Enabling ESPN auto-refresh still requires fresh
         cookies, supplied through the onboard/refresh form; this endpoint only records the flag.
       operationId: setAutoRefresh
@@ -945,8 +946,9 @@ components:
           type: boolean
           description: >
             Whether the league is opted into scheduled auto-refresh
-            (backend/scheduled-league-auto-refresh). Drives the connect-form checkbox prefill and
-            the sidebar auto-refresh toggle. False (default) on leagues onboarded before opt-in.
+            (backend/scheduled-league-auto-refresh). Meaningful for ESPN only (Sleeper and Yahoo
+            are always auto-refreshed). Drives the connect-form checkbox prefill and the sidebar
+            auto-refresh toggle. False (default) on leagues onboarded before opt-in.
           example: false
 
     APIResponse:
@@ -1004,10 +1006,11 @@ components:
           type: boolean
           default: false
           description: >
-            Opt this ESPN/Yahoo league into scheduled auto-refresh
-            (backend/scheduled-league-auto-refresh). When true for ESPN, the supplied cookies are
-            stored encrypted at rest so the weekly refresh can reuse them; when false they are not
-            stored. Ignored for Sleeper (always auto-refreshed).
+            Opt this ESPN league into scheduled auto-refresh
+            (backend/scheduled-league-auto-refresh). When true, the supplied cookies are stored
+            encrypted at rest so the weekly refresh can reuse them; when false they are not
+            stored. Has no effect for Sleeper or Yahoo (always auto-refreshed); the frontend omits
+            it for Yahoo.
           example: false
         s2:
           type: string
