@@ -181,6 +181,7 @@ class TestYahooCallbackEndpoint:
         assert response.status_code == 200
         assert response.headers["content-type"].startswith("text/html")
         body = response.text
+        assert "Yahoo sign-in complete!" in body
         assert "postMessage" in body
         assert "yahoo-oauth" in body
         assert '"yahooLinked": "1"' in body
@@ -190,6 +191,13 @@ class TestYahooCallbackEndpoint:
         target = re.search(r"postMessage\(msg,\s*(\"[^\"]*\")\)", body)
         assert target is not None
         assert json.loads(target.group(1)) == "https://app.test"
+        # The inline script must be syntactically balanced: an unbalanced brace/paren is a JS
+        # syntax error that silently breaks the whole popup (no postMessage, no auto-close),
+        # which the substring checks above would not catch.
+        script = re.search(r"<script[^>]*>(.*?)</script>", body, re.DOTALL)
+        assert script is not None
+        assert script.group(1).count("{") == script.group(1).count("}")
+        assert script.group(1).count("(") == script.group(1).count(")")
         # A nonce CSP is set on the response so only this inline script can run.
         csp = response.headers["content-security-policy"]
         assert "script-src 'nonce-" in csp
@@ -218,8 +226,13 @@ class TestYahooCallbackEndpoint:
         assert response.status_code == 200
         assert response.headers["content-type"].startswith("text/html")
         body = response.text
+        assert "was not completed" in body
         assert "postMessage" in body
         assert '"yahooLinked": "0"' in body
+        script = re.search(r"<script[^>]*>(.*?)</script>", body, re.DOTALL)
+        assert script is not None
+        assert script.group(1).count("{") == script.group(1).count("}")
+        assert script.group(1).count("(") == script.group(1).count(")")
         assert "script-src 'nonce-" in response.headers["content-security-policy"]
 
     def test_declined_error_redirects_not_linked(self, client):

@@ -1299,17 +1299,26 @@ def yahoo_callback(
             # Embed as a JS literal; escape ``<`` so a value can't break out of </script>.
             return json.dumps(value).replace("<", "\\u003c")
 
+        # Server-controlled (driven by ``linked``, not user input), so safe to embed directly.
+        heading = (
+            "Yahoo sign-in complete! You can close this window."
+            if linked
+            else "Yahoo sign-in was not completed. You can close this window."
+        )
+        # The IIFE opens one brace with ``(function(){`` (``{{`` is an escaped literal ``{``),
+        # so it must close with a single ``}`` before ``)();`` — an extra ``}`` is a JS syntax
+        # error that stops the whole script (no postMessage, no auto-close).
         html = (
             '<!doctype html><html><head><meta charset="utf-8">'
-            "<title>Finishing Yahoo sign-in…</title></head><body>"
-            "<p>Finishing Yahoo sign-in — you can close this window.</p>"
+            "<title>Yahoo sign-in</title></head><body>"
+            f"<p>{heading}</p>"
             f'<script nonce="{nonce}">(function(){{'
             f"var msg={_js(message)};"
             "try{if(window.opener&&!window.opener.closed){"
             f"window.opener.postMessage(msg,{_js(target_origin)});"
             "window.close();return;}}catch(e){}"
             f"window.location.replace({_js(redirect_url)});"
-            "}})();</script></body></html>"
+            "})();</script></body></html>"
         )
         return HTMLResponse(
             content=html,
