@@ -112,4 +112,42 @@ defineFeature(feature, (test) => {
       expect(await screen.findByText(text)).toBeInTheDocument();
     });
   });
+
+  test('An unplayed week hides the award cards but keeps the tally', ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    given('a season with a played week and an unplayed current week', () => {
+      server.use(
+        leagueQuery({
+          MATCHUPS: [
+            game('1', 'T1', 120, 'T2', 90),
+            game('2', 'T1', 0, 'T2', 0),
+          ],
+        }),
+      );
+    });
+    when('I open the weekly awards on the unplayed week', async () => {
+      await renderRoute(
+        <WeeklyAwards
+          leagueId="100"
+          platform="SLEEPER"
+          season="2024"
+          selectedWeek={2}
+        />,
+        { league },
+      );
+    });
+    then(/^I do not see "(.*)"$/, async (text) => {
+      // The tally renders (confirms data loaded); the card-only "No award this
+      // week" text is absent because the award cards are hidden for week 2.
+      expect(await screen.findByText('Manager')).toBeInTheDocument();
+      expect(screen.queryByText(text)).toBeNull();
+    });
+    and(/^I see the tally heading "(.*)"$/, async (text) => {
+      expect((await screen.findAllByText(text)).length).toBeGreaterThan(0);
+    });
+  });
 });

@@ -10,6 +10,11 @@ import {
   type PlayerStat,
   type WeeklyStandingItem,
 } from '@/features/matchups/api-calls';
+import { buildMatchupPreview } from '@/features/matchups/compute-preview';
+import {
+  MatchupPreviewCard,
+  type PreviewSide,
+} from '@/features/matchups/matchup-preview';
 import SeasonSelect from '@/features/season_select/season-select';
 import WeeklyAwards from '@/features/weekly_awards/weekly-awards';
 import { avatarColor } from '@/lib/color-constants';
@@ -40,7 +45,22 @@ interface ProcessedMatchup {
 interface MatchupsData {
   weeks: number[];
   matchupsByWeek: Record<number, ProcessedMatchup[]>;
+  /** The season's raw matchups, used to build a live-week matchup preview. */
+  allMatchups: MatchupItem[];
 }
+
+/** A live (in-progress) matchup has no scores yet — both sides are exactly 0. */
+function isLiveMatchup(m: ProcessedMatchup): boolean {
+  return m.teamA.score === 0 && m.teamB.score === 0;
+}
+
+const toPreviewSide = (t: TeamSide): PreviewSide => ({
+  teamId: t.teamId,
+  teamName: t.teamName,
+  ownerUsername: t.ownerUsername,
+  teamLogo: t.teamLogo,
+  color: t.avatarColor,
+});
 
 type MatchupsResult = Result<MatchupsData>;
 
@@ -119,11 +139,26 @@ function processData(
     });
   }
 
-  const weeks = Object.keys(byWeek)
+  const allWeeks = Object.keys(byWeek)
     .map(Number)
     .sort((a, b) => a - b);
 
-  return { weeks, matchupsByWeek: byWeek };
+  // An in-progress season persists its future/unplayed weeks as `0-0`
+  // placeholder matchups (see isUnplayedMatchup). A week is "played" once any of
+  // its matchups has a non-zero score. Show every played week plus the current
+  // week — the earliest unplayed week — and hide the future placeholder weeks
+  // beyond it. A completed season has no unplayed weeks, so all weeks show.
+  const isWeekPlayed = (w: number) =>
+    (byWeek[w] ?? []).some((m) => m.teamA.score !== 0 || m.teamB.score !== 0);
+  const unplayedWeeks = allWeeks.filter((w) => !isWeekPlayed(w));
+  const currentWeek =
+    unplayedWeeks.length > 0 ? Math.min(...unplayedWeeks) : null;
+  const weeks =
+    currentWeek === null
+      ? allWeeks
+      : allWeeks.filter((w) => isWeekPlayed(w) || w === currentWeek);
+
+  return { weeks, matchupsByWeek: byWeek, allMatchups: matchups };
 }
 
 function playoffBadgeColors(playoffRound: string): {
@@ -240,7 +275,9 @@ function MatchupCard({
 
         <div className="mt-2.5 flex justify-end">
           <span className="text-[11px] font-medium text-primary">
-            View box score →
+            {isLiveMatchup(matchup)
+              ? 'View matchup preview →'
+              : 'View box score →'}
           </span>
         </div>
       </div>
@@ -362,7 +399,7 @@ function MatchupsContent({
     );
   }
 
-  const { weeks, matchupsByWeek } = result.data;
+  const { weeks, matchupsByWeek, allMatchups } = result.data;
   const latestWeek = weeks[weeks.length - 1] ?? 1;
   const activeWeek = selectedWeek ?? latestWeek;
   const currentMatchups = matchupsByWeek[activeWeek] ?? [];
@@ -370,6 +407,7 @@ function MatchupsContent({
     selectedMatchup !== null
       ? (currentMatchups[selectedMatchup] ?? null)
       : null;
+  const activeIsLive = activeMatchup !== null && isLiveMatchup(activeMatchup);
 
   return (
     <div>
@@ -408,16 +446,56 @@ function MatchupsContent({
         </div>
       )}
 
-      {/* Box score */}
-      {activeMatchup !== null && (
-        <BoxScoreView
-          key={selectedMatchup}
-          matchup={activeMatchup}
-          onClose={() => onMatchupSelect(null)}
-          platform={platform}
-          season={season}
-        />
-      )}
+      {/* Live-week matchups open a preview; played matchups open the box score. */}
+      {activeMatchup !== null &&
+        (activeIsLive ? (
+          <MatchupPreviewView
+            key={selectedMatchup}
+            matchup={activeMatchup}
+            matchups={allMatchups}
+            onClose={() => onMatchupSelect(null)}
+          />
+        ) : (
+          <BoxScoreView
+            key={selectedMatchup}
+            matchup={activeMatchup}
+            onClose={() => onMatchupSelect(null)}
+            platform={platform}
+            season={season}
+          />
+        ))}
+    </div>
+  );
+}
+
+function MatchupPreviewView({
+  matchup,
+  matchups,
+  onClose,
+}: {
+  matchup: ProcessedMatchup;
+  matchups: MatchupItem[];
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, []);
+
+  const data = useMemo(
+    () =>
+      buildMatchupPreview(matchups, matchup.teamA.teamId, matchup.teamB.teamId),
+    [matchups, matchup.teamA.teamId, matchup.teamB.teamId],
+  );
+
+  return (
+    <div className="mt-8" ref={ref}>
+      <MatchupPreviewCard
+        left={toPreviewSide(matchup.teamA)}
+        right={toPreviewSide(matchup.teamB)}
+        data={data}
+        onClose={onClose}
+      />
     </div>
   );
 }
@@ -443,7 +521,7 @@ export default function Matchups() {
           )
         : Promise.resolve({
             ok: true as const,
-            data: { weeks: [], matchupsByWeek: {} },
+            data: { weeks: [], matchupsByWeek: {}, allMatchups: [] },
           }),
     [leagueId, platform, selectedSeason],
   );

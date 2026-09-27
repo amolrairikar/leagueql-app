@@ -228,7 +228,7 @@ const STD_EPSILON = 1e-9;
  * deviation (the pooled within-team residual std). Returns `undefined` when no games
  * have been played, so callers fall back to an even 50/50 matchup weight.
  */
-function buildTeamScoring(
+export function buildTeamScoring(
   playedRegMatchups: MatchupItem[],
 ): Map<string, TeamScoring> | undefined {
   const scores = new Map<string, number[]>();
@@ -300,13 +300,15 @@ function normalCdf(z: number): number {
  * independent, the margin is `N(meanA - meanB, sqrt(stdA^2 + stdB^2))`, so the win
  * probability is `Φ((meanA - meanB) / σ_diff)`. Falls back to a coin flip (0.5) when
  * scoring data is missing for either team or the combined spread is ~0.
+ *
+ * Shared with the matchup preview (frontend/matchup-previews); pass a scoring map
+ * from {@link buildTeamScoring}.
  */
-function matchupWinProb(
-  model: PredictorModel,
+export function winProbability(
+  scoring: Map<string, TeamScoring> | undefined,
   aId: string,
   bId: string,
 ): number {
-  const scoring = model.teamScoring;
   if (!scoring) return 0.5;
   const a = scoring.get(aId);
   const b = scoring.get(bId);
@@ -454,7 +456,7 @@ function mulberry32(seed: number): () => number {
  * Each team's probability (0..1) of finishing in *each* seed across every possible
  * result of the remaining *unpicked* matchups. Each such matchup is weighted by the
  * probability that each team wins it, derived from the two teams' scoring
- * distributions via {@link matchupWinProb} (a coin flip when scoring history is
+ * distributions via {@link winProbability} (a coin flip when scoring history is
  * absent). The returned map gives every team a length-`n` array where index `k` is
  * the chance of finishing in seed `k + 1` (1-based). Picked matchups are locked to
  * their result (folded into the fixed base), so the distribution is conditional on
@@ -500,7 +502,7 @@ export function computeSeedProbabilities(
       } else {
         freeA.push(index.get(pm.teamAId)!);
         freeB.push(index.get(pm.teamBId)!);
-        pFree.push(matchupWinProb(model, pm.teamAId, pm.teamBId));
+        pFree.push(winProbability(model.teamScoring, pm.teamAId, pm.teamBId));
       }
     }
   }

@@ -239,13 +239,19 @@ function WeeklyAwardsInner({
     );
   }
 
+  // An unplayed/in-progress week (all `0-0`) yields no computable awards, so the
+  // per-week award cards are hidden; the week-to-date tally still renders.
+  const hasAwards = Object.keys(data.awards).length > 0;
+
   return (
     <div className="flex flex-col gap-6">
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {AWARD_DEFS.map((d) => (
-          <AwardCard key={d.key} award={d} winner={data.awards[d.key]} />
-        ))}
-      </div>
+      {hasAwards && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {AWARD_DEFS.map((d) => (
+            <AwardCard key={d.key} award={d} winner={data.awards[d.key]} />
+          ))}
+        </div>
+      )}
       <TallyTable tally={data.tally} longestStreak={data.longestStreak} />
     </div>
   );
