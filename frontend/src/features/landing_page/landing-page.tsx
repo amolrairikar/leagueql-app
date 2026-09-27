@@ -33,10 +33,6 @@ import {
 import { EspnCredentialFields } from '@/features/connect_league/espn-credential-fields';
 import { pollForCompletion } from '@/features/connect_league/poll';
 import {
-  setYahooAutoRefreshPref,
-  takeYahooAutoRefreshPref,
-} from '@/features/connect_league/yahoo-auto-refresh-pref';
-import {
   FEATURES,
   HOW_STEPS,
   PLATFORMS,
@@ -161,9 +157,6 @@ export default function LeagueQLLanding() {
   const [authOpen, setAuthOpen] = useState(false);
   const [showConnectForm, setShowConnectForm] = useState(false);
   const [platform, setPlatform] = useState<Platform>('ESPN');
-  // Yahoo auto-refresh opt-in (default off). Persisted before the OAuth redirect so the
-  // return leg can apply it (backend/scheduled-league-auto-refresh).
-  const [yahooAutoRefresh, setYahooAutoRefresh] = useState(false);
   // ESPN private-league credentials entered inline (only sent when onboarding a
   // not-yet-onboarded league). Held in React state, never browser storage;
   // cleared on success (frontend/landing-page, backend/espn-credential-storage).
@@ -248,8 +241,8 @@ export default function LeagueQLLanding() {
         setError(null);
         setLoading(true);
         // Reuse the already-linked onboard chain (poll + progress bar + revoked-link
-        // recovery), passing the opt-in stashed before the redirect.
-        await handleYahooConnect(returnedLeagueId, takeYahooAutoRefreshPref());
+        // recovery).
+        await handleYahooConnect(returnedLeagueId);
       } else {
         // A declined/failed link (yahooLinked=0), or a linked return with no league id
         // to resume — show the inline retry alert with Yahoo preselected.
@@ -365,7 +358,7 @@ export default function LeagueQLLanding() {
         // A cross-origin popup may already be closing — ignore.
       }
       if (msg.yahooLinked === '1' && msg.leagueId) {
-        void handleYahooConnect(msg.leagueId, takeYahooAutoRefreshPref());
+        void handleYahooConnect(msg.leagueId);
       } else {
         setError('Yahoo linking was cancelled or failed — try again.');
         setLoading(false);
@@ -398,18 +391,10 @@ export default function LeagueQLLanding() {
   // Yahoo's consent screen. POST /leagues 403-gates unlinked callers before any side
   // effect (backend/yahoo-oauth), so we optimistically onboard first and treat a 403 as
   // "not linked". A revoked-token link passes the gate but fails the job with YAHOO_AUTH.
-  async function handleYahooConnect(
-    trimmedId: string,
-    autoRefreshOverride?: boolean,
-  ) {
-    // The normal submit path uses the checkbox state; the OAuth return path passes the
-    // opt-in it stashed before the redirect (takeYahooAutoRefreshPref) as an override.
-    const autoRefresh = autoRefreshOverride ?? yahooAutoRefresh;
-    // Persist the opt-in so it survives a possible OAuth redirect, and apply it on the
-    // direct (already-linked) onboard below.
-    setYahooAutoRefreshPref(autoRefresh);
+  // No auto-refresh opt-in: Yahoo leagues are always auto-refreshed in season.
+  async function handleYahooConnect(trimmedId: string) {
     try {
-      const onboardResult = await onboardYahooLeague(trimmedId, autoRefresh);
+      const onboardResult = await onboardYahooLeague(trimmedId);
       // A fresh onboard returns a correlation_id to poll; an already-onboarded league
       // returns 200 with null `data`, which skips straight to routing the user in.
       if (onboardResult.data) {
@@ -771,38 +756,6 @@ export default function LeagueQLLanding() {
                       </Tooltip>
                     </TooltipProvider>
                   </div>
-                </div>
-              </div>
-            )}
-            {platform === 'YAHOO' && (
-              <div className="mt-3 flex items-center gap-2 text-left">
-                <input
-                  id="yahoo-auto-refresh"
-                  type="checkbox"
-                  className="size-4 cursor-pointer accent-primary"
-                  checked={yahooAutoRefresh}
-                  onChange={(e) => setYahooAutoRefresh(e.target.checked)}
-                  disabled={loading}
-                />
-                <div className="flex items-center gap-1.5">
-                  <Label
-                    htmlFor="yahoo-auto-refresh"
-                    className="cursor-pointer"
-                  >
-                    Enable automatic weekly refresh
-                  </Label>
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <HelpCircle className="size-3.5 text-muted-foreground cursor-help" />
-                      </TooltipTrigger>
-                      <TooltipContent side="right" className="max-w-64">
-                        When enabled, LeagueQL refreshes your league
-                        automatically each week during the season using your
-                        saved Yahoo connection.
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
                 </div>
               </div>
             )}

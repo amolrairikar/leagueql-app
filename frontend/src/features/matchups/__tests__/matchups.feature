@@ -24,6 +24,21 @@ Feature: Matchups and box scores (frontend/matchups)
     And I open the live-week matchup
     Then I see the matchup preview
 
+  Scenario: Each matchup preview card scrolls horizontally on its own
+    Given an in-progress season with a played week 1 and a live week 2
+    When I open the matchups page
+    And I open the live-week matchup
+    Then each preview card is its own horizontally scrollable container
+    And the recent form usernames can wrap to fit the card
+    And the close button sits outside every scrollable card
+
+  Scenario: Top scorers stack by team on mobile
+    Given an in-progress season with a played week 1 and a live week 2
+    When I open the matchups page
+    And I open the live-week matchup
+    Then the top scorers are a single column on mobile and two columns from the sm breakpoint
+    And "Alice"'s top scorers are listed above "Bob"'s
+
   Scenario: A played matchup opens the box score
     Given an in-progress season with a played week 1 and a live week 2
     When I open the matchups page

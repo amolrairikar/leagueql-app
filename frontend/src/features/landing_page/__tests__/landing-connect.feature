@@ -80,10 +80,15 @@ Feature: Landing page connect routing (frontend/landing-page / frontend/connect-
     When I connect a Yahoo league "45.l.678" from the landing page
     Then the Yahoo consent popup is opened for that league
 
-  Scenario: Enabling auto-refresh when connecting a linked Yahoo league sends the opt-in
+  Scenario: Selecting Yahoo shows no auto-refresh checkbox or note
+    When I select Yahoo on the landing page
+    Then no auto-refresh checkbox is shown
+    And no auto-refresh note is shown
+
+  Scenario: Connecting a linked Yahoo league sends no auto-refresh opt-in
     Given onboarding a linked Yahoo league completes successfully
-    When I connect a Yahoo league "45.l.678" with auto-refresh enabled
-    Then the Yahoo onboard request included auto-refresh
+    When I connect a Yahoo league "45.l.678" from the landing page
+    Then the Yahoo onboard request carried no auto-refresh opt-in
 
   Scenario: Returning from Yahoo with a linked account resumes onboarding inline
     Given onboarding a linked Yahoo league completes successfully
@@ -95,11 +100,10 @@ Feature: Landing page connect routing (frontend/landing-page / frontend/connect-
     When I return from Yahoo to the landing page with a linked account for league "45.l.678"
     Then I land on the league home page
 
-  Scenario: The auto-refresh opt-in chosen before the redirect is applied on return
+  Scenario: Returning from Yahoo sends no auto-refresh opt-in
     Given onboarding a linked Yahoo league completes successfully
-    And the Yahoo auto-refresh opt-in was stashed before the redirect
     When I return from Yahoo to the landing page with a linked account for league "45.l.678"
-    Then the Yahoo onboard request included auto-refresh
+    Then the Yahoo onboard request carried no auto-refresh opt-in
 
   Scenario: A revoked Yahoo link surfaced on return reopens the consent popup
     Given onboarding a linked Yahoo league fails with a re-link signal and the authorize endpoint returns a consent URL

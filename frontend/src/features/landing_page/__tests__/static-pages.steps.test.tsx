@@ -162,6 +162,24 @@ defineFeature(feature, (test) => {
     });
   });
 
+  test('The docs page says Yahoo leagues refresh automatically', ({
+    when,
+    then,
+    and,
+  }) => {
+    when('I open the docs page', async () => {
+      await renderRoute(<InstructionsPage />, { route: '/docs' });
+    });
+    then(/^I see "(.*)"$/, async (text) => {
+      expect(
+        (await screen.findAllByText(text, { exact: false })).length,
+      ).toBeGreaterThan(0);
+    });
+    and(/^I do not see "(.*)"$/, (text) => {
+      expect(screen.queryAllByText(text, { exact: false })).toHaveLength(0);
+    });
+  });
+
   test('The privacy policy discloses Yahoo OAuth token storage', ({
     when,
     then,
