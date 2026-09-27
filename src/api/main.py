@@ -217,12 +217,15 @@ SECURITY_HEADERS = {
 async def _security_headers(request, call_next):
     """Stamp security headers on every response and default caching to deny (backend/security-headers).
 
-    Uses ``setdefault`` so route-level intent always wins: ``GET
-    /leagues/{id}/query`` keeps its ``private, max-age=300`` opt-in, while every
-    other response — including secret-bearing ones like ``POST
-    /leagues/{id}/transfer-token`` — falls back to ``no-store``. This default-deny
-    is the outcome of the Cache-Control audit: authenticated/private responses are
-    never cacheable unless a route deliberately opts in.
+    Uses ``setdefault`` so route-level intent always wins: a route that sets its
+    own ``Cache-Control`` keeps it, while every response that does not — including
+    secret-bearing ones like ``POST /leagues/{id}/transfer-token`` — falls back to
+    ``no-store``. No route currently opts into a browser-cacheable value (the
+    league-data reads ``GET /leagues/{id}/query`` and ``/export`` set their own
+    ``no-store`` so a stale response is never re-served after a
+    delete/re-onboard/refresh); ``setdefault`` still lets a future route override.
+    This default-deny is the outcome of the Cache-Control audit: authenticated/private
+    responses are never cacheable unless a route deliberately opts in.
     """
     response = await call_next(request)
     for header, value in SECURITY_HEADERS.items():

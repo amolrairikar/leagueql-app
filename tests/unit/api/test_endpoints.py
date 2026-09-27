@@ -47,15 +47,17 @@ class TestSecurityHeaders:
         response = client.get("/health")
         assert response.headers["cache-control"] == "no-store"
 
-    def test_default_does_not_override_route_cache_control(
-        self, client, mock_table, league_lookup_item
-    ):
-        # The query route's private, max-age=300 opt-in must survive the default.
-        mock_table.get_item.return_value = {"Item": league_lookup_item}
-        mock_table.query.return_value = {"Items": [{"data": [{"a": 1}]}]}
-        response = client.get("/leagues/123/query?platform=SLEEPER&queryType=MATCHUPS")
+    def test_default_does_not_override_route_cache_control(self, client):
+        # A route that sets its own Cache-Control must have it preserved by the
+        # middleware's setdefault, not overwritten. No route opts into a
+        # browser-cacheable value anymore, so /feature-flags (which explicitly
+        # sets its own no-store) stands in as the route-set-its-own case.
+        from common import feature_flags
+
+        feature_flags._override_for_testing({})
+        response = client.get("/feature-flags")
         assert response.status_code == 200
-        assert response.headers["cache-control"] == "private, max-age=300"
+        assert response.headers["cache-control"] == "no-store"
 
 
 class TestFeatureFlagsEndpoint:
@@ -1117,7 +1119,7 @@ class TestQueryLeagueEndpoint:
         mock_table.get_item.return_value = {"Item": league_lookup_item}
         mock_table.query.return_value = {"Items": [{"data": [{"week": 1}]}]}
         response = client.get("/leagues/123/query?platform=SLEEPER&queryType=MATCHUPS")
-        assert response.headers["cache-control"] == "private, max-age=300"
+        assert response.headers["cache-control"] == "no-store"
 
     def test_boto_error_returns_500(
         self, client, mock_table, league_lookup_item, league_metadata_item
@@ -2314,7 +2316,7 @@ class TestExportLeagueEndpoint:
         mock_table.query.side_effect = _export_query([league_lookup_item], {})
         response = client.get("/leagues/123/export?platform=SLEEPER&seasons=2024")
         assert response.status_code == 200
-        assert response.headers["cache-control"] == "private, max-age=300"
+        assert response.headers["cache-control"] == "no-store"
 
     def test_omits_empty_data_views(
         self, client, mock_table, league_lookup_item, league_metadata_item
