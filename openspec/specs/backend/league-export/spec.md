@@ -69,11 +69,12 @@ season. Requested seasons that the league does not have SHALL NOT cause a `500`.
 - **WHEN** the export is requested for a league that has not been onboarded
 - **THEN** the API returns `404`
 
-### Requirement: Serialize numbers and cache the export response
+### Requirement: Serialize numbers and mark the export response non-cacheable
 The export SHALL convert DynamoDB `Decimal` values to JSON numbers before serializing, and SHALL
-set `Cache-Control: private, max-age=300` on a successful response.
+set `Cache-Control: no-store` on a successful response so a browser never re-serves an export
+captured before a league was deleted, re-onboarded, refreshed, or auto-refreshed.
 
 #### Scenario: Decimals converted and cache header set
 - **WHEN** an export request succeeds
 - **THEN** numeric values are returned as JSON numbers and the response sets
-  `Cache-Control: private, max-age=300`
+  `Cache-Control: no-store`

@@ -141,7 +141,7 @@ export default function JoinInvitePage() {
           )}
           <Button
             className="cursor-pointer"
-            onClick={() => void navigate('/connect_league')}
+            onClick={() => void navigate('/?connect=true')}
           >
             View another league
           </Button>

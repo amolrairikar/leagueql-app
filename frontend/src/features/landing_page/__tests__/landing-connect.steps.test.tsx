@@ -7,7 +7,12 @@ import { afterEach, expect, vi } from 'vitest';
 
 import LeagueQLLanding from '../landing-page';
 
-import { API, leagueMetadataError, server } from '@/test/msw/server';
+import {
+  API,
+  leagueMetadataError,
+  server,
+  sleeperNflState,
+} from '@/test/msw/server';
 import { renderRoute } from '@/test/render';
 
 const feature = loadFeature(
@@ -56,6 +61,25 @@ const getLeagueOk = http.get(`${API}/leagues/:id`, () =>
     data: { seasons: ['2024'], league_name: 'L', is_owner: true },
   }),
 );
+
+/**
+ * GET /leagues/:id returns 404 for the two pre-onboard lookups — the first Connect
+ * (which reveals the credential fields) and the second Connect (which onboards) —
+ * then 200 for the post-success read.
+ */
+function statefulGetLeague() {
+  let calls = 0;
+  return http.get(`${API}/leagues/:id`, () => {
+    calls += 1;
+    if (calls <= 2) {
+      return HttpResponse.json({ detail: 'League not found' }, { status: 404 });
+    }
+    return HttpResponse.json({
+      detail: 'Found league',
+      data: { seasons: ['2026'], league_name: 'L', is_owner: true },
+    });
+  });
+}
 
 // jsdom's window.location is non-configurable and navigation is unimplemented, so
 // tests that expect a full-page consent redirect swap it for a URL (settable href,
@@ -111,8 +135,142 @@ async function connectYahooLeague(
   });
 }
 
+/**
+ * Render the landing page and enter the league id (platform defaults to ESPN). The
+ * ESPN credential fields are hidden until a lookup shows the league isn't onboarded,
+ * so a single Connect click runs the existence check; a 404 reveals the fields.
+ * Interactions run on real timers.
+ */
+async function lookupEspnLeague(leagueId: string) {
+  const user = userEvent.setup();
+  await renderRoute(
+    <Routes>
+      <Route path="/" element={<LeagueQLLanding />} />
+      <Route path="/home" element={<div>HOME PAGE</div>} />
+      <Route path="/connect_league" element={<div>CONNECT FORM</div>} />
+    </Routes>,
+    { route: '/' },
+  );
+  await user.type(await screen.findByPlaceholderText('League ID'), leagueId);
+  await user.click(screen.getByRole('button', { name: /^connect$/i }));
+}
+
+/**
+ * Connect a not-yet-onboarded ESPN league end to end. The credential fields are
+ * gated behind the lookup, so this clicks Connect twice: the first click's 404
+ * reveals the SWID/espn_s2 inputs, then — unless `skipCookies` — the cookies are
+ * typed and Connect is clicked again to onboard. The second click's onboard/poll
+ * runs under fake timers so `pollForCompletion`'s 1s interval can be fast-forwarded.
+ */
+async function connectEspnLeague(
+  leagueId: string,
+  opts: { skipCookies?: boolean } = {},
+) {
+  await lookupEspnLeague(leagueId);
+  const user = userEvent.setup();
+  // The first Connect resolved the existence check to 404 and revealed the fields.
+  const swidInput = await screen.findByPlaceholderText('Enter your SWID');
+  if (!opts.skipCookies) {
+    await user.type(swidInput, 'swidcookie');
+    await user.type(
+      screen.getByPlaceholderText('Enter your ESPN S2 token'),
+      's2cookie',
+    );
+  }
+  vi.useFakeTimers();
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: /^connect$/i }));
+    await Promise.resolve();
+  });
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(8000);
+  });
+}
+
 defineFeature(feature, (test) => {
-  test('Connecting an ESPN league I am not a member of shows invite-link guidance', ({
+  test('ESPN credential fields stay hidden until the league is looked up', ({
+    given,
+    then,
+    and,
+  }) => {
+    given('the landing connect form is open with ESPN selected', async () => {
+      window.history.pushState({}, '', '/?connect=true');
+      await renderRoute(
+        <Routes>
+          <Route path="/" element={<LeagueQLLanding />} />
+        </Routes>,
+        { route: '/' },
+      );
+    });
+
+    then('the ESPN credential fields are not shown', async () => {
+      // The connect form (League ID box) is present, but the SWID/espn_s2 inputs
+      // stay hidden until a lookup shows the league isn't onboarded yet.
+      expect(
+        await screen.findByPlaceholderText('League ID'),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByPlaceholderText('Enter your SWID'),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByPlaceholderText('Enter your ESPN S2 token'),
+      ).not.toBeInTheDocument();
+    });
+
+    and('the "League not added to LeagueQL yet" message is not shown', () => {
+      expect(
+        screen.queryByText(/League not added to LeagueQL yet/i),
+      ).not.toBeInTheDocument();
+    });
+  });
+
+  test('A first Connect on a not-yet-onboarded ESPN league reveals the credential fields', ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    let onboardCalled = false;
+    given('a not-yet-onboarded ESPN league', () => {
+      server.use(
+        http.get(`${API}/leagues/:id`, () =>
+          HttpResponse.json({ detail: 'League not found' }, { status: 404 }),
+        ),
+        http.post(`${API}/leagues`, () => {
+          onboardCalled = true;
+          return HttpResponse.json(
+            { detail: 'x', data: { correlation_id: 'c' } },
+            { status: 201 },
+          );
+        }),
+      );
+      window.history.pushState({}, '', '/?connect=true');
+    });
+    when(
+      /^I look up an ESPN league "(.*)" from the landing page$/,
+      async (leagueId) => {
+        await lookupEspnLeague(leagueId);
+      },
+    );
+    then('the ESPN credential fields are shown', async () => {
+      expect(
+        await screen.findByPlaceholderText('Enter your SWID'),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByPlaceholderText('Enter your ESPN S2 token'),
+      ).toBeInTheDocument();
+    });
+    and('the "League not added to LeagueQL yet" message is shown', () => {
+      expect(
+        screen.getByText(/League not added to LeagueQL yet/i),
+      ).toBeInTheDocument();
+    });
+    and('no ESPN onboard request was made', () => {
+      expect(onboardCalled).toBe(false);
+    });
+  });
+
+  test('Connecting an ESPN league I am not a member of shows already-onboarded guidance', ({
     given,
     when,
     then,
@@ -142,6 +300,131 @@ defineFeature(feature, (test) => {
 
     then(/^I see invite-link guidance "(.*)"$/, async (message) => {
       expect(await screen.findByText(new RegExp(message))).toBeInTheDocument();
+    });
+  });
+
+  test('Connecting a not-yet-onboarded ESPN league onboards in place', ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    let capturedBody: { season?: string } | null = null;
+    given(
+      /^a not-yet-onboarded ESPN league that will onboard successfully and the current season is "(.*)"$/,
+      (season) => {
+        server.use(
+          sleeperNflState(season),
+          statefulGetLeague(),
+          http.post(`${API}/leagues`, async ({ request }) => {
+            capturedBody = (await request.json()) as { season?: string };
+            return HttpResponse.json(
+              {
+                detail: 'Successfully triggered onboarding',
+                data: { correlation_id: 'corr-1' },
+              },
+              { status: 201 },
+            );
+          }),
+          jobStatus('COMPLETED'),
+        );
+        window.history.pushState({}, '', '/?connect=true');
+      },
+    );
+    when(
+      /^I connect an ESPN league "(.*)" with cookies from the landing page$/,
+      async (leagueId) => {
+        await connectEspnLeague(leagueId);
+      },
+    );
+    then('I land on the league home page', () => {
+      expect(screen.getByText('HOME PAGE')).toBeInTheDocument();
+      // Onboarded in place — the caller was never routed to the connect form.
+      expect(screen.queryByText('CONNECT FORM')).not.toBeInTheDocument();
+    });
+    and(/^the ESPN onboard request carried season "(.*)"$/, (season) => {
+      expect(capturedBody?.season).toBe(season);
+    });
+  });
+
+  test('The auto-derived season falls back to the clock when Sleeper is unavailable', ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    let capturedBody: { season?: string } | null = null;
+    given(
+      'a not-yet-onboarded ESPN league that will onboard successfully and the Sleeper season endpoint is unavailable',
+      () => {
+        server.use(
+          sleeperNflState(null),
+          statefulGetLeague(),
+          http.post(`${API}/leagues`, async ({ request }) => {
+            capturedBody = (await request.json()) as { season?: string };
+            return HttpResponse.json(
+              {
+                detail: 'Successfully triggered onboarding',
+                data: { correlation_id: 'corr-1' },
+              },
+              { status: 201 },
+            );
+          }),
+          jobStatus('COMPLETED'),
+        );
+        window.history.pushState({}, '', '/?connect=true');
+      },
+    );
+    when(
+      /^I connect an ESPN league "(.*)" with cookies from the landing page$/,
+      async (leagueId) => {
+        await connectEspnLeague(leagueId);
+      },
+    );
+    then('I land on the league home page', () => {
+      expect(screen.getByText('HOME PAGE')).toBeInTheDocument();
+    });
+    and('the ESPN onboard request carried a 4-digit season', () => {
+      expect(capturedBody?.season).toMatch(/^\d{4}$/);
+    });
+  });
+
+  test('Connecting a not-yet-onboarded ESPN league without cookies shows an inline error', ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    let onboardCalled = false;
+    given('a not-yet-onboarded ESPN league', () => {
+      server.use(
+        http.get(`${API}/leagues/:id`, () =>
+          HttpResponse.json({ detail: 'League not found' }, { status: 404 }),
+        ),
+        http.post(`${API}/leagues`, () => {
+          onboardCalled = true;
+          return HttpResponse.json(
+            { detail: 'x', data: { correlation_id: 'c' } },
+            { status: 201 },
+          );
+        }),
+      );
+      window.history.pushState({}, '', '/?connect=true');
+    });
+    when(
+      /^I connect an ESPN league "(.*)" without cookies from the landing page$/,
+      async (leagueId) => {
+        await connectEspnLeague(leagueId, { skipCookies: true });
+      },
+    );
+    // The error is set synchronously on submit (no request), so read it
+    // synchronously — findByText would poll on real time under the fake timers
+    // still active from the connect helper.
+    then(/^I see invite-link guidance "(.*)"$/, (message) => {
+      expect(screen.getByText(new RegExp(message))).toBeInTheDocument();
+    });
+    and('no ESPN onboard request was made', () => {
+      expect(onboardCalled).toBe(false);
     });
   });
 

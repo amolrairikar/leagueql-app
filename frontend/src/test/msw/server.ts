@@ -93,3 +93,18 @@ export function leagueExportError(status = 500) {
 export function postJson(path: string, body: JsonBodyType, status = 200) {
   return http.post(`${API}${path}`, () => HttpResponse.json(body, { status }));
 }
+
+/**
+ * A handler for Sleeper's NFL-state endpoint, the source of the auto-derived
+ * ESPN season (`lib/season.getCurrentNflSeason`). Any ESPN onboard path in a
+ * test hits this absolute URL, so it must be registered or MSW's
+ * `onUnhandledRequest: 'error'` fails the test. Pass `season: null` to simulate
+ * a failure and exercise the clock-based fallback.
+ */
+export function sleeperNflState(season: string | null = '2026') {
+  const url = 'https://api.sleeper.app/v1/state/nfl';
+  if (season === null) {
+    return http.get(url, () => HttpResponse.json({}, { status: 500 }));
+  }
+  return http.get(url, () => HttpResponse.json({ season }));
+}

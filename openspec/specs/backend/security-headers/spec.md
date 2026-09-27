@@ -24,8 +24,8 @@ The middleware SHALL set `Cache-Control: no-store` only when the handler did not
 - **THEN** the response defaults to `Cache-Control: no-store`
 
 #### Scenario: Route-set cache value preserved
-- **WHEN** `GET /leagues/{id}/query` sets `private, max-age=300`
-- **THEN** the middleware does not override it
+- **WHEN** a route sets its own `Cache-Control` (e.g. `GET /feature-flags` sets `no-store`)
+- **THEN** the middleware preserves that value rather than re-applying its own
 
 ### Requirement: Application-layer only
 The headers SHALL be applied by app middleware, with no OpenAPI or API Gateway/Terraform change.

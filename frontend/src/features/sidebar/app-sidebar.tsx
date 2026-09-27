@@ -56,6 +56,7 @@ import { TransferOwnershipDialog } from '@/features/ownership/transfer-ownership
 import { useIsOwner } from '@/features/ownership/use-is-owner';
 import { deleteLeague } from '@/features/sidebar/api-calls';
 import { DisableAutoRefreshDialog } from '@/features/sidebar/disable-auto-refresh-dialog';
+import { RefreshLeagueDialog } from '@/features/sidebar/refresh-league-dialog';
 import { clearApiCache } from '@/lib/api-client';
 import {
   clearAllLeagueCookies,
@@ -99,16 +100,15 @@ export function AppSidebar() {
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
   const [claimDialogOpen, setClaimDialogOpen] = useState(false);
   const [disableAutoRefreshOpen, setDisableAutoRefreshOpen] = useState(false);
+  const [refreshLeagueOpen, setRefreshLeagueOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
 
   const { isOwner, autoRefreshEnabled } = useIsOwner();
 
   const demoMode = isDemoMode();
 
-  // Pre-fill (and lock) the platform/league ID on the refresh form with the
-  // league the user is currently viewing.
-  const { leagueId: currentLeagueId, platform: currentPlatform } =
-    getLeagueCookies();
+  // The manual Refresh League action is ESPN-only; the platform gates it.
+  const { platform: currentPlatform } = getLeagueCookies();
   // Insert the Transactions item right after "Draft Grades" so it sits among the
   // draft entries rather than at the very bottom of the nav. Shown for all platforms.
   const visibleNavItems = [...navItems];
@@ -120,10 +120,6 @@ export function AppSidebar() {
       draftGradesIdx === -1 ? visibleNavItems.length : draftGradesIdx + 1;
     visibleNavItems.splice(at, 0, ...transactionsNavItems);
   }
-  const refreshLeagueUrl = currentLeagueId
-    ? `/connect_league?leagueId=${encodeURIComponent(currentLeagueId)}&platform=${currentPlatform.toLowerCase()}`
-    : '/connect_league';
-
   function handleExitDemo() {
     clearAllLeagueCookies();
     void navigate('/');
@@ -257,17 +253,15 @@ export function AppSidebar() {
                         {currentPlatform === 'ESPN' && !autoRefreshEnabled && (
                           <SidebarMenuItem>
                             <SidebarMenuButton
-                              asChild
                               tooltip="Refresh League"
                               className="cursor-pointer"
+                              onClick={() => {
+                                closeMobileSidebar();
+                                setRefreshLeagueOpen(true);
+                              }}
                             >
-                              <Link
-                                to={refreshLeagueUrl}
-                                onClick={closeMobileSidebar}
-                              >
-                                <RefreshCw />
-                                <span>Refresh League</span>
-                              </Link>
+                              <RefreshCw />
+                              <span>Refresh League</span>
                             </SidebarMenuButton>
                           </SidebarMenuItem>
                         )}
@@ -432,6 +426,10 @@ export function AppSidebar() {
       <DisableAutoRefreshDialog
         open={disableAutoRefreshOpen}
         onOpenChange={setDisableAutoRefreshOpen}
+      />
+      <RefreshLeagueDialog
+        open={refreshLeagueOpen}
+        onOpenChange={setRefreshLeagueOpen}
       />
       <ExportLeagueDialog
         open={exportDialogOpen}

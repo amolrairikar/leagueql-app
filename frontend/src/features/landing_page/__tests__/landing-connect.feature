@@ -5,10 +5,40 @@ Feature: Landing page connect routing (frontend/landing-page / frontend/connect-
   caller is already linked; only an unlinked (or revoked) caller is sent to Yahoo's
   consent screen.
 
-  Scenario: Connecting an ESPN league I am not a member of shows invite-link guidance
+  Scenario: ESPN credential fields stay hidden until the league is looked up
+    Given the landing connect form is open with ESPN selected
+    Then the ESPN credential fields are not shown
+    And the "League not added to LeagueQL yet" message is not shown
+
+  Scenario: A first Connect on a not-yet-onboarded ESPN league reveals the credential fields
+    Given a not-yet-onboarded ESPN league
+    When I look up an ESPN league "100" from the landing page
+    Then the ESPN credential fields are shown
+    And the "League not added to LeagueQL yet" message is shown
+    And no ESPN onboard request was made
+
+  Scenario: Connecting an ESPN league I am not a member of shows already-onboarded guidance
     Given the ESPN league read is member-gated for me
     When I submit an ESPN league ID from the landing page
-    Then I see invite-link guidance "Ask the league owner to share their invite link"
+    Then I see invite-link guidance "reach out to your leaguemate who onboarded the league"
+
+  Scenario: Connecting a not-yet-onboarded ESPN league onboards in place
+    Given a not-yet-onboarded ESPN league that will onboard successfully and the current season is "2026"
+    When I connect an ESPN league "100" with cookies from the landing page
+    Then I land on the league home page
+    And the ESPN onboard request carried season "2026"
+
+  Scenario: The auto-derived season falls back to the clock when Sleeper is unavailable
+    Given a not-yet-onboarded ESPN league that will onboard successfully and the Sleeper season endpoint is unavailable
+    When I connect an ESPN league "100" with cookies from the landing page
+    Then I land on the league home page
+    And the ESPN onboard request carried a 4-digit season
+
+  Scenario: Connecting a not-yet-onboarded ESPN league without cookies shows an inline error
+    Given a not-yet-onboarded ESPN league
+    When I connect an ESPN league "100" without cookies from the landing page
+    Then I see invite-link guidance "Enter your SWID and espn_s2"
+    And no ESPN onboard request was made
 
   Scenario: The connect form offers Yahoo as a selectable platform
     Given the landing connect form is open
