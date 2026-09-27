@@ -7,6 +7,17 @@ from unittest.mock import patch
 import pytest
 
 
+def _inline_script(html: str) -> str:
+    """Return the inline ``<script>`` body from a generated popup page.
+
+    Extracted by locating the literal tag delimiters (not an HTML-parsing regex) since we
+    generate this markup ourselves and only need the script contents for a brace/paren
+    balance check.
+    """
+    open_tag_end = html.index(">", html.index("<script")) + 1
+    return html[open_tag_end : html.index("</script>", open_tag_end)]
+
+
 class TestYahooAuthorizeEndpoint:
     def test_returns_consent_url(self, client, mock_table):
         with (
@@ -194,10 +205,9 @@ class TestYahooCallbackEndpoint:
         # The inline script must be syntactically balanced: an unbalanced brace/paren is a JS
         # syntax error that silently breaks the whole popup (no postMessage, no auto-close),
         # which the substring checks above would not catch.
-        script = re.search(r"<script[^>]*>(.*?)</script>", body, re.DOTALL)
-        assert script is not None
-        assert script.group(1).count("{") == script.group(1).count("}")
-        assert script.group(1).count("(") == script.group(1).count(")")
+        script = _inline_script(body)
+        assert script.count("{") == script.count("}")
+        assert script.count("(") == script.count(")")
         # A nonce CSP is set on the response so only this inline script can run.
         csp = response.headers["content-security-policy"]
         assert "script-src 'nonce-" in csp
@@ -229,10 +239,9 @@ class TestYahooCallbackEndpoint:
         assert "was not completed" in body
         assert "postMessage" in body
         assert '"yahooLinked": "0"' in body
-        script = re.search(r"<script[^>]*>(.*?)</script>", body, re.DOTALL)
-        assert script is not None
-        assert script.group(1).count("{") == script.group(1).count("}")
-        assert script.group(1).count("(") == script.group(1).count(")")
+        script = _inline_script(body)
+        assert script.count("{") == script.count("}")
+        assert script.count("(") == script.count(")")
         assert "script-src 'nonce-" in response.headers["content-security-policy"]
 
     def test_declined_error_redirects_not_linked(self, client):
