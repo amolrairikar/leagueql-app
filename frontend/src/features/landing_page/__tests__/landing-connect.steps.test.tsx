@@ -82,6 +82,64 @@ function statefulGetLeague() {
   });
 }
 
+// The Yahoo consent screen now opens in a popup; the authorize endpoint returns this URL.
+const CONSENT_URL = 'https://consent.yahoo.test/authorize?x=1';
+
+/** Capture the leagueId/display the authorize endpoint is called with, and return a consent URL. */
+function captureAuthorize() {
+  const captured: { leagueId: string | null; display: string | null } = {
+    leagueId: null,
+    display: null,
+  };
+  const handler = http.get(
+    `${API}/leagues/yahoo/oauth/authorize`,
+    ({ request }) => {
+      const url = new URL(request.url);
+      captured.leagueId = url.searchParams.get('leagueId');
+      captured.display = url.searchParams.get('display');
+      return HttpResponse.json({
+        detail: 'ok',
+        data: { authorize_url: CONSENT_URL },
+      });
+    },
+  );
+  return { captured, handler };
+}
+
+interface FakePopup {
+  closed: boolean;
+  close: () => void;
+}
+
+/** Stub `window.open` to return a controllable fake popup (consent opened in a popup). */
+function mockPopupOpen() {
+  const popup: FakePopup = {
+    closed: false,
+    close: vi.fn(() => {
+      popup.closed = true;
+    }),
+  };
+  const open = vi
+    .spyOn(window, 'open')
+    .mockReturnValue(popup as unknown as Window);
+  return { popup, open };
+}
+
+/** Stub `window.open` to return null (the browser blocked the popup). */
+function mockPopupBlocked() {
+  return vi.spyOn(window, 'open').mockReturnValue(null);
+}
+
+/** Simulate the consent popup posting its result back to the opener (from the API origin). */
+function postYahooMessage(data: Record<string, string>) {
+  window.dispatchEvent(
+    new MessageEvent('message', {
+      data: { source: 'yahoo-oauth', ...data },
+      origin: new URL(API).origin,
+    }),
+  );
+}
+
 // jsdom's window.location is non-configurable and navigation is unimplemented, so
 // tests that expect a full-page consent redirect swap it for a URL (settable href,
 // real search). Restored after every test.
@@ -93,6 +151,7 @@ afterEach(() => {
     value: originalLocation,
   });
   vi.useRealTimers();
+  vi.restoreAllMocks();
 });
 
 /** Swap window.location so `href` is settable and the connect form is revealed. */
@@ -486,31 +545,20 @@ defineFeature(feature, (test) => {
     });
   });
 
-  test('Connecting a Yahoo league I have not linked starts the OAuth flow', ({
+  test('Connecting a Yahoo league I have not linked opens the consent popup', ({
     given,
     when,
     then,
   }) => {
-    let authorizeLeagueId: string | null = null;
+    const auth = captureAuthorize();
+    let popup!: ReturnType<typeof mockPopupOpen>;
 
     given(
       'onboarding a Yahoo league is rejected as unlinked and the authorize endpoint returns a consent URL',
       () => {
-        server.use(
-          onboardUnlinked,
-          http.get(`${API}/leagues/yahoo/oauth/authorize`, ({ request }) => {
-            authorizeLeagueId = new URL(request.url).searchParams.get(
-              'leagueId',
-            );
-            return HttpResponse.json({
-              detail: 'ok',
-              data: {
-                authorize_url: 'https://consent.yahoo.test/authorize?x=1',
-              },
-            });
-          }),
-        );
-        swapLocationWithConnect();
+        server.use(onboardUnlinked, auth.handler);
+        popup = mockPopupOpen();
+        window.history.pushState({}, '', '/?connect=true');
       },
     );
 
@@ -521,11 +569,168 @@ defineFeature(feature, (test) => {
       },
     );
 
-    then('the Yahoo authorization is requested for that league', () => {
-      expect(authorizeLeagueId).toBe('45.l.678');
-      expect(window.location.href).toBe(
-        'https://consent.yahoo.test/authorize?x=1',
+    then('the Yahoo consent popup is opened for that league', () => {
+      expect(auth.captured.leagueId).toBe('45.l.678');
+      expect(auth.captured.display).toBe('popup');
+      expect(popup.open).toHaveBeenCalledWith(
+        CONSENT_URL,
+        expect.any(String),
+        expect.any(String),
       );
+    });
+  });
+
+  test('Linking completes in the popup and resumes onboarding inline', ({
+    given,
+    when,
+    then,
+  }) => {
+    given(
+      'a Yahoo league that is unlinked until the popup links it, then onboards successfully',
+      () => {
+        // The first onboard is 403 (unlinked → opens the popup); after the popup links, the
+        // resume onboard succeeds and polls to completion.
+        let calls = 0;
+        server.use(
+          captureAuthorize().handler,
+          http.post(`${API}/leagues`, () => {
+            calls += 1;
+            if (calls === 1) {
+              return HttpResponse.json(
+                { detail: 'Link your Yahoo account first' },
+                { status: 403 },
+              );
+            }
+            return HttpResponse.json(
+              {
+                detail: 'Successfully triggered onboarding',
+                data: { correlation_id: 'corr-1' },
+              },
+              { status: 201 },
+            );
+          }),
+          jobStatus('COMPLETED'),
+          getLeagueOk,
+        );
+        mockPopupOpen();
+        window.history.pushState({}, '', '/?connect=true');
+      },
+    );
+
+    when(
+      /^I connect a Yahoo league "(.*)" and the popup reports a successful link$/,
+      async (leagueId) => {
+        const user = userEvent.setup();
+        await renderRoute(
+          <Routes>
+            <Route path="/" element={<LeagueQLLanding />} />
+            <Route path="/home" element={<div>HOME PAGE</div>} />
+          </Routes>,
+          { route: '/' },
+        );
+        await user.click(await screen.findByRole('combobox'));
+        await user.click(await screen.findByRole('option', { name: 'Yahoo' }));
+        await user.type(screen.getByPlaceholderText('League ID'), leagueId);
+        vi.useFakeTimers();
+        await act(async () => {
+          fireEvent.click(screen.getByRole('button', { name: /^connect$/i }));
+          await Promise.resolve();
+        });
+        // Flush the 403 + authorize call so the popup has "opened".
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(100);
+        });
+        // The popup posts the linked result back to the opener.
+        await act(async () => {
+          postYahooMessage({ yahooLinked: '1', leagueId });
+          await Promise.resolve();
+        });
+        // Drive the resume onboard's poll to completion.
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(5000);
+        });
+      },
+    );
+
+    then('I land on the league home page', () => {
+      expect(screen.getByText('HOME PAGE')).toBeInTheDocument();
+    });
+  });
+
+  test('A blocked consent popup falls back to a full-page redirect', ({
+    given,
+    when,
+    then,
+  }) => {
+    given(
+      'onboarding a Yahoo league is rejected as unlinked and the authorize endpoint returns a consent URL',
+      () => {
+        server.use(onboardUnlinked, captureAuthorize().handler);
+        mockPopupBlocked();
+        // The fallback sets window.location.href, so swap in a settable URL.
+        swapLocationWithConnect();
+      },
+    );
+
+    when(
+      /^I connect a Yahoo league "(.*)" but the browser blocks the popup$/,
+      async (leagueId) => {
+        await connectYahooLeague(leagueId);
+      },
+    );
+
+    then('the browser is redirected to the Yahoo consent URL', () => {
+      expect(window.location.href).toBe(CONSENT_URL);
+    });
+  });
+
+  test('Dismissing the consent popup shows a retry', ({
+    given,
+    when,
+    then,
+  }) => {
+    let popup!: ReturnType<typeof mockPopupOpen>;
+    given(
+      'onboarding a Yahoo league is rejected as unlinked and the authorize endpoint returns a consent URL',
+      () => {
+        server.use(onboardUnlinked, captureAuthorize().handler);
+        popup = mockPopupOpen();
+        window.history.pushState({}, '', '/?connect=true');
+      },
+    );
+
+    when(
+      /^I connect a Yahoo league "(.*)" and then dismiss the popup$/,
+      async (leagueId) => {
+        const user = userEvent.setup();
+        await renderRoute(
+          <Routes>
+            <Route path="/" element={<LeagueQLLanding />} />
+            <Route path="/home" element={<div>HOME PAGE</div>} />
+          </Routes>,
+          { route: '/' },
+        );
+        await user.click(await screen.findByRole('combobox'));
+        await user.click(await screen.findByRole('option', { name: 'Yahoo' }));
+        await user.type(screen.getByPlaceholderText('League ID'), leagueId);
+        vi.useFakeTimers();
+        await act(async () => {
+          fireEvent.click(screen.getByRole('button', { name: /^connect$/i }));
+          await Promise.resolve();
+        });
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(100);
+        });
+        // The user closes the consent window without finishing.
+        popup.popup.closed = true;
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(1000);
+        });
+      },
+    );
+
+    then(/^I see an inline alert "(.*)"$/, (text) => {
+      expect(screen.getByText(new RegExp(text, 'i'))).toBeInTheDocument();
     });
   });
 
@@ -575,32 +780,20 @@ defineFeature(feature, (test) => {
     });
   });
 
-  test('A revoked Yahoo link restarts the OAuth flow', ({
+  test('A revoked Yahoo link reopens the consent popup', ({
     given,
     when,
     then,
   }) => {
-    let authorizeLeagueId: string | null = null;
+    const auth = captureAuthorize();
+    let popup!: ReturnType<typeof mockPopupOpen>;
 
     given(
       'onboarding a linked Yahoo league fails with a re-link signal and the authorize endpoint returns a consent URL',
       () => {
-        server.use(
-          onboardOk,
-          jobStatus('FAILED', 'YAHOO_AUTH'),
-          http.get(`${API}/leagues/yahoo/oauth/authorize`, ({ request }) => {
-            authorizeLeagueId = new URL(request.url).searchParams.get(
-              'leagueId',
-            );
-            return HttpResponse.json({
-              detail: 'ok',
-              data: {
-                authorize_url: 'https://consent.yahoo.test/authorize?x=1',
-              },
-            });
-          }),
-        );
-        swapLocationWithConnect();
+        server.use(onboardOk, jobStatus('FAILED', 'YAHOO_AUTH'), auth.handler);
+        popup = mockPopupOpen();
+        window.history.pushState({}, '', '/?connect=true');
       },
     );
 
@@ -611,10 +804,13 @@ defineFeature(feature, (test) => {
       },
     );
 
-    then('the Yahoo authorization is requested for that league', () => {
-      expect(authorizeLeagueId).toBe('45.l.678');
-      expect(window.location.href).toBe(
-        'https://consent.yahoo.test/authorize?x=1',
+    then('the Yahoo consent popup is opened for that league', () => {
+      expect(auth.captured.leagueId).toBe('45.l.678');
+      expect(auth.captured.display).toBe('popup');
+      expect(popup.open).toHaveBeenCalledWith(
+        CONSENT_URL,
+        expect.any(String),
+        expect.any(String),
       );
     });
   });
@@ -731,30 +927,18 @@ defineFeature(feature, (test) => {
     });
   });
 
-  test('A revoked Yahoo link surfaced on return restarts the OAuth flow', ({
+  test('A revoked Yahoo link surfaced on return reopens the consent popup', ({
     given,
     when,
     then,
   }) => {
-    let authorizeLeagueId: string | null = null;
+    const auth = captureAuthorize();
+    let popup!: ReturnType<typeof mockPopupOpen>;
     given(
       'onboarding a linked Yahoo league fails with a re-link signal and the authorize endpoint returns a consent URL',
       () => {
-        server.use(
-          onboardOk,
-          jobStatus('FAILED', 'YAHOO_AUTH'),
-          http.get(`${API}/leagues/yahoo/oauth/authorize`, ({ request }) => {
-            authorizeLeagueId = new URL(request.url).searchParams.get(
-              'leagueId',
-            );
-            return HttpResponse.json({
-              detail: 'ok',
-              data: {
-                authorize_url: 'https://consent.yahoo.test/authorize?x=1',
-              },
-            });
-          }),
-        );
+        server.use(onboardOk, jobStatus('FAILED', 'YAHOO_AUTH'), auth.handler);
+        popup = mockPopupOpen();
       },
     );
     when(
@@ -763,10 +947,13 @@ defineFeature(feature, (test) => {
         await returnFromYahoo({ yahooLinked: '1', leagueId });
       },
     );
-    then('the Yahoo authorization is requested for that league', () => {
-      expect(authorizeLeagueId).toBe('45.l.678');
-      expect(window.location.href).toBe(
-        'https://consent.yahoo.test/authorize?x=1',
+    then('the Yahoo consent popup is opened for that league', () => {
+      expect(auth.captured.leagueId).toBe('45.l.678');
+      expect(auth.captured.display).toBe('popup');
+      expect(popup.open).toHaveBeenCalledWith(
+        CONSENT_URL,
+        expect.any(String),
+        expect.any(String),
       );
     });
   });

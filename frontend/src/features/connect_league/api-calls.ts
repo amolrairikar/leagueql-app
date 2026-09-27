@@ -69,16 +69,20 @@ export interface YahooAuthorizeResponse {
 }
 
 /**
- * Start the Yahoo OAuth link (backend/yahoo-oauth). Returns the Yahoo consent URL the
- * caller full-page-redirects to; the pending `leagueId` is carried through the flow so the
- * callback can resume onboarding. No Yahoo tokens ever reach the browser.
+ * Start the Yahoo OAuth link (backend/yahoo-oauth). Returns the Yahoo consent URL the caller
+ * opens; the pending `leagueId` is carried through the flow so the callback can resume
+ * onboarding. `display=popup` makes the callback hand the result back via `postMessage` (so the
+ * opener page never reloads); `display=page` (default) makes it a full-page redirect. No Yahoo
+ * tokens ever reach the browser.
  */
 export function getYahooAuthorizeUrl(
   leagueId: string,
   flow?: 'ONBOARD' | 'MIGRATE',
+  display?: 'page' | 'popup',
 ): Promise<YahooAuthorizeResponse> {
   const params = new URLSearchParams({ leagueId });
   if (flow) params.set('flow', flow);
+  if (display) params.set('display', display);
   // skipCache: this mints a single-use state server-side, so it must never be deduped.
   return apiClient.get<YahooAuthorizeResponse>(
     `/leagues/yahoo/oauth/authorize?${params}`,

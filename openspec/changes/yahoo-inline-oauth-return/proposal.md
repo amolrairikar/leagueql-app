@@ -18,6 +18,10 @@ flow like ESPN.
   inline retry alert with Yahoo preselected.
 - `/connect_league` becomes a redirect shim that forwards any Yahoo return params to `/`; the
   `YahooConnectReturn` component is removed.
+- The Yahoo consent handshake runs in a **popup window** instead of a full-page redirect, so the
+  connect page stays mounted (progress bar keeps running) and onboarding resumes with no page
+  reload. The callback returns a `postMessage` page for the popup, and the app falls back to the
+  full-page redirect when the browser blocks the popup.
 - The Yahoo migrate flow (`/migrate_league`) is unchanged.
 
 ## Capabilities
@@ -38,13 +42,15 @@ _None._
 ## Impact
 
 - **Frontend:** `frontend/src/features/landing_page/landing-page.tsx` (return-param mount effect;
-  `handleYahooConnect` gains an optional auto-refresh override),
-  `frontend/src/features/connect_league/league-connect.tsx` (redirect shim); delete
-  `frontend/src/features/connect_league/yahoo-connect-return.tsx`. Tests:
-  `landing_page/__tests__/landing-connect.*` (new return scenarios) and
+  `handleYahooConnect` gains an optional auto-refresh override; `startYahooOauth` opens a popup and
+  resumes on its `postMessage`, with redirect fallback), `frontend/src/features/connect_league/api-calls.ts`
+  (`getYahooAuthorizeUrl` gains `display`), `frontend/src/features/connect_league/league-connect.tsx`
+  (redirect shim); delete `frontend/src/features/connect_league/yahoo-connect-return.tsx`. Tests:
+  `landing_page/__tests__/landing-connect.*` (return + popup scenarios) and
   `connect_league/__tests__/yahoo-connect.*` (removed/migrated).
 - **Backend:** `src/api/main.py` `YAHOO_CONNECT_RETURN_URL` default; `infrastructure/regional/vars.tf`
-  `yahoo_connect_return_url` default. Callback logic in `src/api/routes.py` is unchanged (it already
-  appends the return params to the configured base).
+  `yahoo_connect_return_url` default. `src/api/routes.py` gains a `display` param on the authorize
+  route and a popup `postMessage` HTML response (nonce-CSP) on the callback; `src/api/yahoo_oauth.py`
+  carries `display` in the OAuth state.
 - **Deploy order:** ship frontend first (landing handles the params; `/connect_league` shim forwards
   them), then flip the backend return URL — avoids a broken window regardless of tier order.

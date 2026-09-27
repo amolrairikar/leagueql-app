@@ -17,6 +17,15 @@ def step_start_authorize(context, league_id):
     context.yahoo_state = parse_qs(urlparse(authorize_url).query)["state"][0]
 
 
+@when('I start the Yahoo popup authorization for league "{league_id}"')
+def step_start_popup_authorize(context, league_id):
+    context.response = context.api.get(
+        f"/leagues/yahoo/oauth/authorize?leagueId={league_id}&display=popup"
+    )
+    authorize_url = context.response.json()["data"]["authorize_url"]
+    context.yahoo_state = parse_qs(urlparse(authorize_url).query)["state"][0]
+
+
 @when("Yahoo redirects back to the callback with a valid code")
 def step_callback_valid(context):
     import main
@@ -61,6 +70,18 @@ def step_assert_linked(context):
     location = context.response.headers["location"]
     assert "platform=YAHOO" in location
     assert "yahooLinked=1" in location
+
+
+@then("the callback returns a postMessage page with the linked marker")
+def step_assert_popup_linked(context):
+    assert context.response.status_code == 200, context.response.status_code
+    assert context.response.headers["content-type"].startswith("text/html")
+    body = context.response.text
+    assert "postMessage" in body
+    assert "yahoo-oauth" in body
+    assert '"yahooLinked": "1"' in body
+    csp = context.response.headers["content-security-policy"]
+    assert "script-src 'nonce-" in csp
 
 
 @then("the callback redirects with the not-linked marker")

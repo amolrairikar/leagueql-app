@@ -25,7 +25,9 @@ class TestYahooAuthorizeEndpoint:
             body["data"]["authorize_url"]
             == "https://api.login.yahoo.com/oauth2/request_auth?x=1"
         )
-        mk_state.assert_called_once_with("user_1", "45.l.678", flow="ONBOARD")
+        mk_state.assert_called_once_with(
+            "user_1", "45.l.678", flow="ONBOARD", display="page"
+        )
         mk_url.assert_called_once_with("state-1", "challenge-1")
 
     def test_forwards_migrate_flow(self, client, mock_table):
@@ -41,10 +43,35 @@ class TestYahooAuthorizeEndpoint:
             )
 
         assert response.status_code == 200
-        mk_state.assert_called_once_with("user_1", "678", flow="MIGRATE")
+        mk_state.assert_called_once_with(
+            "user_1", "678", flow="MIGRATE", display="page"
+        )
+
+    def test_forwards_popup_display(self, client, mock_table):
+        with (
+            patch(
+                "yahoo_oauth.create_oauth_state",
+                return_value=("state-1", "challenge-1"),
+            ) as mk_state,
+            patch("yahoo_oauth.build_authorize_url", return_value="https://y/auth"),
+        ):
+            response = client.get(
+                "/leagues/yahoo/oauth/authorize?leagueId=678&display=popup"
+            )
+
+        assert response.status_code == 200
+        mk_state.assert_called_once_with(
+            "user_1", "678", flow="ONBOARD", display="popup"
+        )
 
     def test_rejects_unknown_flow(self, client):
         response = client.get("/leagues/yahoo/oauth/authorize?leagueId=678&flow=BOGUS")
+        assert response.status_code == 422
+
+    def test_rejects_unknown_display(self, client):
+        response = client.get(
+            "/leagues/yahoo/oauth/authorize?leagueId=678&display=bogus"
+        )
         assert response.status_code == 422
 
     def test_requires_league_id(self, client):
@@ -122,6 +149,74 @@ class TestYahooCallbackEndpoint:
         assert location.startswith("https://app/migrate_league?")
         assert "yahooLinked=1" in location
         assert "leagueId=678" in location
+
+    def test_popup_success_returns_postmessage_page(self, client):
+        # A popup-mode link returns an HTML page that postMessages the opener and closes,
+        # instead of a 302 (backend/yahoo-oauth) — so the connect page never reloads.
+        with (
+            patch("main.YAHOO_CONNECT_RETURN_URL", "https://app.test/"),
+            patch(
+                "yahoo_oauth.consume_oauth_state",
+                return_value={
+                    "clerk_user_id": "user_1",
+                    "league_id": "45.l.678",
+                    "flow": "ONBOARD",
+                    "display": "popup",
+                    "code_verifier": "verifier-1",
+                },
+            ),
+            patch(
+                "yahoo_oauth.exchange_code_for_tokens",
+                return_value={"access_token": "at", "refresh_token": "rt"},
+            ),
+            patch("yahoo_oauth.store_tokens") as mk_store,
+        ):
+            response = client.get(
+                "/leagues/yahoo/oauth/callback?code=abc&state=s1",
+                follow_redirects=False,
+            )
+
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("text/html")
+        body = response.text
+        assert "postMessage" in body
+        assert "yahoo-oauth" in body
+        assert '"yahooLinked": "1"' in body
+        assert "45.l.678" in body
+        # The message targets the frontend origin exactly, never a wildcard.
+        assert "https://app.test" in body
+        assert "*" not in body.split("postMessage")[1].split(")")[0]
+        # A nonce CSP is set on the response so only this inline script can run.
+        csp = response.headers["content-security-policy"]
+        assert "script-src 'nonce-" in csp
+        assert "default-src 'none'" in csp
+        mk_store.assert_called_once()
+
+    def test_popup_declined_returns_postmessage_page_not_linked(self, client):
+        with (
+            patch("main.YAHOO_CONNECT_RETURN_URL", "https://app.test/"),
+            patch(
+                "yahoo_oauth.consume_oauth_state",
+                return_value={
+                    "clerk_user_id": "user_1",
+                    "league_id": "678",
+                    "flow": "ONBOARD",
+                    "display": "popup",
+                    "code_verifier": "v",
+                },
+            ),
+        ):
+            response = client.get(
+                "/leagues/yahoo/oauth/callback?error=access_denied&state=s1",
+                follow_redirects=False,
+            )
+
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("text/html")
+        body = response.text
+        assert "postMessage" in body
+        assert '"yahooLinked": "0"' in body
+        assert "script-src 'nonce-" in response.headers["content-security-policy"]
 
     def test_declined_error_redirects_not_linked(self, client):
         # Yahoo echoes ``state`` on access_denied; the callback consumes it to recover the

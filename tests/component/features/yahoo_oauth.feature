@@ -14,6 +14,13 @@ Feature: Yahoo OAuth linking (backend/yahoo-oauth)
     Then the API responds with status 201
     And the onboarder Lambda was invoked
 
+  Scenario: Linking a Yahoo account via a popup returns a postMessage page
+    When I start the Yahoo popup authorization for league "678"
+    Then the API responds with status 200
+    When Yahoo redirects back to the callback with a valid code
+    Then the callback returns a postMessage page with the linked marker
+    And a YAHOO_OAUTH token item exists for the default user with encrypted tokens
+
   Scenario: Callback with an unknown state does not link
     When Yahoo redirects back to the callback with code "abc" and state "never-issued"
     Then the callback redirects with the not-linked marker

@@ -44,7 +44,7 @@ import {
 import { Faq } from '@/features/landing_page/faq';
 import { ProductShowcase } from '@/features/landing_page/product-showcase';
 import type { Feature, HowStep } from '@/features/landing_page/types';
-import { ApiError, clearApiCache } from '@/lib/api-client';
+import { API_BASE_URL, ApiError, clearApiCache } from '@/lib/api-client';
 import {
   clearAllLeagueCookies,
   clearEspnCookies,
@@ -188,6 +188,8 @@ export default function LeagueQLLanding() {
   );
   // Guards the Yahoo OAuth-return resume against a StrictMode double-invoke.
   const yahooReturnRef = useRef(false);
+  // Removes the consent-popup message listener + poll if the page unmounts mid-consent.
+  const popupCleanupRef = useRef<(() => void) | null>(null);
 
   // Reaching the landing page is a demo-mode exit path. The landing page is never
   // part of the demo experience, so any of the ways a user can arrive here — the
@@ -198,6 +200,10 @@ export default function LeagueQLLanding() {
   useEffect(() => {
     if (isDemoMode()) clearAllLeagueCookies();
   }, []);
+
+  // If the page unmounts while a Yahoo consent popup is still open, drop its message
+  // listener + poll so nothing lingers (frontend/connect-yahoo-league).
+  useEffect(() => () => popupCleanupRef.current?.(), []);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -305,17 +311,86 @@ export default function LeagueQLLanding() {
     void navigate('/home');
   }
 
-  // Hand off to Yahoo's consent screen (backend/yahoo-oauth), carrying the league id so
-  // the callback resumes onboarding on return. The full-page redirect leaves this page,
-  // so `loading` stays set until navigation; only a failure to start it clears it.
+  // Hand off to Yahoo's consent screen in a popup (backend/yahoo-oauth), carrying the league
+  // id so onboarding can resume when the popup reports back. Keeping consent in a popup lets
+  // this page stay mounted with its progress bar — no jarring mid-onboard reload. `loading`
+  // stays set while the popup is open; the postMessage handler resumes onboarding, and only a
+  // failure to start (or a dismissed/declined popup) clears it. If the browser blocks the
+  // popup we fall back to a full-page redirect (the callback page self-redirects with no opener).
   async function startYahooOauth(trimmedId: string) {
     try {
-      const { data } = await getYahooAuthorizeUrl(trimmedId);
-      window.location.href = data.authorize_url;
+      const { data } = await getYahooAuthorizeUrl(
+        trimmedId,
+        'ONBOARD',
+        'popup',
+      );
+      const popup = window.open(
+        data.authorize_url,
+        'yahoo-oauth',
+        'width=600,height=760',
+      );
+      if (!popup) {
+        window.location.href = data.authorize_url;
+        return;
+      }
+      listenForYahooPopup(popup);
     } catch {
       setError('Could not start Yahoo sign-in. Please try again.');
       setLoading(false);
     }
+  }
+
+  // Wait for the Yahoo consent popup to report its result (backend/yahoo-oauth) and resume
+  // onboarding inline. The popup document is served by the API origin, so a message is trusted
+  // only when it comes from that origin and carries our own {source:'yahoo-oauth'} shape. A
+  // poll on `popup.closed` covers the user dismissing the window; a short grace period avoids
+  // racing a success message that was posted just before the popup closed itself.
+  function listenForYahooPopup(popup: Window) {
+    const apiOrigin = new URL(API_BASE_URL).origin;
+    let settled = false;
+
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== apiOrigin) return;
+      const msg = event.data as {
+        source?: string;
+        yahooLinked?: string;
+        leagueId?: string;
+      } | null;
+      if (msg?.source !== 'yahoo-oauth') return;
+      settled = true;
+      popupCleanupRef.current?.();
+      try {
+        popup.close();
+      } catch {
+        // A cross-origin popup may already be closing — ignore.
+      }
+      if (msg.yahooLinked === '1' && msg.leagueId) {
+        void handleYahooConnect(msg.leagueId, takeYahooAutoRefreshPref());
+      } else {
+        setError('Yahoo linking was cancelled or failed — try again.');
+        setLoading(false);
+      }
+    };
+
+    const closedTimer = setInterval(() => {
+      if (!popup.closed || settled) return;
+      clearInterval(closedTimer);
+      // The success message (posted just before the popup self-closed) may still be in
+      // flight — wait briefly before treating a closed popup as a cancel.
+      setTimeout(() => {
+        if (settled) return;
+        popupCleanupRef.current?.();
+        setError('Yahoo linking was cancelled — try again.');
+        setLoading(false);
+      }, 400);
+    }, 500);
+
+    window.addEventListener('message', onMessage);
+    popupCleanupRef.current = () => {
+      window.removeEventListener('message', onMessage);
+      clearInterval(closedTimer);
+      popupCleanupRef.current = null;
+    };
   }
 
   // Connect a Yahoo league. An already-linked caller onboards in place with the same

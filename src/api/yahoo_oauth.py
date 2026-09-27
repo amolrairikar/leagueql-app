@@ -93,20 +93,25 @@ def _generate_pkce() -> tuple[str, str]:
 
 
 def create_oauth_state(
-    clerk_user_id: str, league_id: str, flow: str = "ONBOARD"
+    clerk_user_id: str,
+    league_id: str,
+    flow: str = "ONBOARD",
+    display: str = "page",
 ) -> tuple[str, str]:
     """Mint a single-use ``state`` + PKCE pair, bound to the caller and persisted with a TTL.
 
     Stores ``PK=OAUTH_STATE#{state}, SK=YAHOO`` carrying the caller's Clerk user id, the
-    pending ``league_id``, the return-context ``flow``, and the PKCE ``code_verifier`` so the
-    callback can validate the caller, resume on the correct frontend page, and complete the
-    token exchange.
+    pending ``league_id``, the return-context ``flow``, the ``display`` mode, and the PKCE
+    ``code_verifier`` so the callback can validate the caller, resume on the correct frontend
+    page, hand the result back in the right way, and complete the token exchange.
 
     Args:
         clerk_user_id: The authenticated caller the state is bound to.
         league_id: The Yahoo league id to resume for after the callback.
-        flow: The return context — ``"ONBOARD"`` (default; callback returns to
-            ``/connect_league``) or ``"MIGRATE"`` (callback returns to ``/migrate_league``).
+        flow: The return context — ``"ONBOARD"`` (default; callback returns to the landing
+            page) or ``"MIGRATE"`` (callback returns to ``/migrate_league``).
+        display: How the callback hands the result back — ``"page"`` (default; a ``302``
+            redirect) or ``"popup"`` (an HTML page that ``postMessage``s the opener and closes).
 
     Returns:
         ``(state, code_challenge)`` — the ``state`` and PKCE ``code_challenge`` to embed in
@@ -122,6 +127,7 @@ def create_oauth_state(
             "clerk_user_id": clerk_user_id,
             "league_id": league_id,
             "flow": flow,
+            "display": display,
             "code_verifier": code_verifier,
             "created_at": now,
             "expires_at": now + OAUTH_STATE_TTL_SECONDS,
@@ -141,9 +147,9 @@ def consume_oauth_state(state: str) -> dict[str, Any] | None:
         state: The ``state`` echoed back by Yahoo on the callback.
 
     Returns:
-        ``{"clerk_user_id", "league_id", "flow", "code_verifier"}`` on success, or ``None`` when
-        the state is missing, expired, or already consumed. ``flow`` defaults to ``"ONBOARD"``
-        for states minted before the return-context was introduced.
+        ``{"clerk_user_id", "league_id", "flow", "display", "code_verifier"}`` on success, or
+        ``None`` when the state is missing, expired, or already consumed. ``flow`` defaults to
+        ``"ONBOARD"`` and ``display`` to ``"page"`` for states minted before those fields existed.
     """
     if not state:
         return None
@@ -167,6 +173,7 @@ def consume_oauth_state(state: str) -> dict[str, Any] | None:
         "clerk_user_id": item.get("clerk_user_id"),
         "league_id": item.get("league_id", ""),
         "flow": item.get("flow", "ONBOARD"),
+        "display": item.get("display", "page"),
         "code_verifier": item.get("code_verifier", ""),
     }
 

@@ -46,6 +46,32 @@ route (a `ProtectedRoute`).
   fallback; `yahoo-connect-return.tsx` is deleted. This keeps in-flight OAuth and stale bookmarks
   working during/after the transition without a second onboarding code path.
 
+- **Popup consent instead of a full-page redirect.** A redirect-based OAuth necessarily unloads and
+  later reboots the SPA (a jarring mid-onboard reload). Instead `startYahooOauth` requests an
+  authorize URL with `display=popup` and opens it with `window.open`; the connect page stays mounted
+  with `loading` true so the progress bar keeps running. The callback, when the state records
+  `display=popup`, returns a small HTML page whose script `postMessage`s
+  `{ source: "yahoo-oauth", platform, yahooLinked, leagueId }` to the opener at the frontend origin
+  and closes; the landing page listens for that message and resumes onboarding by reusing
+  `handleYahooConnect`. Alternatives rejected: an iframe (providers send `X-Frame-Options: DENY` and
+  interactive consent can't be framed) and "smooth the redirect" (any full-page redirect reboots the
+  SPA — the reload can't be hidden).
+  - **Popup-blocked fallback (single authorize URL).** If `window.open` returns null, the app
+    navigates the current tab to the same authorize URL. The `display=popup` callback page detects it
+    has no usable `window.opener` and self-redirects to the `page`-mode return URL, so onboarding
+    still resumes inline via the existing mount effect — no second authorize call needed.
+  - **Popup-dismissed detection.** A `setInterval` polling `popup.closed` (readable cross-origin)
+    clears the loading state and shows a retry message if the user closes the window without
+    finishing.
+  - **Message-origin security.** The popup document is served by the **API** origin, so its
+    `postMessage` arrives with `event.origin === <API origin>`; the listener verifies exactly that
+    (derived from `API_BASE_URL`) and the message `source` tag before acting, and the callback targets
+    the frontend's exact origin (never `*`).
+  - **CSP for the inline script.** The API's security-headers middleware sets a strict
+    `default-src 'none'` CSP via `setdefault`, which would block an inline script. The popup response
+    sets its **own** CSP with a per-response nonce (`script-src 'nonce-…'`), so only that one script
+    runs and everything else stays locked down.
+
 ## Risks / Trade-offs
 
 - **Deploy ordering** → Ship frontend first (landing handles the new params; the `/connect_league`

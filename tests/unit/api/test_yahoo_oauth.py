@@ -68,6 +68,14 @@ class TestCreateOauthState:
         yahoo.create_oauth_state("user_1", "678", flow="MIGRATE")
         assert mock_table.put_item.call_args.kwargs["Item"]["flow"] == "MIGRATE"
 
+    def test_display_defaults_to_page(self, yahoo, mock_table):
+        yahoo.create_oauth_state("user_1", "678")
+        assert mock_table.put_item.call_args.kwargs["Item"]["display"] == "page"
+
+    def test_persists_popup_display(self, yahoo, mock_table):
+        yahoo.create_oauth_state("user_1", "678", display="popup")
+        assert mock_table.put_item.call_args.kwargs["Item"]["display"] == "popup"
+
     def test_pkce_challenge_is_s256_of_verifier(self, yahoo, mock_table):
         import base64
         import hashlib
@@ -99,6 +107,7 @@ class TestConsumeOauthState:
             "clerk_user_id": "user_1",
             "league_id": "45.l.678",
             "flow": "ONBOARD",
+            "display": "page",
             "code_verifier": "verifier-abc",
         }
         mock_table.delete_item.assert_called_once_with(
@@ -116,6 +125,18 @@ class TestConsumeOauthState:
             }
         }
         assert yahoo.consume_oauth_state("abc")["flow"] == "MIGRATE"
+
+    def test_returns_popup_display(self, yahoo, mock_table):
+        mock_table.get_item.return_value = {
+            "Item": {
+                "clerk_user_id": "user_1",
+                "league_id": "678",
+                "display": "popup",
+                "code_verifier": "v",
+                "expires_at": int(time.time()) + 300,
+            }
+        }
+        assert yahoo.consume_oauth_state("abc")["display"] == "popup"
 
     def test_empty_state_returns_none(self, yahoo, mock_table):
         assert yahoo.consume_oauth_state("") is None
@@ -156,6 +177,7 @@ class TestConsumeOauthState:
             "clerk_user_id": "user_1",
             "league_id": "x",
             "flow": "ONBOARD",
+            "display": "page",
             "code_verifier": "",
         }
 

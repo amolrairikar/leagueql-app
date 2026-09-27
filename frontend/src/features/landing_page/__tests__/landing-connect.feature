@@ -45,10 +45,25 @@ Feature: Landing page connect routing (frontend/landing-page / frontend/connect-
     When I open the platform dropdown
     Then Yahoo is offered as a selectable platform
 
-  Scenario: Connecting a Yahoo league I have not linked starts the OAuth flow
+  Scenario: Connecting a Yahoo league I have not linked opens the consent popup
     Given onboarding a Yahoo league is rejected as unlinked and the authorize endpoint returns a consent URL
     When I connect a Yahoo league "45.l.678" from the landing page
-    Then the Yahoo authorization is requested for that league
+    Then the Yahoo consent popup is opened for that league
+
+  Scenario: Linking completes in the popup and resumes onboarding inline
+    Given a Yahoo league that is unlinked until the popup links it, then onboards successfully
+    When I connect a Yahoo league "45.l.678" and the popup reports a successful link
+    Then I land on the league home page
+
+  Scenario: A blocked consent popup falls back to a full-page redirect
+    Given onboarding a Yahoo league is rejected as unlinked and the authorize endpoint returns a consent URL
+    When I connect a Yahoo league "45.l.678" but the browser blocks the popup
+    Then the browser is redirected to the Yahoo consent URL
+
+  Scenario: Dismissing the consent popup shows a retry
+    Given onboarding a Yahoo league is rejected as unlinked and the authorize endpoint returns a consent URL
+    When I connect a Yahoo league "45.l.678" and then dismiss the popup
+    Then I see an inline alert "Yahoo linking was cancelled"
 
   Scenario: Connecting a Yahoo league I have already linked onboards in place
     Given onboarding a linked Yahoo league completes successfully
@@ -60,10 +75,10 @@ Feature: Landing page connect routing (frontend/landing-page / frontend/connect-
     When I connect a Yahoo league "45.l.678" from the landing page
     Then I land on the league home page
 
-  Scenario: A revoked Yahoo link restarts the OAuth flow
+  Scenario: A revoked Yahoo link reopens the consent popup
     Given onboarding a linked Yahoo league fails with a re-link signal and the authorize endpoint returns a consent URL
     When I connect a Yahoo league "45.l.678" from the landing page
-    Then the Yahoo authorization is requested for that league
+    Then the Yahoo consent popup is opened for that league
 
   Scenario: Enabling auto-refresh when connecting a linked Yahoo league sends the opt-in
     Given onboarding a linked Yahoo league completes successfully
@@ -86,10 +101,10 @@ Feature: Landing page connect routing (frontend/landing-page / frontend/connect-
     When I return from Yahoo to the landing page with a linked account for league "45.l.678"
     Then the Yahoo onboard request included auto-refresh
 
-  Scenario: A revoked Yahoo link surfaced on return restarts the OAuth flow
+  Scenario: A revoked Yahoo link surfaced on return reopens the consent popup
     Given onboarding a linked Yahoo league fails with a re-link signal and the authorize endpoint returns a consent URL
     When I return from Yahoo to the landing page with a linked account for league "45.l.678"
-    Then the Yahoo authorization is requested for that league
+    Then the Yahoo consent popup is opened for that league
 
   Scenario: A cancelled Yahoo link on return shows an inline retry alert
     When I return from Yahoo to the landing page with a cancelled link
