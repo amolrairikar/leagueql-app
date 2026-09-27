@@ -32,7 +32,10 @@ import {
 } from '@/features/connect_league/api-calls';
 import { EspnCredentialFields } from '@/features/connect_league/espn-credential-fields';
 import { pollForCompletion } from '@/features/connect_league/poll';
-import { setYahooAutoRefreshPref } from '@/features/connect_league/yahoo-auto-refresh-pref';
+import {
+  setYahooAutoRefreshPref,
+  takeYahooAutoRefreshPref,
+} from '@/features/connect_league/yahoo-auto-refresh-pref';
 import {
   FEATURES,
   HOW_STEPS,
@@ -183,6 +186,8 @@ export default function LeagueQLLanding() {
   const loadingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
     null,
   );
+  // Guards the Yahoo OAuth-return resume against a StrictMode double-invoke.
+  const yahooReturnRef = useRef(false);
 
   // Reaching the landing page is a demo-mode exit path. The landing page is never
   // part of the demo experience, so any of the ways a user can arrive here — the
@@ -203,6 +208,51 @@ export default function LeagueQLLanding() {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setShowConnectForm(true);
     }
+  }, [isSignedIn]);
+
+  // Resume the Yahoo OAuth return inline (frontend/connect-yahoo-league,
+  // frontend/landing-page). Yahoo's consent flow redirects the browser back to `/` carrying
+  // a YAHOO platform marker, a linked flag, and the pending league id; pick those up here so
+  // onboarding finishes with the same inline progress UI as ESPN/Sleeper instead of on a
+  // separate page. Gated on isSignedIn (the caller returns still signed in) and guarded
+  // against a StrictMode double-invoke.
+  useEffect(() => {
+    if (yahooReturnRef.current) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('platform')?.toUpperCase() !== 'YAHOO') return;
+    if (!isSignedIn) return;
+    yahooReturnRef.current = true;
+
+    const linked = params.get('yahooLinked') === '1';
+    const returnedLeagueId = params.get('leagueId') ?? '';
+    // Consume the return params so a reload doesn't re-trigger onboarding.
+    try {
+      window.history.replaceState(null, '', window.location.pathname);
+    } catch {
+      // History unavailable — the guard ref still prevents an in-session re-run.
+    }
+
+    // All state updates happen inside the async callback (not the effect body) so this
+    // resume doesn't trip react-hooks/set-state-in-effect, mirroring migrate-league.
+    void (async () => {
+      setPlatform('YAHOO');
+      setShowConnectForm(true);
+      if (linked && returnedLeagueId) {
+        setLeagueId(returnedLeagueId);
+        setError(null);
+        setLoading(true);
+        // Reuse the already-linked onboard chain (poll + progress bar + revoked-link
+        // recovery), passing the opt-in stashed before the redirect.
+        await handleYahooConnect(returnedLeagueId, takeYahooAutoRefreshPref());
+      } else {
+        // A declined/failed link (yahooLinked=0), or a linked return with no league id
+        // to resume — show the inline retry alert with Yahoo preselected.
+        setError('Yahoo linking was cancelled or failed — try again.');
+      }
+    })();
+    // handleYahooConnect is a stable-enough closure for this once-per-return resume; the
+    // ref guard makes the effect run at most once, so we intentionally key only on sign-in.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSignedIn]);
 
   useEffect(() => {
@@ -273,15 +323,18 @@ export default function LeagueQLLanding() {
   // Yahoo's consent screen. POST /leagues 403-gates unlinked callers before any side
   // effect (backend/yahoo-oauth), so we optimistically onboard first and treat a 403 as
   // "not linked". A revoked-token link passes the gate but fails the job with YAHOO_AUTH.
-  async function handleYahooConnect(trimmedId: string) {
+  async function handleYahooConnect(
+    trimmedId: string,
+    autoRefreshOverride?: boolean,
+  ) {
+    // The normal submit path uses the checkbox state; the OAuth return path passes the
+    // opt-in it stashed before the redirect (takeYahooAutoRefreshPref) as an override.
+    const autoRefresh = autoRefreshOverride ?? yahooAutoRefresh;
     // Persist the opt-in so it survives a possible OAuth redirect, and apply it on the
     // direct (already-linked) onboard below.
-    setYahooAutoRefreshPref(yahooAutoRefresh);
+    setYahooAutoRefreshPref(autoRefresh);
     try {
-      const onboardResult = await onboardYahooLeague(
-        trimmedId,
-        yahooAutoRefresh,
-      );
+      const onboardResult = await onboardYahooLeague(trimmedId, autoRefresh);
       // A fresh onboard returns a correlation_id to poll; an already-onboarded league
       // returns 200 with null `data`, which skips straight to routing the user in.
       if (onboardResult.data) {

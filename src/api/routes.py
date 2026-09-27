@@ -1205,7 +1205,7 @@ def yahoo_authorize(
     flow: Annotated[
         Literal["ONBOARD", "MIGRATE"],
         Query(
-            description="Return context: ONBOARD returns to /connect_league, MIGRATE to /migrate_league"
+            description="Return context: ONBOARD returns to the landing page, MIGRATE to /migrate_league"
         ),
     ] = "ONBOARD",
 ) -> APIResponse:
@@ -1237,12 +1237,12 @@ def yahoo_callback(
     Public route — Yahoo redirects the browser here with no Clerk JWT. Validates and
     single-use-consumes ``state``, exchanges the ``code`` for tokens, persists an encrypted
     ``YAHOO_OAUTH`` item, and 302s back to the frontend page selected by the state's
-    return-context ``flow`` (``MIGRATE`` -> ``/migrate_league``, else ``/connect_league``) with
-    a linked/declined marker. ``state`` is consumed first — even on a declined link (Yahoo
-    echoes it on ``error=access_denied``) — so the return page is recovered from ``flow``; when
-    no usable ``state`` is present the callback falls back to ``/connect_league``. A
-    declined/invalid/failed link writes no token item and never reflects an external redirect
-    target.
+    return-context ``flow`` (``MIGRATE`` -> ``/migrate_league``, else the landing page ``/``,
+    which resumes onboarding inline) with a linked/declined marker. ``state`` is consumed
+    first — even on a declined link (Yahoo echoes it on ``error=access_denied``) — so the
+    return page is recovered from ``flow``; when no usable ``state`` is present the callback
+    falls back to the landing page. A declined/invalid/failed link writes no token item and
+    never reflects an external redirect target.
     """
 
     def _base_for_flow(flow: str) -> str:
@@ -1268,7 +1268,7 @@ def yahoo_callback(
 
     # Consume state first (when present) so a single-use state is enforced and the return-context
     # ``flow`` is recoverable even when the user declined — otherwise a MIGRATE decline would
-    # bounce the user to /connect_league.
+    # bounce the user to the landing page.
     state_payload = yahoo_oauth.consume_oauth_state(state) if state else None
     return_base = (
         _base_for_flow(state_payload.get("flow", "ONBOARD"))

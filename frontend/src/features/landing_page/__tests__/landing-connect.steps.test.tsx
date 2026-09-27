@@ -7,6 +7,7 @@ import { afterEach, expect, vi } from 'vitest';
 
 import LeagueQLLanding from '../landing-page';
 
+import { setYahooAutoRefreshPref } from '@/features/connect_league/yahoo-auto-refresh-pref';
 import {
   API,
   leagueMetadataError,
@@ -184,6 +185,36 @@ async function connectEspnLeague(
   });
   await act(async () => {
     await vi.advanceTimersByTimeAsync(8000);
+  });
+}
+
+/**
+ * Simulate Yahoo's OAuth callback returning the browser to the landing page. The page
+ * reads the YAHOO platform marker, linked flag, and league id from window.location.search
+ * on mount and resumes onboarding inline. window.location is swapped for a URL so `search`
+ * is real and
+ * `href` is settable (the revoked path restarts OAuth). Fake timers are enabled before the
+ * render so the resume's poll interval can be fast-forwarded — the resume runs during mount.
+ */
+async function returnFromYahoo(markers: Record<string, string>) {
+  const search = new URLSearchParams({
+    platform: 'YAHOO',
+    ...markers,
+  }).toString();
+  Object.defineProperty(window, 'location', {
+    configurable: true,
+    value: new URL(`http://localhost/?${search}`),
+  });
+  vi.useFakeTimers();
+  await renderRoute(
+    <Routes>
+      <Route path="/" element={<LeagueQLLanding />} />
+      <Route path="/home" element={<div>HOME PAGE</div>} />
+    </Routes>,
+    { route: '/' },
+  );
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(5000);
   });
 }
 
@@ -618,6 +649,140 @@ defineFeature(feature, (test) => {
     );
     then('the Yahoo onboard request included auto-refresh', () => {
       expect(capturedBody?.autoRefresh).toBe(true);
+    });
+  });
+
+  test('Returning from Yahoo with a linked account resumes onboarding inline', ({
+    given,
+    when,
+    then,
+  }) => {
+    given('onboarding a linked Yahoo league completes successfully', () => {
+      server.use(onboardOk, jobStatus('COMPLETED'), getLeagueOk);
+    });
+    when(
+      /^I return from Yahoo to the landing page with a linked account for league "(.*)"$/,
+      async (leagueId) => {
+        await returnFromYahoo({ yahooLinked: '1', leagueId });
+      },
+    );
+    then('I land on the league home page', () => {
+      expect(screen.getByText('HOME PAGE')).toBeInTheDocument();
+    });
+  });
+
+  test('Returning from Yahoo for an already-onboarded league routes straight in', ({
+    given,
+    when,
+    then,
+  }) => {
+    given('the Yahoo league is already onboarded', () => {
+      // No jobStatus handler: an already-onboarded league returns data:null, so the
+      // return leg must skip polling and route straight into the existing league.
+      server.use(onboardAlreadyOnboarded, getLeagueOk);
+    });
+    when(
+      /^I return from Yahoo to the landing page with a linked account for league "(.*)"$/,
+      async (leagueId) => {
+        await returnFromYahoo({ yahooLinked: '1', leagueId });
+      },
+    );
+    then('I land on the league home page', () => {
+      expect(screen.getByText('HOME PAGE')).toBeInTheDocument();
+    });
+  });
+
+  test('The auto-refresh opt-in chosen before the redirect is applied on return', ({
+    given,
+    and,
+    when,
+    then,
+  }) => {
+    let capturedBody: { autoRefresh?: boolean } | null = null;
+    given('onboarding a linked Yahoo league completes successfully', () => {
+      server.use(
+        getLeagueOk,
+        http.post(`${API}/leagues`, async ({ request }) => {
+          capturedBody = (await request.json()) as { autoRefresh?: boolean };
+          return HttpResponse.json(
+            {
+              detail: 'Successfully triggered onboarding',
+              data: { correlation_id: 'corr-1' },
+            },
+            { status: 201 },
+          );
+        }),
+        jobStatus('COMPLETED'),
+      );
+    });
+    and('the Yahoo auto-refresh opt-in was stashed before the redirect', () => {
+      // The opt-in is chosen before the consent redirect and stashed in sessionStorage;
+      // the return leg consumes it (takeYahooAutoRefreshPref) and applies it on onboard.
+      setYahooAutoRefreshPref(true);
+    });
+    when(
+      /^I return from Yahoo to the landing page with a linked account for league "(.*)"$/,
+      async (leagueId) => {
+        await returnFromYahoo({ yahooLinked: '1', leagueId });
+      },
+    );
+    then('the Yahoo onboard request included auto-refresh', () => {
+      expect(capturedBody?.autoRefresh).toBe(true);
+    });
+  });
+
+  test('A revoked Yahoo link surfaced on return restarts the OAuth flow', ({
+    given,
+    when,
+    then,
+  }) => {
+    let authorizeLeagueId: string | null = null;
+    given(
+      'onboarding a linked Yahoo league fails with a re-link signal and the authorize endpoint returns a consent URL',
+      () => {
+        server.use(
+          onboardOk,
+          jobStatus('FAILED', 'YAHOO_AUTH'),
+          http.get(`${API}/leagues/yahoo/oauth/authorize`, ({ request }) => {
+            authorizeLeagueId = new URL(request.url).searchParams.get(
+              'leagueId',
+            );
+            return HttpResponse.json({
+              detail: 'ok',
+              data: {
+                authorize_url: 'https://consent.yahoo.test/authorize?x=1',
+              },
+            });
+          }),
+        );
+      },
+    );
+    when(
+      /^I return from Yahoo to the landing page with a linked account for league "(.*)"$/,
+      async (leagueId) => {
+        await returnFromYahoo({ yahooLinked: '1', leagueId });
+      },
+    );
+    then('the Yahoo authorization is requested for that league', () => {
+      expect(authorizeLeagueId).toBe('45.l.678');
+      expect(window.location.href).toBe(
+        'https://consent.yahoo.test/authorize?x=1',
+      );
+    });
+  });
+
+  test('A cancelled Yahoo link on return shows an inline retry alert', ({
+    when,
+    then,
+  }) => {
+    when(
+      'I return from Yahoo to the landing page with a cancelled link',
+      async () => {
+        await returnFromYahoo({ yahooLinked: '0' });
+      },
+    );
+    then(/^I see an inline alert "(.*)"$/, (text) => {
+      expect(screen.getByText(new RegExp(text, 'i'))).toBeInTheDocument();
     });
   });
 });

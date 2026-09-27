@@ -76,8 +76,9 @@ paths:
           in: query
           required: false
           description: >
-            Return context. ONBOARD (default) returns the callback to /connect_league;
-            MIGRATE returns it to /migrate_league so the migration wizard resumes.
+            Return context. ONBOARD (default) returns the callback to the landing page,
+            which resumes onboarding inline; MIGRATE returns it to /migrate_league so the
+            migration wizard resumes.
           schema:
             type: string
             enum: [ONBOARD, MIGRATE]
@@ -102,7 +103,8 @@ paths:
         Public — no Clerk authorizer (backend/yahoo-oauth). Yahoo redirects the browser here
         with no JWT after the user authorizes. Validates and single-use-consumes the state,
         exchanges the code for tokens (PKCE public client, no secret), stores an encrypted per-user token item,
-        and 302-redirects to the frontend /connect_league page with a linked/declined marker.
+        and 302-redirects to the flow's frontend return page with a linked/declined marker
+        (ONBOARD -> the landing page, which resumes onboarding inline; MIGRATE -> /migrate_league).
       operationId: yahooCallback
       parameters:
         - name: code

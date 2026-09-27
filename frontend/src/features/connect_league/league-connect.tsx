@@ -1,27 +1,21 @@
 import { Navigate } from 'react-router-dom';
 
-import YahooConnectReturn from '@/features/connect_league/yahoo-connect-return';
-
 /**
- * The `/connect_league` route. Its only remaining job is the Yahoo OAuth return:
- * Yahoo redirects the browser back here with `platform=YAHOO` (plus a
- * `yahooLinked` flag and the league id), which renders the two-phase
- * {@link YahooConnectReturn} UI.
+ * The `/connect_league` route is retired. Yahoo now finishes its OAuth round-trip
+ * inline on the landing page (frontend/landing-page), which reads the
+ * `platform=YAHOO`, `yahooLinked`, and `leagueId` return params on load.
  *
- * The standalone ESPN/Sleeper onboard/refresh form has been retired — ESPN and
- * Sleeper onboard inline on the landing page (frontend/landing-page) and ESPN
- * refresh happens in the in-dashboard dialog (frontend/navigation-sidebar). Any
- * other hit on this route is sent to the landing connect entry.
+ * This route is kept only as a redirect shim so in-flight OAuth callbacks and stale
+ * bookmarks still resolve: a Yahoo return is forwarded to `/` with its params
+ * preserved (so the inline resume runs), and anything else goes to the landing
+ * connect entry. The standalone ESPN/Sleeper onboard/refresh form was already
+ * retired — those onboard inline on the landing page and ESPN refresh happens in the
+ * in-dashboard dialog (frontend/navigation-sidebar).
  */
 export default function LeagueConnect() {
   const params = new URLSearchParams(window.location.search);
   if (params.get('platform')?.toUpperCase() === 'YAHOO') {
-    return (
-      <YahooConnectReturn
-        linked={params.get('yahooLinked') === '1'}
-        leagueId={params.get('leagueId') ?? ''}
-      />
-    );
+    return <Navigate to={`/?${params.toString()}`} replace />;
   }
   return <Navigate to="/?connect=true" replace />;
 }

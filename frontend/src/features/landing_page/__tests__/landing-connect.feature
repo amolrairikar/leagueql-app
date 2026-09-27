@@ -69,3 +69,28 @@ Feature: Landing page connect routing (frontend/landing-page / frontend/connect-
     Given onboarding a linked Yahoo league completes successfully
     When I connect a Yahoo league "45.l.678" with auto-refresh enabled
     Then the Yahoo onboard request included auto-refresh
+
+  Scenario: Returning from Yahoo with a linked account resumes onboarding inline
+    Given onboarding a linked Yahoo league completes successfully
+    When I return from Yahoo to the landing page with a linked account for league "45.l.678"
+    Then I land on the league home page
+
+  Scenario: Returning from Yahoo for an already-onboarded league routes straight in
+    Given the Yahoo league is already onboarded
+    When I return from Yahoo to the landing page with a linked account for league "45.l.678"
+    Then I land on the league home page
+
+  Scenario: The auto-refresh opt-in chosen before the redirect is applied on return
+    Given onboarding a linked Yahoo league completes successfully
+    And the Yahoo auto-refresh opt-in was stashed before the redirect
+    When I return from Yahoo to the landing page with a linked account for league "45.l.678"
+    Then the Yahoo onboard request included auto-refresh
+
+  Scenario: A revoked Yahoo link surfaced on return restarts the OAuth flow
+    Given onboarding a linked Yahoo league fails with a re-link signal and the authorize endpoint returns a consent URL
+    When I return from Yahoo to the landing page with a linked account for league "45.l.678"
+    Then the Yahoo authorization is requested for that league
+
+  Scenario: A cancelled Yahoo link on return shows an inline retry alert
+    When I return from Yahoo to the landing page with a cancelled link
+    Then I see an inline alert "Yahoo linking was cancelled or failed"
