@@ -72,7 +72,7 @@ defineFeature(feature, (test) => {
       ).getAllByRole('heading', { level: 2 });
       expect(steps.map((s) => s.textContent)).toEqual([
         'Export your league',
-        'Plug it into something',
+        "Analyze your league's data",
         'Share what you built',
       ]);
       expect(

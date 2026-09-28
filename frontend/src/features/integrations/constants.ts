@@ -50,7 +50,7 @@ export const HOW_IT_WORKS: HowItWorksStep[] = [
     body: 'Download a ZIP of <season>_<view>.json files, plus README.md and manifest.json.',
   },
   {
-    title: 'Plug it into something',
+    title: "Analyze your league's data",
     body: 'Upload it to an AI assistant, import it into a sheet, or point a script at it.',
   },
   {

@@ -46,9 +46,8 @@ export default function IntegrationsPage() {
               Integrations
             </h1>
             <p className="mt-1.5 max-w-[62ch] text-sm text-muted-foreground">
-              Bots, dashboards, spreadsheets and AI prompts that league managers
-              built on their LeagueQL exports. Pick one, export your seasons,
-              and plug your own league in.
+              Built something cool using the data from LeagueQL? Submit your
+              creation here to share it with other LeagueQL users!
             </p>
           </div>
           <Button

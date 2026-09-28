@@ -22,7 +22,7 @@ visiting `/integrations` SHALL redirect to `/home`.
 
 ### Requirement: Explain how integrations work
 The page SHALL show a heading "Integrations", a short description, a "Submit your integration" button, and a
-three-step "How it works" strip: export your league, plug it into something ("Upload it to an AI assistant, import
+three-step "How it works" strip: export your league, analyze your league's data ("Upload it to an AI assistant, import
 it into a sheet, or point a script at it."), and share what you built.
 
 #### Scenario: Page header and steps
