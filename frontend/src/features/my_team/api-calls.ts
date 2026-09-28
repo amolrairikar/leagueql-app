@@ -4,6 +4,7 @@ import { isDemoMode } from '@/lib/cookie-handler';
 import { getDemoMyTeam } from '@/lib/demo-api';
 
 export { getManagerHistoryData } from '@/features/manager_history/api-calls';
+export { getDraftData } from '@/features/draft_grades/api-calls';
 export { getLeagueSettings } from '@/features/playoff_race_predictor/api-calls';
 
 export interface MyTeamPrefs {

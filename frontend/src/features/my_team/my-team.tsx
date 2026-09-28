@@ -1,8 +1,9 @@
-import { Mail, Trophy } from 'lucide-react';
+import { Info, Mail, Trophy } from 'lucide-react';
 import { Suspense, use, useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 
 import {
+  getDraftData,
   getLeagueSettings,
   getManagerHistoryData,
   getMyTeam,
@@ -19,12 +20,18 @@ import {
   type TeamOption,
   type TeamSummary,
   type ThisWeekMatchup,
+  type TopDraftPick,
 } from './compute-my-team';
 
 import { TeamAvatar } from '@/components/team-avatar';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { assignAvatarColors, avatarColor } from '@/lib/color-constants';
 import { getLeagueCookies } from '@/lib/cookie-handler';
 import { ErrorAlert } from '@/lib/error-alert';
@@ -93,8 +100,13 @@ export default function MyTeamPage() {
           getLeagueSettings(leagueId, platform, season)
             .then((r) => r.data[0] ?? null)
             .catch(() => null),
-        ]).then(([history, settings]) => ({
-          input: { ...history, settings, season },
+          // Optional section: no draft (404) or a failed load shows the empty
+          // message rather than failing the page.
+          getDraftData(leagueId, platform, season)
+            .then((r) => r.data)
+            .catch(() => []),
+        ]).then(([history, settings, draftPicks]) => ({
+          input: { ...history, settings, season, draftPicks },
           teams: listSeasonTeams(history.matchups, season),
         })),
         'Failed to load league data.',
@@ -413,17 +425,100 @@ function AwardsRow({ view }: { view: MyTeamView }) {
   );
 }
 
+function DraftSlot({ pick }: { pick: TopDraftPick }) {
+  return pick.bid != null ? (
+    <>${pick.bid}</>
+  ) : (
+    <>
+      Rd {pick.round}, Pick {pick.roundPick} (#{pick.overallPick})
+    </>
+  );
+}
+
+function TopDraftPicks({ picks }: { picks: TopDraftPick[] }) {
+  return (
+    <section
+      className="border border-border/50 rounded-lg p-4 flex flex-col gap-3"
+      aria-label="My top 3 draft picks"
+    >
+      <div className="flex items-center justify-between">
+        <span className={LABEL}>My top 3 draft picks</span>
+        <Link
+          to="/draft_grades"
+          className="text-[12px] font-medium text-primary cursor-pointer"
+        >
+          Draft grades →
+        </Link>
+      </div>
+      {picks.length === 0 ? (
+        <p className="text-[13px] text-muted-foreground">
+          No draft value data yet
+        </p>
+      ) : (
+        <ol className="flex flex-col divide-y divide-border/50">
+          {picks.map((p, i) => (
+            <li key={p.overallPick} className="flex items-center gap-3 py-2">
+              <span className="text-[12px] text-muted-foreground w-4 text-right shrink-0">
+                {i + 1}
+              </span>
+              <div className="flex-1 min-w-0 flex flex-col">
+                <span className="text-[13px] font-medium truncate">
+                  {p.playerName}{' '}
+                  <span className="text-[11px] font-normal text-muted-foreground">
+                    {p.position}
+                  </span>
+                </span>
+                <span className="text-[12px] text-muted-foreground">
+                  <DraftSlot pick={p} />
+                </span>
+              </div>
+              <div className="flex flex-col items-end shrink-0 tabular-nums">
+                <span className="text-[13px] font-semibold">
+                  {p.vorp >= 0 ? '+' : ''}
+                  {fmtPts(p.vorp)} VORP
+                </span>
+                <span className="text-[12px] text-muted-foreground">
+                  {p.totalPoints != null ? `${fmtPts(p.totalPoints)} pts` : '—'}
+                </span>
+              </div>
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
+  );
+}
+
 function EmailPlaceholderRow() {
   return (
     <div className="border border-border/50 rounded-lg px-3.5 py-3 flex items-center gap-3">
       <Mail className="h-5 w-5 text-muted-foreground shrink-0" aria-hidden />
       <div className="flex-1 flex flex-col gap-1 items-start">
-        <label
-          htmlFor="email-digest"
-          className="text-[13px] font-medium text-muted-foreground"
-        >
-          Email me each week
-        </label>
+        <div className="flex items-center gap-1.5">
+          <label
+            htmlFor="email-digest"
+            className="text-[13px] font-medium text-muted-foreground"
+          >
+            Email me each week
+          </label>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label="What's in the weekly emails"
+                className="text-muted-foreground hover:text-foreground cursor-pointer"
+              >
+                <Info className="h-3.5 w-3.5" aria-hidden />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="max-w-72">
+              You will receive 2 weekly emails. On Tuesday, a recap of last
+              week, and on Thursday, a preview of your upcoming matchup. You can
+              opt out of the email recaps at any time and are opted out by
+              default.
+            </TooltipContent>
+          </Tooltip>
+        </div>
         <span className="text-[10px] font-bold tracking-[0.06em] text-primary bg-primary/10 rounded px-1.5 py-0.5">
           COMING SOON!
         </span>
@@ -677,7 +772,11 @@ function OffseasonCard({
           to="/manager_history"
         />
         {efficiencyTile(view)}
-        <Tile label="Regular-season rank" value={ordinal(team.rank)} />
+        <Tile
+          label="Longest win streak"
+          value={view.longestWinStreak}
+          to="/matchups"
+        />
       </div>
     </>
   );
@@ -706,6 +805,7 @@ function YourWeekCard({
           onChangeTeam={onChangeTeam}
         />
       )}
+      <TopDraftPicks picks={view.topDraftPicks} />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
         <AwardsRow view={view} />
         <EmailPlaceholderRow />

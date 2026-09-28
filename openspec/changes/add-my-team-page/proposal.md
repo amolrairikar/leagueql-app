@@ -21,6 +21,7 @@ reason to open the app. It is built from data and calculations the app already h
   - this week's matchup (projected score, win probability, all-time head-to-head, last meeting,
     the opponent's recent form)
   - a weekly-awards summary
+  - my top 3 draft picks this season, by value over replacement (VORP)
   - a "Change team" link
 - **"Email me each week" row:** a disabled placeholder marked "COMING SOON!". It does nothing
   in this change; weekly email digests are deferred.

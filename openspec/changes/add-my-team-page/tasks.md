@@ -31,6 +31,7 @@
 - [x] 3.2 Register `/my_team` in `frontend/src/app/app.tsx` (no feature flag). Verify with the my-team feature, whose scenarios open the page at `/my_team`.
 - [x] 3.3 Add the "My Team" entry after "Home" in `features/sidebar/app-sidebar.tsx` (always shown). Verify with `__tests__/my-team-nav.feature` + steps: the entry sits between Home and Standings and links to `/my_team`.
 - [x] 3.4 From `frontend/`, run `npm run format:fix && npm run lint && npx vitest run src/features/my_team src/features/sidebar && npm run build:ci` and verify all pass.
+- [x] 3.5 Add "My top 3 draft picks": load the current season's `DRAFT` view (a failure falls back to no picks), select the claimed team's top 3 picks by VORP (excluding null VORP), and render them on the in-season and offseason cards. Verify with unit tests in `compute-my-team.test.ts` (ordering, null exclusion, fewer than three, other teams' picks ignored) and my-team feature scenarios (list shown; empty and failed loads show "No draft value data yet").
 
 ## 4. Integration
 

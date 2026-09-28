@@ -67,6 +67,29 @@ Feature: My Team page (frontend/my-team)
     Then my claim for "owner-2" was saved
     And I see the Your week card for "Team 2"
 
+  Scenario: Top three draft picks by VORP
+    Given the league data is available
+    And I have claimed owner "owner-1"
+    When I open My Team
+    Then my top draft picks are "Player 1, Player 9, Player 5"
+    And top pick 1 shows "RB", "Rd 1, Pick 1 (#1)", "+85.2 VORP" and "185.2 pts"
+
+  Scenario: No draft data
+    Given the league data is available
+    And I have claimed owner "owner-1"
+    And the league has no draft data
+    When I open My Team
+    Then the draft picks section shows "No draft value data yet"
+    And the card heading reads "Your week · Week 3"
+
+  Scenario: Draft data fails to load
+    Given the league data is available
+    And I have claimed owner "owner-1"
+    And the draft data fails to load
+    When I open My Team
+    Then the draft picks section shows "No draft value data yet"
+    And the card heading reads "Your week · Week 3"
+
   Scenario: Week 1
     Given the league data is available
     And I have claimed owner "owner-1"
@@ -86,7 +109,8 @@ Feature: My Team page (frontend/my-team)
     Then the card heading reads "Final result · 2025 season"
     And the "Final standing" tile shows "1st" and "League champion"
     And the "Final record" tile shows "3–0" and "358.40 PF | 312.90 PA"
-    And the "Regular-season rank" tile has no subtext
+    And the "Longest win streak" tile shows "3"
+    And the "Longest win streak" tile has no subtext
     And the "Lineup efficiency" tile has no subtext
 
   Scenario: Offseason without a title
@@ -104,6 +128,8 @@ Feature: My Team page (frontend/my-team)
     And I try to toggle "Email me each week"
     Then the "Email me each week" switch is disabled and off
     And "COMING SOON!" is shown
+    When I hover the weekly emails info icon
+    Then the tooltip describes the "On Tuesday, a recap of last week" and the "are opted out by default"
     And no claim was saved
 
   Scenario: Loading

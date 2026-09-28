@@ -157,6 +157,34 @@ const STANDINGS = [
   },
 ];
 
+// Team 1's picks: top three by VORP are 85.2 (#1), 62.7 (#9), 40.1 (#5); the kicker
+// has no VORP and team 2's higher-VORP pick is not ours.
+function draftPick(overall: number, teamId: string, vorp: number | null) {
+  return {
+    overall_pick_number: overall,
+    round: Math.ceil(overall / 4),
+    round_pick_number: ((overall - 1) % 4) + 1,
+    team_id: teamId,
+    player_id: String(overall),
+    player_name: `Player ${overall}`,
+    position: vorp == null ? 'K' : 'RB',
+    vorp,
+    total_points: vorp == null ? 90 : 100 + vorp,
+    is_auction: false,
+    bid_amount: 0,
+    season: SEASON,
+  };
+}
+
+const DRAFT = [
+  draftPick(1, '1', 85.2),
+  draftPick(5, '1', 40.1),
+  draftPick(9, '1', 62.7),
+  draftPick(13, '1', 12),
+  draftPick(17, '1', null),
+  draftPick(2, '2', 120),
+];
+
 const tile = (label: string) =>
   screen.getByText(label, { selector: 'span' }).parentElement!;
 
@@ -174,6 +202,7 @@ const steps = ({
   let demo = false;
   const saved: string[] = [];
   let putStatus = 200;
+  let draft: unknown[] | undefined = DRAFT;
 
   function handlers() {
     return [
@@ -182,6 +211,8 @@ const steps = ({
         SEASON_STANDINGS: STANDINGS,
         PLATFORM_MIGRATION: MIGRATION,
         LEAGUE_SETTINGS: SETTINGS,
+        // Omitted (undefined) → the query 404s, like a league with no draft.
+        ...(draft ? { DRAFT: draft } : {}),
       }),
       http.get(`${API}/leagues/:id/me`, () =>
         HttpResponse.json({ detail: 'ok', data: { owner_id: claimed } }),
@@ -278,6 +309,24 @@ const steps = ({
       ),
     );
   });
+  and('the league has no draft data', () => {
+    draft = undefined;
+    server.use(...handlers());
+  });
+  and('the draft data fails to load', () => {
+    server.use(
+      http.get(`${API}/leagues/:id/query`, ({ request }) => {
+        const queryType = new URL(request.url).searchParams.get('queryType');
+        if (queryType?.startsWith('DRAFT#')) {
+          return HttpResponse.json(
+            { detail: 'Internal Server Error' },
+            { status: 500 },
+          );
+        }
+        return undefined;
+      }),
+    );
+  });
   and('the league data fails to load', () => {
     server.use(leagueQueryError(500));
   });
@@ -349,6 +398,9 @@ const steps = ({
     expect(t.children[1]).toHaveTextContent(value);
     expect(t.children[2]).toHaveTextContent(sub);
   });
+  and(/^the "(.*)" tile shows "([^"]*)"$/, (label, value) => {
+    expect(tile(label).children[1]).toHaveTextContent(value);
+  });
   and(/^the "(.*)" tile has no subtext$/, (label) => {
     // Label + value only; the optional subtext span is not rendered.
     expect(tile(label).children).toHaveLength(2);
@@ -369,6 +421,7 @@ const steps = ({
         ),
         settings: SETTINGS[0],
         season: SEASON,
+        draftPicks: [],
       },
       'owner-1',
     ) as InSeasonView;
@@ -415,6 +468,51 @@ const steps = ({
   and(/^"(.*)" is shown$/, (text) => {
     expect(screen.getByText(text)).toBeInTheDocument();
   });
+  then(/^my top draft picks are "(.*)"$/, async (names) => {
+    const section = await screen.findByRole('region', {
+      name: 'My top 3 draft picks',
+    });
+    const rows = within(section).getAllByRole('listitem');
+    expect(rows).toHaveLength(names.split(', ').length);
+    names.split(', ').forEach((n, i) => {
+      expect(rows[i]).toHaveTextContent(n);
+    });
+  });
+  and(
+    /^top pick (\d+) shows "(.*)", "(.*)", "(.*)" and "(.*)"$/,
+    (index, position, slot, vorp, points) => {
+      const section = screen.getByRole('region', {
+        name: 'My top 3 draft picks',
+      });
+      const row = within(section).getAllByRole('listitem')[Number(index) - 1];
+      for (const text of [position, slot, vorp, points]) {
+        expect(row).toHaveTextContent(text);
+      }
+    },
+  );
+  then(/^the draft picks section shows "(.*)"$/, async (text) => {
+    const section = await screen.findByRole('region', {
+      name: 'My top 3 draft picks',
+    });
+    expect(section).toHaveTextContent(text);
+    expect(within(section).queryAllByRole('listitem')).toHaveLength(0);
+  });
+  when('I hover the weekly emails info icon', async () => {
+    await act(async () => {
+      fireEvent.focus(
+        screen.getByRole('button', { name: "What's in the weekly emails" }),
+      );
+      await Promise.resolve();
+    });
+  });
+  then(
+    /^the tooltip describes the "(.*)" and the "(.*)"$/,
+    async (first, second) => {
+      const tip = await screen.findByRole('tooltip');
+      expect(tip).toHaveTextContent(first);
+      expect(tip).toHaveTextContent(second);
+    },
+  );
   then('I see the loading skeleton', () => {
     expect(screen.getByLabelText('Loading My Team')).toBeInTheDocument();
   });

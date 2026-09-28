@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   computeMyTeam,
   listSeasonTeams,
+  longestWinStreak,
   resolveClaimedTeam,
+  topDraftPicks,
   type InSeasonView,
   type MyTeamInput,
   type OffseasonView,
@@ -14,6 +16,7 @@ import type {
   MatchupItem,
   PlayerStat,
 } from '@/components/api/types';
+import type { DraftPickItem } from '@/features/draft_grades/api-calls';
 import { computeStartSitReport } from '@/features/lineup_efficiency/compute-lineup-efficiency';
 import type { ManagerStandingsItem } from '@/features/manager_history/api-calls';
 import { buildMatchupPreview } from '@/features/matchups/compute-preview';
@@ -127,9 +130,41 @@ const MIGRATION = new Map([
   ['old-4', 'owner-4'],
 ]);
 
+function pick(
+  overall: number,
+  teamId: string,
+  vorp: number | null,
+  extra: Partial<DraftPickItem> = {},
+): DraftPickItem {
+  return {
+    overall_pick_number: overall,
+    round: Math.ceil(overall / 4),
+    round_pick_number: ((overall - 1) % 4) + 1,
+    team_id: teamId,
+    player_id: String(overall),
+    player_name: `Player ${overall}`,
+    position: vorp == null ? 'K' : 'RB',
+    vorp,
+    total_points: vorp == null ? 90 : 100 + vorp,
+    is_auction: false,
+    bid_amount: 0,
+    ...extra,
+  } as DraftPickItem;
+}
+
+const DRAFT = [
+  pick(1, '1', 85.2),
+  pick(5, '1', 40.1),
+  pick(9, '1', 62.7),
+  pick(13, '1', 12),
+  pick(17, '1', null),
+  pick(2, '2', 120),
+];
+
 function input(
   matchups: MatchupItem[],
   standings: ManagerStandingsItem[] = [],
+  draftPicks: DraftPickItem[] = DRAFT,
 ): MyTeamInput {
   return {
     matchups,
@@ -137,6 +172,7 @@ function input(
     migrationMapping: MIGRATION,
     settings: SETTINGS,
     season: SEASON,
+    draftPicks,
   };
 }
 
@@ -157,6 +193,71 @@ describe('listSeasonTeams / resolveClaimedTeam', () => {
     expect(resolveClaimedTeam(teams, 'owner-2', MIGRATION)?.teamId).toBe('2');
     expect(resolveClaimedTeam(teams, 'nobody', MIGRATION)).toBeNull();
     expect(resolveClaimedTeam(teams, null, MIGRATION)).toBeNull();
+  });
+});
+
+describe('topDraftPicks', () => {
+  it('takes the team top three by VORP, ignoring null VORP and other teams', () => {
+    const top = topDraftPicks(DRAFT, '1');
+    expect(top.map((p) => p.vorp)).toEqual([85.2, 62.7, 40.1]);
+    expect(top[0]).toMatchObject({
+      playerName: 'Player 1',
+      position: 'RB',
+      round: 1,
+      roundPick: 1,
+      overallPick: 1,
+      bid: null,
+      totalPoints: 185.2,
+    });
+  });
+
+  it('returns fewer than three when fewer picks have a VORP', () => {
+    const picks = [pick(1, '1', 10), pick(5, '1', null), pick(9, '1', 5)];
+    expect(topDraftPicks(picks, '1').map((p) => p.vorp)).toEqual([10, 5]);
+  });
+
+  it('is empty with no draft data', () => {
+    expect(topDraftPicks([], '1')).toEqual([]);
+  });
+
+  it('reports the bid for an auction draft and names unnamed players', () => {
+    const [top] = topDraftPicks(
+      [
+        pick(3, '1', 7, {
+          is_auction: true,
+          bid_amount: 42,
+          player_name: null,
+        }),
+      ],
+      '1',
+    );
+    expect(top).toMatchObject({ bid: 42, playerName: 'Player 3' });
+  });
+
+  it('breaks VORP ties by the earlier pick', () => {
+    const top = topDraftPicks([pick(9, '1', 5), pick(1, '1', 5)], '1');
+    expect(top.map((p) => p.overallPick)).toEqual([1, 9]);
+  });
+});
+
+describe('longestWinStreak', () => {
+  it('counts consecutive wins in week order, ended by a loss or a tie', () => {
+    const ms = [
+      game(4, '1', 100, '2', 90), // W (listed out of order)
+      game(1, '1', 100, '2', 90), // W
+      game(2, '1', 100, '3', 90), // W
+      game(3, '1', 95, '4', 95), // T ends the run at 2
+      game(5, '3', 80, '1', 120), // W (team 1 on side b)
+      game(6, '1', 100, '4', 90), // W → run of 3 (wks 4–6)
+      game(7, '1', 80, '2', 90), // L
+      game(8, '1', 0, '3', 0), // unplayed, ignored
+    ];
+    expect(longestWinStreak(ms, '1')).toBe(3);
+  });
+
+  it('is zero without a win', () => {
+    expect(longestWinStreak([game(1, '1', 80, '2', 90)], '1')).toBe(0);
+    expect(longestWinStreak([], '1')).toBe(0);
   });
 });
 
@@ -230,6 +331,19 @@ describe('computeMyTeam', () => {
     expect(r2.pointsLeft).toBe(12);
   });
 
+  it('includes the top draft picks in both views', () => {
+    const inSeason = computeMyTeam(input(midSeason()), 'owner-1')!;
+    expect(inSeason.topDraftPicks.map((p) => p.vorp)).toEqual([
+      85.2, 62.7, 40.1,
+    ]);
+    const offseason = computeMyTeam(
+      input([game(1, '1', 120, '2', 100)]),
+      'owner-1',
+    )!;
+    expect(offseason.kind).toBe('offseason');
+    expect(offseason.topDraftPicks).toHaveLength(3);
+  });
+
   it('reports last week awards and the highest-score count', () => {
     const view = computeMyTeam(input(midSeason()), 'owner-1') as InSeasonView;
     expect(view.awards.lastWeek).toContain('Highest Score');
@@ -284,6 +398,8 @@ describe('computeMyTeam', () => {
     expect(view.kind).toBe('offseason');
     expect(view.finalRank).toBe(1);
     expect(view.champion).toBe(true);
+    // Week 1 regular-season win + week 5 playoff win.
+    expect(view.longestWinStreak).toBe(2);
     expect(view.team).toMatchObject({ wins: 1, losses: 0 });
   });
 
@@ -293,5 +409,7 @@ describe('computeMyTeam', () => {
       'owner-2',
     ) as OffseasonView;
     expect(view).toMatchObject({ finalRank: null, champion: false });
+    // Team 2 lost its only game.
+    expect(view.longestWinStreak).toBe(0);
   });
 });

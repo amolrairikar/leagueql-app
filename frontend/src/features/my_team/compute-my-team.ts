@@ -1,4 +1,5 @@
 import type { LeagueSettingsItem, MatchupItem } from '@/components/api/types';
+import type { DraftPickItem } from '@/features/draft_grades/api-calls';
 import { computeStartSitReport } from '@/features/lineup_efficiency/compute-lineup-efficiency';
 import type { ManagerStandingsItem } from '@/features/manager_history/api-calls';
 import { buildMatchupPreview } from '@/features/matchups/compute-preview';
@@ -90,6 +91,7 @@ export interface InSeasonView {
   efficiency: Efficiency;
   matchup: ThisWeekMatchup | null;
   awards: AwardsSummary;
+  topDraftPicks: TopDraftPick[];
 }
 
 export interface OffseasonView {
@@ -99,8 +101,24 @@ export interface OffseasonView {
   /** Final placement, when the season's standings carry one. */
   finalRank: number | null;
   champion: boolean;
+  /** Most consecutive wins this season (regular season and playoffs, in week order). */
+  longestWinStreak: number;
   efficiency: Efficiency;
   awards: AwardsSummary;
+  topDraftPicks: TopDraftPick[];
+}
+
+/** One of the claimed team's most valuable draft picks (by VORP). */
+export interface TopDraftPick {
+  playerName: string;
+  position: string;
+  round: number;
+  roundPick: number;
+  overallPick: number;
+  /** Winning bid for an auction draft; null for a snake draft. */
+  bid: number | null;
+  vorp: number;
+  totalPoints: number | null;
 }
 
 export type MyTeamView = InSeasonView | OffseasonView;
@@ -114,9 +132,41 @@ export interface MyTeamInput {
   settings: LeagueSettingsItem | null;
   /** The current (latest) season. */
   season: string;
+  /** The current season's draft picks (empty when unavailable). */
+  draftPicks: DraftPickItem[];
 }
 
 const wk = (m: MatchupItem): number => Number(m.week);
+
+const TOP_DRAFT_PICKS = 3;
+
+/**
+ * The team's top draft picks by value over replacement, highest first. Picks with no
+ * VORP (kickers, D/ST, players with no scoring data) are excluded.
+ */
+export function topDraftPicks(
+  picks: DraftPickItem[],
+  teamId: string,
+  n = TOP_DRAFT_PICKS,
+): TopDraftPick[] {
+  return picks
+    .filter((p) => String(p.team_id) === teamId && p.vorp != null)
+    .sort(
+      (a, b) =>
+        b.vorp! - a.vorp! || a.overall_pick_number - b.overall_pick_number,
+    )
+    .slice(0, n)
+    .map((p) => ({
+      playerName: p.player_name ?? `Player ${p.player_id}`,
+      position: p.position,
+      round: p.round,
+      roundPick: p.round_pick_number,
+      overallPick: p.overall_pick_number,
+      bid: p.is_auction ? p.bid_amount : null,
+      vorp: p.vorp!,
+      totalPoints: p.total_points,
+    }));
+}
 
 function involves(m: MatchupItem, teamId: string): boolean {
   return m.team_a_id === teamId || m.team_b_id === teamId;
@@ -234,6 +284,26 @@ function computeEfficiency(
   };
 }
 
+/**
+ * The team's longest run of consecutive wins in the season's played games (regular
+ * season and playoffs) in week order; a loss or a tie ends a run.
+ */
+export function longestWinStreak(
+  seasonMatchups: MatchupItem[],
+  teamId: string,
+): number {
+  let best = 0;
+  let run = 0;
+  const games = seasonMatchups
+    .filter((m) => involves(m, teamId) && !isUnplayedMatchup(m))
+    .sort((a, b) => wk(a) - wk(b));
+  for (const m of games) {
+    run = scoreFor(m, teamId).result === 'W' ? run + 1 : 0;
+    best = Math.max(best, run);
+  }
+  return best;
+}
+
 function computeAwards(
   seasonMatchups: MatchupItem[],
   teamId: string,
@@ -306,7 +376,14 @@ export function computeMyTeam(
   input: MyTeamInput,
   claimedOwnerId: string | null,
 ): MyTeamView | null {
-  const { matchups, standings, migrationMapping, settings, season } = input;
+  const {
+    matchups,
+    standings,
+    migrationMapping,
+    settings,
+    season,
+    draftPicks,
+  } = input;
   const seasonMatchups = matchups.filter((m) => m.season === season);
   const teams = listSeasonTeams(seasonMatchups, season);
   const claimed = resolveClaimedTeam(teams, claimedOwnerId, migrationMapping);
@@ -333,8 +410,10 @@ export function computeMyTeam(
       team,
       finalRank: standing?.final_rank ?? null,
       champion: standing?.champion === 'Yes',
+      longestWinStreak: longestWinStreak(seasonMatchups, team.teamId),
       efficiency: computeEfficiency(seasonMatchups, team.teamId, lastPlayed),
       awards: computeAwards(seasonMatchups, team.teamId, lastPlayed),
+      topDraftPicks: topDraftPicks(draftPicks, team.teamId),
     };
   }
 
@@ -408,5 +487,6 @@ export function computeMyTeam(
     efficiency: computeEfficiency(seasonMatchups, team.teamId, lastWeek),
     matchup,
     awards: computeAwards(seasonMatchups, team.teamId, lastWeek),
+    topDraftPicks: topDraftPicks(draftPicks, team.teamId),
   };
 }

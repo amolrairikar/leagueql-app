@@ -82,11 +82,39 @@ matchup this week, it SHALL show a "No matchup this week" message instead.
 - **WHEN** the claimed team has no matchup in the current week (for example, a playoff bye or elimination)
 - **THEN** the matchup panel shows "No matchup this week"
 
+### Requirement: Show my top draft picks
+The card SHALL show a "My top 3 draft picks" section for the claimed team's draft in the current
+season, in both the in-season and offseason views. It SHALL list up to three of the team's picks
+with the highest value over replacement (VORP), highest first. Each row SHALL show the player's
+name and position, where they were drafted (round and pick, or the winning bid for an auction
+draft), their VORP, and their total points. Picks with no VORP SHALL be excluded, which covers
+kickers, D/ST, and players with no scoring data. When the current season has no draft data, or
+none of the team's picks has a VORP, the section SHALL show "No draft value data yet" instead of
+a list. If the draft data fails to load, the rest of the card SHALL still render and the section
+SHALL show that same message.
+
+#### Scenario: Top three by VORP
+- **WHEN** the claimed team drafted players with VORP 85.2, 40.1, 62.7 and 12.0, plus a kicker with no VORP
+- **THEN** the section lists the players with VORP 85.2, 62.7 and 40.1, in that order, each with position, draft slot, VORP and total points
+
+#### Scenario: Fewer than three valued picks
+- **WHEN** only two of the team's picks have a VORP
+- **THEN** the section lists those two
+
+#### Scenario: No draft value data
+- **WHEN** the current season has no draft data, the draft fails to load, or none of the team's picks has a VORP
+- **THEN** the section shows "No draft value data yet" and the rest of the card renders normally
+
 ### Requirement: Handle season boundaries
 In Week 1, before any game is played, the card SHALL show no last-week result, SHALL show the
 efficiency and odds change as unavailable, and SHALL show an even 50% win probability. When the
 current season has no remaining matchups (the offseason), the card SHALL show the team's final
-result for that season (final record and final standing) instead of a current week.
+result for that season instead of a current week:
+- the final record, with points for and points against
+- the final standing, noting a league championship
+- the season lineup efficiency
+- the longest win streak: the most consecutive wins that season, regular season and playoffs in
+  week order, where a loss or tie ends a streak (shown as a value only, with no subtext)
 
 #### Scenario: Week 1
 - **WHEN** a user with a claimed team opens `/my_team` before any game of the season has been played
@@ -94,15 +122,22 @@ result for that season (final record and final standing) instead of a current we
 
 #### Scenario: Offseason
 - **WHEN** a user with a claimed team opens `/my_team` after every matchup of the latest season has been played
-- **THEN** the card shows that season's final record and final standing for the team instead of a current-week view
+- **THEN** the card shows that season's final record (with points for and against), final standing, lineup efficiency and longest win streak for the team instead of a current-week view
 
 ### Requirement: Email placeholder
 The card SHALL show an "Email me each week" row with a "COMING SOON!" label and a disabled switch
-in the off position. The switch SHALL NOT be operable and SHALL NOT send any request.
+in the off position. The switch SHALL NOT be operable and SHALL NOT send any request. An info
+control next to the label SHALL show a tooltip reading: "You will receive 2 weekly emails. On
+Tuesday, a recap of last week, and on Thursday, a preview of your upcoming matchup. You can opt
+out of the email recaps at any time and are opted out by default."
 
 #### Scenario: Placeholder cannot be toggled
 - **WHEN** the user tries to activate the "Email me each week" switch
 - **THEN** the switch stays off, it is exposed as disabled, and no request is sent
+
+#### Scenario: Email contents tooltip
+- **WHEN** the user hovers over or focuses the info control next to "Email me each week"
+- **THEN** a tooltip explains the two weekly emails (Tuesday recap, Thursday preview), that users can opt out at any time, and that they are opted out by default
 
 ### Requirement: Loading and errors
 The page SHALL show skeleton placeholders while its data loads. If loading the claim or the
