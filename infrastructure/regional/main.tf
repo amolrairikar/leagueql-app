@@ -180,6 +180,13 @@ module "api_lambda" {
     # this unset, all flags default off.
     FEATURE_FLAGS_SSM_PARAM = "/leagueql/${var.environment}/feature-flags"
 
+    # Community integrations (backend/integrations): submissions open review issues in the
+    # LeagueQL repo and approved ones are listed from it. The repo-scoped fine-grained PAT
+    # (Issues read/write) is fetched at runtime from a SecureString SSM parameter by *name*
+    # (value never lands here / in TF state / CI).
+    GITHUB_TOKEN_SSM_PARAM = "/leagueql/${var.environment}/github/token"
+    GITHUB_REPO            = "amolrairikar/leagueql-app"
+
     # Yahoo OAuth (backend/yahoo-oauth). The Yahoo app is a PKCE public client, so only the
     # client_id is needed (no client_secret) — it's fetched at runtime from a SecureString SSM
     # parameter by *name* (value never lands here / in TF state / CI). The redirect_uri MUST

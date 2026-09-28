@@ -34,6 +34,10 @@ logger = logging.getLogger(__name__)
 # SPA via GET /feature-flags; the backend enforces nothing.
 BANNER = "banner"
 
+# Gates the community Integrations page (backend/integrations, frontend/integrations): when off,
+# GET/POST /integrations return 404 and the SPA hides the nav item and route.
+INTEGRATIONS = "integrations"
+
 # The variant names are cosmetic; what matters is the boolean each maps to.
 _ON = "on"
 _OFF = "off"

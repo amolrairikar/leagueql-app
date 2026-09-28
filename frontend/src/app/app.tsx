@@ -29,6 +29,7 @@ import DraftGrades from '@/features/draft_grades/draft-grades';
 import DraftRecap from '@/features/draft_recap/draft-recap';
 import HomePage from '@/features/home_page/home-page';
 import InstructionsPage from '@/features/instructions/instructions-page';
+import IntegrationsRoute from '@/features/integrations/integrations-route';
 import { NAV_LINKS } from '@/features/landing_page/constants';
 import LeagueQLLanding from '@/features/landing_page/landing-page';
 import type { NavLinkItem } from '@/features/landing_page/types';
@@ -129,6 +130,8 @@ const APP_LAYOUT_ROUTES: { path: string; element: React.ReactNode }[] = [
   { path: '/draft_recap', element: <DraftRecap /> },
   { path: '/draft_grades', element: <DraftGrades /> },
   { path: '/transactions', element: <Transactions /> },
+  // Flag-gated: redirects to /home while `integrations` is off.
+  { path: '/integrations', element: <IntegrationsRoute /> },
 ];
 
 function App() {

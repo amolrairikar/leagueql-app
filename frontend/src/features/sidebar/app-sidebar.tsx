@@ -1,6 +1,7 @@
 import { UserButton } from '@clerk/react';
 import {
   ArrowLeftRight,
+  Blocks,
   Download,
   GraduationCap,
   History,
@@ -64,6 +65,7 @@ import {
   getLeagueCookies,
   isDemoMode,
 } from '@/lib/cookie-handler';
+import { isIntegrationsEnabled } from '@/lib/feature-flags';
 
 const navItems = [
   { title: 'Home', url: '/home', icon: Home },
@@ -174,6 +176,31 @@ export function AppSidebar() {
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
+
+          {isIntegrationsEnabled() && (
+            <>
+              <SidebarSeparator />
+              <SidebarGroup>
+                <SidebarGroupLabel>Community</SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    <SidebarMenuItem>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={location.pathname === '/integrations'}
+                        tooltip="Integrations"
+                      >
+                        <Link to="/integrations" onClick={closeMobileSidebar}>
+                          <Blocks />
+                          <span>Integrations</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            </>
+          )}
 
           <SidebarSeparator />
 

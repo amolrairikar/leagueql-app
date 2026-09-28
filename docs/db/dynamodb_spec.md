@@ -818,6 +818,33 @@ non-paging `ESPN_AUTH` failure prompting re-entry.
 </details>
 
 <details>
+<summary><b>INTEGRATION_SUBMISSIONS</b></summary>
+
+Per-user rolling limit on integration submissions (backend/integrations). `POST /integrations`
+reads it, drops timestamps older than 24 hours, and returns `429` when 3 remain; after the GitHub
+issue is created it rewrites the pruned list plus the new timestamp. Only accepted submissions are
+recorded, so validation or GitHub failures never count. The `ttl` reaps the item 24 hours after
+the newest submission.
+
+| Attribute | Type | Required | Description |
+|---|---|---|---|
+| `PK` | String | Yes | `USER#{clerk_user_id}` |
+| `SK` | String | Yes | `INTEGRATION_SUBMISSIONS` |
+| `submitted_at` | List (Number) | Yes | Unix epoch seconds of each accepted submission still inside the 24-hour window, oldest first |
+| `ttl` | Number | Yes | Unix epoch seconds (newest submission + 24h) after which DynamoDB TTL reaps the item |
+
+**Example:**
+```json
+{
+  "PK": "USER#user_2abc123",
+  "SK": "INTEGRATION_SUBMISSIONS",
+  "submitted_at": [1725235200, 1725242400],
+  "ttl": 1725328800
+}
+```
+</details>
+
+<details>
 <summary><b>OAUTH_STATE</b></summary>
 
 Single-use Yahoo OAuth `state` (backend/yahoo-oauth). Written by `GET /leagues/yahoo/oauth/authorize`
