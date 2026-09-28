@@ -10,7 +10,7 @@ def step_seed_team_owners(context, canonical, owners):
         {"team_id": str(i + 1), "season": "2024", "primary_owner_id": owner.strip()}
         for i, owner in enumerate(owners.split(","))
     ]
-    put_item(context, {"PK": f"LEAGUE#{canonical}", "SK": "TEAMS", "data": rows})
+    put_item(context, {"PK": f"LEAGUE#{canonical}", "SK": "TEAMS#2024", "data": rows})
 
 
 @given('I PUT my claimed owner "{owner_id}" for "{path}"')

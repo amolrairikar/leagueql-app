@@ -47,16 +47,16 @@ def step_seed_view(context, canonical, sk, count):
 
 @given('league "{canonical}" has team rows for seasons "{seasons}"')
 def step_seed_teams(context, canonical, seasons):
-    # TEAMS is stored once across all seasons; each row carries its own season so the
-    # export can filter it per requested season (backend/league-export).
-    rows = [
-        {"team_id": str(i + 1), "season": season}
-        for i, season in enumerate(s.strip() for s in seasons.split(","))
-    ]
-    put_item(
-        context,
-        {"PK": f"LEAGUE#{canonical}", "SK": "TEAMS", "data": rows},
-    )
+    # TEAMS is stored one item per season (SK TEAMS#{season}), as the processor writes it.
+    for i, season in enumerate(s.strip() for s in seasons.split(",")):
+        put_item(
+            context,
+            {
+                "PK": f"LEAGUE#{canonical}",
+                "SK": f"TEAMS#{season}",
+                "data": [{"team_id": str(i + 1), "season": season}],
+            },
+        )
 
 
 @then('the export response has season "{season}"')

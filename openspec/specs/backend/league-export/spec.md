@@ -28,11 +28,11 @@ be omitted from that season's object rather than returned as an empty list.
 
 ### Requirement: Concatenate chunked and multi-item views in the export
 The export SHALL assemble each view's rows the same way the query endpoint does: single-item views
-(`standings`, `weekly_standings`, `draft`, `playoff_bracket`, `league_settings`) are read as one
-item, while `matchups` (stored per week) and `transactions` (stored in chunks) are read via a
-season-scoped prefix scan whose items' `data` lists are concatenated in sort-key order across all
-pages. The `teams` view (stored once across all seasons) SHALL be included per requested season,
-filtered to that season's rows.
+(`standings`, `weekly_standings`, `draft`, `playoff_bracket`, `league_settings`, `teams`) are read
+as one item per season, while `matchups` (stored per week) and `transactions` (stored in chunks) are
+read via a season-scoped prefix scan whose items' `data` lists are concatenated in sort-key order
+across all pages. The `teams` view SHALL be included per requested season, containing only that
+season's rows.
 
 #### Scenario: Transactions chunks concatenated
 - **WHEN** a season's transactions are stored across multiple chunk items

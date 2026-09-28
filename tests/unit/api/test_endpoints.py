@@ -2262,12 +2262,8 @@ class TestExportLeagueEndpoint:
         self, client, mock_table, league_lookup_item, league_metadata_item
     ):
         items_by_sk = {
-            "TEAMS": {
-                "data": [
-                    {"team_id": "1", "season": "2024"},
-                    {"team_id": "9", "season": "2023"},
-                ]
-            },
+            "TEAMS#2024": {"data": [{"team_id": "1", "season": "2024"}]},
+            "TEAMS#2023": {"data": [{"team_id": "9", "season": "2023"}]},
             "STANDINGS#2024": {"data": [{"team": "A", "wins": 10}]},
             "WEEKLY_STANDINGS#2024": {"data": [{"week": 1}]},
             "DRAFT#2024": {"data": [{"pick": 1}]},
@@ -2296,7 +2292,7 @@ class TestExportLeagueEndpoint:
         assert data["2024"]["transactions"] == [{"txn": 1}]
         assert data["2024"]["playoff_bracket"] == [{"round": 1}]
         assert data["2024"]["league_settings"] == [{"num_playoff_teams": 6}]
-        # TEAMS is filtered to each requested season.
+        # TEAMS is read per requested season (SK TEAMS#{season}).
         assert data["2024"]["teams"] == [{"team_id": "1", "season": "2024"}]
         assert data["2023"]["teams"] == [{"team_id": "9", "season": "2023"}]
         assert data["2023"]["standings"] == [{"team": "A", "wins": 8}]
@@ -3044,12 +3040,13 @@ class TestUserLeaguePrefsEndpoints:
         mock_table.get_item.side_effect = [
             {"Item": league_lookup_item},
             {"Item": league_metadata_item},
-            {
-                "Item": {
-                    "data": [{"primary_owner_id": "U1"}, {"primary_owner_id": "U2"}]
-                }
-            },
         ]
+        mock_table.query.return_value = {
+            "Items": [
+                {"data": [{"primary_owner_id": "U1"}]},
+                {"data": [{"primary_owner_id": "U2"}]},
+            ]
+        }
         response = client.put(
             "/leagues/123/me?platform=SLEEPER", json={"owner_id": "U2"}
         )
@@ -3065,8 +3062,10 @@ class TestUserLeaguePrefsEndpoints:
         mock_table.get_item.side_effect = [
             {"Item": league_lookup_item},
             {"Item": league_metadata_item},
-            {"Item": {"data": [{"primary_owner_id": "U1"}]}},
         ]
+        mock_table.query.return_value = {
+            "Items": [{"data": [{"primary_owner_id": "U1"}]}]
+        }
         response = client.put(
             "/leagues/123/me?platform=SLEEPER", json={"owner_id": "ZZ"}
         )

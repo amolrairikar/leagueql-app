@@ -842,8 +842,9 @@ def league_has_owner(canonical_league_id: str, owner_id: str) -> bool:
     """
     Whether ``owner_id`` is a team's primary owner in any season of the league.
 
-    Checked against the league's all-seasons ``TEAMS`` view (``SK=TEAMS``), the same
-    source the MATCHUPS view's ``team_{a,b}_primary_owner_id`` fields come from.
+    Checked against the league's per-season ``TEAMS`` views (``SK=TEAMS#{season}``, read
+    together via a ``TEAMS#`` prefix scan), the same source the MATCHUPS view's
+    ``team_{a,b}_primary_owner_id`` fields come from.
 
     Args:
         canonical_league_id: The canonical league ID.
@@ -855,17 +856,7 @@ def league_has_owner(canonical_league_id: str, owner_id: str) -> bool:
     Raises:
         HTTPException: 500 on a DynamoDB error.
     """
-    try:
-        response = main.table.get_item(
-            Key={"PK": f"LEAGUE#{canonical_league_id}", "SK": "TEAMS"}
-        )
-    except botocore.exceptions.ClientError as e:
-        logger.error("Boto error occurred: %s", e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to retrieve league data",
-        )
-    teams = (response.get("Item") or {}).get("data") or []
+    teams = read_view(canonical_league_id, "TEAMS", None, use_prefix=True) or []
     return any(str(t.get("primary_owner_id")) == owner_id for t in teams)
 
 

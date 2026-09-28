@@ -134,8 +134,7 @@ PREFIX_READ_QUERY_TYPES = {QueryType.TRANSACTIONS}
 # Season-scoped views included in a league export, mapped to their (QueryType, use_prefix).
 # `use_prefix` is True for views stored across multiple items per season — per-week matchups
 # and chunked transactions — which resolve via a season-prefix begins_with scan; the rest are
-# a single item per season read by exact sort key. TEAMS is excluded here because it is stored
-# once across all seasons (SK "TEAMS") and is read separately, then filtered per season.
+# a single item per season read by exact sort key.
 EXPORT_SEASON_VIEWS = {
     "standings": (QueryType.SEASON_STANDINGS, False),
     "weekly_standings": (QueryType.WEEKLY_STANDINGS, False),
@@ -144,6 +143,7 @@ EXPORT_SEASON_VIEWS = {
     "transactions": (QueryType.TRANSACTIONS, True),
     "playoff_bracket": (QueryType.PLAYOFF_BRACKET, False),
     "league_settings": (QueryType.LEAGUE_SETTINGS, False),
+    "teams": (QueryType.TEAMS, False),
 }
 
 

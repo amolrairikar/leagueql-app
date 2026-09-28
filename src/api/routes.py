@@ -988,21 +988,6 @@ def export_league(
             detail="None of the requested seasons exist for this league.",
         )
 
-    # TEAMS is stored once for the whole league (SK "TEAMS", no season suffix), so it is
-    # read a single time here and filtered per season below rather than through read_view.
-    try:
-        teams_response = main.table.get_item(
-            Key={"PK": f"LEAGUE#{canonical_league_id}", "SK": "TEAMS"},
-            ConsistentRead=True,
-        )
-    except botocore.exceptions.ClientError as e:
-        logger.error("Boto error occurred: %s", e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to retrieve league data",
-        )
-    teams_rows = (teams_response.get("Item") or {}).get("data") or []
-
     bundle: dict[str, dict[str, list]] = {}
     for season in selected_seasons:
         season_views: dict[str, list] = {}
@@ -1013,9 +998,6 @@ def export_league(
             )
             if view_data:
                 season_views[view_name] = view_data
-        season_teams = [r for r in teams_rows if str(r.get("season")) == season]
-        if season_teams:
-            season_views["teams"] = season_teams
         if season_views:
             bundle[season] = season_views
 

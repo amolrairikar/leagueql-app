@@ -831,25 +831,41 @@ class TestPutUserLeaguePrefs:
 
 class TestLeagueHasOwner:
     @pytest.mark.parametrize(
-        ("response", "owner_id", "expected"),
+        ("items", "owner_id", "expected"),
         [
-            ({"Item": {"data": [{"primary_owner_id": "U1"}]}}, "U1", True),
-            ({"Item": {"data": [{"primary_owner_id": 42}]}}, "42", True),
-            ({"Item": {"data": [{"primary_owner_id": "U1"}]}}, "U2", False),
-            ({"Item": {"data": [{"secondary_owner_id": "U2"}]}}, "U2", False),
-            ({}, "U1", False),
+            ([{"data": [{"primary_owner_id": "U1"}]}], "U1", True),
+            ([{"data": [{"primary_owner_id": 42}]}], "42", True),
+            ([{"data": [{"primary_owner_id": "U1"}]}], "U2", False),
+            ([{"data": [{"secondary_owner_id": "U2"}]}], "U2", False),
+            ([], "U1", False),
         ],
     )
-    def test_matches_primary_owner(self, mock_table, response, owner_id, expected):
+    def test_matches_primary_owner(self, mock_table, items, owner_id, expected):
         from main import league_has_owner
 
-        mock_table.get_item.return_value = response
+        mock_table.query.return_value = {"Items": items}
         assert league_has_owner("canonical-abc", owner_id) is expected
+
+    def test_reads_per_season_teams_items_by_prefix(self, mock_table):
+        from main import league_has_owner
+
+        # TEAMS is stored per season (SK TEAMS#{season}); an owner only present in a
+        # later season, on a later result page, still matches.
+        mock_table.query.side_effect = [
+            {
+                "Items": [{"SK": "TEAMS#2023", "data": [{"primary_owner_id": "U1"}]}],
+                "LastEvaluatedKey": {"PK": "x", "SK": "TEAMS#2023"},
+            },
+            {"Items": [{"SK": "TEAMS#2024", "data": [{"primary_owner_id": "U2"}]}]},
+        ]
+        assert league_has_owner("canonical-abc", "U2") is True
+        assert mock_table.query.call_count == 2
+        mock_table.get_item.assert_not_called()
 
     def test_raises_500_on_boto_error(self, mock_table):
         from main import league_has_owner
 
-        mock_table.get_item.side_effect = _boto_error()
+        mock_table.query.side_effect = _boto_error()
         with pytest.raises(HTTPException) as exc_info:
             league_has_owner("canonical-abc", "U1")
         assert exc_info.value.status_code == 500

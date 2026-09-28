@@ -157,12 +157,12 @@ the league will not appear as onboarded and a retry will re-run the full onboard
 <details>
 <summary><b>TEAMS</b></summary>
 
-Represents all teams across all seasons in the fantasy league.
+Represents all teams in one season of the fantasy league (one item per season).
 
 | Attribute | Type | Required | Description |
 |---|---|---|---|
 | `PK` | String | Yes | `LEAGUE#{league_id}` |
-| `SK` | String | Yes | `TEAMS` |
+| `SK` | String | Yes | `TEAMS#{season}` |
 | `data` | List\<Object\> | Yes | A list of objects containing team details |
 
 **`data[n]` object:**
@@ -181,7 +181,7 @@ Represents all teams across all seasons in the fantasy league.
 ```json
 {
   "PK": "LEAGUE#123456789",
-  "SK": "TEAMS",
+  "SK": "TEAMS#2025",
   "data": [
     {
       "display_name": "myusername123",
@@ -831,7 +831,7 @@ only personalizes the claimer's own view. No TTL.
 |---|---|---|---|
 | `PK` | String | Yes | `LEAGUE#{canonical_league_id}` |
 | `SK` | String | Yes | `USER#{clerk_user_id}` |
-| `owner_id` | String | Yes | Platform owner ID of the claimed team — a `primary_owner_id` from the league's `TEAMS` view. Stable across seasons, so the My Team page resolves the current season's `team_id` (and all-time head-to-head) from it, remapped through `PLATFORM_MIGRATION` mappings. |
+| `owner_id` | String | Yes | Platform owner ID of the claimed team — a `primary_owner_id` from any of the league's `TEAMS#{season}` items. Stable across seasons, so the My Team page resolves the current season's `team_id` (and all-time head-to-head) from it, remapped through `PLATFORM_MIGRATION` mappings. |
 | `updated_at` | String | Yes | ISO 8601 (UTC) timestamp of the most recent write |
 
 **Example:**
