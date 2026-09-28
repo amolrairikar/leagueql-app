@@ -7,6 +7,10 @@ Feature: Export league data dialog (frontend/export-league-data)
     Then I see a checkbox for each season
     And the export button is disabled
 
+  Scenario: The dialog suggests uploading the export to an AI assistant
+    Given the export dialog is open for a league with seasons "2024"
+    Then I see a hint about using the export with an AI assistant
+
   Scenario: Selecting all seasons and exporting downloads a ZIP
     Given the export dialog is open for a league with seasons "2023,2024"
     When I select all seasons

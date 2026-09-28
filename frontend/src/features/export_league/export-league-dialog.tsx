@@ -62,7 +62,11 @@ export function ExportLeagueDialog({
     setError(null);
     try {
       const res = await exportLeague(leagueId, platform, selected);
-      await downloadLeagueZip(`leagueql_export_${leagueId}.zip`, res.data);
+      await downloadLeagueZip(`leagueql_export_${leagueId}.zip`, res.data, {
+        leagueId,
+        platform,
+        exportedAt: new Date().toISOString(),
+      });
       onOpenChange(false);
       reset();
     } catch (err) {
@@ -90,6 +94,22 @@ export function ExportLeagueDialog({
             JSON file per data view for each season you pick.
           </DialogDescription>
         </DialogHeader>
+        <div className="rounded-md bg-muted p-3 text-sm text-muted-foreground">
+          <p>
+            Tip: upload the ZIP to an AI assistant like Claude or ChatGPT to ask
+            questions about your league. It includes a README that explains the
+            data. Try:
+          </p>
+          <ul className="mt-2 list-disc space-y-1 pl-5">
+            <li>
+              &ldquo;Write a season-in-review recap for this league.&rdquo;
+            </li>
+            <li>&ldquo;Roast my draft — who were my biggest busts?&rdquo;</li>
+            <li>
+              &ldquo;Who&apos;s my bogey opponent across all seasons?&rdquo;
+            </li>
+          </ul>
+        </div>
         {sortedSeasons.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             This league has no seasons available to export.
