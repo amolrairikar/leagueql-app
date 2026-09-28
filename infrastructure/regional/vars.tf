@@ -39,5 +39,5 @@ variable "yahoo_redirect_uri" {
 variable "yahoo_connect_return_url" {
   description = "Frontend landing-page URL the ONBOARD-flow Yahoo callback 302s back to (resumes onboarding inline)"
   type        = string
-  default     = "https://leagueql.app/"
+  default     = "https://leagueql.com/"
 }

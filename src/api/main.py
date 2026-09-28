@@ -273,10 +273,10 @@ YAHOO_REDIRECT_URI = os.environ.get(
     "YAHOO_REDIRECT_URI", "https://api.leagueql.com/leagues/yahoo/oauth/callback"
 )
 YAHOO_CONNECT_RETURN_URL = os.environ.get(
-    "YAHOO_CONNECT_RETURN_URL", "https://leagueql.app/"
+    "YAHOO_CONNECT_RETURN_URL", "https://leagueql.com/"
 )
 YAHOO_MIGRATE_RETURN_URL = os.environ.get(
-    "YAHOO_MIGRATE_RETURN_URL", "https://leagueql.app/migrate_league"
+    "YAHOO_MIGRATE_RETURN_URL", "https://leagueql.com/migrate_league"
 )
 
 # Minimum interval between `last_accessed_at` writes for a single league (backend/league-access-tracking).

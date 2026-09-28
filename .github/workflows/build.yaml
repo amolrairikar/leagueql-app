@@ -328,7 +328,7 @@ jobs:
         run: |
           if [ "${{ env.ENVIRONMENT }}" == "prod" ]; then
             echo "YAHOO_REDIRECT_URI=https://api.leagueql.com/leagues/yahoo/oauth/callback" >> $GITHUB_ENV
-            echo "YAHOO_CONNECT_RETURN_URL=https://leagueql.app/connect_league" >> $GITHUB_ENV
+            echo "YAHOO_CONNECT_RETURN_URL=https://leagueql.com/" >> $GITHUB_ENV
           else
             echo "YAHOO_REDIRECT_URI=${{ secrets.YAHOO_REDIRECT_URI_DEV }}" >> $GITHUB_ENV
             echo "YAHOO_CONNECT_RETURN_URL=${{ secrets.YAHOO_CONNECT_RETURN_URL_DEV }}" >> $GITHUB_ENV
