@@ -20,6 +20,11 @@ export interface ManagerStandingsItem {
   total_pf: number;
   avg_pf: number;
   champion: string;
+  /**
+   * Set by `withInProgressRanks` (not sent by the API): true when the season has
+   * no finalized placement yet, so playoff outcomes are not settled.
+   */
+  in_progress?: boolean;
 }
 
 /**
@@ -36,6 +41,10 @@ export interface ManagerStandingsItem {
  * record, ordering by wins then points-for — the same canonical order the
  * backend `SEASON_STANDINGS` view uses (`ORDER BY ... wins DESC, total_pf DESC`).
  * A season with no games yet keeps a `null` `final_rank` (nothing to rank).
+ *
+ * Every row of an unfinalized season is flagged `in_progress` so the page can
+ * hold back playoff outcomes (Champion / Playoffs / Missed Playoffs) that are
+ * not settled yet.
  */
 function withInProgressRanks(
   standings: ManagerStandingsItem[],
@@ -49,26 +58,31 @@ function withInProgressRanks(
 
   // Provisional current-standings rank per in-progress team, keyed season|team.
   const provisionalRank = new Map<string, number>();
+  const inProgressSeasons = new Set<string>();
   for (const [season, rows] of bySeason) {
     const isFinalized = rows.some(
       (r) => r.final_rank != null && r.final_rank >= 1,
     );
+    if (isFinalized) continue;
+    inProgressSeasons.add(season);
     const hasGames = rows.some((r) => r.games_played > 0);
-    if (isFinalized || !hasGames) continue;
+    if (!hasGames) continue;
     [...rows]
       .sort((a, b) => b.wins - a.wins || b.total_pf - a.total_pf)
       .forEach((r, i) => provisionalRank.set(`${season}|${r.team_id}`, i + 1));
   }
 
   return standings.map((r) => {
+    const in_progress = inProgressSeasons.has(r.season);
     const provisional = provisionalRank.get(`${r.season}|${r.team_id}`);
-    if (provisional != null) return { ...r, final_rank: provisional };
+    if (provisional != null)
+      return { ...r, final_rank: provisional, in_progress };
     // Otherwise normalize a non-positive `final_rank` (ESPN's `0` for a season
     // with no games yet) to `null` so an unfinalized season is never plotted at
     // rank `0`.
     return r.final_rank != null && r.final_rank < 1
-      ? { ...r, final_rank: null }
-      : r;
+      ? { ...r, final_rank: null, in_progress }
+      : { ...r, in_progress };
   });
 }
 

@@ -97,8 +97,7 @@ export function ExportLeagueDialog({
         <div className="rounded-md bg-muted p-3 text-sm text-muted-foreground">
           <p>
             Tip: upload the ZIP to an AI assistant like Claude or ChatGPT to ask
-            questions about your league. It includes a README that explains the
-            data. Try:
+            questions about your league. Try:
           </p>
           <ul className="mt-2 list-disc space-y-1 pl-5">
             <li>
