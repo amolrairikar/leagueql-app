@@ -784,3 +784,91 @@ class TestOwnerHasOtherOptedinEspnLeagues:
         mock_table.get_item.return_value = {"Item": {"auto_refresh_enabled": True}}
         assert owner_has_other_optedin_espn_leagues("user_1", "deleted") is True
         assert mock_table.query.call_count == 2
+
+
+class TestIntegrationSubmissionLimit:
+    NOW = 1_800_000_000
+    DAY = 24 * 60 * 60
+
+    def test_under_limit_returns_recent_and_drops_expired(self, mock_table):
+        from helpers import check_integration_submission_limit
+
+        mock_table.get_item.return_value = {
+            "Item": {
+                "submitted_at": [
+                    Decimal(self.NOW - self.DAY - 1),  # aged out of the window
+                    Decimal(self.NOW - 60),
+                ]
+            }
+        }
+        assert check_integration_submission_limit("user_1", self.NOW) == [self.NOW - 60]
+        assert mock_table.get_item.call_args.kwargs["Key"] == {
+            "PK": "USER#user_1",
+            "SK": "INTEGRATION_SUBMISSIONS",
+        }
+
+    def test_no_item_is_under_limit(self, mock_table):
+        from helpers import check_integration_submission_limit
+
+        mock_table.get_item.return_value = {}
+        assert check_integration_submission_limit("user_1", self.NOW) == []
+
+    def test_at_limit_raises_429_with_wait(self, mock_table):
+        from helpers import check_integration_submission_limit
+
+        # Oldest in-window submission ages out in 2.5 hours → rounds up to 3.
+        oldest = self.NOW - self.DAY + int(2.5 * 3600)
+        mock_table.get_item.return_value = {
+            "Item": {"submitted_at": [oldest, self.NOW - 60, self.NOW - 30]}
+        }
+        with pytest.raises(HTTPException) as exc:
+            check_integration_submission_limit("user_1", self.NOW)
+        assert exc.value.status_code == 429
+        assert "limit of 3" in exc.value.detail
+        assert "3 hours" in exc.value.detail
+
+    def test_at_limit_minimum_wait_is_one_hour(self, mock_table):
+        from helpers import check_integration_submission_limit
+
+        oldest = self.NOW - self.DAY + 10
+        mock_table.get_item.return_value = {
+            "Item": {"submitted_at": [oldest, self.NOW - 60, self.NOW - 30]}
+        }
+        with pytest.raises(HTTPException) as exc:
+            check_integration_submission_limit("user_1", self.NOW)
+        assert "1 hour." in exc.value.detail
+
+    def test_window_expiry_allows_again(self, mock_table):
+        from helpers import check_integration_submission_limit
+
+        mock_table.get_item.return_value = {
+            "Item": {
+                "submitted_at": [self.NOW - self.DAY, self.NOW - 60, self.NOW - 30]
+            }
+        }
+        assert len(check_integration_submission_limit("user_1", self.NOW)) == 2
+
+    def test_read_error_raises_500(self, mock_table):
+        from helpers import check_integration_submission_limit
+
+        mock_table.get_item.side_effect = _boto_error()
+        with pytest.raises(HTTPException) as exc:
+            check_integration_submission_limit("user_1", self.NOW)
+        assert exc.value.status_code == 500
+
+    def test_record_appends_and_sets_ttl(self, mock_table):
+        from helpers import record_integration_submission
+
+        record_integration_submission("user_1", [self.NOW - 60], self.NOW)
+        assert mock_table.put_item.call_args.kwargs["Item"] == {
+            "PK": "USER#user_1",
+            "SK": "INTEGRATION_SUBMISSIONS",
+            "submitted_at": [self.NOW - 60, self.NOW],
+            "ttl": self.NOW + self.DAY,
+        }
+
+    def test_record_error_is_swallowed(self, mock_table):
+        from helpers import record_integration_submission
+
+        mock_table.put_item.side_effect = _boto_error()
+        record_integration_submission("user_1", [], self.NOW)  # does not raise

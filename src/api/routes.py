@@ -11,6 +11,7 @@ import hmac
 import json
 import os
 import secrets
+import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Annotated, Literal
@@ -18,6 +19,7 @@ from urllib.parse import urlencode, urlparse
 
 import botocore.exceptions
 import espn_credentials
+import integrations
 import main
 import requests as http_requests
 import yahoo_oauth
@@ -35,6 +37,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from helpers import (
     _is_conditional_check_failure,
     add_league_member,
+    check_integration_submission_limit,
     convert_decimals,
     create_job_status,
     delete_all_league_items,
@@ -49,11 +52,13 @@ from helpers import (
     owner_has_other_yahoo_leagues,
     publish_failure,
     read_view,
+    record_integration_submission,
     record_league_access,
     require_league_member,
     require_league_owner,
     set_active_job,
 )
+from integrations import GitHubError, IntegrationSubmission
 from main import (
     EXPORT_SEASON_VIEWS,
     PREFIX_READ_QUERY_TYPES,
@@ -78,6 +83,7 @@ from main import (
 
 from common.feature_flags import (
     BANNER,
+    INTEGRATIONS,
     is_enabled,
 )
 from common.onboarder_invoke import invoke_onboarder
@@ -124,6 +130,7 @@ def get_feature_flags(response: Response) -> APIResponse:
         detail="Feature flags",
         data={
             BANNER: is_enabled(BANNER),
+            INTEGRATIONS: is_enabled(INTEGRATIONS),
         },
     )
 
@@ -197,6 +204,81 @@ def get_league(
             # (backend/scheduled-league-auto-refresh). Absent on older leagues → not enrolled.
             "auto_refresh_enabled": bool(metadata.get("auto_refresh_enabled")),
         },
+    )
+
+
+def require_integrations_enabled() -> None:
+    """404 the integrations endpoints while the ``integrations`` flag is off.
+
+    Used as a route dependency so it runs before body validation: with the flag off
+    the endpoints look absent, whatever the request carries.
+    """
+    if not is_enabled(INTEGRATIONS):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
+
+
+INTEGRATION_SUBMIT_FAILED = "Couldn't submit right now. Try again in a few minutes."
+
+
+@router.get(
+    "/integrations",
+    status_code=status.HTTP_200_OK,
+    dependencies=[
+        Depends(require_integrations_enabled),
+        Depends(get_authenticated_user),
+    ],
+)
+def list_integrations() -> APIResponse:
+    """List maintainer-approved community integrations (backend/integrations).
+
+    Served from a short in-memory cache of the GitHub issues labeled
+    ``integration:approved``; a stale listing is returned if GitHub is down.
+    """
+    try:
+        items = integrations.list_approved()
+    except GitHubError:
+        logger.exception("Failed to list approved integrations from GitHub")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Couldn't load integrations right now. Try again in a few minutes.",
+        )
+    return APIResponse(detail="Integrations", data={"items": items})
+
+
+@router.post(
+    "/integrations",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_integrations_enabled)],
+)
+def submit_integration(
+    payload: IntegrationSubmission,
+    clerk_user_id: Annotated[str, Depends(get_authenticated_user)],
+) -> APIResponse:
+    """Open a GitHub review issue for a community integration (backend/integrations).
+
+    The submitter's Clerk id is only logged next to the issue number; it is never
+    written to the public issue.
+    """
+    now = int(time.time())
+    recent = check_integration_submission_limit(clerk_user_id, now)
+    try:
+        issue_number = integrations.create_issue(payload)
+    except GitHubError as e:
+        logger.error("Integration submission failed: %s", e)
+        publish_failure(f"Integration submission failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=INTEGRATION_SUBMIT_FAILED,
+        )
+    record_integration_submission(clerk_user_id, recent, now)
+    logger.info(
+        "Integration submission from user %s opened issue #%s",
+        clerk_user_id,
+        issue_number,
+    )
+    return APIResponse(
+        detail="Integration submitted for review",
+        data={"issue_number": issue_number},
     )
 
 

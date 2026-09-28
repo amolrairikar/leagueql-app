@@ -66,12 +66,12 @@ class TestFeatureFlagsEndpoint:
     def test_returns_resolved_flag_map(self, client):
         from common import feature_flags
 
-        feature_flags._override_for_testing({"banner": True})
+        feature_flags._override_for_testing({"banner": True, "integrations": True})
         response = client.get("/feature-flags")
         assert response.status_code == 200
         body = response.json()
         assert body["detail"] == "Feature flags"
-        assert body["data"] == {"banner": True}
+        assert body["data"] == {"banner": True, "integrations": True}
         assert response.headers["Cache-Control"] == "no-store"
 
     def test_defaults_off_when_unset(self, client):
@@ -79,7 +79,7 @@ class TestFeatureFlagsEndpoint:
 
         feature_flags._override_for_testing({})
         response = client.get("/feature-flags")
-        assert response.json()["data"] == {"banner": False}
+        assert response.json()["data"] == {"banner": False, "integrations": False}
 
 
 class TestParseCorsOrigins:

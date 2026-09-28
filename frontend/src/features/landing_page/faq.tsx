@@ -50,8 +50,8 @@ const FAQ_ITEMS: FaqItem[] = [
     q: 'My data looks outdated. How do I refresh it?',
     a: (
       <>
-        Sleeper leagues refresh automatically each week during the season. ESPN
-        and Yahoo auto-refresh are opt-in: enable{' '}
+        Sleeper and Yahoo leagues refresh automatically each week during the
+        season. ESPN auto-refresh is opt-in: enable{' '}
         <Kbd>Enable automatic weekly refresh</Kbd> when you connect the league
         (enabling it for ESPN stores your cookies encrypted so LeagueQL can
         refresh for you). You can also refresh an ESPN league manually anytime

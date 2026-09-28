@@ -775,3 +775,89 @@ def _is_conditional_check_failure(exc: botocore.exceptions.ClientError) -> bool:
     return (
         exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException"
     )
+
+
+# Per-user cap on integration submissions (backend/integrations): at most this many
+# accepted submissions in any rolling window, so the review queue in the public repo
+# can't be flooded.
+INTEGRATION_SUBMISSION_LIMIT = 3
+INTEGRATION_SUBMISSION_WINDOW_SECONDS = 24 * 60 * 60
+
+
+def _integration_submissions_key(clerk_user_id: str) -> dict[str, str]:
+    return {"PK": f"USER#{clerk_user_id}", "SK": "INTEGRATION_SUBMISSIONS"}
+
+
+def check_integration_submission_limit(clerk_user_id: str, now: int) -> list[int]:
+    """
+    Enforce the rolling per-user integration submission limit.
+
+    Only accepted submissions are recorded (see ``record_integration_submission``), so
+    a submission that failed validation or GitHub never counts toward the limit.
+
+    Args:
+        clerk_user_id: The submitting user's Clerk ID.
+        now: The current Unix epoch seconds.
+
+    Returns:
+        The user's accepted-submission timestamps still inside the window, to pass
+        back to ``record_integration_submission`` once the issue is created.
+
+    Raises:
+        HTTPException: 429 when the limit is reached; 500 on a DynamoDB error.
+    """
+    try:
+        response = main.table.get_item(Key=_integration_submissions_key(clerk_user_id))
+    except botocore.exceptions.ClientError as e:
+        logger.error("Failed to read integration submissions: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to check submission limit",
+        )
+    window_start = now - INTEGRATION_SUBMISSION_WINDOW_SECONDS
+    recent = sorted(
+        int(ts)
+        for ts in (response.get("Item") or {}).get("submitted_at", [])
+        if int(ts) > window_start
+    )
+    if len(recent) >= INTEGRATION_SUBMISSION_LIMIT:
+        # The oldest submission in the window is the next one to age out.
+        wait_seconds = recent[-INTEGRATION_SUBMISSION_LIMIT] - window_start
+        hours = max(-(-wait_seconds // 3600), 1)
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=(
+                f"You've reached the limit of {INTEGRATION_SUBMISSION_LIMIT} "
+                "integration submissions per day. Try again in "
+                f"{hours} hour{'s' if hours != 1 else ''}."
+            ),
+        )
+    return recent
+
+
+def record_integration_submission(
+    clerk_user_id: str, recent: list[int], now: int
+) -> None:
+    """
+    Record an accepted submission against the user's rolling limit.
+
+    Best-effort: the GitHub issue already exists, so a write failure is logged rather
+    than failing the request (the worst case is one extra submission slipping through).
+
+    Args:
+        clerk_user_id: The submitting user's Clerk ID.
+        recent: Timestamps returned by ``check_integration_submission_limit``.
+        now: The current Unix epoch seconds.
+    """
+    submitted_at = [*recent, now]
+    try:
+        main.table.put_item(
+            Item={
+                **_integration_submissions_key(clerk_user_id),
+                "submitted_at": submitted_at,
+                # Reap the item once its newest entry has left the window.
+                "ttl": now + INTEGRATION_SUBMISSION_WINDOW_SECONDS,
+            }
+        )
+    except botocore.exceptions.ClientError as e:
+        logger.error("Failed to record integration submission: %s", e)

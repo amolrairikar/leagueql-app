@@ -29,6 +29,7 @@ from diagrams.aws.storage import S3
 from diagrams.generic.blank import Blank
 from diagrams.generic.storage import Storage
 from diagrams.onprem.client import Client, User
+from diagrams.onprem.vcs import Github
 from diagrams.programming.framework import React
 from diagrams.saas.cdn import Cloudflare
 from diagrams.saas.chat import Discord
@@ -64,6 +65,7 @@ with Diagram(
         espn = Client("ESPN API")
         sleeper = Client("Sleeper API")
         yahoo = Client("Yahoo API\n(OAuth 2.0)")
+        github = Github("GitHub Issues\n(integration review)")
         # Text-only node (no vendor icon) for the OTEL / Better Stack observability backend.
         betterstack = Blank("OTEL\nBetter Stack (traces + RUM)")
 
@@ -109,7 +111,7 @@ with Diagram(
     user >> Edge(label="uses") >> spa
     ext >> Edge(label="autofills cookies") >> spa
     spa >> Edge(label="auth") >> clerk
-    spa >> Edge(label="REST /leagues, /jobs") >> apigw >> api
+    spa >> Edge(label="REST /leagues, /jobs,\n/integrations") >> apigw >> api
     spa >> Edge(label="/counts") >> get_counts >> Edge(label="read") >> counts_kv
     # sync-counts refreshes the KV cache from DynamoDB on an hourly Cloudflare cron.
     sync_counts >> SCHED >> counts_kv
@@ -164,6 +166,11 @@ with Diagram(
     # ciphertext in DynamoDB. No Yahoo token ever reaches the browser.
     api >> Edge(label="OAuth 2.0\n(authorize/callback)") >> yahoo
     api >> Edge(label="encrypt/decrypt\ntokens") >> kms
+
+    # ── Community integrations (backend/integrations) ──────────────────────────
+    # Submissions open review issues in the LeagueQL repo (PAT from SSM); the approved
+    # listing is read back from issues labeled integration:approved.
+    api >> Edge(label="open review issues /\nlist approved") >> github
 
     # ── Alerting & config ─────────────────────────────────────────────────────
     sns >> discord_fn >> Edge(label="webhook URL from SSM") >> discord
