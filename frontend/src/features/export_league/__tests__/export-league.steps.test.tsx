@@ -44,7 +44,7 @@ defineFeature(feature, (test) => {
       for (const season of ['2022', '2023', '2024']) {
         expect(screen.getByLabelText(season)).toBeInTheDocument();
       }
-      expect(screen.getByLabelText('Select all')).toBeInTheDocument();
+      expect(screen.getByLabelText('Export all seasons')).toBeInTheDocument();
     });
 
     and('the export button is disabled', () => {
@@ -96,7 +96,7 @@ defineFeature(feature, (test) => {
     );
 
     when('I select all seasons', async () => {
-      await userEvent.click(screen.getByLabelText('Select all'));
+      await userEvent.click(screen.getByLabelText('Export all seasons'));
     });
 
     when('I click export', async () => {

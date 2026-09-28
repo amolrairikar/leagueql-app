@@ -56,21 +56,22 @@ export function buildWeeklyPlayerPoints(
 /**
  * Total fantasy points a player scored from `tradeWeek` onward (inclusive), rounded to 2 dp.
  *
- * There is no explicit upper bound: the matchup box scores only contain weeks that were
- * played, up to the last playoff week, so summing every week `>= tradeWeek` naturally stops
- * at the end of the season. A player absent from the box scores (never rostered in range)
- * contributes 0.
+ * `untilWeek` is an optional exclusive upper bound (e.g. the week an added player was later
+ * dropped). Without it, the sum runs to the end of the season: the matchup box scores only
+ * contain weeks that were played, up to the last playoff week. A player absent from the box
+ * scores (never rostered in range) contributes 0.
  */
 export function rosPointsFor(
   playerId: string,
   tradeWeek: number,
   weekly: WeeklyPlayerPoints,
+  untilWeek = Infinity,
 ): number {
   const weeks = weekly.get(playerId);
   if (!weeks) return 0;
   let total = 0;
   for (const [week, points] of weeks) {
-    if (week >= tradeWeek) total += points;
+    if (week >= tradeWeek && week < untilWeek) total += points;
   }
   return Math.round(total * 100) / 100;
 }

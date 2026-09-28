@@ -1,13 +1,4 @@
-import {
-  ArrowDown,
-  ArrowLeftRight,
-  ArrowUp,
-  Gavel,
-  type LucideIcon,
-  Repeat,
-  Trophy,
-  UserPlus,
-} from 'lucide-react';
+import { ArrowDown, ArrowLeftRight, ArrowUp, Trophy } from 'lucide-react';
 import { type ReactNode, Suspense, use, useMemo, useState } from 'react';
 
 import { TeamAvatar } from '@/components/team-avatar';
@@ -28,6 +19,17 @@ import {
   getTransactions,
   rosPointsFor,
 } from '@/features/transactions/api-calls';
+import { TopTransactions } from '@/features/transactions/top-transactions';
+import {
+  type RosterExits,
+  buildRosterExits,
+  involvedRosterIds,
+  netPickupValue,
+  pointsWhileRostered,
+  sideTotal,
+  teamLabel,
+} from '@/features/transactions/transaction-impact';
+import { typeMeta } from '@/features/transactions/type-meta';
 import { avatarColor } from '@/lib/color-constants';
 import { getLeagueCookies } from '@/lib/cookie-handler';
 import { type Result } from '@/lib/result';
@@ -39,41 +41,6 @@ type TransactionsResult = Result<TransactionItem[]>;
 type StandingsResult = Result<SeasonStandingsItem[]>;
 
 type MatchupsResult = Result<MatchupItem[]>;
-
-/**
- * Per-type presentation: label, icon, and the accent classes for the type chip. The commissioner
- * entry is a neutral fallback — it is never filterable, but a stray commissioner move still renders
- * a sensible chip.
- */
-const TYPE_META: Record<
-  string,
-  { label: string; Icon: LucideIcon; chip: string }
-> = {
-  trade: {
-    label: 'Trade',
-    Icon: Repeat,
-    chip: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400',
-  },
-  waiver: {
-    label: 'Waiver',
-    Icon: Gavel,
-    chip: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
-  },
-  free_agent: {
-    label: 'Free Agent',
-    Icon: UserPlus,
-    chip: 'bg-sky-500/10 text-sky-600 dark:text-sky-400',
-  },
-  commissioner: {
-    label: 'Commissioner',
-    Icon: Repeat,
-    chip: 'bg-muted text-muted-foreground',
-  },
-};
-
-function typeMeta(type: string) {
-  return TYPE_META[type] ?? TYPE_META.commissioner;
-}
 
 type TypeFilter = 'trade' | 'waiver' | 'free_agent';
 
@@ -96,25 +63,6 @@ function playerLabel(player: TransactionPlayer): ReactNode {
       )}
     </span>
   );
-}
-
-function teamLabel(txn: TransactionItem, rosterId: string | null): string {
-  if (rosterId === null) return 'Unknown team';
-  const team = txn.teams.find((t) => t.roster_id === rosterId);
-  if (!team) return `Roster ${rosterId}`;
-  // Prefer the display name, then the team name, ignoring null/empty values.
-  return (
-    [team.display_name, team.team_name].find((n) => n) ?? `Roster ${rosterId}`
-  );
-}
-
-/** All roster_ids touched by a transaction, in the order teams are listed. */
-function involvedRosterIds(txn: TransactionItem): string[] {
-  const ids = new Set<string>();
-  for (const team of txn.teams) ids.add(team.roster_id);
-  for (const add of txn.adds) ids.add(add.roster_id);
-  for (const drop of txn.drops) ids.add(drop.roster_id);
-  return [...ids];
 }
 
 /** The type columns the summary table tracks (commissioner moves are excluded). */
@@ -190,8 +138,8 @@ function buildOwnerSummary(transactions: TransactionItem[]): OwnerSummaryRow[] {
 
 /**
  * A single add (green ↑) or drop (red ↓) row inside a team panel. `points`, when provided,
- * renders right-aligned in the foreground color — the rest-of-season points for a traded
- * player (a `—` placeholder for a traded pick, which scores nothing).
+ * renders right-aligned in the foreground color — the player's points (a `—` placeholder for a
+ * traded pick, which scores nothing).
  */
 function MoveRow({
   direction,
@@ -227,7 +175,8 @@ function MoveRow({
  * One team's panel within a transaction card: its avatar, name, and the moves it received.
  *
  * For a two-team trade with matchup box scores loaded, `weekly` is non-null and each acquired
- * player shows their rest-of-season points; the panel gains a per-side total footer, and the
+ * player shows the points they scored while on this roster; the panel gains a per-side total
+ * footer, and the
  * higher-scoring side (`isWinner`) is tinted and tagged "Won".
  */
 function TeamPanel({
@@ -236,6 +185,7 @@ function TeamPanel({
   isTrade,
   visual,
   weekly,
+  exits,
   sideTotal,
   isWinner,
 }: {
@@ -244,6 +194,7 @@ function TeamPanel({
   isTrade: boolean;
   visual: OwnerVisual | undefined;
   weekly: WeeklyPlayerPoints | null;
+  exits: RosterExits;
   sideTotal: number | null;
   isWinner: boolean;
 }) {
@@ -279,24 +230,15 @@ function TeamPanel({
     <span className="text-muted-foreground font-normal">—</span>
   ) : undefined;
 
-  // For a waiver / free-agent move, the net pickup value is the ROS points the acquired player(s)
-  // scored minus the ROS points the released player(s) scored — a positive net means the pickup
+  // For a waiver / free-agent move, the net pickup value is the points the acquired player(s)
+  // scored while on this roster (until a later transaction dropped or traded them away) minus the
+  // ROS points the released player(s) scored — a positive net means the pickup
   // outscored what was let go. It is shown on every waiver / free-agent move for a consistent
   // footer: a pure add resolves to the added total (nothing dropped), a pure drop to the negative
   // of the dropped total (nothing added). Trades use per-side totals + a winner banner instead.
   const net =
     showRos && !isTrade && !empty
-      ? Math.round(
-          (adds.reduce(
-            (sum, p) => sum + rosPointsFor(p.player_id, tradeWeek, weekly),
-            0,
-          ) -
-            drops.reduce(
-              (sum, p) => sum + rosPointsFor(p.player_id, tradeWeek, weekly),
-              0,
-            )) *
-            100,
-        ) / 100
+      ? netPickupValue(txn, rosterId, weekly, exits)
       : null;
 
   return (
@@ -324,12 +266,12 @@ function TeamPanel({
             Won
           </span>
         )}
-        {/* Waivers / free agents label the right-aligned points column so the numbers read as
-            rest-of-season totals; trades convey that through their per-side total footer instead.
+        {/* Waivers / free agents label the right-aligned points column (adds count only while on
+            this roster; drops count the rest of the season); trades convey that through their per-side total footer instead.
             Placed in the header row so it aligns vertically with the owner name/icon. */}
         {showRos && !isTrade && !empty && (
           <span className="ml-auto shrink-0 text-[10px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">
-            Rest of season points
+            Points while rostered
           </span>
         )}
       </div>
@@ -340,7 +282,7 @@ function TeamPanel({
             direction="add"
             points={
               showRos
-                ? rosPointsFor(p.player_id, tradeWeek, weekly).toFixed(2)
+                ? pointsWhileRostered(txn, p, weekly, exits).toFixed(2)
                 : undefined
             }
           >
@@ -377,7 +319,7 @@ function TeamPanel({
       {showRos && sideTotal != null && (
         <div className="mt-2.5 pt-2 border-t border-border/50 flex items-baseline justify-between gap-2">
           <span className="text-[10px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">
-            Rest-of-season pts
+            Points while rostered
           </span>
           <span
             className={cn(
@@ -416,29 +358,16 @@ function TeamPanel({
   );
 }
 
-/** Sum of the rest-of-season points a roster's acquired players scored, for a trade. */
-function sideTotal(
-  txn: TransactionItem,
-  rosterId: string,
-  weekly: WeeklyPlayerPoints,
-): number {
-  const total = txn.adds
-    .filter((a) => a.roster_id === rosterId)
-    .reduce(
-      (sum, a) => sum + rosPointsFor(a.player_id, txn.week ?? 0, weekly),
-      0,
-    );
-  return Math.round(total * 100) / 100;
-}
-
 function TransactionCard({
   txn,
   visuals,
   weekly,
+  exits,
 }: {
   txn: TransactionItem;
   visuals: Map<string, OwnerVisual>;
   weekly: WeeklyPlayerPoints | null;
+  exits: RosterExits;
 }) {
   const date = new Date(txn.created).toLocaleDateString(undefined, {
     month: 'short',
@@ -449,11 +378,12 @@ function TransactionCard({
   const isTrade = txn.type === 'trade';
   const rosterIds = involvedRosterIds(txn);
 
-  // Two-team-trade rest-of-season totals drive the per-side footers and the winner comparison, and
-  // only once the season's matchup box scores have loaded.
+  // Two-team-trade side totals (each acquired player's points while on the receiving roster) drive
+  // the per-side footers and the winner comparison, and only once the season's matchup box scores
+  // have loaded.
   const showRos = isTrade && rosterIds.length === 2 && weekly != null;
   const totals = showRos
-    ? rosterIds.map((rid) => sideTotal(txn, rid, weekly))
+    ? rosterIds.map((rid) => sideTotal(txn, rid, weekly, exits))
     : null;
   const winnerIndex =
     totals && totals[0] !== totals[1] ? (totals[0] > totals[1] ? 0 : 1) : null;
@@ -471,6 +401,7 @@ function TransactionCard({
       isTrade={isTrade}
       visual={visuals.get(rosterId)}
       weekly={panelWeekly}
+      exits={exits}
       sideTotal={totals ? totals[index] : null}
       isWinner={winnerIndex === index}
     />
@@ -732,6 +663,9 @@ function TransactionsBody({
   const weekly = matchupsResult.ok
     ? buildWeeklyPlayerPoints(matchupsResult.data)
     : null;
+  // Built from the whole season (not the filtered wire) so a waiver/FA add's later drop or trade
+  // away ends its points window whatever that later transaction's type.
+  const exits = buildRosterExits(result.data);
 
   const transactions = [...result.data]
     .filter((t) => t.type === typeFilter)
@@ -753,9 +687,42 @@ function TransactionsBody({
           txn={txn}
           visuals={visuals}
           weekly={weekly}
+          exits={exits}
         />
       ))}
     </div>
+  );
+}
+
+/**
+ * The Top transactions highlight. It ranks by rest-of-season points, so it renders only once the
+ * season's matchup box scores have loaded; a failed/missing transactions or matchups load renders
+ * nothing (the wire below surfaces any transactions error). Independent of the type filter.
+ */
+function TopTransactionsSection({
+  promise,
+  standingsPromise,
+  matchupsPromise,
+}: {
+  promise: Promise<TransactionsResult>;
+  standingsPromise: Promise<StandingsResult>;
+  matchupsPromise: Promise<MatchupsResult>;
+}) {
+  const result = use(promise);
+  const standingsResult = use(standingsPromise);
+  const matchupsResult = use(matchupsPromise);
+
+  if (!result.ok || !matchupsResult.ok) return null;
+
+  return (
+    <TopTransactions
+      transactions={result.data}
+      weekly={buildWeeklyPlayerPoints(matchupsResult.data)}
+      visuals={buildTransactionVisuals(
+        result.data,
+        standingsResult.ok ? standingsResult.data : [],
+      )}
+    />
   );
 }
 
@@ -850,6 +817,14 @@ export default function Transactions() {
             season and onward are stored.
           </p>
         )}
+
+        <Suspense fallback={null}>
+          <TopTransactionsSection
+            promise={transactionsPromise}
+            standingsPromise={standingsPromise}
+            matchupsPromise={matchupsPromise}
+          />
+        </Suspense>
 
         <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-2.5">
           Summary

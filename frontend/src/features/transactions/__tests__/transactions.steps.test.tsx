@@ -1,12 +1,13 @@
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { defineFeature, loadFeature } from 'jest-cucumber';
+import { http, HttpResponse } from 'msw';
 
 import type { MatchupItem, TransactionItem } from '../api-calls';
 import Transactions from '../transactions';
 
 import { avatarColor } from '@/lib/color-constants';
-import { leagueQuery, leagueQueryError, server } from '@/test/msw/server';
+import { API, leagueQuery, leagueQueryError, server } from '@/test/msw/server';
 import { renderRoute } from '@/test/render';
 
 const feature = loadFeature(
@@ -428,7 +429,583 @@ const ROS_FA_PURE_DROP_MATCHUPS: MatchupItem[] = [
   mkMatchup(4, [{ id: 23, pts: 4 }]),
 ];
 
+/** A week-1 move among Alice (roster 1) and Bob (roster 2) for the top-transactions scenarios. */
+function mkMove(
+  id: string,
+  type: TransactionItem['type'],
+  created: number,
+  adds: { id: string; name: string; roster: string }[],
+  drops: { id: string; name: string; roster: string }[] = [],
+  waiverBid: number | null = null,
+): TransactionItem {
+  const player = (p: { id: string; name: string; roster: string }) => ({
+    player_id: p.id,
+    player_name: p.name,
+    position: null,
+    roster_id: p.roster,
+  });
+  const rosters = [...new Set([...adds, ...drops].map((p) => p.roster))].sort();
+  const TEAMS: Record<string, TransactionItem['teams'][number]> = {
+    '1': { roster_id: '1', team_name: 'Team Alice', display_name: 'Alice' },
+    '2': { roster_id: '2', team_name: 'Team Bob', display_name: 'Bob' },
+  };
+  return {
+    season: '2024',
+    transaction_id: id,
+    type,
+    week: 1,
+    created,
+    roster_ids: rosters,
+    teams: rosters.map((r) => TEAMS[r]),
+    adds: adds.map(player),
+    drops: drops.map(player),
+    draft_picks: [],
+    waiver_bid: waiverBid,
+  };
+}
+
+const A = '1';
+const B = '2';
+
+// Impacts (ROS points from week 1): Big Pickup waiver +90 (100 − 10), Solid Add FA +60, the
+// Star/Role trade won by Bob +45 (70 − 25), Late Add waiver +30, Minor Add FA +15 (20 − 5), Sixth
+// Add FA +10 (6th, cut), Bust FA −45 (net-negative, excluded), Even Swap trade 8 v 8 (excluded).
+const TOP_MIXED: TransactionItem[] = [
+  mkMove(
+    'w-big',
+    'waiver',
+    1,
+    [{ id: '30', name: 'Big Pickup', roster: A }],
+    [{ id: '31', name: 'Scrub', roster: A }],
+    12,
+  ),
+  mkMove(
+    'tr-star',
+    'trade',
+    2,
+    [
+      { id: '10', name: 'Star Player', roster: B },
+      { id: '11', name: 'Role Player', roster: A },
+    ],
+    [
+      { id: '10', name: 'Star Player', roster: A },
+      { id: '11', name: 'Role Player', roster: B },
+    ],
+  ),
+  mkMove('fa-solid', 'free_agent', 3, [
+    { id: '32', name: 'Solid Add', roster: B },
+  ]),
+  mkMove(
+    'fa-minor',
+    'free_agent',
+    4,
+    [{ id: '33', name: 'Minor Add', roster: A }],
+    [{ id: '34', name: 'Minor Drop', roster: A }],
+  ),
+  mkMove('w-late', 'waiver', 5, [{ id: '35', name: 'Late Add', roster: B }]),
+  mkMove('fa-sixth', 'free_agent', 6, [
+    { id: '36', name: 'Sixth Add', roster: B },
+  ]),
+  mkMove(
+    'fa-bust',
+    'free_agent',
+    7,
+    [{ id: '37', name: 'Bust', roster: A }],
+    [{ id: '38', name: 'Keeper', roster: A }],
+  ),
+  mkMove(
+    'tr-even',
+    'trade',
+    8,
+    [
+      { id: '39', name: 'Even Swap A', roster: A },
+      { id: '40', name: 'Even Swap B', roster: B },
+    ],
+    [
+      { id: '39', name: 'Even Swap A', roster: B },
+      { id: '40', name: 'Even Swap B', roster: A },
+    ],
+  ),
+];
+
+const TOP_MIXED_MATCHUPS: MatchupItem[] = [
+  mkMatchup(1, [
+    { id: 30, pts: 100 },
+    { id: 31, pts: 10 },
+    { id: 10, pts: 70 },
+    { id: 11, pts: 25 },
+    { id: 32, pts: 60 },
+    { id: 33, pts: 20 },
+    { id: 34, pts: 5 },
+    { id: 35, pts: 30 },
+    { id: 36, pts: 10 },
+    { id: 37, pts: 5 },
+    { id: 38, pts: 50 },
+    { id: 39, pts: 8 },
+    { id: 40, pts: 8 },
+  ]),
+];
+
+// Two +20 pickups; the later-created one is listed first in the data, so the tie-break (earlier
+// transaction first) is what puts "Early Add" on top.
+const TOP_TIE: TransactionItem[] = [
+  mkMove('fa-later', 'free_agent', 20, [
+    { id: '41', name: 'Later Add', roster: B },
+  ]),
+  mkMove('fa-early', 'free_agent', 10, [
+    { id: '42', name: 'Early Add', roster: A },
+  ]),
+];
+
+const TOP_TIE_MATCHUPS: MatchupItem[] = [
+  mkMatchup(1, [
+    { id: 41, pts: 20 },
+    { id: 42, pts: 20 },
+  ]),
+];
+
+const atWeek = (week: number, txn: TransactionItem): TransactionItem => ({
+  ...txn,
+  week,
+});
+
+// Alice picks up "Short Stint" (id 50) for "Old Guy" (id 51) in week 3, then cuts Short Stint in
+// week 5. Short Stint: 10 + 20 while rostered (weeks 3–4), then 100 + 100 elsewhere → 30.00, not
+// 230.00. Old Guy keeps his full rest of season, including week 6 after the cut: 5 + 10 = 15.00.
+// Net = 30.00 − 15.00 = +15.00.
+const REDROP: TransactionItem[] = [
+  atWeek(
+    3,
+    mkMove(
+      'fa-stint',
+      'free_agent',
+      100,
+      [{ id: '50', name: 'Short Stint', roster: A }],
+      [{ id: '51', name: 'Old Guy', roster: A }],
+    ),
+  ),
+  atWeek(
+    5,
+    mkMove(
+      'fa-cut',
+      'free_agent',
+      200,
+      [],
+      [{ id: '50', name: 'Short Stint', roster: A }],
+    ),
+  ),
+];
+
+const REDROP_MATCHUPS: MatchupItem[] = [
+  mkMatchup(3, [
+    { id: 50, pts: 10 },
+    { id: 51, pts: 5 },
+  ]),
+  mkMatchup(4, [{ id: 50, pts: 20 }]),
+  mkMatchup(5, [{ id: 50, pts: 100 }]),
+  mkMatchup(6, [
+    { id: 50, pts: 100 },
+    { id: 51, pts: 10 },
+  ]),
+];
+
+// Alice picks up "Flip Guy" (id 60) in week 2, then trades him to Bob in week 4 for "Return Guy"
+// (id 61). Flip Guy: 10 + 10 while on Alice's roster (weeks 2–3); his week-4 50 belongs to Bob →
+// the pickup is +20.00, not +70.00.
+const TRADED_AWAY: TransactionItem[] = [
+  atWeek(
+    2,
+    mkMove('fa-flip', 'free_agent', 100, [
+      { id: '60', name: 'Flip Guy', roster: A },
+    ]),
+  ),
+  atWeek(
+    4,
+    mkMove(
+      'tr-flip',
+      'trade',
+      200,
+      [
+        { id: '60', name: 'Flip Guy', roster: B },
+        { id: '61', name: 'Return Guy', roster: A },
+      ],
+      [
+        { id: '60', name: 'Flip Guy', roster: A },
+        { id: '61', name: 'Return Guy', roster: B },
+      ],
+    ),
+  ),
+];
+
+const TRADED_AWAY_MATCHUPS: MatchupItem[] = [
+  mkMatchup(2, [{ id: 60, pts: 10 }]),
+  mkMatchup(3, [{ id: 60, pts: 10 }]),
+  mkMatchup(4, [
+    { id: 60, pts: 50 },
+    { id: 61, pts: 7 },
+  ]),
+];
+
+// Alice picks up "Blip" (id 70) and drops him again the same week (3): he never counts for her.
+const SAME_WEEK: TransactionItem[] = [
+  atWeek(
+    3,
+    mkMove('fa-blip', 'free_agent', 100, [
+      { id: '70', name: 'Blip', roster: A },
+    ]),
+  ),
+  atWeek(
+    3,
+    mkMove(
+      'fa-unblip',
+      'free_agent',
+      200,
+      [],
+      [{ id: '70', name: 'Blip', roster: A }],
+    ),
+  ),
+];
+
+const SAME_WEEK_MATCHUPS: MatchupItem[] = [
+  mkMatchup(3, [{ id: 70, pts: 12 }]),
+  mkMatchup(4, [{ id: 70, pts: 12 }]),
+];
+
+// The week-3 Star/Role trade, after which Bob cuts Star Player in week 4. With ROS_MATCHUPS, Star
+// Player counts only week 3 for Bob (30.00, not 70.00); Role Player keeps 25.00 → Bob by +5.00.
+const TRADE_THEN_DROP: TransactionItem[] = [
+  ...ROS_TRANSACTIONS,
+  atWeek(
+    4,
+    mkMove(
+      'fa-cut-star',
+      'free_agent',
+      1700000000001,
+      [],
+      [{ id: '10', name: 'Star Player', roster: B }],
+    ),
+  ),
+];
+
+/** The Top transactions tiles, in rendered order. */
+async function topTiles(): Promise<HTMLElement[]> {
+  const list = await screen.findByRole('list', { name: 'Top transactions' });
+  return [...list.children] as HTMLElement[];
+}
+
+const tileFor = async (name: string) => {
+  const tile = (await topTiles()).find((t) => t.textContent?.includes(name));
+  expect(tile).toBeDefined();
+  return tile!;
+};
+
+/** Waits until the wire has settled (it awaits every query), then asserts no highlight renders. */
+async function expectNoTopTransactions() {
+  await screen.findAllByText(/No transactions for this season\.|Star Player/);
+  expect(
+    screen.queryByRole('heading', { name: 'Top transactions' }),
+  ).toBeNull();
+}
+
+const expectTopOrder = async (names: string) => {
+  const tiles = await topTiles();
+  const expected = names.split(', ');
+  expect(tiles).toHaveLength(expected.length);
+  expected.forEach((name, i) => expect(tiles[i].textContent).toContain(name));
+};
+
 defineFeature(feature, (test) => {
+  const seePoints = async (pts: string) => {
+    expect((await screen.findAllByText(pts)).length).toBeGreaterThan(0);
+  };
+  const notSeePoints = (pts: string) => {
+    expect(screen.queryByText(pts)).toBeNull();
+  };
+  const seeNet = async (value: string) => {
+    expect(await screen.findByText(value)).toBeInTheDocument();
+  };
+  const selectFilter = async (label: string) => {
+    await userEvent.click(screen.getByRole('button', { name: label }));
+  };
+
+  test('A pickup later dropped only counts its points while rostered', ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    given(
+      'a free-agent pickup that is later dropped, with matchup box scores',
+      () => {
+        server.use(
+          leagueQuery({ TRANSACTIONS: REDROP, MATCHUPS: REDROP_MATCHUPS }),
+        );
+      },
+    );
+    when('I open the transactions page', async () => {
+      await renderRoute(<Transactions />, { route: '/transactions', league });
+    });
+    and(/^I select the "(.*)" filter$/, selectFilter);
+    then(/^I see the points "(.*)"$/, seePoints);
+    and(/^I do not see the points "(.*)"$/, notSeePoints);
+    // The dropped player keeps his full rest of season (week 6, after the cut, included).
+    and(/^I see the points "(.*)"$/, seePoints);
+    and(/^I see the net pickup value "(.*)"$/, seeNet);
+    and(
+      /^the top transaction for "(.*)" shows "(.*)"$/,
+      async (player: string, value: string) => {
+        expect((await tileFor(player)).textContent).toContain(value);
+      },
+    );
+  });
+
+  test('A traded player later dropped only counts his points while rostered', ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    given(
+      'a trade whose acquired player is later dropped, with matchup box scores',
+      () => {
+        server.use(
+          leagueQuery({
+            TRANSACTIONS: TRADE_THEN_DROP,
+            MATCHUPS: ROS_MATCHUPS,
+          }),
+        );
+      },
+    );
+    when('I open the transactions page', async () => {
+      await renderRoute(<Transactions />, { route: '/transactions', league });
+    });
+    then(/^I see the points "(.*)"$/, seePoints);
+    and(/^I do not see the points "(.*)"$/, notSeePoints);
+    and(/^the trade winner is "(.*)" by "(.*)"$/, async (team, margin) => {
+      expect(
+        await screen.findByText(`${team} won by ${margin} pts`),
+      ).toBeInTheDocument();
+    });
+    and(/^I see the side total label "(.*)"$/, async (label) => {
+      expect((await screen.findAllByText(label)).length).toBeGreaterThan(0);
+    });
+  });
+
+  test('A pickup later traded away stops counting at the trade week', ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    given(
+      'a free-agent pickup that is later traded away, with matchup box scores',
+      () => {
+        server.use(
+          leagueQuery({
+            TRANSACTIONS: TRADED_AWAY,
+            MATCHUPS: TRADED_AWAY_MATCHUPS,
+          }),
+        );
+      },
+    );
+    when('I open the transactions page', async () => {
+      await renderRoute(<Transactions />, { route: '/transactions', league });
+    });
+    and(/^I select the "(.*)" filter$/, selectFilter);
+    then(/^I see the points "(.*)"$/, seePoints);
+    and(/^I do not see the points "(.*)"$/, notSeePoints);
+    and(/^I see the net pickup value "(.*)"$/, seeNet);
+  });
+
+  test('A pickup dropped in the same week counts nothing', ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    given(
+      'a free-agent pickup dropped again the same week, with matchup box scores',
+      () => {
+        server.use(
+          leagueQuery({
+            TRANSACTIONS: SAME_WEEK,
+            MATCHUPS: SAME_WEEK_MATCHUPS,
+          }),
+        );
+      },
+    );
+    when('I open the transactions page', async () => {
+      await renderRoute(<Transactions />, { route: '/transactions', league });
+    });
+    and(/^I select the "(.*)" filter$/, selectFilter);
+    then(/^I see the points "(.*)"$/, seePoints);
+    and(/^I see the net pickup value "(.*)"$/, seeNet);
+  });
+
+  test("The top transactions highlight ranks the season's best moves across types", ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    given(
+      'a season of mixed transactions with matchup box scores is available',
+      () => {
+        server.use(
+          leagueQuery({
+            TRANSACTIONS: TOP_MIXED,
+            MATCHUPS: TOP_MIXED_MATCHUPS,
+          }),
+        );
+      },
+    );
+    when('I open the transactions page', async () => {
+      await renderRoute(<Transactions />, { route: '/transactions', league });
+    });
+    then(/^the top transactions are "(.*)" in order$/, expectTopOrder);
+    and(/^the top transaction values are "(.*)"$/, async (values: string) => {
+      const tiles = await topTiles();
+      values
+        .split(', ')
+        .forEach((v, i) => expect(tiles[i].textContent).toContain(v));
+    });
+    const notIncluded = async (name: string) => {
+      for (const tile of await topTiles()) {
+        expect(tile.textContent).not.toContain(name);
+      }
+    };
+    and(/^the top transactions do not include "(.*)"$/, notIncluded);
+    and(/^the top transactions do not include "(.*)"$/, notIncluded);
+    and(/^the top transactions do not include "(.*)"$/, notIncluded);
+  });
+
+  test('A trade tile credits the winning team', ({ given, when, then }) => {
+    given(
+      'a season of mixed transactions with matchup box scores is available',
+      () => {
+        server.use(
+          leagueQuery({
+            TRANSACTIONS: TOP_MIXED,
+            MATCHUPS: TOP_MIXED_MATCHUPS,
+          }),
+        );
+      },
+    );
+    when('I open the transactions page', async () => {
+      await renderRoute(<Transactions />, { route: '/transactions', league });
+    });
+    then(
+      /^the top transaction for "(.*)" is credited to "(.*)" and shows "(.*)" and "(.*)"$/,
+      async (player, team, label, opponent) => {
+        const tile = await tileFor(player);
+        expect(within(tile).getByText(team)).toBeInTheDocument();
+        expect(within(tile).getByText(label)).toBeInTheDocument();
+        expect(tile.textContent).toContain(opponent);
+      },
+    );
+  });
+
+  test('The top transactions highlight is independent of the type filter', ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    given(
+      'a season of mixed transactions with matchup box scores is available',
+      () => {
+        server.use(
+          leagueQuery({
+            TRANSACTIONS: TOP_MIXED,
+            MATCHUPS: TOP_MIXED_MATCHUPS,
+          }),
+        );
+      },
+    );
+    when('I open the transactions page', async () => {
+      await renderRoute(<Transactions />, { route: '/transactions', league });
+    });
+    and(/^I select the "(.*)" filter$/, async (label) => {
+      await screen.findByRole('list', { name: 'Top transactions' });
+      await userEvent.click(screen.getByRole('button', { name: label }));
+    });
+    then(/^the top transactions are "(.*)" in order$/, expectTopOrder);
+  });
+
+  test('Fewer than five eligible moves are shown, earlier first on a tie', ({
+    given,
+    when,
+    then,
+  }) => {
+    given(
+      'two equally valued pickups with matchup box scores are available',
+      () => {
+        server.use(
+          leagueQuery({ TRANSACTIONS: TOP_TIE, MATCHUPS: TOP_TIE_MATCHUPS }),
+        );
+      },
+    );
+    when('I open the transactions page', async () => {
+      await renderRoute(<Transactions />, { route: '/transactions', league });
+    });
+    then(/^the top transactions are "(.*)" in order$/, expectTopOrder);
+  });
+
+  test('The top transactions highlight is hidden when nothing is eligible', ({
+    given,
+    when,
+    then,
+  }) => {
+    given('a pure free-agent drop with matchup box scores is available', () => {
+      server.use(
+        leagueQuery({
+          TRANSACTIONS: ROS_FA_PURE_DROP,
+          MATCHUPS: ROS_FA_PURE_DROP_MATCHUPS,
+        }),
+      );
+    });
+    when('I open the transactions page', async () => {
+      await renderRoute(<Transactions />, { route: '/transactions', league });
+    });
+    then('there is no top transactions highlight', expectNoTopTransactions);
+  });
+
+  test('The top transactions highlight is hidden when box scores fail to load', ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    given(
+      'a season of mixed transactions whose matchup box scores fail to load',
+      () => {
+        // Transactions load; matchups 500 (standings 404s, which is tolerated).
+        server.use(
+          http.get(`${API}/leagues/:id/query`, ({ request }) => {
+            const queryType =
+              new URL(request.url).searchParams.get('queryType') ?? '';
+            if (queryType.startsWith('TRANSACTIONS')) {
+              return HttpResponse.json({ data: TOP_MIXED });
+            }
+            return HttpResponse.json(
+              { detail: 'Internal Server Error' },
+              { status: queryType.startsWith('MATCHUPS') ? 500 : 404 },
+            );
+          }),
+        );
+      },
+    );
+    when('I open the transactions page', async () => {
+      await renderRoute(<Transactions />, { route: '/transactions', league });
+    });
+    then('there is no top transactions highlight', expectNoTopTransactions);
+    and(/^I see the received player "(.*)"$/, async (name) => {
+      expect(
+        (await screen.findAllByText(name, { exact: false })).length,
+      ).toBeGreaterThan(0);
+    });
+  });
+
   test('Trades are shown by default with no All option', ({
     given,
     when,
@@ -771,7 +1348,7 @@ defineFeature(feature, (test) => {
     and(/^I see the net pickup value "(.*)"$/, async (value) => {
       expect(await screen.findByText(value)).toBeInTheDocument();
     });
-    and(/^I see the rest-of-season note "(.*)"$/, async (note) => {
+    and(/^I see the points column header "(.*)"$/, async (note) => {
       expect(
         (await screen.findAllByText(note, { exact: false })).length,
       ).toBeGreaterThan(0);
