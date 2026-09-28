@@ -3,7 +3,6 @@
 from unittest.mock import patch
 
 import pytest
-from integrations import GitHubError
 
 VALID_SUBMISSION = {
     "name": "Trade Grader",
@@ -14,6 +13,15 @@ VALID_SUBMISSION = {
     "description": "Grades every trade.",
     "setup_steps": ["Fork the repo."],
 }
+
+
+@pytest.fixture
+def github_error():
+    # Imported lazily: a module-level import would load ``common.secrets`` during
+    # collection, before ``conftest`` patches boto3, and build a real SSM client.
+    from integrations import GitHubError
+
+    return GitHubError
 
 
 @pytest.fixture
@@ -63,8 +71,8 @@ class TestListIntegrations:
         assert response.json() == {"detail": "Integrations", "data": {"items": items}}
         assert response.headers["cache-control"] == "no-store"
 
-    def test_github_failure_returns_502(self, client):
-        with patch("integrations.list_approved", side_effect=GitHubError("down")):
+    def test_github_failure_returns_502(self, client, github_error):
+        with patch("integrations.list_approved", side_effect=github_error("down")):
             response = client.get("/integrations")
         assert response.status_code == 502
         assert "Couldn't load integrations" in response.json()["detail"]
@@ -123,12 +131,12 @@ class TestSubmitIntegration:
         create_issue.assert_not_called()
 
     def test_github_failure_returns_502_alerts_and_does_not_count(
-        self, client, mock_table
+        self, client, mock_table, github_error
     ):
         mock_table.get_item.return_value = {}
         with (
             patch(
-                "integrations.create_issue", side_effect=GitHubError("500 boom")
+                "integrations.create_issue", side_effect=github_error("500 boom")
             ) as create_issue,
             patch("routes.publish_failure") as alert,
         ):
