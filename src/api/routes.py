@@ -43,11 +43,14 @@ from helpers import (
     get_league_metadata,
     get_league_seasons,
     get_nfl_state,
+    get_user_league_prefs,
     is_job_in_progress,
+    league_has_owner,
     lookup_league,
     owner_has_other_optedin_espn_leagues,
     owner_has_other_yahoo_leagues,
     publish_failure,
+    put_user_league_prefs,
     read_view,
     record_league_access,
     require_league_member,
@@ -72,6 +75,7 @@ from main import (
     QueryResponse,
     QueryType,
     RequestType,
+    UserLeaguePrefsPayload,
     correlation_id_var,
     logger,
 )
@@ -829,6 +833,62 @@ def set_auto_refresh(
     return APIResponse(
         detail="Auto-refresh enabled" if payload.enabled else "Auto-refresh disabled",
         data={"auto_refresh_enabled": payload.enabled},
+    )
+
+
+@router.get("/leagues/{leagueId}/me", status_code=status.HTTP_200_OK)
+def get_my_league_prefs(
+    leagueId: Annotated[
+        str, Path(description="The ID of the fantasy league", pattern=r"^\d+$")
+    ],
+    platform: Annotated[Platform, Query(description="The platform the league is on")],
+    response: Response,
+    clerk_user_id: Annotated[str, Depends(get_authenticated_user)],
+) -> APIResponse:
+    """Return the caller's preferences (claimed team) for a league.
+
+    Member-gated like league reads (backend/user-league-preferences): ESPN/Yahoo require
+    the owner or a member; Sleeper is open to any authenticated caller.
+    """
+    canonical_league_id = lookup_league(league_id=leagueId, platform=platform)
+    metadata = get_league_metadata(canonical_league_id=canonical_league_id)
+    require_league_member(
+        canonical_league_id, clerk_user_id, platform, metadata=metadata
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return APIResponse(
+        detail="Found user preferences",
+        data=get_user_league_prefs(canonical_league_id, clerk_user_id),
+    )
+
+
+@router.put("/leagues/{leagueId}/me", status_code=status.HTTP_200_OK)
+def put_my_league_prefs(
+    leagueId: Annotated[
+        str, Path(description="The ID of the fantasy league", pattern=r"^\d+$")
+    ],
+    platform: Annotated[Platform, Query(description="The platform the league is on")],
+    payload: UserLeaguePrefsPayload,
+    clerk_user_id: Annotated[str, Depends(get_authenticated_user)],
+) -> APIResponse:
+    """Save the caller's claimed team for a league (backend/user-league-preferences).
+
+    ``owner_id`` must be a team's primary owner in the league's TEAMS view, else ``400``
+    and the stored claim is left unchanged.
+    """
+    canonical_league_id = lookup_league(league_id=leagueId, platform=platform)
+    metadata = get_league_metadata(canonical_league_id=canonical_league_id)
+    require_league_member(
+        canonical_league_id, clerk_user_id, platform, metadata=metadata
+    )
+    if not league_has_owner(canonical_league_id, payload.owner_id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="owner_id is not a team owner in this league",
+        )
+    put_user_league_prefs(canonical_league_id, clerk_user_id, payload.owner_id)
+    return APIResponse(
+        detail="Saved user preferences", data={"owner_id": payload.owner_id}
     )
 
 

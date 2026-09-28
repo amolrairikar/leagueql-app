@@ -784,3 +784,72 @@ class TestOwnerHasOtherOptedinEspnLeagues:
         mock_table.get_item.return_value = {"Item": {"auto_refresh_enabled": True}}
         assert owner_has_other_optedin_espn_leagues("user_1", "deleted") is True
         assert mock_table.query.call_count == 2
+
+
+class TestGetUserLeaguePrefs:
+    def test_returns_owner_id(self, mock_table):
+        from main import get_user_league_prefs
+
+        mock_table.get_item.return_value = {"Item": {"owner_id": "U1"}}
+        assert get_user_league_prefs("canonical-abc", "user_1") == {"owner_id": "U1"}
+        _, kwargs = mock_table.get_item.call_args
+        assert kwargs["Key"] == {"PK": "LEAGUE#canonical-abc", "SK": "USER#user_1"}
+
+    def test_returns_none_when_no_item(self, mock_table):
+        from main import get_user_league_prefs
+
+        mock_table.get_item.return_value = {}
+        assert get_user_league_prefs("canonical-abc", "user_1") == {"owner_id": None}
+
+    def test_raises_500_on_boto_error(self, mock_table):
+        from main import get_user_league_prefs
+
+        mock_table.get_item.side_effect = _boto_error()
+        with pytest.raises(HTTPException) as exc_info:
+            get_user_league_prefs("canonical-abc", "user_1")
+        assert exc_info.value.status_code == 500
+
+
+class TestPutUserLeaguePrefs:
+    def test_upserts_owner_id(self, mock_table):
+        from main import put_user_league_prefs
+
+        put_user_league_prefs("canonical-abc", "user_1", "U1")
+        kwargs = mock_table.update_item.call_args.kwargs
+        assert kwargs["Key"] == {"PK": "LEAGUE#canonical-abc", "SK": "USER#user_1"}
+        assert kwargs["ExpressionAttributeValues"][":o"] == "U1"
+        assert ":t" in kwargs["ExpressionAttributeValues"]
+
+    def test_raises_500_on_boto_error(self, mock_table):
+        from main import put_user_league_prefs
+
+        mock_table.update_item.side_effect = _boto_error()
+        with pytest.raises(HTTPException) as exc_info:
+            put_user_league_prefs("canonical-abc", "user_1", "U1")
+        assert exc_info.value.status_code == 500
+
+
+class TestLeagueHasOwner:
+    @pytest.mark.parametrize(
+        ("response", "owner_id", "expected"),
+        [
+            ({"Item": {"data": [{"primary_owner_id": "U1"}]}}, "U1", True),
+            ({"Item": {"data": [{"primary_owner_id": 42}]}}, "42", True),
+            ({"Item": {"data": [{"primary_owner_id": "U1"}]}}, "U2", False),
+            ({"Item": {"data": [{"secondary_owner_id": "U2"}]}}, "U2", False),
+            ({}, "U1", False),
+        ],
+    )
+    def test_matches_primary_owner(self, mock_table, response, owner_id, expected):
+        from main import league_has_owner
+
+        mock_table.get_item.return_value = response
+        assert league_has_owner("canonical-abc", owner_id) is expected
+
+    def test_raises_500_on_boto_error(self, mock_table):
+        from main import league_has_owner
+
+        mock_table.get_item.side_effect = _boto_error()
+        with pytest.raises(HTTPException) as exc_info:
+            league_has_owner("canonical-abc", "U1")
+        assert exc_info.value.status_code == 500

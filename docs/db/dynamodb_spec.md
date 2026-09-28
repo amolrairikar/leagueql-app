@@ -818,6 +818,34 @@ non-paging `ESPN_AUTH` failure prompting re-entry.
 </details>
 
 <details>
+<summary><b>USER (per-league user preferences)</b></summary>
+
+A user's personal preferences for one league (backend/user-league-preferences), written by
+`PUT /leagues/{leagueId}/me` and read by `GET /leagues/{leagueId}/me`. Today it holds the team the
+user claimed on the My Team page. Keyed under the **league's** partition (unlike the
+`USER#`-partitioned credential items), so `DELETE /leagues/{id}` removes it with every other item
+under the canonical PK. The claim is self-declared (not verified against the platform account) and
+only personalizes the claimer's own view. No TTL.
+
+| Attribute | Type | Required | Description |
+|---|---|---|---|
+| `PK` | String | Yes | `LEAGUE#{canonical_league_id}` |
+| `SK` | String | Yes | `USER#{clerk_user_id}` |
+| `owner_id` | String | Yes | Platform owner ID of the claimed team — a `primary_owner_id` from the league's `TEAMS` view. Stable across seasons, so the My Team page resolves the current season's `team_id` (and all-time head-to-head) from it, remapped through `PLATFORM_MIGRATION` mappings. |
+| `updated_at` | String | Yes | ISO 8601 (UTC) timestamp of the most recent write |
+
+**Example:**
+```json
+{
+  "PK": "LEAGUE#123456789",
+  "SK": "USER#user_2abc123",
+  "owner_id": "734811230425763840",
+  "updated_at": "2026-09-28T17:04:00+00:00"
+}
+```
+</details>
+
+<details>
 <summary><b>OAUTH_STATE</b></summary>
 
 Single-use Yahoo OAuth `state` (backend/yahoo-oauth). Written by `GET /leagues/yahoo/oauth/authorize`

@@ -89,6 +89,35 @@ export async function queryDemoLeague<T = unknown>(
 }
 
 /**
+ * The demo viewer's claimed team (frontend/my-team): the first team, by team id, of
+ * the latest demo season's matchups. Mirrors `GET /leagues/{id}/me`; nothing is
+ * persisted, so a reload always lands back on this team.
+ */
+export async function getDemoMyTeam(): Promise<{
+  detail: string;
+  data: { owner_id: string | null };
+}> {
+  const data = await loadDemoData();
+  const latest = DEMO_SEASONS[DEMO_SEASONS.length - 1];
+  const rows = resolveQuery(data, `MATCHUPS#${latest}#`) as {
+    team_a_id: string;
+    team_a_primary_owner_id: string;
+    team_b_id: string;
+    team_b_primary_owner_id: string;
+  }[];
+  const owners = new Map<string, string>();
+  for (const r of rows) {
+    owners.set(r.team_a_id, r.team_a_primary_owner_id);
+    owners.set(r.team_b_id, r.team_b_primary_owner_id);
+  }
+  const firstId = [...owners.keys()].sort((a, b) => Number(a) - Number(b))[0];
+  return {
+    detail: 'Found user preferences',
+    data: { owner_id: firstId != null ? owners.get(firstId)! : null },
+  };
+}
+
+/**
  * Returns the demo league metadata (seasons, name).
  * Mirrors the real `GET /leagues/{leagueId}` response.
  */

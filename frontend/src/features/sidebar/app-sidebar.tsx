@@ -17,6 +17,7 @@ import {
   Swords,
   TableProperties,
   Trophy,
+  UserRound,
   Trash2,
   UserRoundCog,
   UserRoundPlus,
@@ -67,6 +68,8 @@ import {
 
 const navItems = [
   { title: 'Home', url: '/home', icon: Home },
+  // The personal My Team page (frontend/my-team), directly under Home.
+  { title: 'My Team', url: '/my_team', icon: UserRound },
   { title: 'Standings', url: '/standings', icon: TableProperties },
   { title: 'Matchups', url: '/matchups', icon: Swords },
   { title: 'Playoff Bracket', url: '/playoff_bracket', icon: Trophy },

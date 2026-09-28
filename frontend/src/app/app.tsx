@@ -37,6 +37,7 @@ import ManagerHistory from '@/features/manager_history/manager-history';
 import MatchupRecords from '@/features/matchup_records/matchup-records';
 import Matchups from '@/features/matchups/matchups';
 import MigrateLeague from '@/features/migrate_league/migrate-league';
+import MyTeamPage from '@/features/my_team/my-team';
 import { MembershipGuard } from '@/features/ownership/membership-guard';
 import PlayerRecords from '@/features/player_records/player-records';
 import PlayoffBracket from '@/features/playoff_bracket/playoff-bracket';
@@ -119,6 +120,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 const APP_LAYOUT_ROUTES: { path: string; element: React.ReactNode }[] = [
   { path: '/home', element: <HomePage /> },
+  { path: '/my_team', element: <MyTeamPage /> },
   { path: '/standings', element: <SeasonStandings /> },
   { path: '/matchups', element: <Matchups /> },
   { path: '/manager_comparison', element: <ManagerComparison /> },

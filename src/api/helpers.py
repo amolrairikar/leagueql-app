@@ -770,6 +770,105 @@ def add_league_member(canonical_league_id: str, clerk_user_id: str) -> None:
         )
 
 
+def get_user_league_prefs(canonical_league_id: str, clerk_user_id: str) -> dict:
+    """
+    Read a user's preferences for a league (backend/user-league-preferences).
+
+    Preferences live in the league's own partition (``SK=USER#{clerk_user_id}``) so
+    deleting the league removes them with everything else under its PK.
+
+    Args:
+        canonical_league_id: The canonical league ID.
+        clerk_user_id: The authenticated caller's Clerk user ID.
+
+    Returns:
+        ``{"owner_id": <str | None>}`` — ``None`` when the user has not claimed a team.
+
+    Raises:
+        HTTPException: 500 on a DynamoDB error.
+    """
+    try:
+        response = main.table.get_item(
+            Key={"PK": f"LEAGUE#{canonical_league_id}", "SK": f"USER#{clerk_user_id}"},
+            ConsistentRead=True,
+        )
+    except botocore.exceptions.ClientError as e:
+        logger.error("Boto error occurred: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve user preferences",
+        )
+    item = response.get("Item") or {}
+    return {"owner_id": item.get("owner_id")}
+
+
+def put_user_league_prefs(
+    canonical_league_id: str, clerk_user_id: str, owner_id: str
+) -> None:
+    """
+    Save (upsert) a user's claimed team for a league (backend/user-league-preferences).
+
+    ``UpdateItem`` rather than ``PutItem`` so a later change can add other preference
+    attributes to the same item without this write clobbering them.
+
+    Args:
+        canonical_league_id: The canonical league ID.
+        clerk_user_id: The authenticated caller's Clerk user ID.
+        owner_id: The platform owner ID of the claimed team.
+
+    Raises:
+        HTTPException: 500 on a DynamoDB error.
+    """
+    try:
+        main.table.update_item(
+            Key={"PK": f"LEAGUE#{canonical_league_id}", "SK": f"USER#{clerk_user_id}"},
+            UpdateExpression="SET owner_id = :o, updated_at = :t",
+            ExpressionAttributeValues={
+                ":o": owner_id,
+                ":t": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+    except botocore.exceptions.ClientError as e:
+        logger.error(
+            "Failed to save preferences for league %s: %s", canonical_league_id, e
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to save user preferences",
+        )
+
+
+def league_has_owner(canonical_league_id: str, owner_id: str) -> bool:
+    """
+    Whether ``owner_id`` is a team's primary owner in any season of the league.
+
+    Checked against the league's all-seasons ``TEAMS`` view (``SK=TEAMS``), the same
+    source the MATCHUPS view's ``team_{a,b}_primary_owner_id`` fields come from.
+
+    Args:
+        canonical_league_id: The canonical league ID.
+        owner_id: The platform owner ID to look for.
+
+    Returns:
+        True when some team lists ``owner_id`` as its ``primary_owner_id``.
+
+    Raises:
+        HTTPException: 500 on a DynamoDB error.
+    """
+    try:
+        response = main.table.get_item(
+            Key={"PK": f"LEAGUE#{canonical_league_id}", "SK": "TEAMS"}
+        )
+    except botocore.exceptions.ClientError as e:
+        logger.error("Boto error occurred: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve league data",
+        )
+    teams = (response.get("Item") or {}).get("data") or []
+    return any(str(t.get("primary_owner_id")) == owner_id for t in teams)
+
+
 def _is_conditional_check_failure(exc: botocore.exceptions.ClientError) -> bool:
     """True when a DynamoDB ClientError is a failed ConditionExpression."""
     return (

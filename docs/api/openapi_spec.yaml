@@ -281,6 +281,105 @@ paths:
         uri: "arn:aws:apigateway:${aws_region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations"
         payloadFormatVersion: "2.0"   # use 2.0 for HTTP API (v2)
 
+  /leagues/{leagueId}/me:
+    get:
+      summary: Get the caller's preferences for a league
+      description: >
+        Returns the authenticated caller's per-league preferences (backend/user-league-preferences):
+        currently the team they claimed on the My Team page, as the platform owner ID
+        (`owner_id`, null when unclaimed). Member-gated like league reads: ESPN/Yahoo require the
+        owner or a member; Sleeper is open to any authenticated caller.
+      operationId: getMyLeaguePrefs
+      parameters:
+        - name: leagueId
+          in: path
+          required: true
+          description: The ESPN, Sleeper, or Yahoo league ID
+          schema:
+            type: string
+            pattern: '^\d+$'
+            example: "12345678"
+        - name: platform
+          in: query
+          required: true
+          description: The name of the platform the fantasy football league is on
+          schema:
+            type: string
+            enum: [ESPN, SLEEPER, YAHOO]
+            example: "SLEEPER"
+      responses:
+        "200":
+          description: The caller's preferences (`data.owner_id`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/APIResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/LeagueNotFoundError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      security:
+        - ClerkJWT: []
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        httpMethod: POST        # always POST for Lambda proxy, regardless of your route method
+        uri: "arn:aws:apigateway:${aws_region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations"
+        payloadFormatVersion: "2.0"   # use 2.0 for HTTP API (v2)
+    put:
+      summary: Save the caller's claimed team for a league
+      description: >
+        Saves (upserts) the caller's claimed team (backend/user-league-preferences). `owner_id` must
+        be a team's primary owner in the league's TEAMS view, otherwise 400 and the stored claim
+        is unchanged. Stored under the league's partition, so deleting the league removes it.
+      operationId: putMyLeaguePrefs
+      parameters:
+        - name: leagueId
+          in: path
+          required: true
+          description: The ESPN, Sleeper, or Yahoo league ID
+          schema:
+            type: string
+            pattern: '^\d+$'
+            example: "12345678"
+        - name: platform
+          in: query
+          required: true
+          description: The name of the platform the fantasy football league is on
+          schema:
+            type: string
+            enum: [ESPN, SLEEPER, YAHOO]
+            example: "SLEEPER"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserLeaguePrefsRequest"
+      responses:
+        "200":
+          description: The saved preferences (`data.owner_id`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/APIResponse"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/LeagueNotFoundError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      security:
+        - ClerkJWT: []
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        httpMethod: POST        # always POST for Lambda proxy, regardless of your route method
+        uri: "arn:aws:apigateway:${aws_region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations"
+        payloadFormatVersion: "2.0"   # use 2.0 for HTTP API (v2)
+
   /leagues:
     post:
       summary: Onboard a new league or refresh an existing league's data
@@ -1037,6 +1136,18 @@ components:
           type: boolean
           description: Whether scheduled auto-refresh should be enabled for the league.
           example: true
+
+    UserLeaguePrefsRequest:
+      type: object
+      additionalProperties: false
+      required: [owner_id]
+      properties:
+        owner_id:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Platform owner ID (a team's primary_owner_id) the caller claims as their team.
+          example: "734811230425763840"
 
     EspnMembersRequest:
       type: object

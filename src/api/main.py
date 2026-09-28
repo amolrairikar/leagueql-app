@@ -160,6 +160,12 @@ class AcceptInvitePayload(BaseModel):
     token: str = Field(max_length=512)
 
 
+class UserLeaguePrefsPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    owner_id: str = Field(min_length=1, max_length=100)
+
+
 class ManagerMappingEntry(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -186,7 +192,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=ORIGINS,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "DELETE"],
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
     # ``traceparent``/``tracestate`` allow the browser OTel SDK (frontend/observability) to send W3C
     # trace context cross-origin so the API span continues the browser's trace
     # (backend/otel-tracing); kept in lockstep with the API Gateway CORS config.
@@ -301,11 +307,14 @@ from helpers import (  # noqa: F401
     get_league_metadata,
     get_league_seasons,
     get_nfl_state,
+    get_user_league_prefs,
     is_job_in_progress,
+    league_has_owner,
     lookup_league,
     owner_has_other_optedin_espn_leagues,
     owner_has_other_yahoo_leagues,
     publish_failure,
+    put_user_league_prefs,
     read_view,
     record_league_access,
     require_league_member,

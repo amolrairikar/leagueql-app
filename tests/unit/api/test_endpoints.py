@@ -2992,3 +2992,150 @@ class TestDeleteLeagueEspnCredentialCleanup:
         ):
             response = client.delete("/leagues/456?platform=ESPN")
         assert response.status_code == 200
+
+
+class TestUserLeaguePrefsEndpoints:
+    """GET/PUT /leagues/{id}/me (backend/user-league-preferences)."""
+
+    def _gated_items(self, platform="ESPN", members=frozenset({"user_1"})):
+        lookup = {
+            "PK": f"LEAGUE#456#PLATFORM#{platform}",
+            "SK": "LEAGUE_LOOKUP",
+            "canonical_league_id": "canonical-g",
+        }
+        metadata = {
+            "PK": "LEAGUE#canonical-g",
+            "SK": "METADATA",
+            "platform": platform,
+            "owner_user_id": "owner_x",
+            "members": set(members),
+        }
+        return lookup, metadata
+
+    def test_get_returns_null_without_claim(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+            {},
+        ]
+        response = client.get("/leagues/123/me?platform=SLEEPER")
+        assert response.status_code == 200
+        assert response.json()["data"] == {"owner_id": None}
+        assert response.headers["cache-control"] == "no-store"
+
+    def test_get_returns_existing_claim(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+            {"Item": {"owner_id": "U1"}},
+        ]
+        response = client.get("/leagues/123/me?platform=SLEEPER")
+        assert response.json()["data"] == {"owner_id": "U1"}
+        key = mock_table.get_item.call_args_list[2].kwargs["Key"]
+        assert key == {"PK": "LEAGUE#canonical-abc", "SK": "USER#user_1"}
+
+    def test_put_saves_valid_owner(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+            {
+                "Item": {
+                    "data": [{"primary_owner_id": "U1"}, {"primary_owner_id": "U2"}]
+                }
+            },
+        ]
+        response = client.put(
+            "/leagues/123/me?platform=SLEEPER", json={"owner_id": "U2"}
+        )
+        assert response.status_code == 200
+        assert response.json()["data"] == {"owner_id": "U2"}
+        update = mock_table.update_item.call_args.kwargs
+        assert update["Key"] == {"PK": "LEAGUE#canonical-abc", "SK": "USER#user_1"}
+        assert update["ExpressionAttributeValues"][":o"] == "U2"
+
+    def test_put_unknown_owner_returns_400_and_does_not_write(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+            {"Item": {"data": [{"primary_owner_id": "U1"}]}},
+        ]
+        response = client.put(
+            "/leagues/123/me?platform=SLEEPER", json={"owner_id": "ZZ"}
+        )
+        assert response.status_code == 400
+        mock_table.update_item.assert_not_called()
+
+    @pytest.mark.parametrize("body", [{}, {"owner_id": ""}, {"owner_id": "U1", "x": 1}])
+    def test_put_invalid_body_returns_422(self, client, mock_table, body):
+        response = client.put("/leagues/123/me?platform=SLEEPER", json=body)
+        assert response.status_code == 422
+        mock_table.update_item.assert_not_called()
+
+    @pytest.mark.parametrize("method", ["get", "put"])
+    def test_unknown_league_returns_404(self, client, mock_table, method):
+        mock_table.get_item.return_value = {}
+        kwargs = {"json": {"owner_id": "U1"}} if method == "put" else {}
+        response = getattr(client, method)("/leagues/999/me?platform=SLEEPER", **kwargs)
+        assert response.status_code == 404
+
+    @pytest.mark.parametrize("platform", ["ESPN", "YAHOO"])
+    @pytest.mark.parametrize("method", ["get", "put"])
+    def test_gated_non_member_returns_403(self, client, mock_table, platform, method):
+        lookup, metadata = self._gated_items(platform, members=frozenset({"someone"}))
+        mock_table.get_item.side_effect = [{"Item": lookup}, {"Item": metadata}]
+        kwargs = {"json": {"owner_id": "U1"}} if method == "put" else {}
+        response = getattr(client, method)(
+            f"/leagues/456/me?platform={platform}", **kwargs
+        )
+        assert response.status_code == 403
+        mock_table.update_item.assert_not_called()
+
+    def test_gated_member_can_read(self, client, mock_table):
+        lookup, metadata = self._gated_items("ESPN")
+        mock_table.get_item.side_effect = [{"Item": lookup}, {"Item": metadata}, {}]
+        response = client.get("/leagues/456/me?platform=ESPN")
+        assert response.status_code == 200
+
+    def test_sleeper_open_to_non_member(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        league_metadata_item["owner_user_id"] = "someone"
+        league_metadata_item["members"] = {"someone"}
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+            {},
+        ]
+        response = client.get("/leagues/123/me?platform=SLEEPER")
+        assert response.status_code == 200
+
+    @pytest.mark.parametrize("method", ["get", "put"])
+    def test_unauthenticated_returns_401(self, client, mock_table, method):
+        import main
+        import routes
+
+        main.app.dependency_overrides.pop(routes.get_authenticated_user, None)
+        kwargs = {"json": {"owner_id": "U1"}} if method == "put" else {}
+        response = getattr(client, method)("/leagues/123/me?platform=SLEEPER", **kwargs)
+        assert response.status_code == 401
+
+
+class TestCorsAllowsPut:
+    def test_preflight_allows_put(self, client):
+        response = client.options(
+            "/leagues/123/me?platform=SLEEPER",
+            headers={
+                "Origin": "https://leagueql.com",
+                "Access-Control-Request-Method": "PUT",
+            },
+        )
+        assert response.status_code == 200
+        assert "PUT" in response.headers["access-control-allow-methods"]
