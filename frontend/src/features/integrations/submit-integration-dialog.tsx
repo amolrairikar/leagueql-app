@@ -221,8 +221,8 @@ export function SubmitIntegrationDialog({
             </span>
             <p className="font-semibold">Submitted for review</p>
             <p className="max-w-[40ch] text-sm text-muted-foreground">
-              Thanks! It&apos;s in the review queue as #{submittedIssue} and
-              will appear on this page once it&apos;s approved.
+              Thanks! We have received your submission and will feature your
+              integration on this page if it&apos;s approved.
             </p>
             <Button
               className="mt-2 cursor-pointer"

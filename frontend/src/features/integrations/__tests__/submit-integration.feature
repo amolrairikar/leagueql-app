@@ -8,7 +8,7 @@ Feature: Submit an integration for review (frontend/integrations)
     And the submit endpoint will accept the submission as issue 331
     When I fill in a complete "Bot" submission named "Trade Grader"
     And I click "Submit for review"
-    Then the dialog shows "Submitted for review" with issue 331
+    Then the dialog shows "Submitted for review" and that the submission was received
     And the submission sent "Trade Grader" with views "transactions,matchups" and no prompt
 
   Scenario: Submit is disabled until the form is complete

@@ -111,13 +111,16 @@ defineFeature(feature, (test) => {
     whenClickSubmit(when);
 
     then(
-      /^the dialog shows "Submitted for review" with issue (\d+)$/,
-      async (issue) => {
+      'the dialog shows "Submitted for review" and that the submission was received',
+      async () => {
         const dialog = screen.getByRole('dialog');
         expect(
           await within(dialog).findByText('Submitted for review'),
         ).toBeInTheDocument();
-        expect(within(dialog).getByText(new RegExp(`#${issue}`))).toBeVisible();
+        expect(
+          within(dialog).getByText(/we have received your submission/i),
+        ).toBeVisible();
+        expect(within(dialog).queryByText(/#\d+/)).not.toBeInTheDocument();
       },
     );
 
