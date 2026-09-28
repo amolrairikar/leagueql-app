@@ -173,7 +173,10 @@ export function SubmitIntegrationDialog({
               Thanks! It&apos;s in the review queue as #{submittedIssue} and
               will appear on this page once it&apos;s approved.
             </p>
-            <Button className="mt-2" onClick={() => handleOpenChange(false)}>
+            <Button
+              className="mt-2 cursor-pointer"
+              onClick={() => handleOpenChange(false)}
+            >
               Done
             </Button>
           </div>
@@ -211,12 +214,19 @@ export function SubmitIntegrationDialog({
                   update('category', value as IntegrationCategory)
                 }
               >
-                <SelectTrigger id="integration-category" className="w-full">
+                <SelectTrigger
+                  id="integration-category"
+                  className="w-full cursor-pointer"
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   {CATEGORIES.map((category) => (
-                    <SelectItem key={category} value={category}>
+                    <SelectItem
+                      key={category}
+                      value={category}
+                      className="cursor-pointer"
+                    >
                       {CATEGORY_LABELS[category]}
                     </SelectItem>
                   ))}
@@ -254,7 +264,7 @@ export function SubmitIntegrationDialog({
                   >
                     <input
                       type="checkbox"
-                      className="size-3.5 accent-primary"
+                      className="size-3.5 cursor-pointer accent-primary"
                       checked={form.views.includes(view)}
                       onChange={() => toggleView(view)}
                     />
@@ -313,11 +323,16 @@ export function SubmitIntegrationDialog({
               <Button
                 type="button"
                 variant="ghost"
+                className="cursor-pointer"
                 onClick={() => handleOpenChange(false)}
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={!canSubmit}>
+              <Button
+                type="submit"
+                className="cursor-pointer"
+                disabled={!canSubmit}
+              >
                 {loading && <Spinner />}
                 Submit for review
               </Button>

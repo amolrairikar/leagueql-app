@@ -56,7 +56,10 @@ export default function IntegrationsPage() {
               and plug your own league in.
             </p>
           </div>
-          <Button onClick={() => setSubmitOpen(true)}>
+          <Button
+            className="cursor-pointer"
+            onClick={() => setSubmitOpen(true)}
+          >
             <Plus />
             Submit your integration
           </Button>
@@ -132,7 +135,12 @@ function IntegrationsContent({
     return (
       <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed px-4 py-10 text-center text-muted-foreground">
         <p>No integrations yet. Be the first to submit one.</p>
-        <Button variant="outline" size="sm" onClick={onSubmit}>
+        <Button
+          variant="outline"
+          size="sm"
+          className="cursor-pointer"
+          onClick={onSubmit}
+        >
           Submit your integration
         </Button>
       </div>
@@ -183,7 +191,12 @@ function FeaturedCard({
           {integration.author_handle}
         </div>
         <div className="mt-auto pt-1">
-          <Button onClick={() => onSelect(integration)}>View setup</Button>
+          <Button
+            className="cursor-pointer"
+            onClick={() => onSelect(integration)}
+          >
+            View setup
+          </Button>
         </div>
       </div>
       <CategoryPreview
@@ -246,7 +259,7 @@ function BrowseIntegrations({
                 aria-pressed={active}
                 onClick={() => setCategory(chip.value)}
                 className={cn(
-                  'h-7.5 rounded-full border px-3 text-[13px] transition-colors',
+                  'h-7.5 cursor-pointer rounded-full border px-3 text-[13px] transition-colors',
                   active
                     ? 'border-foreground bg-foreground text-background'
                     : 'bg-card hover:bg-muted',

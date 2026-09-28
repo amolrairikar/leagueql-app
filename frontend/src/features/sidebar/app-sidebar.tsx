@@ -1,6 +1,7 @@
 import { UserButton } from '@clerk/react';
 import {
   ArrowLeftRight,
+  Blocks,
   Download,
   GraduationCap,
   History,
@@ -8,7 +9,6 @@ import {
   KeyRound,
   LogIn,
   LogOut,
-  Puzzle,
   RefreshCw,
   RefreshCwOff,
   Repeat,
@@ -191,7 +191,7 @@ export function AppSidebar() {
                         tooltip="Integrations"
                       >
                         <Link to="/integrations" onClick={closeMobileSidebar}>
-                          <Puzzle />
+                          <Blocks />
                           <span>Integrations</span>
                         </Link>
                       </SidebarMenuButton>

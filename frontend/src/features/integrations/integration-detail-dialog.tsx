@@ -97,13 +97,14 @@ export function IntegrationDetailDialog({
             {integration.prompt && (
               <Button
                 variant="outline"
+                className="cursor-pointer"
                 onClick={() => copy(integration.prompt ?? '')}
               >
                 {copied ? <Check /> : <Copy />}
                 {copied ? 'Copied' : 'Copy prompt'}
               </Button>
             )}
-            <Button asChild>
+            <Button asChild className="cursor-pointer">
               <a
                 href={integration.link}
                 target="_blank"

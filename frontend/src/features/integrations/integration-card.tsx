@@ -138,7 +138,7 @@ export function IntegrationCard({
     <button
       type="button"
       onClick={() => onSelect(integration)}
-      className="flex flex-col overflow-hidden rounded-lg border bg-card text-left transition hover:-translate-y-px hover:border-ring focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 motion-reduce:transition-none"
+      className="flex cursor-pointer flex-col overflow-hidden rounded-lg border bg-card text-left transition hover:-translate-y-px hover:border-ring focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 motion-reduce:transition-none"
     >
       <CategoryPreview category={integration.category} className="h-30" />
       <div className="flex flex-1 flex-col gap-2 px-4 pt-3.5 pb-4">
