@@ -1,28 +1,6 @@
-# export-league-data Specification
+# Spec Delta
 
-## Purpose
-
-Let a league member choose which seasons to export and download the league's processed data to
-their browser as a ZIP of per-view-per-season JSON files.
-
-## Requirements
-
-### Requirement: Season selection dialog
-The export action SHALL open a dialog listing a checkbox for each of the league's onboarded seasons
-plus a "Select all" control that toggles every season at once. The confirm/export button SHALL be
-disabled until at least one season is selected.
-
-#### Scenario: Seasons listed
-- **WHEN** the export dialog opens for a connected league
-- **THEN** it shows one checkbox per onboarded season and a "Select all" control
-
-#### Scenario: Export disabled with no selection
-- **WHEN** no season is selected
-- **THEN** the export/confirm button is disabled
-
-#### Scenario: Select all toggles every season
-- **WHEN** the user activates "Select all"
-- **THEN** every season checkbox becomes checked, and deactivating it clears them
+## MODIFIED Requirements
 
 ### Requirement: Download selected seasons as a ZIP of JSON files
 On confirm, the frontend SHALL request the export for the selected seasons and download the result
@@ -39,13 +17,7 @@ loading indicator SHALL be shown while the export is in progress.
 - **WHEN** an export request is in flight
 - **THEN** the dialog shows a loading indicator and the confirm button is disabled
 
-### Requirement: Surface export errors inline
-When the export request fails, the dialog SHALL surface the error inline (via the shared error
-alert) and remain open so the user can retry, rather than downloading a file.
-
-#### Scenario: Export failure shows inline error
-- **WHEN** the export request returns an error
-- **THEN** the dialog shows an inline error message, stays open, and no file is downloaded
+## ADDED Requirements
 
 ### Requirement: Export includes a data guide
 The export ZIP's `README.md` SHALL describe the export so an AI assistant or person can interpret it

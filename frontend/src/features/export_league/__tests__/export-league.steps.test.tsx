@@ -52,6 +52,25 @@ defineFeature(feature, (test) => {
     });
   });
 
+  test('The dialog suggests uploading the export to an AI assistant', ({
+    given,
+    then,
+  }) => {
+    given(
+      /^the export dialog is open for a league with seasons "(.*)"$/,
+      async (seasons) => {
+        await openDialog(seasons.split(','));
+      },
+    );
+
+    then('I see a hint about using the export with an AI assistant', () => {
+      expect(
+        screen.getByText(/upload the ZIP to an AI assistant/i),
+      ).toBeInTheDocument();
+      expect(screen.getByText(/roast my draft/i)).toBeInTheDocument();
+    });
+  });
+
   test('Selecting all seasons and exporting downloads a ZIP', ({
     given,
     when,
@@ -91,6 +110,11 @@ defineFeature(feature, (test) => {
       expect(vi.mocked(downloadLeagueZip)).toHaveBeenCalledWith(
         'leagueql_export_100.zip',
         { '2024': { standings: [{ team: 'A' }] } },
+        expect.objectContaining({
+          leagueId: '100',
+          platform: 'SLEEPER',
+          exportedAt: expect.any(String) as string,
+        }),
       );
     });
 

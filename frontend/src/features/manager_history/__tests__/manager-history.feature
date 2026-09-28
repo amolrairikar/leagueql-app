@@ -17,6 +17,12 @@ Feature: Manager history (frontend/manager-history)
     Given manager history data for an in-progress season with final_rank 0
     When I open the manager history page
     Then the season card shows the current standings finish "1st" and never "0th"
+    And the season card shows no playoff result pill
+
+  Scenario: A finalized season keeps its playoff result pill
+    Given manager history data is available
+    When I open the manager history page
+    Then the season card shows the "Champion" result pill
 
   Scenario: A failed load surfaces an inline error
     Given the manager history data fails to load

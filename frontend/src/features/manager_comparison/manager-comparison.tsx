@@ -531,8 +531,8 @@ function ManagerComparisonInner({
   return (
     <div className="flex flex-1 flex-col p-6 overflow-auto">
       <div className="max-w-275 mx-auto w-full">
-        <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,275px)] gap-4 items-stretch">
-          <div className="flex flex-col gap-3">
+        <div className="grid grid-cols-[minmax(0,1fr)] sm:grid-cols-[minmax(0,1fr)_minmax(0,275px)] gap-4 items-stretch">
+          <div className="flex flex-col gap-3 min-w-0">
             {/* Manager selectors */}
             <div className="grid grid-cols-[1fr_56px_1fr] items-center">
               <select
@@ -562,77 +562,82 @@ function ManagerComparisonInner({
               </select>
             </div>
 
-            {/* Comparison grid — flat so each row naturally aligns across all 3 columns */}
-            <div className="grid grid-cols-[1fr_110px_1fr]">
-              {/* Header row: avatars + names */}
-              <div className="flex flex-col items-center gap-1.5 pb-4.5 pt-2.5">
-                <MgrAvatar color={LWithH2H.color} init={LWithH2H.init} />
-                <span className="text-[13px] font-medium text-foreground text-center">
-                  {LWithH2H.name}
-                </span>
-              </div>
-              <div />
-              <div className="flex flex-col items-center gap-1.5 pb-4.5 pt-2.5">
-                <MgrAvatar color={RWithH2H.color} init={RWithH2H.init} />
-                <span className="text-[13px] font-medium text-foreground text-center">
-                  {RWithH2H.name}
-                </span>
-              </div>
+            {/* Comparison grid — flat so each row naturally aligns across all 3 columns.
+                Sized to its content (w-max) so both 1fr manager columns resolve to the
+                wider one's width — a long username never squeezes the other side — and
+                scrolls horizontally when that doesn't fit (e.g. on mobile). */}
+            <div className="overflow-x-auto">
+              <div className="grid grid-cols-[1fr_110px_1fr] w-max min-w-full">
+                {/* Header row: avatars + names */}
+                <div className="flex flex-col items-center gap-1.5 pb-4.5 pt-2.5">
+                  <MgrAvatar color={LWithH2H.color} init={LWithH2H.init} />
+                  <span className="text-[13px] font-medium text-foreground text-center">
+                    {LWithH2H.name}
+                  </span>
+                </div>
+                <div />
+                <div className="flex flex-col items-center gap-1.5 pb-4.5 pt-2.5">
+                  <MgrAvatar color={RWithH2H.color} init={RWithH2H.init} />
+                  <span className="text-[13px] font-medium text-foreground text-center">
+                    {RWithH2H.name}
+                  </span>
+                </div>
 
-              {/* Stat rows */}
-              {STAT_DEFS.map((s) => {
-                const lVal = s.value(LWithH2H);
-                const rVal = s.value(RWithH2H);
-                const lWin = s.higher ? lVal >= rVal : lVal <= rVal;
-                const rWin = s.higher ? rVal >= lVal : rVal <= lVal;
-                const lP = pct(lVal, rVal);
-                const rP = pct(rVal, lVal);
-                return (
-                  <Fragment key={s.key}>
-                    <div className="h-13 flex flex-col justify-center gap-1.25 px-2 text-left">
-                      <span
-                        className="text-[15px] font-medium"
-                        style={{ color: lWin ? LWithH2H.color : undefined }}
-                      >
-                        {s.fmt(LWithH2H)}
-                      </span>
-                      <div className="h-2 rounded-full bg-muted overflow-hidden w-full">
-                        <div
-                          className="h-full rounded-full ml-auto"
-                          style={{
-                            width: `${lP}%`,
-                            background: lWin
-                              ? LWithH2H.color
-                              : 'var(--color-border)',
-                          }}
-                        />
+                {/* Stat rows */}
+                {STAT_DEFS.map((s) => {
+                  const lVal = s.value(LWithH2H);
+                  const rVal = s.value(RWithH2H);
+                  const lWin = s.higher ? lVal >= rVal : lVal <= rVal;
+                  const rWin = s.higher ? rVal >= lVal : rVal <= lVal;
+                  const lP = pct(lVal, rVal);
+                  const rP = pct(rVal, lVal);
+                  return (
+                    <Fragment key={s.key}>
+                      <div className="h-13 flex flex-col justify-center gap-1.25 px-2 text-left">
+                        <span
+                          className="text-[15px] font-medium"
+                          style={{ color: lWin ? LWithH2H.color : undefined }}
+                        >
+                          {s.fmt(LWithH2H)}
+                        </span>
+                        <div className="h-2 rounded-full bg-muted overflow-hidden w-full">
+                          <div
+                            className="h-full rounded-full ml-auto"
+                            style={{
+                              width: `${lP}%`,
+                              background: lWin
+                                ? LWithH2H.color
+                                : 'var(--color-border)',
+                            }}
+                          />
+                        </div>
                       </div>
-                    </div>
-                    <div className="h-13 flex items-center justify-center text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground text-center">
-                      {s.label}
-                    </div>
-                    <div className="h-13 flex flex-col justify-center gap-1.25 px-2 text-right">
-                      <span
-                        className="text-[15px] font-medium"
-                        style={{ color: rWin ? RWithH2H.color : undefined }}
-                      >
-                        {s.fmt(RWithH2H)}
-                      </span>
-                      <div className="h-2 rounded-full bg-muted overflow-hidden w-full">
-                        <div
-                          className="h-full rounded-full"
-                          style={{
-                            width: `${rP}%`,
-                            background: rWin
-                              ? RWithH2H.color
-                              : 'var(--color-border)',
-                          }}
-                        />
+                      <div className="h-13 flex items-center justify-center text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground text-center">
+                        {s.label}
                       </div>
-                    </div>
-                  </Fragment>
-                );
-              })}
+                      <div className="h-13 flex flex-col justify-center gap-1.25 px-2 text-right">
+                        <span
+                          className="text-[15px] font-medium"
+                          style={{ color: rWin ? RWithH2H.color : undefined }}
+                        >
+                          {s.fmt(RWithH2H)}
+                        </span>
+                        <div className="h-2 rounded-full bg-muted overflow-hidden w-full">
+                          <div
+                            className="h-full rounded-full"
+                            style={{
+                              width: `${rP}%`,
+                              background: rWin
+                                ? RWithH2H.color
+                                : 'var(--color-border)',
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </Fragment>
+                  );
+                })}
+              </div>
             </div>
           </div>
 

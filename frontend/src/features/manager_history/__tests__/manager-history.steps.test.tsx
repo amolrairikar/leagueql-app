@@ -94,6 +94,7 @@ defineFeature(feature, (test) => {
     given,
     when,
     then,
+    and,
   }) => {
     given(
       'manager history data for an in-progress season with final_rank 0',
@@ -118,6 +119,38 @@ defineFeature(feature, (test) => {
         expect(screen.queryByText(/0th/)).toBeNull();
       },
     );
+    and('the season card shows no playoff result pill', () => {
+      // Playoff outcomes aren't settled for an in-progress season, so no pill
+      // (not even the "Missed Playoffs" default) is shown.
+      for (const label of [
+        'Champion',
+        'Runner-up',
+        'Playoffs',
+        'Missed Playoffs',
+      ]) {
+        expect(screen.queryByText(label)).toBeNull();
+      }
+    });
+  });
+
+  test('A finalized season keeps its playoff result pill', ({
+    given,
+    when,
+    then,
+  }) => {
+    given('manager history data is available', () => {
+      server.use(leagueQuery({ SEASON_STANDINGS: STANDINGS, MATCHUPS }));
+    });
+    when('I open the manager history page', async () => {
+      await renderRoute(<ManagerHistory />, {
+        route: '/manager_history',
+        league: LEAGUE,
+      });
+    });
+    then(/^the season card shows the "(.*)" result pill$/, async (label) => {
+      // Default manager Alice won the finalized 2024 season.
+      expect(await screen.findByText(label)).toBeInTheDocument();
+    });
   });
 
   test('A failed load surfaces an inline error', ({ given, when, then }) => {

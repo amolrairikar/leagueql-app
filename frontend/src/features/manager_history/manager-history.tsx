@@ -89,7 +89,8 @@ interface SeasonEntry {
   pts: number;
   avg: number;
   high: number;
-  result: 'champion' | 'runner' | 'playoff' | 'elim';
+  /** Playoff outcome; null for an in-progress season (not settled yet). */
+  result: 'champion' | 'runner' | 'playoff' | 'elim' | null;
   finish: number | null;
   schedule: ScheduleGame[];
 }
@@ -389,8 +390,9 @@ function processData(
         const isRunnerUp = runnerUpMap.get(r.season)?.has(ownerId) ?? false;
         const madePlayoffs = playoffMap.get(ownerId)?.has(r.season) ?? false;
 
-        let result: 'champion' | 'runner' | 'playoff' | 'elim';
-        if (isChampion) result = 'champion';
+        let result: SeasonEntry['result'];
+        if (r.in_progress) result = null;
+        else if (isChampion) result = 'champion';
         else if (isRunnerUp) result = 'runner';
         else if (madePlayoffs) result = 'playoff';
         else result = 'elim';
@@ -988,7 +990,7 @@ function ManagerHistoryContent({
               <div className="text-[11px] text-muted-foreground mt-0.5">
                 {s.team || `Team ${m.owner_username}`}
               </div>
-              <div className="mt-2">{resultBadge(s.result)}</div>
+              {s.result && <div className="mt-2">{resultBadge(s.result)}</div>}
             </div>
             <div className="flex gap-5 flex-wrap">
               <div>
