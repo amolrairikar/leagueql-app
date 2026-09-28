@@ -181,7 +181,7 @@ export const EXPORT_VIEW_DOCS: Record<string, ViewDoc> = {
 const EXAMPLE_PROMPTS = [
   'Write a season-in-review recap for this league, with awards for each team.',
   "Roast my draft: which of my picks were the biggest busts and steals? (I'm <your username>)",
-  'Who is my bogey opponent — the manager I have the worst all-time record against?',
+  'Build a profile for each manager, highlighting their tendencies.',
   "Which teams were luckiest or unluckiest? Compare each team's record to its all-play record.",
   'How many points did each team leave on the bench this season?',
 ];

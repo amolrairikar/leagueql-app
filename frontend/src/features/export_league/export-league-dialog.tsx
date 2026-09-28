@@ -105,7 +105,8 @@ export function ExportLeagueDialog({
             </li>
             <li>&ldquo;Roast my draft — who were my biggest busts?&rdquo;</li>
             <li>
-              &ldquo;Who&apos;s my bogey opponent across all seasons?&rdquo;
+              &ldquo;Build a profile for each manager, highlighting their
+              tendencies.&rdquo;
             </li>
           </ul>
         </div>
@@ -124,7 +125,7 @@ export function ExportLeagueDialog({
                 onChange={toggleSelectAll}
               />
               <Label htmlFor="export-select-all" className="cursor-pointer">
-                Select all
+                Export all seasons
               </Label>
             </div>
             {sortedSeasons.map((season) => (

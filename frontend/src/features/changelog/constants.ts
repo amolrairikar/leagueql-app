@@ -17,6 +17,18 @@ export interface ChangelogRelease {
 // Newest release first.
 export const CHANGELOG: ChangelogRelease[] = [
   {
+    version: '1.12.0',
+    date: 'September 28, 2026',
+    sections: [
+      {
+        title: 'Added',
+        items: [
+          "Top transactions on the Transactions page. A new highlight at the top of the page shows the season's five most impactful moves across waivers, free agents, and trades together.",
+        ],
+      },
+    ],
+  },
+  {
     version: '1.11.0',
     date: 'September 26, 2026',
     sections: [

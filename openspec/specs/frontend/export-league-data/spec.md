@@ -9,19 +9,19 @@ their browser as a ZIP of per-view-per-season JSON files.
 
 ### Requirement: Season selection dialog
 The export action SHALL open a dialog listing a checkbox for each of the league's onboarded seasons
-plus a "Select all" control that toggles every season at once. The confirm/export button SHALL be
+plus an "Export all seasons" control that toggles every season at once. The confirm/export button SHALL be
 disabled until at least one season is selected.
 
 #### Scenario: Seasons listed
 - **WHEN** the export dialog opens for a connected league
-- **THEN** it shows one checkbox per onboarded season and a "Select all" control
+- **THEN** it shows one checkbox per onboarded season and an "Export all seasons" control
 
 #### Scenario: Export disabled with no selection
 - **WHEN** no season is selected
 - **THEN** the export/confirm button is disabled
 
-#### Scenario: Select all toggles every season
-- **WHEN** the user activates "Select all"
+#### Scenario: Export all seasons toggles every season
+- **WHEN** the user activates "Export all seasons"
 - **THEN** every season checkbox becomes checked, and deactivating it clears them
 
 ### Requirement: Download selected seasons as a ZIP of JSON files

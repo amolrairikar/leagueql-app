@@ -92,27 +92,34 @@ The summary SHALL list one row per participating owner with per-transaction Waiv
 
 ### Requirement: Trade rest-of-season points
 For a two-team trade, `/transactions` SHALL show, for each acquired player, the total fantasy
-points they scored from the trade's week through the end of the season (all games, following the
-player regardless of later roster moves), plus a per-side total and which side scored more (or a
-tie) — all computed client-side from the season's `MATCHUPS` box scores; when those box scores are
-unavailable the trade SHALL render without these additions and without an error.
+points they scored while on the receiving roster — from the trade's week up to (not including) the
+week of the next season transaction of any type that drops that player from that roster, or through
+the end of the season when there is none — plus a per-side total (labelled "Points while rostered")
+and which side scored more (or a tie), all computed client-side from the season's `MATCHUPS` box
+scores; when those box scores are unavailable the trade SHALL render without these additions and
+without an error.
 
 #### Scenario: Per-player points and winner
 - **WHEN** a two-team trade is shown and the season's matchup box scores are available
 - **THEN** each acquired player shows the sum of their `points_scored` for weeks on or after the
-  trade's week, each side shows the total of its acquired players' points, and the higher-scoring
-  side is marked as the winner with the point margin
+  trade's week while on the receiving roster, each side shows the total of its acquired players'
+  points, and the higher-scoring side is marked as the winner with the point margin
 
 #### Scenario: Points window excludes earlier weeks
 - **WHEN** an acquired player scored in weeks before the trade's week and in weeks on or after it
 - **THEN** only the points from the trade's week onward are counted toward that player's total
+
+#### Scenario: Acquired player later dropped or traded away
+- **WHEN** a player acquired in a trade is later dropped or traded away from the receiving roster
+- **THEN** only the points from the trade's week up to (not including) that later transaction's
+  week count toward the player's total, the side total, and the winning margin
 
 #### Scenario: Traded pick has no points
 - **WHEN** a trade side receives a draft pick
 - **THEN** the pick row shows no points value and is excluded from the side total
 
 #### Scenario: Tie
-- **WHEN** both sides of a trade have equal rest-of-season totals
+- **WHEN** both sides of a trade have equal totals
 - **THEN** the card shows a tie ("Even") rather than a winning side
 
 #### Scenario: Box scores unavailable
@@ -121,32 +128,56 @@ unavailable the trade SHALL render without these additions and without an error.
   banner is shown
 
 ### Requirement: Waiver and free-agent rest-of-season points
-For a waiver or free-agent move, `/transactions` SHALL show, for each added and each dropped
-player, the total fantasy points that player scored from the transaction's week through the end of
-the season (all games, following the player regardless of later roster moves) — computed
-client-side from the season's `MATCHUPS` box scores. Every waiver or free-agent move SHALL also
-show a net pickup value equal to the added players' total minus the dropped players' total: a move
-with both an add and a drop shows their difference, a pure add resolves to the added total, and a
-pure drop resolves to the negative of the dropped total. When the season's matchup box scores are
-unavailable, the move SHALL render in its normal form with no points, no net value, and no error.
+For a waiver or free-agent move, `/transactions` SHALL show, for each added player, the total
+fantasy points that player scored while on the acquiring roster — from the transaction's week up to
+(not including) the week of the next season transaction of any type that drops that player from
+that roster, or through the end of the season when there is none — and, for each dropped player,
+the total fantasy points that player scored from the transaction's week through the end of the
+season (all games, following the player regardless of later roster moves), all computed
+client-side from the season's `MATCHUPS` box scores. The per-player points column SHALL be headed
+"Points while rostered". Every waiver or free-agent move SHALL also show a net pickup value equal to
+the added players' total minus the dropped players' total: a move with both an add and a drop shows
+their difference, a pure add resolves to the added total, and a pure drop resolves to the negative
+of the dropped total. When the season's matchup box scores are unavailable, the move SHALL render
+in its normal form with no points, no net value, and no error.
 
 #### Scenario: Per-player points and net pickup value
 - **WHEN** a waiver or free-agent move with both an add and a drop is shown and the season's
   matchup box scores are available
 - **THEN** the added player shows the sum of their `points_scored` for weeks on or after the
-  transaction's week, the dropped player shows the same for their row, and the card shows a net
-  pickup value equal to the added total minus the dropped total (positive when the add outscored
-  the drop, negative when the drop outscored the add, "Even" when equal)
+  transaction's week while on the acquiring roster, the dropped player shows the sum of their
+  `points_scored` for weeks on or after the transaction's week, the points column is headed
+  "Points while rostered", and the card shows a net pickup value equal to the added total minus the
+  dropped total (positive when the add outscored the drop, negative when the drop outscored the
+  add, "Even" when equal)
 
 #### Scenario: Points window excludes earlier weeks
 - **WHEN** an added or dropped player scored in weeks before the transaction's week and in weeks on
   or after it
 - **THEN** only the points from the transaction's week onward are counted toward that player's total
 
+#### Scenario: Added player later dropped
+- **WHEN** an added player is dropped from the same roster by a later waiver or free-agent move
+- **THEN** only the points from the original transaction's week up to (not including) the later
+  drop's week count toward the added player's total and the net pickup value
+
+#### Scenario: Added player later traded away
+- **WHEN** an added player is later traded away from the acquiring roster
+- **THEN** the added player's total stops before the trade's week
+
+#### Scenario: Added player dropped in the same week
+- **WHEN** an added player is dropped from the same roster by a later transaction in the same week
+- **THEN** the added player's total is 0
+
+#### Scenario: Dropped player keeps full rest of season
+- **WHEN** a waiver or free-agent move drops a player
+- **THEN** the dropped player's total counts every week from the transaction's week through the end
+  of the season, regardless of that player's later roster moves
+
 #### Scenario: Pure add
 - **WHEN** a waiver or free-agent move has an add and no drop
-- **THEN** the added player shows their rest-of-season points and the net pickup value equals the
-  added player's total (a positive value)
+- **THEN** the added player shows their points while rostered and the net pickup value equals the
+  added player's total
 
 #### Scenario: Pure drop
 - **WHEN** a waiver or free-agent move has a drop and no add
@@ -157,3 +188,42 @@ unavailable, the move SHALL render in its normal form with no points, no net val
 - **WHEN** the season's matchup box scores fail to load or do not exist
 - **THEN** the waiver or free-agent move renders in its normal form with no points, no net value,
   and no error banner is shown
+
+### Requirement: Highlight the season's top transactions
+`/transactions` SHALL show a "Top transactions" section above the Summary table listing up to five
+of the selected season's highest-impact moves across waivers, free agents, and trades together,
+ordered by impact descending (earlier transaction first on a tie). A waiver or free-agent move's
+impact SHALL be its net pickup value, and a two-team trade's impact SHALL be its winning margin,
+credited to the winning team — both computed from the season's `MATCHUPS` box scores exactly as the
+transaction cards compute them. Only moves with a positive impact SHALL be eligible; multi-team
+trades and commissioner moves are never eligible. The section SHALL NOT change with the type
+filter, and SHALL render nothing when no move is eligible or the matchup box scores are unavailable.
+
+#### Scenario: Top moves across types
+- **WHEN** a season has eligible waiver, free-agent, and trade moves and matchup box scores are
+  available
+- **THEN** the section shows at most five tiles ranked by impact descending, each with its rank,
+  type, impact value, team, and the players added/dropped (for a trade, what the winning team
+  received and gave up)
+
+#### Scenario: Trade tile credits the winner
+- **WHEN** an eligible two-team trade appears in the section
+- **THEN** its tile shows the winning team, its winning margin labelled as won-by, and the losing
+  team as the opponent
+
+#### Scenario: Fewer than five eligible
+- **WHEN** fewer than five moves have a positive impact
+- **THEN** only those moves are shown; even trades and net-zero or net-negative pickups are omitted
+
+#### Scenario: Nothing eligible
+- **WHEN** no move in the season has a positive impact
+- **THEN** the "Top transactions" section is not rendered
+
+#### Scenario: Box scores unavailable
+- **WHEN** the season's matchup box scores fail to load or do not exist
+- **THEN** the "Top transactions" section is not rendered and the rest of the page renders normally
+  without an error
+
+#### Scenario: Independent of the type filter
+- **WHEN** the user changes the type filter
+- **THEN** the "Top transactions" section is unchanged

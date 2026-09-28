@@ -84,7 +84,7 @@ Feature: Transactions (frontend/transactions)
     Then I see the points "60.00"
     And I see the points "15.00"
     And I see the net pickup value "+45.00 pts"
-    And I see the rest-of-season note "Rest of season points"
+    And I see the points column header "Points while rostered"
     And I do not see the points "160.00"
 
   Scenario: A pure free-agent add shows the added player's points and its net pickup value
@@ -108,6 +108,75 @@ Feature: Transactions (frontend/transactions)
     Then I see the received player "Pickup Hero"
     And there is no net pickup value
     And I do not see the message "Failed to load matchups."
+
+  Scenario: A pickup later dropped only counts its points while rostered
+    Given a free-agent pickup that is later dropped, with matchup box scores
+    When I open the transactions page
+    And I select the "Free Agents" filter
+    Then I see the points "30.00"
+    And I do not see the points "230.00"
+    And I see the points "15.00"
+    And I see the net pickup value "+15.00 pts"
+    And the top transaction for "Short Stint" shows "+15.00"
+
+  Scenario: A pickup later traded away stops counting at the trade week
+    Given a free-agent pickup that is later traded away, with matchup box scores
+    When I open the transactions page
+    And I select the "Free Agents" filter
+    Then I see the points "20.00"
+    And I do not see the points "70.00"
+    And I see the net pickup value "+20.00 pts"
+
+  Scenario: A pickup dropped in the same week counts nothing
+    Given a free-agent pickup dropped again the same week, with matchup box scores
+    When I open the transactions page
+    And I select the "Free Agents" filter
+    Then I see the points "0.00"
+    And I see the net pickup value "Even"
+
+  Scenario: A traded player later dropped only counts his points while rostered
+    Given a trade whose acquired player is later dropped, with matchup box scores
+    When I open the transactions page
+    Then I see the points "30.00"
+    And I do not see the points "70.00"
+    And the trade winner is "Bob" by "+5.00"
+    And I see the side total label "Points while rostered"
+
+  Scenario: The top transactions highlight ranks the season's best moves across types
+    Given a season of mixed transactions with matchup box scores is available
+    When I open the transactions page
+    Then the top transactions are "Big Pickup, Solid Add, Star Player, Late Add, Minor Add" in order
+    And the top transaction values are "+90.00, +60.00, +45.00, +30.00, +15.00"
+    And the top transactions do not include "Sixth Add"
+    And the top transactions do not include "Bust"
+    And the top transactions do not include "Even Swap"
+
+  Scenario: A trade tile credits the winning team
+    Given a season of mixed transactions with matchup box scores is available
+    When I open the transactions page
+    Then the top transaction for "Star Player" is credited to "Bob" and shows "Won by" and "vs Alice"
+
+  Scenario: The top transactions highlight is independent of the type filter
+    Given a season of mixed transactions with matchup box scores is available
+    When I open the transactions page
+    And I select the "Free Agents" filter
+    Then the top transactions are "Big Pickup, Solid Add, Star Player, Late Add, Minor Add" in order
+
+  Scenario: Fewer than five eligible moves are shown, earlier first on a tie
+    Given two equally valued pickups with matchup box scores are available
+    When I open the transactions page
+    Then the top transactions are "Early Add, Later Add" in order
+
+  Scenario: The top transactions highlight is hidden when nothing is eligible
+    Given a pure free-agent drop with matchup box scores is available
+    When I open the transactions page
+    Then there is no top transactions highlight
+
+  Scenario: The top transactions highlight is hidden when box scores fail to load
+    Given a season of mixed transactions whose matchup box scores fail to load
+    When I open the transactions page
+    Then there is no top transactions highlight
+    And I see the received player "Star Player"
 
   Scenario: ESPN defaults to Free Agents and offers no Trades filter
     Given ESPN transactions data is available
