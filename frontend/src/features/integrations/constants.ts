@@ -62,10 +62,8 @@ export const HOW_IT_WORKS: HowItWorksStep[] = [
 /** Field limits, kept in sync with the backend's submission model. */
 export const LIMITS = {
   name: 60,
-  authorHandle: 30,
   link: 300,
   description: 500,
-  setupSteps: 6,
-  setupStep: 200,
-  prompt: 2000,
+  setupSteps: 10,
+  setupStep: 500,
 } as const;

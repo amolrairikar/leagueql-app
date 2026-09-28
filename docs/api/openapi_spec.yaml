@@ -1080,7 +1080,7 @@ components:
     IntegrationSubmission:
       type: object
       additionalProperties: false
-      required: [name, author_handle, category, link, views, description, setup_steps]
+      required: [name, category, link, views, description, setup_steps]
       properties:
         name:
           type: string
@@ -1088,12 +1088,6 @@ components:
           maxLength: 60
           description: Single line; no backticks.
           example: "Trade Grader"
-        author_handle:
-          type: string
-          minLength: 1
-          maxLength: 30
-          description: Name shown on the card. Single line; no backticks.
-          example: "benchwarmer"
         category:
           type: string
           enum: [ai_prompt, dashboard, spreadsheet, bot, notebook]
@@ -1116,11 +1110,11 @@ components:
         setup_steps:
           type: array
           minItems: 1
-          maxItems: 6
+          maxItems: 10
           items:
             type: string
             minLength: 1
-            maxLength: 200
+            maxLength: 500
             description: Single line; no backticks.
         prompt:
           type: string

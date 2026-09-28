@@ -39,24 +39,20 @@ const VALIDATION_MESSAGE =
 
 interface FormState {
   name: string;
-  authorHandle: string;
   category: IntegrationCategory;
   link: string;
   views: ExportView[];
   description: string;
   setupSteps: string;
-  prompt: string;
 }
 
 const EMPTY_FORM: FormState = {
   name: '',
-  authorHandle: '',
   category: 'ai_prompt',
   link: '',
   views: [],
   description: '',
   setupSteps: '',
-  prompt: '',
 };
 
 const TEXTAREA_CLASS =
@@ -98,7 +94,6 @@ export function SubmitIntegrationDialog({
   const canSubmit =
     !loading &&
     form.name.trim() !== '' &&
-    form.authorHandle.trim() !== '' &&
     form.link.trim() !== '' &&
     form.views.length > 0 &&
     form.description.trim() !== '' &&
@@ -133,13 +128,11 @@ export function SubmitIntegrationDialog({
     if (!canSubmit) return;
     const submission: IntegrationSubmission = {
       name: form.name.trim(),
-      author_handle: form.authorHandle.trim(),
       category: form.category,
       link: form.link.trim(),
       views: form.views,
       description: form.description.trim(),
       setup_steps: steps,
-      prompt: isPrompt && form.prompt.trim() ? form.prompt.trim() : null,
     };
     setLoading(true);
     setError(null);
@@ -185,25 +178,14 @@ export function SubmitIntegrationDialog({
             onSubmit={(event) => void handleSubmit(event)}
             className="flex flex-col gap-4"
           >
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="integration-name">Name</Label>
-                <Input
-                  id="integration-name"
-                  value={form.name}
-                  maxLength={LIMITS.name}
-                  onChange={(e) => update('name', e.target.value)}
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="integration-author">Your handle</Label>
-                <Input
-                  id="integration-author"
-                  value={form.authorHandle}
-                  maxLength={LIMITS.authorHandle}
-                  onChange={(e) => update('authorHandle', e.target.value)}
-                />
-              </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="integration-name">Name</Label>
+              <Input
+                id="integration-name"
+                value={form.name}
+                maxLength={LIMITS.name}
+                onChange={(e) => update('name', e.target.value)}
+              />
             </div>
 
             <div className="flex flex-col gap-1.5">
@@ -296,21 +278,10 @@ export function SubmitIntegrationDialog({
               />
               <p className="text-xs text-muted-foreground">
                 One step per line, up to {LIMITS.setupSteps}.
+                {isPrompt &&
+                  ` Include your prompt as a step, e.g. "Paste this prompt: …" (up to ${LIMITS.setupStep} characters per step).`}
               </p>
             </div>
-
-            {isPrompt && (
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="integration-prompt">Prompt (optional)</Label>
-                <textarea
-                  id="integration-prompt"
-                  className={cn(TEXTAREA_CLASS, 'font-mono')}
-                  value={form.prompt}
-                  maxLength={LIMITS.prompt}
-                  onChange={(e) => update('prompt', e.target.value)}
-                />
-              </div>
-            )}
 
             <p className="rounded-md bg-muted px-3 py-2.5 text-xs text-muted-foreground">
               Don&apos;t include your league&apos;s data, cookies or tokens.

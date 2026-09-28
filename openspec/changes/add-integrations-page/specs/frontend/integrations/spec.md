@@ -32,7 +32,7 @@ it into a sheet, or point a script at it."), and share what you built.
 ### Requirement: List approved integrations
 The page SHALL load approved integrations from `GET /integrations`, show a loading state while the request is in
 flight, render the `featured` item (if any) as a featured card above the grid, and render every item as a card
-showing its name, author handle, category, description, and the views it reads.
+showing its name, category, description, and the views it reads.
 
 #### Scenario: Integrations render
 - **WHEN** `GET /integrations` returns three items, one with `featured: true`
@@ -68,7 +68,7 @@ count and a no-matches state.
 - **THEN** a no-matches message is shown
 
 ### Requirement: Show integration details
-Selecting a card or the featured card's "View setup" SHALL open a dialog with the integration's name, author,
+Selecting a card or the featured card's "View setup" SHALL open a dialog with the integration's name,
 category, description, numbered setup steps, the export files it reads (as `<season>_<view>.json`), a link to open
 the project in a new tab, and — only when the integration has a prompt — the prompt text with a "Copy prompt"
 button that changes to "Copied" after copying.
@@ -86,9 +86,9 @@ button that changes to "Copied" after copying.
 - **THEN** the dialog shows no prompt section and no copy button
 
 ### Requirement: Submit an integration for review
-The "Submit your integration" dialog SHALL collect name, author handle, category, link, views read (checkboxes of the
-export's views), description, setup steps (one per line), and — only when the category is AI prompt — a prompt, SHALL
-disable submission while a request is in flight, and SHALL send the submission to `POST /integrations`. On success it
+The "Submit your integration" dialog SHALL collect name, category, link, views read (checkboxes of the
+export's views), description, and setup steps (one per line) with no separate prompt field — when the category is AI
+prompt it SHALL instead guide the user to include the prompt as one of the setup steps — SHALL disable submission while a request is in flight, and SHALL send the submission to `POST /integrations`. On success it
 SHALL show a "Submitted for review" confirmation. On failure it SHALL keep the dialog and entered values and show the
 error inline: the backend's message for `4xx` (including the daily-limit `429`), and a generic retry message for
 `5xx`.
@@ -105,6 +105,7 @@ error inline: the backend's message for `4xx` (including the daily-limit `429`),
 - **WHEN** `POST /integrations` returns `502`
 - **THEN** the dialog shows an inline retry message and keeps the entered values
 
-#### Scenario: Prompt field only for AI prompts
-- **WHEN** the selected category is not AI prompt
-- **THEN** the prompt field is hidden and no prompt is sent
+#### Scenario: Prompt goes in the setup steps
+- **WHEN** the selected category is AI prompt
+- **THEN** the form shows no prompt field, the setup steps hint asks the user to include the prompt as a step, and no
+  `prompt` is sent

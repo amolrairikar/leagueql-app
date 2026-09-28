@@ -16,7 +16,6 @@ from pydantic import ValidationError
 def _valid(**overrides) -> dict:
     data = {
         "name": "Trade Grader",
-        "author_handle": "benchwarmer",
         "category": "bot",
         "link": "https://github.com/example/trade-grader",
         "views": ["transactions", "matchups"],
@@ -90,6 +89,10 @@ class TestSubmissionModel:
         assert sub.views == ["matchups", "teams"]
         assert sub.prompt is None
 
+    def test_accepts_max_setup_steps(self, submission):
+        sub = submission(setup_steps=["x" * 500] * 10)
+        assert len(sub.setup_steps) == 10
+
     def test_export_views_match_the_export(self, integ):
         from main import EXPORT_SEASON_VIEWS
 
@@ -102,7 +105,6 @@ class TestSubmissionModel:
             {"name": "x" * 61},
             {"name": "has `backtick`"},
             {"name": "two\nlines"},
-            {"author_handle": "x" * 31},
             {"category": "game"},
             {"link": "http://example.com"},
             {"link": "javascript:alert(1)"},
@@ -114,8 +116,8 @@ class TestSubmissionModel:
             {"description": ""},
             {"description": "x" * 501},
             {"setup_steps": []},
-            {"setup_steps": ["step"] * 7},
-            {"setup_steps": ["x" * 201]},
+            {"setup_steps": ["step"] * 11},
+            {"setup_steps": ["x" * 501]},
             {"setup_steps": ["line\nbreak"]},
             {"prompt": "x" * 2001},
             {"unexpected": "field"},
@@ -165,9 +167,15 @@ class TestIssueBody:
 
     def test_accepts_maintainer_plain_text_edits(self, integ, submission):
         body = integ.build_issue_body(submission()).replace(
-            "`benchwarmer`", "bench_warmer"
+            "`Trade Grader`", "Trade Grader 2"
         )
-        assert integ.parse_issue_body(body).author_handle == "bench_warmer"
+        assert integ.parse_issue_body(body).name == "Trade Grader 2"
+
+    def test_ignores_unknown_sections(self, integ, submission):
+        body = integ.build_issue_body(submission()).replace(
+            "### Category", "### Author\n\n`benchwarmer`\n\n### Category"
+        )
+        assert integ.parse_issue_body(body) == submission()
 
     @pytest.mark.parametrize("body", [None, "", "### Name\n\n`No marker`"])
     def test_missing_marker_returns_none(self, integ, body):

@@ -101,22 +101,6 @@ export function CategoryPreview({
   );
 }
 
-/** Two-letter avatar for an author handle. */
-export function AuthorAvatar({ handle }: { handle: string }) {
-  const initials = handle
-    .replace(/[^a-z]/gi, '')
-    .slice(0, 2)
-    .toUpperCase();
-  return (
-    <span
-      aria-hidden="true"
-      className="grid size-5.5 shrink-0 place-items-center rounded-full bg-chart-3 text-[10px] font-semibold text-primary-foreground"
-    >
-      {initials || '?'}
-    </span>
-  );
-}
-
 /** Chip naming one export view an integration reads. */
 export function ViewChip({ children }: { children: string }) {
   return (
@@ -147,10 +131,6 @@ export function IntegrationCard({
           <Badge variant="secondary">
             {CATEGORY_LABELS[integration.category]}
           </Badge>
-        </div>
-        <div className="flex items-center gap-2 text-[13px] text-muted-foreground">
-          <AuthorAvatar handle={integration.author_handle} />@
-          {integration.author_handle}
         </div>
         <p className="text-[13px] text-muted-foreground">
           {integration.description}

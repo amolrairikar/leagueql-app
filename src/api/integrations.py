@@ -74,7 +74,7 @@ class IntegrationCategory(StrEnum):
     NOTEBOOK = "notebook"
 
 
-SetupStep = Annotated[str, Field(min_length=1, max_length=200, pattern=_SINGLE_LINE)]
+SetupStep = Annotated[str, Field(min_length=1, max_length=500, pattern=_SINGLE_LINE)]
 
 
 class IntegrationSubmission(BaseModel):
@@ -83,12 +83,11 @@ class IntegrationSubmission(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     name: str = Field(min_length=1, max_length=60, pattern=_SINGLE_LINE)
-    author_handle: str = Field(min_length=1, max_length=30, pattern=_SINGLE_LINE)
     category: IntegrationCategory
     link: str = Field(max_length=300, pattern=_HTTPS_URL)
     views: list[ExportView] = Field(min_length=1)
     description: str = Field(min_length=1, max_length=500)
-    setup_steps: list[SetupStep] = Field(min_length=1, max_length=6)
+    setup_steps: list[SetupStep] = Field(min_length=1, max_length=10)
     prompt: str | None = Field(default=None, max_length=2000)
 
     @field_validator("views")
@@ -112,7 +111,6 @@ class GitHubError(Exception):
 
 _FIELD_HEADINGS = {
     "name": "Name",
-    "author_handle": "Author",
     "category": "Category",
     "link": "Link",
     "views": "Views",
@@ -146,10 +144,6 @@ def build_issue_body(submission: IntegrationSubmission) -> str:
             f"`{APPROVED_LABEL}` label to list it._"
         ),
         f"### {_FIELD_HEADINGS['name']}\n\n{_code_span(submission.name)}",
-        (
-            f"### {_FIELD_HEADINGS['author_handle']}\n\n"
-            f"{_code_span(submission.author_handle)}"
-        ),
         f"### {_FIELD_HEADINGS['category']}\n\n{_code_span(submission.category.value)}",
         f"### {_FIELD_HEADINGS['link']}\n\n{_code_span(submission.link)}",
         f"### {_FIELD_HEADINGS['views']}\n\n"
@@ -213,7 +207,7 @@ def parse_issue_body(body: str | None) -> IntegrationSubmission | None:
     sections = _split_sections(body)
     fields: dict[str, object] = {
         field: _unwrap(sections[field])
-        for field in ("name", "author_handle", "category", "link", "description")
+        for field in ("name", "category", "link", "description")
         if field in sections
     }
     if "views" in sections:

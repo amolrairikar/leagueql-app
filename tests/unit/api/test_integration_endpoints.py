@@ -6,7 +6,6 @@ import pytest
 
 VALID_SUBMISSION = {
     "name": "Trade Grader",
-    "author_handle": "benchwarmer",
     "category": "bot",
     "link": "https://github.com/example/trade-grader",
     "views": ["transactions"],

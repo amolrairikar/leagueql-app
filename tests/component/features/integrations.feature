@@ -18,7 +18,7 @@ Feature: Community integrations backed by GitHub issues (backend/integrations)
     And the integrations listing cache has expired
     And I GET "/integrations"
     Then the integrations listing has 1 item(s)
-    And the integrations listing includes "Trade Grader" by "benchwarmer"
+    And the integrations listing includes "Trade Grader"
 
   Scenario: The newest featured integration is the only featured one
     Given the "integrations" feature flag is on

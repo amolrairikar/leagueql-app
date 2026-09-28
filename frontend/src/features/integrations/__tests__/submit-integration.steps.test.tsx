@@ -39,7 +39,6 @@ function whenFillComplete(when: DefineStepFunction) {
     /^I fill in a complete "(.*)" submission named "(.*)"$/,
     async (category, name) => {
       await user.type(screen.getByLabelText('Name'), name);
-      await user.type(screen.getByLabelText('Your handle'), 'benchwarmer');
       await chooseCategory(category);
       await user.type(
         screen.getByLabelText('Link'),
@@ -127,13 +126,11 @@ defineFeature(feature, (test) => {
       (name, views) => {
         expect(sentBody).toEqual({
           name,
-          author_handle: 'benchwarmer',
           category: 'bot',
           link: 'https://github.com/example/trade-grader',
           views: views.split(','),
           description: 'Grades every trade.',
           setup_steps: ['Fork the repo.', 'Add your webhook secret.'],
-          prompt: null,
         });
       },
     );
@@ -174,17 +171,27 @@ defineFeature(feature, (test) => {
     thenErrorKeepsValues(then, and);
   });
 
-  test('Prompt field only for AI prompts', ({ given, when, then }) => {
+  test('AI prompts are guided to put the prompt in the setup steps', ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
     givenDialogOpen(given);
-    then('the prompt field is shown', () => {
-      expect(screen.getByLabelText('Prompt (optional)')).toBeInTheDocument();
+    then('there is no separate prompt field', () => {
+      expect(screen.queryByLabelText(/prompt/i)).not.toBeInTheDocument();
+    });
+    and('the setup steps hint asks for the prompt', () => {
+      expect(
+        screen.getByText(/include your prompt as a step/i),
+      ).toBeInTheDocument();
     });
     when(/^I choose the "(.*)" category$/, async (label) => {
       await chooseCategory(label);
     });
-    then('the prompt field is hidden', () => {
+    then('the setup steps hint does not mention a prompt', () => {
       expect(
-        screen.queryByLabelText('Prompt (optional)'),
+        screen.queryByText(/include your prompt as a step/i),
       ).not.toBeInTheDocument();
     });
   });

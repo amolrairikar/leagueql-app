@@ -33,8 +33,10 @@ Feature: Submit an integration for review (frontend/integrations)
     Then the dialog shows the error "Couldn't submit right now. Try again in a few minutes."
     And the name field still reads "Trade Grader"
 
-  Scenario: Prompt field only for AI prompts
+  Scenario: AI prompts are guided to put the prompt in the setup steps
     Given the submit dialog is open
-    Then the prompt field is shown
+    Then there is no separate prompt field
+    And the setup steps hint asks for the prompt
     When I choose the "Bot" category
-    Then the prompt field is hidden
+    Then the setup steps hint does not mention a prompt
+

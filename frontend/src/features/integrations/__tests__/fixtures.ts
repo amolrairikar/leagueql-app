@@ -7,7 +7,6 @@ import { API } from '@/test/msw/server';
 export const HISTORIAN: Integration = {
   issue_number: 3,
   name: 'League Historian',
-  author_handle: 'mkdynasty',
   category: 'ai_prompt',
   link: 'https://github.com/example/historian',
   views: ['standings', 'matchups', 'transactions'],
@@ -20,7 +19,6 @@ export const HISTORIAN: Integration = {
 export const RECAP_BOT: Integration = {
   issue_number: 2,
   name: 'Weekly Recap Bot',
-  author_handle: 'gridirongreg',
   category: 'bot',
   link: 'https://github.com/example/recap-bot',
   views: ['matchups'],
@@ -33,7 +31,6 @@ export const RECAP_BOT: Integration = {
 export const POWER_SHEET: Integration = {
   issue_number: 1,
   name: 'Power Rankings Sheet',
-  author_handle: 'spreadsheet_sam',
   category: 'spreadsheet',
   link: 'https://docs.google.com/spreadsheets/example',
   views: ['standings'],

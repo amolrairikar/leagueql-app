@@ -66,7 +66,6 @@ def _integrations():
 def _submission(name: str) -> dict:
     return {
         "name": name,
-        "author_handle": "benchwarmer",
         "category": "bot",
         "link": "https://github.com/example/tool",
         "views": ["transactions", "matchups"],
@@ -157,10 +156,10 @@ def step_assert_listing_count(context, n):
     assert len(items) == n, items
 
 
-@then('the integrations listing includes "{name}" by "{author}"')
-def step_assert_listing_item(context, name, author):
+@then('the integrations listing includes "{name}"')
+def step_assert_listing_item(context, name):
     items = context.response.json()["data"]["items"]
-    assert any(i["name"] == name and i["author_handle"] == author for i in items), items
+    assert any(i["name"] == name for i in items), items
 
 
 @then('only "{name}" is featured in the integrations listing')

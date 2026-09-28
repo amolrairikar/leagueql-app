@@ -28,11 +28,11 @@ Both integrations endpoints SHALL require a valid signed-in user and SHALL rejec
 - **THEN** the API returns `401`
 
 ### Requirement: Validate integration submissions
-`POST /integrations` SHALL accept a JSON body with `name` (1–60 chars), `author_handle` (1–30 chars), `category`
+`POST /integrations` SHALL accept a JSON body with `name` (1–60 chars), `category`
 (one of `ai_prompt`, `dashboard`, `spreadsheet`, `bot`, `notebook`), `link` (an `https://` URL, ≤ 300 chars),
 `views` (a non-empty list drawn only from the export's view names: `standings`, `weekly_standings`, `matchups`,
 `draft`, `transactions`, `playoff_bracket`, `league_settings`, `teams`), `description` (1–500 chars),
-`setup_steps` (1–6 items, each 1–200 chars), and optional `prompt` (≤ 2000 chars), and SHALL reject any other shape
+`setup_steps` (1–10 items, each 1–500 chars), and optional `prompt` (≤ 2000 chars), and SHALL reject any other shape
 with `422` without contacting GitHub.
 
 #### Scenario: Invalid link scheme
@@ -96,7 +96,7 @@ and SHALL NOT retry the creation automatically.
 ### Requirement: List approved integrations
 `GET /integrations` SHALL return, under the standard envelope, every issue in the configured repository labeled
 `integration:approved` regardless of open/closed state, each as an item with `issue_number`, `name`,
-`author_handle`, `category`, `link`, `views`, `description`, `setup_steps`, optional `prompt`, and `featured`
+`category`, `link`, `views`, `description`, `setup_steps`, optional `prompt`, and `featured`
 (true when the issue also carries `integration:featured`), ordered newest first. At most one item SHALL be
 `featured`: when several approved issues carry `integration:featured`, only the newest SHALL be.
 

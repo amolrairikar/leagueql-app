@@ -55,16 +55,15 @@ export function IntegrationDetailDialog({
               </Badge>
             </div>
             <DialogTitle>{integration.name}</DialogTitle>
-            <DialogDescription>
-              by @{integration.author_handle}
-            </DialogDescription>
           </DialogHeader>
 
           <CategoryPreview
             category={integration.category}
             className="h-40 rounded-lg border"
           />
-          <p className="text-sm">{integration.description}</p>
+          <DialogDescription className="text-sm text-foreground">
+            {integration.description}
+          </DialogDescription>
 
           <div>
             <SectionHeading>Setup</SectionHeading>

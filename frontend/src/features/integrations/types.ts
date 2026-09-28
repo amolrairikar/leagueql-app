@@ -16,7 +16,6 @@ export type ExportView =
 /** Body of `POST /integrations`. */
 export interface IntegrationSubmission {
   name: string;
-  author_handle: string;
   category: IntegrationCategory;
   link: string;
   views: ExportView[];

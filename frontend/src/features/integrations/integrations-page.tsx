@@ -8,12 +8,7 @@ import {
   CATEGORY_LABELS,
   HOW_IT_WORKS,
 } from './constants';
-import {
-  AuthorAvatar,
-  CategoryPreview,
-  IntegrationCard,
-  ViewChip,
-} from './integration-card';
+import { CategoryPreview, IntegrationCard, ViewChip } from './integration-card';
 import { IntegrationDetailDialog } from './integration-detail-dialog';
 import { SubmitIntegrationDialog } from './submit-integration-dialog';
 import type { Integration, IntegrationCategory } from './types';
@@ -185,10 +180,6 @@ function FeaturedCard({
           {integration.views.map((view) => (
             <ViewChip key={view}>{view}</ViewChip>
           ))}
-        </div>
-        <div className="flex items-center gap-2 text-[13px] text-muted-foreground">
-          <AuthorAvatar handle={integration.author_handle} />@
-          {integration.author_handle}
         </div>
         <div className="mt-auto pt-1">
           <Button

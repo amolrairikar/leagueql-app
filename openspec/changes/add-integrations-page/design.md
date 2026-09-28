@@ -38,7 +38,7 @@ JWT→installation-token exchange, and more setup for a single-repo, low-volume 
 module.
 
 ### Issue body format: issue-form-style sections with a version marker
-`build_issue_body` writes `<!-- leagueql-integration:v1 -->` then `### Name`, `### Author`, `### Category`,
+`build_issue_body` writes `<!-- leagueql-integration:v1 -->` then `### Name`, `### Category`,
 `### Link`, `### Views`, `### Description`, `### Setup steps`, optional `### Prompt`. `parse_issue_body` splits on
 `### ` headings, requires the marker, and re-validates every field with the same rules as the request model
 (shared Pydantic model), returning `None` on any failure. This is human-readable in GitHub, lets the maintainer fix

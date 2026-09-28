@@ -29,7 +29,7 @@
 - [x] 5.1 Create `frontend/src/features/integrations/{types.ts,constants.ts,api-calls.ts}` (categories + labels, export view names, how-it-works copy, `listIntegrations`, `submitIntegration`); verify `npm run build:ci` type-checks
 - [x] 5.2 Build `integrations-page.tsx` + `integration-card.tsx` (header, steps, featured card, chips with counts, search, grid, loading/empty/no-matches/error states) and add `__tests__/integrations-page.feature` + steps covering render, featured/no featured, empty, 5xx error, filter, search, no matches; verify `npx vitest run src/features/integrations` passes
 - [x] 5.3 Build `integration-detail-dialog.tsx` (steps, `<season>_<view>.json` files, external link, conditional prompt + Copy → Copied) and add scenarios for open details, copy prompt, and no prompt; verify the vitest run passes
-- [x] 5.4 Build `submit-integration-dialog.tsx` (all fields, prompt only for AI prompt, in-flight disable, success, 4xx message, 5xx retry message, values kept on failure) and add `__tests__/submit-integration.feature` + steps for success, 429, 502, and prompt visibility; verify the vitest run passes
+- [x] 5.4 Build `submit-integration-dialog.tsx` (all fields, AI-prompt hint to put the prompt in setup steps, in-flight disable, success, 4xx message, 5xx retry message, values kept on failure) and add `__tests__/submit-integration.feature` + steps for success, 429, 502, and the AI-prompt hint; verify the vitest run passes
 - [x] 5.5 Register `/integrations` in `APP_LAYOUT_ROUTES` (redirect to `/home` when the flag is off) and add the "Community" sidebar group; extend the sidebar gating test for flag on/off; verify `npx vitest run src/features/sidebar src/features/integrations` passes
 
 ## 6. Integration checks
