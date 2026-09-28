@@ -40,3 +40,21 @@ Feature: Submit an integration for review (frontend/integrations)
     When I choose the "Bot" category
     Then the setup steps hint does not mention a prompt
 
+
+  Scenario: Enter starts the next setup step
+    Given the submit dialog is open
+    When I type a step and press Enter
+    Then a second step is added and focused
+
+  Scenario: A pasted multi-line prompt stays one step
+    Given the submit dialog is open
+    When I paste a multi-line prompt into a step
+    Then the step holds the prompt on one line
+
+  Scenario: Steps can be added up to the limit and removed
+    Given the submit dialog is open
+    Then the only step cannot be removed
+    When I add steps until there are 10
+    Then no more steps can be added
+    When I remove step 3
+    And there are 9 steps and the fourth step moved up

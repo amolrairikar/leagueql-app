@@ -38,7 +38,7 @@ function whenFillComplete(when: DefineStepFunction) {
   when(
     /^I fill in a complete "(.*)" submission named "(.*)"$/,
     async (category, name) => {
-      await user.type(screen.getByLabelText('Name'), name);
+      await user.type(screen.getByLabelText('Integration Name'), name);
       await chooseCategory(category);
       await user.type(
         screen.getByLabelText('Link'),
@@ -51,7 +51,7 @@ function whenFillComplete(when: DefineStepFunction) {
         'Grades every trade.',
       );
       await user.type(
-        screen.getByLabelText('Setup steps'),
+        screen.getByLabelText('Step 1'),
         'Fork the repo.{enter}Add your webhook secret.',
       );
     },
@@ -91,7 +91,7 @@ function thenErrorKeepsValues(
   });
 
   and(/^the name field still reads "(.*)"$/, (name) => {
-    expect(screen.getByLabelText('Name')).toHaveValue(name);
+    expect(screen.getByLabelText('Integration Name')).toHaveValue(name);
   });
 }
 
@@ -183,7 +183,7 @@ defineFeature(feature, (test) => {
     });
     and('the setup steps hint asks for the prompt', () => {
       expect(
-        screen.getByText(/include your prompt as a step/i),
+        screen.getByText(/include your prompt as its own step/i),
       ).toBeInTheDocument();
     });
     when(/^I choose the "(.*)" category$/, async (label) => {
@@ -191,8 +191,70 @@ defineFeature(feature, (test) => {
     });
     then('the setup steps hint does not mention a prompt', () => {
       expect(
-        screen.queryByText(/include your prompt as a step/i),
+        screen.queryByText(/include your prompt as its own step/i),
       ).not.toBeInTheDocument();
+    });
+  });
+  test('Enter starts the next setup step', ({ given, when, then }) => {
+    givenDialogOpen(given);
+    when('I type a step and press Enter', async () => {
+      await user.type(screen.getByLabelText('Step 1'), 'Fork the repo.{enter}');
+    });
+    then('a second step is added and focused', () => {
+      expect(screen.getByLabelText('Step 1')).toHaveValue('Fork the repo.');
+      expect(screen.getByLabelText('Step 2')).toHaveFocus();
+    });
+  });
+
+  test('A pasted multi-line prompt stays one step', ({ given, when, then }) => {
+    givenDialogOpen(given);
+    when('I paste a multi-line prompt into a step', async () => {
+      await user.click(screen.getByLabelText('Step 1'));
+      await user.paste('Read README.md first.\nThen grade each trade.');
+    });
+    then('the step holds the prompt on one line', () => {
+      expect(screen.getByLabelText('Step 1')).toHaveValue(
+        'Read README.md first. Then grade each trade.',
+      );
+      expect(screen.queryByLabelText('Step 2')).not.toBeInTheDocument();
+    });
+  });
+
+  test('Steps can be added up to the limit and removed', ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    givenDialogOpen(given);
+    then('the only step cannot be removed', () => {
+      expect(
+        screen.getByRole('button', { name: 'Remove step 1' }),
+      ).toBeDisabled();
+    });
+    when(/^I add steps until there are (\d+)$/, async (count) => {
+      for (let i = 1; i < Number(count); i++) {
+        await user.click(screen.getByRole('button', { name: 'Add step' }));
+      }
+    });
+    then('no more steps can be added', () => {
+      expect(screen.getByLabelText('Step 10')).toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: 'Add step' }),
+      ).not.toBeInTheDocument();
+    });
+    when('I remove step 3', async () => {
+      await user.type(screen.getByLabelText('Step 4'), 'Fourth');
+      await user.click(screen.getByRole('button', { name: 'Remove step 3' }));
+    });
+    and(/^there are (\d+) steps and the fourth step moved up$/, (count) => {
+      expect(screen.getAllByLabelText(/^Step \d+$/)).toHaveLength(
+        Number(count),
+      );
+      expect(screen.getByLabelText('Step 3')).toHaveValue('Fourth');
+      expect(
+        screen.getByRole('button', { name: 'Add step' }),
+      ).toBeInTheDocument();
     });
   });
 });

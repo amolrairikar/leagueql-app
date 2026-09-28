@@ -1,5 +1,5 @@
-import { Check } from 'lucide-react';
-import { useState, type FormEvent } from 'react';
+import { Check, Plus, X } from 'lucide-react';
+import { useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 
 import { submitIntegration } from './api-calls';
 import { CATEGORIES, CATEGORY_LABELS, EXPORT_VIEWS, LIMITS } from './constants';
@@ -43,26 +43,48 @@ interface FormState {
   link: string;
   views: ExportView[];
   description: string;
-  setupSteps: string;
+  setupSteps: SetupStepRow[];
 }
 
-const EMPTY_FORM: FormState = {
-  name: '',
-  category: 'ai_prompt',
-  link: '',
-  views: [],
-  description: '',
-  setupSteps: '',
-};
+/** One row of the step builder; `id` keeps React keys stable across removals. */
+interface SetupStepRow {
+  id: number;
+  text: string;
+}
+
+let nextStepId = 0;
+
+function newStep(): SetupStepRow {
+  nextStepId += 1;
+  return { id: nextStepId, text: '' };
+}
+
+function emptyForm(): FormState {
+  return {
+    name: '',
+    category: 'ai_prompt',
+    link: '',
+    views: [],
+    description: '',
+    setupSteps: [newStep()],
+  };
+}
+
+/** Show a step's character counter once it is this close to the limit. */
+const STEP_COUNTER_THRESHOLD = LIMITS.setupStep - 100;
 
 const TEXTAREA_CLASS =
   'min-h-18 w-full rounded-md border border-input bg-transparent px-2.5 py-1.5 text-base shadow-xs outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm dark:bg-input/30';
 
-function stepsFrom(text: string): string[] {
-  return text
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean);
+/** Steps are single-line: a pasted multi-line prompt is joined with spaces. */
+function singleLine(text: string): string {
+  return text.replace(/\s*\r?\n\s*/g, ' ');
+}
+
+function stepPlaceholder(index: number, isPrompt: boolean): string {
+  if (index === 0) return 'Export your league from LeagueQL.';
+  if (index === 1 && isPrompt) return 'Paste this prompt: …';
+  return '';
 }
 
 function errorMessage(err: unknown): string {
@@ -84,12 +106,16 @@ export function SubmitIntegrationDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [form, setForm] = useState<FormState>(emptyForm);
+  const stepRefs = useRef(new Map<number, HTMLTextAreaElement>());
+  // A step added via Enter / "Add step" takes focus as soon as it mounts.
+  const focusOnMountId = useRef<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submittedIssue, setSubmittedIssue] = useState<number | null>(null);
 
-  const steps = stepsFrom(form.setupSteps);
+  const steps = form.setupSteps.map((step) => step.text.trim()).filter(Boolean);
+  const canAddStep = form.setupSteps.length < LIMITS.setupSteps;
   const isPrompt = form.category === 'ai_prompt';
   const canSubmit =
     !loading &&
@@ -104,6 +130,38 @@ export function SubmitIntegrationDialog({
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
+  function updateStep(id: number, text: string) {
+    update(
+      'setupSteps',
+      form.setupSteps.map((step) =>
+        step.id === id ? { ...step, text: singleLine(text) } : step,
+      ),
+    );
+  }
+
+  function addStepAfter(index: number) {
+    if (!canAddStep) return;
+    const step = newStep();
+    focusOnMountId.current = step.id;
+    update('setupSteps', form.setupSteps.toSpliced(index + 1, 0, step));
+  }
+
+  function removeStep(index: number) {
+    const remaining = form.setupSteps.toSpliced(index, 1);
+    update('setupSteps', remaining);
+    stepRefs.current.get(remaining[Math.max(0, index - 1)].id)?.focus();
+  }
+
+  function handleStepKeyDown(
+    event: KeyboardEvent<HTMLTextAreaElement>,
+    index: number,
+  ) {
+    if (event.key !== 'Enter' || event.nativeEvent.isComposing) return;
+    // Enter starts the next step instead of a line break.
+    event.preventDefault();
+    addStepAfter(index);
+  }
+
   function toggleView(view: ExportView) {
     update(
       'views',
@@ -116,7 +174,7 @@ export function SubmitIntegrationDialog({
   function handleOpenChange(next: boolean) {
     // A finished submission starts fresh next time; an unsent draft is kept.
     if (!next && submittedIssue !== null) {
-      setForm(EMPTY_FORM);
+      setForm(emptyForm());
       setSubmittedIssue(null);
     }
     if (!next) setError(null);
@@ -179,7 +237,7 @@ export function SubmitIntegrationDialog({
             className="flex flex-col gap-4"
           >
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="integration-name">Name</Label>
+              <Label htmlFor="integration-name">Integration Name</Label>
               <Input
                 id="integration-name"
                 value={form.name}
@@ -267,21 +325,83 @@ export function SubmitIntegrationDialog({
               />
             </div>
 
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="integration-steps">Setup steps</Label>
-              <textarea
-                id="integration-steps"
-                className={TEXTAREA_CLASS}
-                placeholder={'Export all seasons.\nUpload the ZIP to …'}
-                value={form.setupSteps}
-                onChange={(e) => update('setupSteps', e.target.value)}
-              />
+            <fieldset className="flex flex-col gap-1.5">
+              <legend className="mb-1.5 text-sm font-medium">
+                Setup steps
+              </legend>
+              <ol className="flex flex-col gap-2">
+                {form.setupSteps.map((step, index) => (
+                  <li key={step.id} className="flex items-start gap-2">
+                    <span
+                      aria-hidden="true"
+                      className="mt-1.5 grid size-5 shrink-0 place-items-center rounded-full bg-muted text-[11px] font-semibold text-muted-foreground"
+                    >
+                      {index + 1}
+                    </span>
+                    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                      <textarea
+                        ref={(el) => {
+                          if (!el) {
+                            stepRefs.current.delete(step.id);
+                            return;
+                          }
+                          stepRefs.current.set(step.id, el);
+                          if (focusOnMountId.current === step.id) {
+                            focusOnMountId.current = null;
+                            el.focus();
+                          }
+                        }}
+                        aria-label={`Step ${index + 1}`}
+                        rows={1}
+                        className={cn(
+                          TEXTAREA_CLASS,
+                          'min-h-0 resize-none field-sizing-content',
+                        )}
+                        placeholder={stepPlaceholder(index, isPrompt)}
+                        value={step.text}
+                        maxLength={LIMITS.setupStep}
+                        onChange={(e) => updateStep(step.id, e.target.value)}
+                        onKeyDown={(e) => handleStepKeyDown(e, index)}
+                      />
+                      {step.text.length >= STEP_COUNTER_THRESHOLD && (
+                        <span className="self-end text-[11px] text-muted-foreground tabular-nums">
+                          {step.text.length}/{LIMITS.setupStep}
+                        </span>
+                      )}
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      className="shrink-0 cursor-pointer text-muted-foreground"
+                      aria-label={`Remove step ${index + 1}`}
+                      disabled={form.setupSteps.length === 1}
+                      onClick={() => removeStep(index)}
+                    >
+                      <X />
+                    </Button>
+                  </li>
+                ))}
+              </ol>
+              {canAddStep && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="self-start cursor-pointer"
+                  onClick={() => addStepAfter(form.setupSteps.length - 1)}
+                >
+                  <Plus />
+                  Add step
+                </Button>
+              )}
               <p className="text-xs text-muted-foreground">
-                One step per line, up to {LIMITS.setupSteps}.
+                Up to {LIMITS.setupSteps} steps. Press Enter to start the next
+                one.
                 {isPrompt &&
-                  ` Include your prompt as a step, e.g. "Paste this prompt: …" (up to ${LIMITS.setupStep} characters per step).`}
+                  ' Include your prompt as its own step, e.g. "Paste this prompt: …".'}
               </p>
-            </div>
+            </fieldset>
 
             <p className="rounded-md bg-muted px-3 py-2.5 text-xs text-muted-foreground">
               Don&apos;t include your league&apos;s data, cookies or tokens.

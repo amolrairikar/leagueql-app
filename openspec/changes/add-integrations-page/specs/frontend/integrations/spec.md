@@ -87,7 +87,9 @@ button that changes to "Copied" after copying.
 
 ### Requirement: Submit an integration for review
 The "Submit your integration" dialog SHALL collect name, category, link, views read (checkboxes of the
-export's views), description, and setup steps (one per line) with no separate prompt field — when the category is AI
+export's views), description, and setup steps (a row-per-step builder of up to 10 single-line steps, where Enter starts the next step,
+a pasted multi-line value is joined onto one line, and a step can be removed while more than one remains) with no
+separate prompt field — when the category is AI
 prompt it SHALL instead guide the user to include the prompt as one of the setup steps — SHALL disable submission while a request is in flight, and SHALL send the submission to `POST /integrations`. On success it
 SHALL show a "Submitted for review" confirmation. On failure it SHALL keep the dialog and entered values and show the
 error inline: the backend's message for `4xx` (including the daily-limit `429`), and a generic retry message for
@@ -104,6 +106,11 @@ error inline: the backend's message for `4xx` (including the daily-limit `429`),
 #### Scenario: Server failure
 - **WHEN** `POST /integrations` returns `502`
 - **THEN** the dialog shows an inline retry message and keeps the entered values
+
+#### Scenario: Step builder
+- **WHEN** the user presses Enter in a step, pastes multi-line text into a step, or has added 10 steps
+- **THEN** a new focused step is started, the pasted text stays in one step on a single line, and no further step can
+  be added, respectively
 
 #### Scenario: Prompt goes in the setup steps
 - **WHEN** the selected category is AI prompt
