@@ -35,4 +35,4 @@
 ## 6. Integration checks
 
 - [x] 6.1 Run `pipenv run ruff check --fix . && pipenv run ruff format .`, `npm run format:fix && npm run lint`, the full unit, component, and frontend suites, and `openspec validate --all`; verify all pass
-- [ ] 6.2 After the manual setup (PAT, SSM parameter, labels, flag JSON) and a dev deploy with the flag on: submit an integration, approve it, feature it, remove approval, hit the daily limit, and turn the flag off; verify each behaves as the specs describe
+- [x] 6.2 After the manual setup (PAT, SSM parameter, labels, flag JSON) and a dev deploy with the flag on: submit an integration, approve it, feature it, remove approval, hit the daily limit, and turn the flag off; verify each behaves as the specs describe
