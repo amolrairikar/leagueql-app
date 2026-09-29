@@ -22,6 +22,12 @@ Feature: Playoff-race predictor (frontend/playoff-race-predictor)
     Then I see "Playoff odds"
     And I see "100%"
 
+  Scenario: The playoff-odds column explains how odds are computed
+    Given an in-progress season with unplayed regular-season games
+    When I open the playoff bracket page
+    And I hover the "Playoff odds" column header
+    Then a tooltip explains the playoff odds are based on remaining matchups and weekly scores
+
   Scenario: The projected standings break down per-seed odds and drop Win %
     Given an in-progress season with unplayed regular-season games
     When I open the playoff bracket page

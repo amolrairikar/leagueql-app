@@ -1,8 +1,10 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { defineFeature, loadFeature } from 'jest-cucumber';
 
 import type { MatchupItem } from '@/components/api/types';
 import PlayoffBracket from '@/features/playoff_bracket/playoff-bracket';
+import { PLAYOFF_ODDS_TOOLTIP } from '@/features/playoff_race_predictor/playoff-race-predictor';
 import { LEAGUE } from '@/test/fixtures';
 import { leagueQuery, server } from '@/test/msw/server';
 import { renderRoute } from '@/test/render';
@@ -180,6 +182,36 @@ defineFeature(feature, (test) => {
     and(/^I see "(.*)"$/, async (text) => {
       expect((await screen.findAllByText(text)).length).toBeGreaterThan(0);
     });
+  });
+
+  test('The playoff-odds column explains how odds are computed', ({
+    given,
+    when,
+    and,
+    then,
+  }) => {
+    given('an in-progress season with unplayed regular-season games', () => {
+      server.use(
+        leagueQuery({
+          PLAYOFF_BRACKET: [],
+          MATCHUPS: IN_PROGRESS,
+          WEEKLY_STANDINGS: [],
+          LEAGUE_SETTINGS: SETTINGS,
+        }),
+      );
+    });
+    when('I open the playoff bracket page', open);
+    and(/^I hover the "(.*)" column header$/, async (label) => {
+      await userEvent.hover(await screen.findByText(label));
+    });
+    then(
+      'a tooltip explains the playoff odds are based on remaining matchups and weekly scores',
+      async () => {
+        expect(await screen.findByRole('tooltip')).toHaveTextContent(
+          PLAYOFF_ODDS_TOOLTIP,
+        );
+      },
+    );
   });
 
   test('The projected standings break down per-seed odds and drop Win %', ({

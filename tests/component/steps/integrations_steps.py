@@ -95,13 +95,6 @@ def step_github_reachable(context):
     )
 
 
-@given('the "{flag}" feature flag is on')
-def step_flag_on(context, flag):
-    from common import feature_flags
-
-    feature_flags._override_for_testing({flag: True})
-
-
 @given("GitHub rejects issue creation")
 def step_github_rejects(context):
     context.github.reject_creates = True

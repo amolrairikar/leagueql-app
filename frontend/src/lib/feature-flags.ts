@@ -74,11 +74,6 @@ export function isBannerEnabled(): boolean {
   return isEnabled('banner');
 }
 
-/** Whether the community Integrations page (frontend/integrations) is enabled. */
-export function isIntegrationsEnabled(): boolean {
-  return isEnabled('integrations');
-}
-
 /** Vitest sets this sentinel (see vite.config.ts); flag fetching stays off in tests. */
 function isTestEnv(): boolean {
   return import.meta.env.VITE_API_URL === 'http://test.local';

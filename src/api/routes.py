@@ -81,11 +81,7 @@ from main import (
     logger,
 )
 
-from common.feature_flags import (
-    BANNER,
-    INTEGRATIONS,
-    is_enabled,
-)
+from common.feature_flags import BANNER, is_enabled
 from common.onboarder_invoke import invoke_onboarder
 from common.yahoo_members import YahooLeagueNotFound, fetch_yahoo_members
 
@@ -130,7 +126,6 @@ def get_feature_flags(response: Response) -> APIResponse:
         detail="Feature flags",
         data={
             BANNER: is_enabled(BANNER),
-            INTEGRATIONS: is_enabled(INTEGRATIONS),
         },
     )
 
@@ -207,26 +202,13 @@ def get_league(
     )
 
 
-def require_integrations_enabled() -> None:
-    """404 the integrations endpoints while the ``integrations`` flag is off.
-
-    Used as a route dependency so it runs before body validation: with the flag off
-    the endpoints look absent, whatever the request carries.
-    """
-    if not is_enabled(INTEGRATIONS):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
-
-
 INTEGRATION_SUBMIT_FAILED = "Couldn't submit right now. Try again in a few minutes."
 
 
 @router.get(
     "/integrations",
     status_code=status.HTTP_200_OK,
-    dependencies=[
-        Depends(require_integrations_enabled),
-        Depends(get_authenticated_user),
-    ],
+    dependencies=[Depends(get_authenticated_user)],
 )
 def list_integrations() -> APIResponse:
     """List maintainer-approved community integrations (backend/integrations).
@@ -248,7 +230,6 @@ def list_integrations() -> APIResponse:
 @router.post(
     "/integrations",
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_integrations_enabled)],
 )
 def submit_integration(
     payload: IntegrationSubmission,

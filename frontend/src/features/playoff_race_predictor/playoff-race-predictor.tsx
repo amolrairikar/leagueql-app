@@ -4,6 +4,7 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  Info,
   RotateCcw,
 } from 'lucide-react';
 import { Suspense, use, useMemo, useState, type ReactNode } from 'react';
@@ -29,11 +30,19 @@ import type {
   Platform,
 } from '@/components/api/types';
 import { TeamAvatar } from '@/components/team-avatar';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { avatarColor } from '@/lib/color-constants';
 import { type Result, toResult } from '@/lib/result';
 import { cn } from '@/lib/utils';
 
 const PREDICTOR_FALLBACK = 'Failed to load the playoff race data.';
+export const PLAYOFF_ODDS_TOOLTIP =
+  "Playoff odds are based on the remaining matchups and a probability distribution generated from each team's weekly scores. The odds will stabilize and be more accurate towards the end of the season when the number of scenario combinations gets smaller.";
 export const PLAYOFF_EMPTY_MESSAGE =
   'No playoff bracket for this season yet. It will appear once the playoffs begin.';
 
@@ -482,7 +491,22 @@ function StandingsTable({
                 Proj. record
               </th>
               <th rowSpan={2} className={cn(metaHeadClass, 'align-bottom')}>
-                Playoff odds
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="inline-flex items-center gap-1 cursor-default">
+                        Playoff odds
+                        <Info className="w-3 h-3 shrink-0" />
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent
+                      side="top"
+                      className="max-w-64 text-center leading-relaxed normal-case tracking-normal font-normal bg-popover text-popover-foreground border border-border shadow-md [&>svg]:fill-popover [&>svg]:bg-popover"
+                    >
+                      {PLAYOFF_ODDS_TOOLTIP}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               </th>
               <th rowSpan={2} className={cn(metaHeadClass, 'align-bottom')}>
                 PF

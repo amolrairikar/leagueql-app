@@ -659,8 +659,7 @@ paths:
         GitHub issues in the LeagueQL repo labeled `integration:approved`, open or closed,
         parsed from their structured body, newest first. At most one item is `featured`
         (the newest carrying `integration:featured`). Served from a 5-minute cache; if
-        GitHub is unavailable the last fetched listing is returned. Returns 404 while the
-        `integrations` feature flag is off.
+        GitHub is unavailable the last fetched listing is returned.
       operationId: listIntegrations
       responses:
         "200":
@@ -682,8 +681,6 @@ paths:
                               $ref: "#/components/schemas/Integration"
         "401":
           $ref: "#/components/responses/UnauthorizedError"
-        "404":
-          description: The `integrations` feature flag is off
         "502":
           description: GitHub is unavailable and no listing has been fetched yet
           content:
@@ -705,7 +702,7 @@ paths:
         written inside code spans/blocks so it cannot mention users or inject Markdown, and
         the caller's account id is never written to the issue. Each user may have at most
         3 submissions accepted per rolling 24 hours; rejected or failed submissions do not
-        count. Returns 404 while the `integrations` feature flag is off.
+        count.
       operationId: submitIntegration
       requestBody:
         required: true
@@ -736,8 +733,6 @@ paths:
                   issue_number: 331
         "401":
           $ref: "#/components/responses/UnauthorizedError"
-        "404":
-          description: The `integrations` feature flag is off
         "422":
           $ref: "#/components/responses/ValidationError"
         "429":
@@ -1148,10 +1143,6 @@ components:
           properties:
             banner:
               type: boolean
-              example: false
-            integrations:
-              type: boolean
-              description: Gates the Integrations page and the /integrations endpoints.
               example: false
 
     OnboardRequest:

@@ -7,7 +7,6 @@ Feature: Community integrations backed by GitHub issues (backend/integrations)
     Given GitHub is reachable
 
   Scenario: A submission is listed only after the maintainer approves it
-    Given the "integrations" feature flag is on
     When I submit the integration "Trade Grader"
     Then the API responds with status 201
     And GitHub has an issue titled "[Integration] Trade Grader" labeled "integration:submitted"
@@ -21,15 +20,13 @@ Feature: Community integrations backed by GitHub issues (backend/integrations)
     And the integrations listing includes "Trade Grader"
 
   Scenario: The newest featured integration is the only featured one
-    Given the "integrations" feature flag is on
-    And GitHub has an approved integration "Older" labeled "integration:featured"
+    Given GitHub has an approved integration "Older" labeled "integration:featured"
     And GitHub has an approved integration "Newer" labeled "integration:featured"
     When I GET "/integrations"
     Then the integrations listing has 2 item(s)
     And only "Newer" is featured in the integrations listing
 
   Scenario: A fourth submission within a day is rejected
-    Given the "integrations" feature flag is on
     When I submit the integration "One"
     And I submit the integration "Two"
     And I submit the integration "Three"
@@ -40,16 +37,8 @@ Feature: Community integrations backed by GitHub issues (backend/integrations)
     And the default user has 3 recorded integration submission(s)
 
   Scenario: A GitHub failure returns 502 and does not count toward the limit
-    Given the "integrations" feature flag is on
-    And GitHub rejects issue creation
+    Given GitHub rejects issue creation
     When I submit the integration "Trade Grader"
     Then the API responds with status 502
     And the API response detail is "Couldn't submit right now. Try again in a few minutes."
     And the default user has 0 recorded integration submission(s)
-
-  Scenario: The endpoints are hidden while the flag is off
-    When I submit the integration "Trade Grader"
-    Then the API responds with status 404
-    And GitHub has 0 issue(s)
-    When I GET "/integrations"
-    Then the API responds with status 404
