@@ -7,18 +7,6 @@ list the integrations the maintainer has approved so the frontend can showcase t
 
 ## Requirements
 
-### Requirement: Gate integrations endpoints behind a feature flag
-`GET /integrations` and `POST /integrations` SHALL return `404` when the `integrations` feature flag is off, and the
-flag SHALL be exposed in the `GET /feature-flags` payload as `integrations`.
-
-#### Scenario: Flag off hides the endpoints
-- **WHEN** the `integrations` flag is off and an authenticated user calls `GET /integrations` or `POST /integrations`
-- **THEN** the API returns `404` and no GitHub request is made
-
-#### Scenario: Flag exposed to the SPA
-- **WHEN** the SPA calls `GET /feature-flags`
-- **THEN** `data` contains an `integrations` boolean reflecting the flag's current value
-
 ### Requirement: Require authentication
 Both integrations endpoints SHALL require a valid signed-in user and SHALL reject unauthenticated requests with
 `401`.

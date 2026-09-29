@@ -7,7 +7,6 @@ import {
   initFeatureFlags,
   isBannerEnabled,
   isEnabled,
-  isIntegrationsEnabled,
   refreshFlags,
   setFlagsForTesting,
 } from '../feature-flags';
@@ -23,12 +22,6 @@ describe('feature-flags', () => {
   it('reports the banner flag off when disabled', () => {
     setFlagsForTesting({ banner: false });
     expect(isBannerEnabled()).toBe(false);
-  });
-
-  it('reports the integrations flag on when enabled and off by default', () => {
-    expect(isIntegrationsEnabled()).toBe(false);
-    setFlagsForTesting({ integrations: true });
-    expect(isIntegrationsEnabled()).toBe(true);
   });
 
   it('defaults an unknown flag to false', () => {

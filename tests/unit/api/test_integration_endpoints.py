@@ -24,15 +24,6 @@ def github_error():
 
 
 @pytest.fixture
-def flag_on():
-    from common import feature_flags
-
-    feature_flags._override_for_testing({"integrations": True})
-    yield
-    feature_flags._override_for_testing({})
-
-
-@pytest.fixture
 def unauthenticated():
     import main
     import routes
@@ -40,27 +31,6 @@ def unauthenticated():
     main.app.dependency_overrides.pop(routes.get_authenticated_user, None)
 
 
-class TestFlagGating:
-    @pytest.mark.parametrize(
-        ("method", "body"),
-        [("get", None), ("post", VALID_SUBMISSION), ("post", {"bad": "body"})],
-    )
-    def test_flag_off_returns_404_without_github(self, client, method, body):
-        from common import feature_flags
-
-        feature_flags._override_for_testing({})
-        with (
-            patch("integrations.list_approved") as list_approved,
-            patch("integrations.create_issue") as create_issue,
-        ):
-            kwargs = {"json": body} if body is not None else {}
-            response = getattr(client, method)("/integrations", **kwargs)
-        assert response.status_code == 404
-        list_approved.assert_not_called()
-        create_issue.assert_not_called()
-
-
-@pytest.mark.usefixtures("flag_on")
 class TestListIntegrations:
     def test_returns_items(self, client):
         items = [{"issue_number": 7, "name": "Tool", "featured": True}]
@@ -84,7 +54,6 @@ class TestListIntegrations:
         list_approved.assert_not_called()
 
 
-@pytest.mark.usefixtures("flag_on")
 class TestSubmitIntegration:
     def test_creates_issue_and_records_submission(self, client, mock_table):
         mock_table.get_item.return_value = {}

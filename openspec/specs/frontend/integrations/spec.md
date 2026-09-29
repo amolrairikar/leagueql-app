@@ -7,18 +7,17 @@ own for maintainer review.
 
 ## Requirements
 
-### Requirement: Gate the Integrations page behind a feature flag
-When the `integrations` flag is on, the sidebar SHALL show an "Integrations" item in a "Community" group linking to
-`/integrations`, and the route SHALL render the Integrations page. When the flag is off, the item SHALL be hidden and
-visiting `/integrations` SHALL redirect to `/home`.
+### Requirement: Show the Integrations page in the sidebar
+The sidebar SHALL always show an "Integrations" item in a "Community" group linking to `/integrations`, and the
+`/integrations` route SHALL render the Integrations page.
 
-#### Scenario: Flag on
-- **WHEN** the `integrations` flag is on and a signed-in user views the sidebar
-- **THEN** a "Community" group with an "Integrations" item is shown, and following it renders the Integrations page
+#### Scenario: Nav item shown
+- **WHEN** a signed-in user views the sidebar
+- **THEN** a "Community" group with an "Integrations" item linking to `/integrations` is shown
 
-#### Scenario: Flag off
-- **WHEN** the `integrations` flag is off
-- **THEN** no "Integrations" item is shown, and navigating to `/integrations` lands on `/home`
+#### Scenario: Route renders the page
+- **WHEN** a signed-in user navigates to `/integrations`
+- **THEN** the Integrations page renders
 
 ### Requirement: Explain how integrations work
 The page SHALL show a heading "Integrations", a short description, a "Submit your integration" button, and a
