@@ -17,6 +17,18 @@ Feature: Matchup records (frontend/matchup-records)
     When I open the matchup records page
     Then the "Lowest Team Score" card does not list "Cara"
 
+  Scenario: Postseason games are excluded by default
+    Given matchup records data includes a postseason game
+    When I open the matchup records page
+    Then the "Highest Team Score" card does not list "Cara"
+
+  Scenario: Toggling to Postseason shows only postseason games
+    Given matchup records data includes a postseason game
+    When I open the matchup records page
+    And I switch to postseason records
+    Then the "Highest Team Score" card lists both "Cara" and "Dan"
+    And the "Highest Team Score" card does not list "Alice"
+
   Scenario: A failed load surfaces an inline error
     Given the matchup records data fails to load
     When I open the matchup records page

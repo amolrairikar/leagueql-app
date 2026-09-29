@@ -1,4 +1,5 @@
 import { screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { defineFeature, loadFeature } from 'jest-cucumber';
 
 import PlayerRecords from '../player-records';
@@ -28,6 +29,30 @@ const MATCHUPS_WITH_UNPLAYED: MatchupItem[] = [
     ],
     winner: 'TIE',
     loser: 'TIE',
+  },
+];
+
+// The regular-season week 1, plus a 2-week playoff game whose inflated starter must
+// only surface once the page is switched to postseason records.
+const MATCHUPS_WITH_POSTSEASON: MatchupItem[] = [
+  ...(MATCHUPS as MatchupItem[]),
+  {
+    ...(MATCHUPS[0] as MatchupItem),
+    week: '15',
+    team_a_score: 260,
+    team_b_score: 240,
+    team_a_starters: [
+      {
+        player_id: 8888,
+        full_name: 'Playoff Hero',
+        points_scored: 70,
+        position: 'QB',
+        fantasy_position: 'QB',
+      },
+    ],
+    team_b_starters: [],
+    playoff_tier_type: 'WINNERS_BRACKET',
+    playoff_round: 'Finals',
   },
 ];
 
@@ -70,6 +95,56 @@ defineFeature(feature, (test) => {
       expect(
         (await screen.findAllByText('Pat Quarterback')).length,
       ).toBeGreaterThan(0);
+      expect(screen.queryByText(name)).toBeNull();
+    });
+  });
+
+  test('Postseason performances are excluded by default', ({
+    given,
+    when,
+    then,
+  }) => {
+    given('player box-score data includes a postseason week', () => {
+      server.use(leagueQuery({ MATCHUPS: MATCHUPS_WITH_POSTSEASON }));
+    });
+    when('I open the player records page', async () => {
+      await renderRoute(<PlayerRecords />, {
+        route: '/player_records',
+        league: LEAGUE,
+      });
+    });
+    then(/^I do not see the player "(.*)"$/, async (name) => {
+      expect(
+        (await screen.findAllByText('Pat Quarterback')).length,
+      ).toBeGreaterThan(0);
+      expect(screen.queryByText(name)).toBeNull();
+    });
+  });
+
+  test('Toggling to Postseason shows only postseason performances', ({
+    given,
+    when,
+    and,
+    then,
+  }) => {
+    given('player box-score data includes a postseason week', () => {
+      server.use(leagueQuery({ MATCHUPS: MATCHUPS_WITH_POSTSEASON }));
+    });
+    when('I open the player records page', async () => {
+      await renderRoute(<PlayerRecords />, {
+        route: '/player_records',
+        league: LEAGUE,
+      });
+    });
+    and('I switch to postseason records', async () => {
+      await userEvent.click(
+        await screen.findByRole('switch', { name: /postseason/i }),
+      );
+    });
+    then(/^I see the player "(.*)"$/, async (name) => {
+      expect((await screen.findAllByText(name)).length).toBeGreaterThan(0);
+    });
+    and(/^I do not see the player "(.*)"$/, (name) => {
       expect(screen.queryByText(name)).toBeNull();
     });
   });

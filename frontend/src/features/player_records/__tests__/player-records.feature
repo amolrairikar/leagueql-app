@@ -12,6 +12,18 @@ Feature: Player records (frontend/player-records)
     When I open the player records page
     Then I do not see the player "Phantom Player"
 
+  Scenario: Postseason performances are excluded by default
+    Given player box-score data includes a postseason week
+    When I open the player records page
+    Then I do not see the player "Playoff Hero"
+
+  Scenario: Toggling to Postseason shows only postseason performances
+    Given player box-score data includes a postseason week
+    When I open the player records page
+    And I switch to postseason records
+    Then I see the player "Playoff Hero"
+    And I do not see the player "Pat Quarterback"
+
   Scenario: A failed load surfaces an inline error
     Given the player data fails to load
     When I open the player records page

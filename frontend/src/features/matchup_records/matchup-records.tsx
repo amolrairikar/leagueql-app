@@ -1,6 +1,7 @@
 import { Suspense, use, useEffect, useMemo, useRef, useState } from 'react';
 
 import { BoxScoreCard, type BoxScoreSide } from '@/components/box-score-card';
+import { SeasonPhaseToggle } from '@/components/season-phase-toggle';
 import {
   Select,
   SelectContent,
@@ -15,7 +16,12 @@ import {
 } from '@/features/matchup_records/api-calls';
 import { RECORD_COLORS, UI_COLORS } from '@/lib/color-constants';
 import { getLeagueCookies, type Platform } from '@/lib/cookie-handler';
-import { buildTeamColorMap, isUnplayedMatchup } from '@/lib/matchups';
+import {
+  buildTeamColorMap,
+  isRegularSeasonMatchup,
+  isUnplayedMatchup,
+  type SeasonPhase,
+} from '@/lib/matchups';
 import { type Result, toResult } from '@/lib/result';
 import { initials } from '@/lib/utils';
 
@@ -436,20 +442,32 @@ function MatchupRecordsContent({
 
   const matchups = result.ok ? result.data : EMPTY_MATCHUPS;
   const colorMap = useMemo(() => buildTeamColorMap(matchups), [matchups]);
-  const allRecords = useMemo(
-    () => extractRecords(matchups, colorMap),
-    [matchups, colorMap],
-  );
   const seasons = useMemo(
     () =>
-      [...new Set(allRecords.map((r) => r.season))].sort(
-        (a, b) => Number(b) - Number(a),
-      ),
-    [allRecords],
+      [
+        ...new Set(
+          matchups.filter((m) => !isUnplayedMatchup(m)).map((m) => m.season),
+        ),
+      ].sort((a, b) => Number(b) - Number(a)),
+    [matchups],
   );
 
   const [season, setSeason] = useState<string>('all');
+  const [phase, setPhase] = useState<SeasonPhase>('regular');
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+
+  // Regular-season and postseason games are ranked separately: multi-week playoff
+  // matchups carry more than one week of points and would skew the boards.
+  const allRecords = useMemo(
+    () =>
+      extractRecords(
+        matchups.filter(
+          (m) => isRegularSeasonMatchup(m) === (phase === 'regular'),
+        ),
+        colorMap,
+      ),
+    [matchups, colorMap, phase],
+  );
 
   const recordCards = useMemo(() => {
     const filtered = allRecords.filter((r) => {
@@ -527,6 +545,13 @@ function MatchupRecordsContent({
             ))}
           </SelectContent>
         </Select>
+        <SeasonPhaseToggle
+          value={phase}
+          onChange={(p) => {
+            setPhase(p);
+            setSelectedKey(null);
+          }}
+        />
       </div>
 
       {recordCards.length === 0 ? (
@@ -583,6 +608,7 @@ export default function MatchupRecords() {
               <div className="flex items-center gap-2.5 mb-5 flex-wrap">
                 <Skeleton className="h-3 w-12" />
                 <Skeleton className="h-7 w-32 rounded-md" />
+                <Skeleton className="h-5 w-48" />
               </div>
               <SkeletonMatchupRecords />
             </div>
