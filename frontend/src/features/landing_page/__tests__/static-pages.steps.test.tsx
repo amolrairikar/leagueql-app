@@ -118,6 +118,34 @@ defineFeature(feature, (test) => {
     });
   });
 
+  test('The Yahoo Beta badge explains how to report import issues', ({
+    when,
+    and,
+    then,
+  }) => {
+    when('I open the landing page', async () => {
+      server.use(
+        http.get('https://api.leagueql.com/counts', () =>
+          HttpResponse.json({ leagueCount: 3 }),
+        ),
+      );
+      await renderRoute(<LeagueQLLanding />, { route: '/' });
+    });
+    and('I hover the Yahoo "Beta" badge', async () => {
+      await userEvent.hover(
+        await screen.findByRole('button', { name: 'Beta' }),
+      );
+    });
+    then(
+      'a tooltip asks me to email support@leagueql.com with my league ID',
+      async () => {
+        expect(await screen.findByRole('tooltip')).toHaveTextContent(
+          'Running into issues importing your Yahoo league? Email support@leagueql.com with your league ID and error message you are seeing',
+        );
+      },
+    );
+  });
+
   test('The Works with strip marks Yahoo as Beta', ({ when, then, and }) => {
     when('I open the landing page', async () => {
       server.use(

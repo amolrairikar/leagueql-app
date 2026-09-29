@@ -36,6 +36,8 @@ import {
   FEATURES,
   HOW_STEPS,
   PLATFORMS,
+  SUPPORT_EMAIL,
+  YAHOO_BETA_SUPPORT_NOTE,
 } from '@/features/landing_page/constants';
 import { Faq } from '@/features/landing_page/faq';
 import { ProductShowcase } from '@/features/landing_page/product-showcase';
@@ -707,6 +709,21 @@ export default function LeagueQLLanding() {
                 )}
               </Button>
             </form>
+            {platform === 'YAHOO' && (
+              <p
+                data-testid="yahoo-beta-note"
+                className="mt-3 text-left text-xs text-muted-foreground"
+              >
+                {YAHOO_BETA_SUPPORT_NOTE.before}
+                <a
+                  href={`mailto:${SUPPORT_EMAIL}`}
+                  className="font-medium text-primary underline-offset-4 hover:underline"
+                >
+                  {SUPPORT_EMAIL}
+                </a>
+                {YAHOO_BETA_SUPPORT_NOTE.after}
+              </p>
+            )}
             {platform === 'ESPN' && needsEspnCredentials && (
               <div className="mt-3 flex flex-col gap-4 text-left">
                 <p className="text-sm text-muted-foreground">
@@ -821,9 +838,24 @@ export default function LeagueQLLanding() {
               <img src={p.logo} alt="" className="h-5 w-auto" />
               {p.name}
               {p.beta && (
-                <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[0.625rem] font-semibold uppercase tracking-wide text-primary">
-                  Beta
-                </span>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        className="inline-flex cursor-help items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[0.625rem] font-semibold uppercase tracking-wide text-primary"
+                      >
+                        Beta
+                        <HelpCircle className="size-3" aria-hidden="true" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-72">
+                      {YAHOO_BETA_SUPPORT_NOTE.before}
+                      {SUPPORT_EMAIL}
+                      {YAHOO_BETA_SUPPORT_NOTE.after}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               )}
             </span>
           ))}
