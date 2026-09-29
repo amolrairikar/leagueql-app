@@ -31,6 +31,11 @@ Feature: Public pages render (frontend/landing-page, frontend/instructions-docs,
     And I see "Yahoo"
     And I see "Beta"
 
+  Scenario: The Yahoo Beta badge explains how to report import issues
+    When I open the landing page
+    And I hover the Yahoo "Beta" badge
+    Then a tooltip asks me to email support@leagueql.com with my league ID
+
   Scenario: The docs page renders
     When I open the docs page
     Then I see "Refresh League (ESPN only)"

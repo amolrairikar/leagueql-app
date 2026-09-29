@@ -538,6 +538,47 @@ defineFeature(feature, (test) => {
     });
   });
 
+  test('Selecting Yahoo shows the Beta support note', ({
+    given,
+    when,
+    then,
+  }) => {
+    given('the landing connect form is open', async () => {
+      window.history.pushState({}, '', '/?connect=true');
+      await renderRoute(
+        <Routes>
+          <Route path="/" element={<LeagueQLLanding />} />
+        </Routes>,
+        { route: '/' },
+      );
+      await screen.findByRole('combobox');
+    });
+
+    then('the Yahoo Beta support note is not shown', () => {
+      // frontend/landing-page: the note is Yahoo-only; ESPN is the default platform.
+      expect(screen.queryByTestId('yahoo-beta-note')).not.toBeInTheDocument();
+    });
+
+    when('I select Yahoo as the platform', async () => {
+      const user = userEvent.setup();
+      await user.click(screen.getByRole('combobox'));
+      await user.click(await screen.findByRole('option', { name: 'Yahoo' }));
+    });
+
+    then(
+      'the Yahoo Beta support note is shown with a support email link',
+      async () => {
+        const note = await screen.findByTestId('yahoo-beta-note');
+        expect(note).toHaveTextContent(
+          'Running into issues importing your Yahoo league? Email support@leagueql.com with your league ID',
+        );
+        expect(
+          screen.getByRole('link', { name: 'support@leagueql.com' }),
+        ).toHaveAttribute('href', 'mailto:support@leagueql.com');
+      },
+    );
+  });
+
   test('Connecting a Yahoo league I have not linked opens the consent popup', ({
     given,
     when,

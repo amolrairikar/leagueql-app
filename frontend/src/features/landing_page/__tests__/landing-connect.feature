@@ -45,6 +45,12 @@ Feature: Landing page connect routing (frontend/landing-page / frontend/connect-
     When I open the platform dropdown
     Then Yahoo is offered as a selectable platform
 
+  Scenario: Selecting Yahoo shows the Beta support note
+    Given the landing connect form is open
+    Then the Yahoo Beta support note is not shown
+    When I select Yahoo as the platform
+    Then the Yahoo Beta support note is shown with a support email link
+
   Scenario: Connecting a Yahoo league I have not linked opens the consent popup
     Given onboarding a Yahoo league is rejected as unlinked and the authorize endpoint returns a consent URL
     When I connect a Yahoo league "45.l.678" from the landing page
