@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildTeamColorMap, isUnplayedMatchup } from '../matchups';
+import {
+  buildTeamColorMap,
+  isRegularSeasonMatchup,
+  isUnplayedMatchup,
+} from '../matchups';
 
 import type { MatchupItem } from '@/components/api/types';
 import { avatarColor } from '@/lib/color-constants';
@@ -35,6 +39,26 @@ describe('isUnplayedMatchup', () => {
 
   it('keeps a normal played game', () => {
     expect(isUnplayedMatchup(matchup(130, 120))).toBe(false);
+  });
+});
+
+describe('isRegularSeasonMatchup', () => {
+  const tier = (playoff_tier_type: string) =>
+    ({ playoff_tier_type }) as MatchupItem;
+
+  it('treats the NONE tier as regular season', () => {
+    expect(isRegularSeasonMatchup(tier('NONE'))).toBe(true);
+  });
+
+  it('treats a missing tier as regular season', () => {
+    expect(isRegularSeasonMatchup({} as MatchupItem)).toBe(true);
+  });
+
+  it('treats every bracket tier as postseason', () => {
+    expect(isRegularSeasonMatchup(tier('WINNERS_BRACKET'))).toBe(false);
+    expect(isRegularSeasonMatchup(tier('LOSERS_CONSOLATION_LADDER'))).toBe(
+      false,
+    );
   });
 });
 

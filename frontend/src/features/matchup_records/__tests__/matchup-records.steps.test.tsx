@@ -1,4 +1,5 @@
 import { screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { defineFeature, loadFeature } from 'jest-cucumber';
 
 import MatchupRecords from '../matchup-records';
@@ -27,6 +28,35 @@ const MATCHUPS_WITH_UNPLAYED: MatchupItem[] = [
     loser: '4',
   },
 ];
+
+// The regular-season week 1, plus a 2-week playoff game between Cara and Dan whose
+// inflated scores must only rank once the page is switched to postseason records.
+const MATCHUPS_WITH_POSTSEASON: MatchupItem[] = [
+  ...(MATCHUPS as MatchupItem[]),
+  {
+    ...(MATCHUPS[0] as MatchupItem),
+    week: '15',
+    team_a_id: '3',
+    team_a_display_name: 'Cara',
+    team_a_team_name: 'Team Cara',
+    team_a_score: 260,
+    team_b_id: '4',
+    team_b_display_name: 'Dan',
+    team_b_team_name: 'Team Dan',
+    team_b_score: 240,
+    playoff_tier_type: 'WINNERS_BRACKET',
+    playoff_round: 'Finals',
+    winner: '3',
+    loser: '4',
+  },
+];
+
+const cardFor = async (cardLabel: string) => {
+  const label = await screen.findByText(cardLabel);
+  const card = label.closest<HTMLElement>('div.bg-card');
+  expect(card).not.toBeNull();
+  return card!;
+};
 
 const feature = loadFeature(
   'src/features/matchup_records/__tests__/matchup-records.feature',
@@ -93,6 +123,56 @@ defineFeature(feature, (test) => {
       const card = label.closest<HTMLElement>('div.bg-card');
       expect(card).not.toBeNull();
       expect(within(card!).queryByText(name)).toBeNull();
+    });
+  });
+
+  test('Postseason games are excluded by default', ({ given, when, then }) => {
+    given('matchup records data includes a postseason game', () => {
+      server.use(leagueQuery({ MATCHUPS: MATCHUPS_WITH_POSTSEASON }));
+    });
+    when('I open the matchup records page', async () => {
+      await renderRoute(<MatchupRecords />, {
+        route: '/matchup_records',
+        league: LEAGUE,
+      });
+    });
+    then(/^the "(.*)" card does not list "(.*)"$/, async (cardLabel, name) => {
+      const card = await cardFor(cardLabel);
+      expect(within(card).queryByText(name)).toBeNull();
+    });
+  });
+
+  test('Toggling to Postseason shows only postseason games', ({
+    given,
+    when,
+    and,
+    then,
+  }) => {
+    given('matchup records data includes a postseason game', () => {
+      server.use(leagueQuery({ MATCHUPS: MATCHUPS_WITH_POSTSEASON }));
+    });
+    when('I open the matchup records page', async () => {
+      await renderRoute(<MatchupRecords />, {
+        route: '/matchup_records',
+        league: LEAGUE,
+      });
+    });
+    and('I switch to postseason records', async () => {
+      await userEvent.click(
+        await screen.findByRole('switch', { name: /postseason/i }),
+      );
+    });
+    then(
+      /^the "(.*)" card lists both "(.*)" and "(.*)"$/,
+      async (cardLabel, teamA, teamB) => {
+        const card = await cardFor(cardLabel);
+        expect(await within(card).findByText(teamA)).toBeInTheDocument();
+        expect(within(card).getByText(teamB)).toBeInTheDocument();
+      },
+    );
+    and(/^the "(.*)" card does not list "(.*)"$/, async (cardLabel, name) => {
+      const card = await cardFor(cardLabel);
+      expect(within(card).queryByText(name)).toBeNull();
     });
   });
 

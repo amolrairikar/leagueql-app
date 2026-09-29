@@ -13,6 +13,18 @@ export function isUnplayedMatchup(m: MatchupItem): boolean {
   return m.team_a_score === 0 && m.team_b_score === 0;
 }
 
+/** Which part of a season a record board ranks. */
+export type SeasonPhase = 'regular' | 'postseason';
+
+/**
+ * Regular-season games carry `playoff_tier_type === 'NONE'`; every bracket tier
+ * (winners, losers, consolation) is postseason. A missing tier is treated as
+ * regular season, matching the schedule-swap simulator.
+ */
+export function isRegularSeasonMatchup(m: MatchupItem): boolean {
+  return !m.playoff_tier_type || m.playoff_tier_type === 'NONE';
+}
+
 /**
  * Deterministic team-id → avatar-color map for a set of matchups. Teams are
  * collected across both sides of every matchup and sorted by display name so a
