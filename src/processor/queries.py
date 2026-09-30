@@ -349,16 +349,30 @@ QUERIES = {
             (weekly_rank - 1) AS vs_league_losses
         FROM league_rankings
     ),
-    champion AS (
+    -- The champion is the winner of the season's title game: the lone winners-bracket game in
+    -- its last winners-bracket week (rather than a fixed week, so leagues whose playoffs end
+    -- before week 17 still get one). A last week with several games is a mid-playoffs round,
+    -- so no champion is named yet.
+    winners_bracket_weeks AS (
         SELECT
             season,
-            winner AS champion_team_id
+            CAST(week AS INTEGER) AS week_num,
+            COUNT(*) AS games,
+            ROW_NUMBER() OVER (PARTITION BY season ORDER BY CAST(week AS INTEGER) DESC) AS recency
         FROM matchups_output
         WHERE playoff_tier_type = 'WINNERS_BRACKET'
-            AND (
-                (CAST(season AS INTEGER) < 2021 AND CAST(week AS INTEGER) = 16)
-                OR (CAST(season AS INTEGER) >= 2021 AND CAST(week AS INTEGER) = 17)
-            )
+        GROUP BY season, CAST(week AS INTEGER)
+    ),
+    champion AS (
+        SELECT
+            m.season,
+            m.winner AS champion_team_id
+        FROM matchups_output m
+        INNER JOIN winners_bracket_weeks w
+            ON (m.season = w.season AND CAST(m.week AS INTEGER) = w.week_num)
+        WHERE m.playoff_tier_type = 'WINNERS_BRACKET'
+            AND w.recency = 1
+            AND w.games = 1
     )
     SELECT
         p.season,

@@ -1,0 +1,254 @@
+{
+  "fantasy_content": {
+    "xml:lang": "en-US",
+    "yahoo:uri": "/fantasy/v2/team/470.l.1676376.t.1/roster;week=2/players/stats;type=week;week=2",
+    "team": [
+      [
+        {
+          "team_key": "470.l.1676376.t.1"
+        },
+        {
+          "team_id": "1"
+        },
+        {
+          "name": "Zone Defense ScottK"
+        },
+        []
+      ],
+      {
+        "roster": {
+          "coverage_type": "week",
+          "week": "2",
+          "is_prescoring": 0,
+          "is_editable": 0,
+          "0": {
+            "players": {
+              "0": {
+                "player": [
+                  [
+                    {
+                      "player_key": "470.p.40896"
+                    },
+                    {
+                      "player_id": "40896"
+                    },
+                    {
+                      "name": {
+                        "full": "Jayden Daniels",
+                        "first": "Jayden",
+                        "last": "Daniels",
+                        "ascii_first": "Jayden",
+                        "ascii_last": "Daniels"
+                      }
+                    },
+                    {
+                      "display_position": "QB"
+                    },
+                    {
+                      "primary_position": "QB"
+                    },
+                    [],
+                    []
+                  ],
+                  {
+                    "selected_position": [
+                      {
+                        "coverage_type": "week",
+                        "week": "2"
+                      },
+                      {
+                        "position": "QB"
+                      },
+                      {
+                        "is_flex": 0
+                      }
+                    ]
+                  },
+                  {
+                    "player_stats": {
+                      "0": {
+                        "coverage_type": "week",
+                        "week": "2"
+                      },
+                      "stats": [
+                        {
+                          "stat": {
+                            "stat_id": "4",
+                            "value": "96"
+                          }
+                        },
+                        {
+                          "stat": {
+                            "stat_id": "5",
+                            "value": "1"
+                          }
+                        }
+                      ]
+                    },
+                    "player_points": {
+                      "0": {
+                        "coverage_type": "week",
+                        "week": "2"
+                      },
+                      "total": "14.74"
+                    }
+                  }
+                ]
+              },
+              "1": {
+                "player": [
+                  [
+                    {
+                      "player_key": "470.p.31908"
+                    },
+                    {
+                      "player_id": "31908"
+                    },
+                    {
+                      "name": {
+                        "full": "Terry McLaurin",
+                        "first": "Terry",
+                        "last": "McLaurin",
+                        "ascii_first": "Terry",
+                        "ascii_last": "McLaurin"
+                      }
+                    },
+                    {
+                      "display_position": "WR"
+                    },
+                    {
+                      "primary_position": "WR"
+                    },
+                    [],
+                    [],
+                    []
+                  ],
+                  {
+                    "selected_position": [
+                      {
+                        "coverage_type": "week",
+                        "week": "2"
+                      },
+                      {
+                        "position": "BN"
+                      },
+                      {
+                        "is_flex": 0
+                      }
+                    ]
+                  },
+                  {
+                    "player_stats": {
+                      "0": {
+                        "coverage_type": "week",
+                        "week": "2"
+                      },
+                      "stats": [
+                        {
+                          "stat": {
+                            "stat_id": "4",
+                            "value": "0"
+                          }
+                        },
+                        {
+                          "stat": {
+                            "stat_id": "5",
+                            "value": "0"
+                          }
+                        }
+                      ]
+                    },
+                    "player_points": {
+                      "0": {
+                        "coverage_type": "week",
+                        "week": "2"
+                      },
+                      "total": "6.00"
+                    }
+                  }
+                ]
+              },
+              "2": {
+                "player": [
+                  [
+                    {
+                      "player_key": "470.p.100007"
+                    },
+                    {
+                      "player_id": "100007"
+                    },
+                    {
+                      "name": {
+                        "full": "Broncos",
+                        "first": "Broncos",
+                        "last": "",
+                        "ascii_first": "Broncos",
+                        "ascii_last": ""
+                      }
+                    },
+                    {
+                      "display_position": "DEF"
+                    },
+                    {
+                      "primary_position": "DEF"
+                    },
+                    [],
+                    [],
+                    []
+                  ],
+                  {
+                    "selected_position": [
+                      {
+                        "coverage_type": "week",
+                        "week": "2"
+                      },
+                      {
+                        "position": "DEF"
+                      },
+                      {
+                        "is_flex": 0
+                      }
+                    ]
+                  },
+                  {
+                    "player_stats": {
+                      "0": {
+                        "coverage_type": "week",
+                        "week": "2"
+                      },
+                      "stats": [
+                        {
+                          "stat": {
+                            "stat_id": "31",
+                            "value": "13"
+                          }
+                        },
+                        {
+                          "stat": {
+                            "stat_id": "32",
+                            "value": "2"
+                          }
+                        }
+                      ]
+                    },
+                    "player_points": {
+                      "0": {
+                        "coverage_type": "week",
+                        "week": "2"
+                      },
+                      "total": "8.00"
+                    }
+                  }
+                ]
+              },
+              "count": 3
+            }
+          }
+        }
+      }
+    ],
+    "time": "96.234083175659ms",
+    "copyright": "Certain Data by Sportradar, Stats Perform and Rotowire",
+    "refresh_rate": "30"
+  }
+}

@@ -18,6 +18,7 @@ player-data cache in S3 (see ``yahoo_player_stats_refresher``); records here car
 """
 
 import asyncio
+import re
 from collections.abc import Callable, Sequence
 from typing import Any
 
@@ -50,6 +51,7 @@ DATA_FETCH_TYPES = [
     "teams",
     "draft_picks",
     "transactions",
+    "game_weeks",
 ]
 
 # Yahoo returns 25 collection items per page; transactions/players page with ``start=``.
@@ -162,38 +164,38 @@ def _filter_matchups(
 def _filter_rosters(
     data: dict[str, Any], _season: str, data_type: str
 ) -> dict[str, Any]:
-    """Flatten a weekly ``teams/roster/players/stats`` payload into per-player roster rows.
+    """Flatten one team's weekly ``team/roster/players/stats`` payload into roster rows.
 
-    One call per week returns every team's roster with each player's ``selected_position`` and
-    weekly ``player_points``; the processor joins these to matchups to build starter/bench stats.
+    One call per team per week returns that team's roster with each player's
+    ``selected_position`` and weekly ``player_points`` (Yahoo drops the stats from the
+    league-wide ``teams/roster`` variant); the processor joins these to matchups to build
+    starter/bench stats.
     """
-    week = data_type.removeprefix("rosters_week")
-    teams = _collection_items(_league_subresource(data, "teams") or {}, "team")
+    match = re.match(r"rosters_week(\d+)", data_type)
+    week = match.group(1) if match else None
+    tflat = _flatten(data.get("fantasy_content", {}).get("team", []))
+    roster = _flatten(tflat.get("roster", {}))
+    players = _collection_items(
+        _flatten(roster.get("0", {})).get("players", {}) or roster.get("players", {}),
+        "player",
+    )
     rows = []
-    for team in teams:
-        tflat = _flatten(team)
-        roster = _flatten(tflat.get("roster", {}))
-        players = _collection_items(
-            _flatten(roster.get("0", {})).get("players", {})
-            or roster.get("players", {}),
-            "player",
+    for player in players:
+        pflat = _flatten(player)
+        selected = _flatten(pflat.get("selected_position", {}))
+        points = _flatten(pflat.get("player_points", {}))
+        name = _flatten(pflat.get("name", {}))
+        rows.append(
+            {
+                "team_key": tflat.get("team_key"),
+                "week": week,
+                "player_key": pflat.get("player_key"),
+                "player_name": name.get("full"),
+                "position": pflat.get("display_position"),
+                "selected_position": selected.get("position"),
+                "points": points.get("total"),
+            }
         )
-        for player in players:
-            pflat = _flatten(player)
-            selected = _flatten(pflat.get("selected_position", {}))
-            points = _flatten(pflat.get("player_points", {}))
-            name = _flatten(pflat.get("name", {}))
-            rows.append(
-                {
-                    "team_key": tflat.get("team_key"),
-                    "week": week,
-                    "player_key": pflat.get("player_key"),
-                    "player_name": name.get("full"),
-                    "position": pflat.get("display_position"),
-                    "selected_position": selected.get("position"),
-                    "points": points.get("total"),
-                }
-            )
     return {"rosters": rows}
 
 
@@ -212,6 +214,30 @@ def _filter_draft_picks(data: dict[str, Any], _season: str, _dt: str) -> dict[st
         for r in results
     ]
     return {"draft_picks": picks}
+
+
+def _filter_game_weeks(data: dict[str, Any], _season: str, _dt: str) -> dict[str, Any]:
+    """Normalize ``/game/{game_key}/game_weeks`` into the season's week calendar.
+
+    Yahoo transactions carry only a timestamp, so the processor uses each week's date range to
+    place them into weeks.
+    """
+    game = data.get("fantasy_content", {}).get("game", [])
+    weeks_node = next(
+        (
+            element["game_weeks"]
+            for element in (game[1:] if isinstance(game, list) else [])
+            if isinstance(element, dict) and "game_weeks" in element
+        ),
+        {},
+    )
+    weeks = [_flatten(week) for week in _collection_items(weeks_node, "game_week")]
+    return {
+        "game_weeks": [
+            {"week": w.get("week"), "start": w.get("start"), "end": w.get("end")}
+            for w in weeks
+        ]
+    }
 
 
 def _filter_transactions(
@@ -258,6 +284,7 @@ _YAHOO_DATA_FILTERS: dict[str, Callable[[dict, str, str], dict]] = {
     "teams": _filter_teams,
     "draft_picks": _filter_draft_picks,
     "transactions": _filter_transactions,
+    "game_weeks": _filter_game_weeks,
 }
 
 
@@ -351,6 +378,7 @@ class YahooClient:
                 "start_week": _to_int(league.get("start_week"), 1),
                 "end_week": _to_int(league.get("end_week"), 17),
                 "current_week": _to_int(league.get("current_week"), None),
+                "num_teams": _to_int(league.get("num_teams"), 0),
             }
         seasons = sorted(self._season_meta)
         logger.info(
@@ -387,16 +415,26 @@ class YahooClient:
         urls: list[tuple[str, str, str]] = []
         for season, meta in self._season_meta.items():
             key = meta["league_key"]
+            # A league key is "{game_key}.l.{league_id}"; the week calendar is per game (season).
+            game_key = key.split(".l.")[0]
             sub_map = {
                 "settings": f"{YAHOO_BASE_URL}/league/{key}/settings?format=json",
                 "standings": f"{YAHOO_BASE_URL}/league/{key}/standings?format=json",
                 "teams": f"{YAHOO_BASE_URL}/league/{key}/teams?format=json",
                 "draft_picks": f"{YAHOO_BASE_URL}/league/{key}/draftresults?format=json",
                 "transactions": f"{YAHOO_BASE_URL}/league/{key}/transactions;types=add,drop,trade?format=json",
+                "game_weeks": f"{YAHOO_BASE_URL}/game/{game_key}/game_weeks?format=json",
             }
             for data_type in DATA_FETCH_TYPES:
                 urls.append((season, data_type, sub_map[data_type]))
             last_week = meta.get("current_week") or meta["end_week"]
+            num_teams = meta.get("num_teams") or 0
+            if not num_teams:
+                logger.warning(
+                    "Yahoo season has no num_teams; skipping weekly rosters: season=%s league_key=%s",
+                    season,
+                    key,
+                )
             for week in range(meta["start_week"], last_week + 1):
                 urls.append(
                     (
@@ -405,15 +443,18 @@ class YahooClient:
                         f"{YAHOO_BASE_URL}/league/{key}/scoreboard;week={week}?format=json",
                     )
                 )
-                # One call per week returns every team's roster + weekly player points,
-                # which the processor joins to matchups for starter/bench lineup stats.
-                urls.append(
-                    (
-                        season,
-                        f"rosters_week{week}",
-                        f"{YAHOO_BASE_URL}/league/{key}/teams/roster;week={week}/players/stats;type=week;week={week}?format=json",
+                # Weekly player points only come back on the per-team roster call (the
+                # league-wide teams/roster variant silently drops player stats). Team keys are
+                # always {league_key}.t.1..N; the per-team results are merged back into one
+                # rosters_week{W} record in _process_api_results.
+                for team_id in range(1, num_teams + 1):
+                    urls.append(
+                        (
+                            season,
+                            f"rosters_week{week}_t{team_id}",
+                            f"{YAHOO_BASE_URL}/team/{key}.t.{team_id}/roster;week={week}/players/stats;type=week;week={week}?format=json",
+                        )
                     )
-                )
         logger.info(
             "Built Yahoo request URLs: league_id=%s total_requests=%d",
             self.league_id,
@@ -472,16 +513,33 @@ class YahooClient:
     def _process_api_results(
         self, results: Sequence[dict[str, Any] | BaseException]
     ) -> list[dict[str, Any]]:
-        """Validate results and apply the per-type Yahoo filters."""
-        processed = []
+        """Validate results and apply the per-type Yahoo filters.
+
+        Per-team weekly roster results (``rosters_week{W}_t{T}``) are merged into a single
+        ``rosters_week{W}`` record per season/week, at the position of the first one.
+        """
+        processed: list[dict[str, Any]] = []
+        merged_rosters: dict[tuple[str, str], list[dict[str, Any]]] = {}
         for result in validate_api_results(results):
             season = result["season"]
             data_type = result["data_type"]
             data = result["data"]
+            if data_type.startswith("rosters"):
+                week_type = data_type.split("_t", 1)[0]
+                rows = _filter_rosters(data, season, data_type)["rosters"]
+                if (season, week_type) not in merged_rosters:
+                    merged_rosters[(season, week_type)] = []
+                    processed.append(
+                        {
+                            "season": season,
+                            "data_type": week_type,
+                            "data": {"rosters": merged_rosters[(season, week_type)]},
+                        }
+                    )
+                merged_rosters[(season, week_type)].extend(rows)
+                continue
             if data_type.startswith("matchups"):
                 filter_fn = _filter_matchups
-            elif data_type.startswith("rosters"):
-                filter_fn = _filter_rosters
             else:
                 filter_fn = _YAHOO_DATA_FILTERS.get(data_type)
                 if filter_fn is None:

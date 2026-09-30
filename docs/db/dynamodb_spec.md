@@ -230,8 +230,8 @@ Represents matchups for a given week in the fantasy league.
 | `team_b_bench` | List\<Object\> | Team B's bench with player stats (see **PlayerStat** below) |
 | `team_b_primary_owner_id` | String | Platform user ID of team B's primary owner |
 | `team_b_secondary_owner_id` | String \| null | Platform user ID of team B's co-owner |
-| `playoff_tier_type` | String | Playoff bracket type. Enum: `NONE`, `WINNERS_BRACKET`, `WINNERS_CONSOLATION_LADDER`, `LOSERS_BRACKET` |
-| `playoff_round` | String \| null | Human-readable round name; `WINNERS_BRACKET` → `"Quarterfinals"`/`"Semifinals"`/`"Finals"`, `WINNERS_CONSOLATION_LADDER` → `"Winners Consolation"`, `LOSERS_BRACKET` → `"Losers Bracket"`; null for regular season (`NONE`) |
+| `playoff_tier_type` | String | Playoff bracket type. Enum: `NONE`, `WINNERS_BRACKET`, `WINNERS_CONSOLATION_LADDER` (placement games, e.g. 3rd/5th place), `LOSERS_BRACKET`, `LOSERS_CONSOLATION_LADDER` (ESPN/Yahoo consolation bracket for non-playoff teams) |
+| `playoff_round` | String \| null | Human-readable round name; `WINNERS_BRACKET` → `"Quarterfinals"`/`"Semifinals"`/`"Finals"`, `WINNERS_CONSOLATION_LADDER` → `"Winners Consolation"`, `LOSERS_BRACKET`/`LOSERS_CONSOLATION_LADDER` → `"Losers Bracket"`; null for regular season (`NONE`) |
 | `winner` | String | Team ID of the winner |
 | `loser` | String | Team ID of the loser |
 | `week` | String | Week number (e.g. `"1"`) |

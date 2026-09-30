@@ -64,6 +64,35 @@ Feature: Onboard-to-processed pipeline (backend/league-onboarding, backend/data-
     Then the API responds with status 200
     And the query response has 1 row(s)
 
+  Scenario: A Yahoo league with placement and consolation games names a single champion (backend/data-processing-pipeline, backend/yahoo-transactions)
+    # A 6-team Yahoo bracket (weeks 15-17). The final week holds the title game (t10 v t12), a
+    # 3rd-place game between the semifinal losers (t4 v t5) and consolation-bracket games between
+    # teams that missed the playoffs. Only the title game is a championship game.
+    Given Yahoo player metadata and stats are cached in S3
+    When the onboarder runs an ONBOARD for "YAHOO" league "432" with fixture "yahoo/raw_data_2024_playoffs.json"
+    Then the onboarder returns status 200
+    And the default caller is a member of the onboarded league
+    When the processor processes the onboarded league
+    Then a JOB_STATUS "COMPLETED" exists for the job
+    And the standings show only "Team 12" as champion
+    And the "PLAYOFF_BRACKET#2024" bracket has exactly one championship game won by "423.l.432.t.12"
+    # Consolation-bracket games are losers-tier; the 3rd-place game is a placement game.
+    When I GET "/leagues/432/query?platform=YAHOO&queryType=MATCHUPS%232024%23WEEK%2317"
+    Then the API responds with status 200
+    And the query response has 4 row(s)
+    And a query response row has "playoff_round" equal to "Finals"
+    And a query response row has "playoff_round" equal to "Winners Consolation"
+    And a query response row has "playoff_round" equal to "Losers Bracket"
+    # A trade lists both teams; created is epoch ms and week comes from the week calendar
+    # (the preseason trade clamps to week 1, the Sep-10 waiver lands in week 2).
+    When I GET "/leagues/432/query?platform=YAHOO&queryType=TRANSACTIONS%232024"
+    Then the API responds with status 200
+    And the query response has 2 row(s)
+    And a query response row has "type" equal to "trade"
+    And a query response row has "created" equal to "1725400000000"
+    And a query response row has "week" equal to "1"
+    And a query response row has "week" equal to "2"
+
   Scenario: A large transactions season is chunked across items and round-trips through the query API (backend/sleeper-transactions)
     # backend/sleeper-transactions: a season with more transactions than fit in one DynamoDB
     # item is split across TRANSACTIONS#{season}#{chunk} items. A tiny per-item cap forces the

@@ -1,0 +1,648 @@
+[
+  {
+    "season": "2024",
+    "data_type": "settings",
+    "data": {
+      "name": "Yahoo Playoff League",
+      "num_playoff_teams": "6",
+      "playoff_start_week": "15"
+    }
+  },
+  {
+    "season": "2024",
+    "data_type": "standings",
+    "data": {
+      "standings": [
+        {
+          "team_key": "423.l.432.t.12",
+          "rank": "1"
+        },
+        {
+          "team_key": "423.l.432.t.10",
+          "rank": "2"
+        },
+        {
+          "team_key": "423.l.432.t.4",
+          "rank": "3"
+        },
+        {
+          "team_key": "423.l.432.t.5",
+          "rank": "4"
+        },
+        {
+          "team_key": "423.l.432.t.1",
+          "rank": "5"
+        },
+        {
+          "team_key": "423.l.432.t.3",
+          "rank": "6"
+        },
+        {
+          "team_key": "423.l.432.t.2",
+          "rank": "7"
+        },
+        {
+          "team_key": "423.l.432.t.9",
+          "rank": "8"
+        },
+        {
+          "team_key": "423.l.432.t.11",
+          "rank": "9"
+        },
+        {
+          "team_key": "423.l.432.t.7",
+          "rank": "10"
+        },
+        {
+          "team_key": "423.l.432.t.8",
+          "rank": "11"
+        },
+        {
+          "team_key": "423.l.432.t.6",
+          "rank": "12"
+        }
+      ]
+    }
+  },
+  {
+    "season": "2024",
+    "data_type": "teams",
+    "data": {
+      "members": [
+        {
+          "manager_id": "G1",
+          "nickname": "Manager 1"
+        },
+        {
+          "manager_id": "G2",
+          "nickname": "Manager 2"
+        },
+        {
+          "manager_id": "G3",
+          "nickname": "Manager 3"
+        },
+        {
+          "manager_id": "G4",
+          "nickname": "Manager 4"
+        },
+        {
+          "manager_id": "G5",
+          "nickname": "Manager 5"
+        },
+        {
+          "manager_id": "G6",
+          "nickname": "Manager 6"
+        },
+        {
+          "manager_id": "G7",
+          "nickname": "Manager 7"
+        },
+        {
+          "manager_id": "G8",
+          "nickname": "Manager 8"
+        },
+        {
+          "manager_id": "G9",
+          "nickname": "Manager 9"
+        },
+        {
+          "manager_id": "G10",
+          "nickname": "Manager 10"
+        },
+        {
+          "manager_id": "G11",
+          "nickname": "Manager 11"
+        },
+        {
+          "manager_id": "G12",
+          "nickname": "Manager 12"
+        }
+      ],
+      "teams": [
+        {
+          "team_key": "423.l.432.t.1",
+          "team_id": "1",
+          "name": "Team 1",
+          "logo": "logo1",
+          "manager_id": "G1"
+        },
+        {
+          "team_key": "423.l.432.t.2",
+          "team_id": "2",
+          "name": "Team 2",
+          "logo": "logo2",
+          "manager_id": "G2"
+        },
+        {
+          "team_key": "423.l.432.t.3",
+          "team_id": "3",
+          "name": "Team 3",
+          "logo": "logo3",
+          "manager_id": "G3"
+        },
+        {
+          "team_key": "423.l.432.t.4",
+          "team_id": "4",
+          "name": "Team 4",
+          "logo": "logo4",
+          "manager_id": "G4"
+        },
+        {
+          "team_key": "423.l.432.t.5",
+          "team_id": "5",
+          "name": "Team 5",
+          "logo": "logo5",
+          "manager_id": "G5"
+        },
+        {
+          "team_key": "423.l.432.t.6",
+          "team_id": "6",
+          "name": "Team 6",
+          "logo": "logo6",
+          "manager_id": "G6"
+        },
+        {
+          "team_key": "423.l.432.t.7",
+          "team_id": "7",
+          "name": "Team 7",
+          "logo": "logo7",
+          "manager_id": "G7"
+        },
+        {
+          "team_key": "423.l.432.t.8",
+          "team_id": "8",
+          "name": "Team 8",
+          "logo": "logo8",
+          "manager_id": "G8"
+        },
+        {
+          "team_key": "423.l.432.t.9",
+          "team_id": "9",
+          "name": "Team 9",
+          "logo": "logo9",
+          "manager_id": "G9"
+        },
+        {
+          "team_key": "423.l.432.t.10",
+          "team_id": "10",
+          "name": "Team 10",
+          "logo": "logo10",
+          "manager_id": "G10"
+        },
+        {
+          "team_key": "423.l.432.t.11",
+          "team_id": "11",
+          "name": "Team 11",
+          "logo": "logo11",
+          "manager_id": "G11"
+        },
+        {
+          "team_key": "423.l.432.t.12",
+          "team_id": "12",
+          "name": "Team 12",
+          "logo": "logo12",
+          "manager_id": "G12"
+        }
+      ]
+    }
+  },
+  {
+    "season": "2024",
+    "data_type": "matchups_week14",
+    "data": {
+      "matchups": [
+        {
+          "week": "14",
+          "is_playoffs": "0",
+          "is_consolation": "0",
+          "winner_team_key": "423.l.432.t.1",
+          "teams": [
+            {
+              "team_key": "423.l.432.t.1",
+              "points": "143.64"
+            },
+            {
+              "team_key": "423.l.432.t.7",
+              "points": "99.61"
+            }
+          ]
+        },
+        {
+          "week": "14",
+          "is_playoffs": "0",
+          "is_consolation": "0",
+          "winner_team_key": "423.l.432.t.2",
+          "teams": [
+            {
+              "team_key": "423.l.432.t.2",
+              "points": "105.55"
+            },
+            {
+              "team_key": "423.l.432.t.4",
+              "points": "103.49"
+            }
+          ]
+        },
+        {
+          "week": "14",
+          "is_playoffs": "0",
+          "is_consolation": "0",
+          "winner_team_key": "423.l.432.t.3",
+          "teams": [
+            {
+              "team_key": "423.l.432.t.3",
+              "points": "128.33"
+            },
+            {
+              "team_key": "423.l.432.t.11",
+              "points": "107.58"
+            }
+          ]
+        },
+        {
+          "week": "14",
+          "is_playoffs": "0",
+          "is_consolation": "0",
+          "winner_team_key": "423.l.432.t.5",
+          "teams": [
+            {
+              "team_key": "423.l.432.t.5",
+              "points": "185.94"
+            },
+            {
+              "team_key": "423.l.432.t.6",
+              "points": "81.91"
+            }
+          ]
+        },
+        {
+          "week": "14",
+          "is_playoffs": "0",
+          "is_consolation": "0",
+          "winner_team_key": "423.l.432.t.12",
+          "teams": [
+            {
+              "team_key": "423.l.432.t.8",
+              "points": "90.29"
+            },
+            {
+              "team_key": "423.l.432.t.12",
+              "points": "152.07"
+            }
+          ]
+        },
+        {
+          "week": "14",
+          "is_playoffs": "0",
+          "is_consolation": "0",
+          "winner_team_key": "423.l.432.t.10",
+          "teams": [
+            {
+              "team_key": "423.l.432.t.9",
+              "points": "122.80"
+            },
+            {
+              "team_key": "423.l.432.t.10",
+              "points": "144.51"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "season": "2024",
+    "data_type": "matchups_week15",
+    "data": {
+      "matchups": [
+        {
+          "week": "15",
+          "is_playoffs": "1",
+          "is_consolation": "0",
+          "winner_team_key": "423.l.432.t.10",
+          "teams": [
+            {
+              "team_key": "423.l.432.t.1",
+              "points": "137.02"
+            },
+            {
+              "team_key": "423.l.432.t.10",
+              "points": "164.97"
+            }
+          ]
+        },
+        {
+          "week": "15",
+          "is_playoffs": "1",
+          "is_consolation": "1",
+          "winner_team_key": "423.l.432.t.2",
+          "teams": [
+            {
+              "team_key": "423.l.432.t.2",
+              "points": "152.10"
+            },
+            {
+              "team_key": "423.l.432.t.8",
+              "points": "104.45"
+            }
+          ]
+        },
+        {
+          "week": "15",
+          "is_playoffs": "1",
+          "is_consolation": "0",
+          "winner_team_key": "423.l.432.t.5",
+          "teams": [
+            {
+              "team_key": "423.l.432.t.3",
+              "points": "130.03"
+            },
+            {
+              "team_key": "423.l.432.t.5",
+              "points": "145.47"
+            }
+          ]
+        },
+        {
+          "week": "15",
+          "is_playoffs": "1",
+          "is_consolation": "1",
+          "winner_team_key": "423.l.432.t.11",
+          "teams": [
+            {
+              "team_key": "423.l.432.t.6",
+              "points": "81.60"
+            },
+            {
+              "team_key": "423.l.432.t.11",
+              "points": "115.03"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "season": "2024",
+    "data_type": "matchups_week16",
+    "data": {
+      "matchups": [
+        {
+          "week": "16",
+          "is_playoffs": "1",
+          "is_consolation": "0",
+          "winner_team_key": "423.l.432.t.1",
+          "teams": [
+            {
+              "team_key": "423.l.432.t.1",
+              "points": "163.33"
+            },
+            {
+              "team_key": "423.l.432.t.3",
+              "points": "158.78"
+            }
+          ]
+        },
+        {
+          "week": "16",
+          "is_playoffs": "1",
+          "is_consolation": "1",
+          "winner_team_key": "423.l.432.t.2",
+          "teams": [
+            {
+              "team_key": "423.l.432.t.2",
+              "points": "137.10"
+            },
+            {
+              "team_key": "423.l.432.t.7",
+              "points": "120.21"
+            }
+          ]
+        },
+        {
+          "week": "16",
+          "is_playoffs": "1",
+          "is_consolation": "0",
+          "winner_team_key": "423.l.432.t.10",
+          "teams": [
+            {
+              "team_key": "423.l.432.t.4",
+              "points": "152.11"
+            },
+            {
+              "team_key": "423.l.432.t.10",
+              "points": "170.66"
+            }
+          ]
+        },
+        {
+          "week": "16",
+          "is_playoffs": "1",
+          "is_consolation": "0",
+          "winner_team_key": "423.l.432.t.12",
+          "teams": [
+            {
+              "team_key": "423.l.432.t.5",
+              "points": "112.60"
+            },
+            {
+              "team_key": "423.l.432.t.12",
+              "points": "123.63"
+            }
+          ]
+        },
+        {
+          "week": "16",
+          "is_playoffs": "1",
+          "is_consolation": "1",
+          "winner_team_key": "423.l.432.t.8",
+          "teams": [
+            {
+              "team_key": "423.l.432.t.6",
+              "points": "90.89"
+            },
+            {
+              "team_key": "423.l.432.t.8",
+              "points": "133.55"
+            }
+          ]
+        },
+        {
+          "week": "16",
+          "is_playoffs": "1",
+          "is_consolation": "1",
+          "winner_team_key": "423.l.432.t.9",
+          "teams": [
+            {
+              "team_key": "423.l.432.t.9",
+              "points": "103.07"
+            },
+            {
+              "team_key": "423.l.432.t.11",
+              "points": "63.90"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "season": "2024",
+    "data_type": "matchups_week17",
+    "data": {
+      "matchups": [
+        {
+          "week": "17",
+          "is_playoffs": "1",
+          "is_consolation": "1",
+          "winner_team_key": "423.l.432.t.2",
+          "teams": [
+            {
+              "team_key": "423.l.432.t.2",
+              "points": "163.25"
+            },
+            {
+              "team_key": "423.l.432.t.9",
+              "points": "108.52"
+            }
+          ]
+        },
+        {
+          "week": "17",
+          "is_playoffs": "1",
+          "is_consolation": "0",
+          "winner_team_key": "423.l.432.t.4",
+          "teams": [
+            {
+              "team_key": "423.l.432.t.4",
+              "points": "151.73"
+            },
+            {
+              "team_key": "423.l.432.t.5",
+              "points": "125.43"
+            }
+          ]
+        },
+        {
+          "week": "17",
+          "is_playoffs": "1",
+          "is_consolation": "1",
+          "winner_team_key": "423.l.432.t.11",
+          "teams": [
+            {
+              "team_key": "423.l.432.t.7",
+              "points": "77.37"
+            },
+            {
+              "team_key": "423.l.432.t.11",
+              "points": "92.29"
+            }
+          ]
+        },
+        {
+          "week": "17",
+          "is_playoffs": "1",
+          "is_consolation": "0",
+          "winner_team_key": "423.l.432.t.12",
+          "teams": [
+            {
+              "team_key": "423.l.432.t.10",
+              "points": "95.08"
+            },
+            {
+              "team_key": "423.l.432.t.12",
+              "points": "158.39"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "season": "2024",
+    "data_type": "draft_picks",
+    "data": {
+      "draft_picks": [
+        {
+          "pick": "1",
+          "round": "1",
+          "team_key": "423.l.432.t.1",
+          "player_key": "423.p.1",
+          "cost": null
+        },
+        {
+          "pick": "2",
+          "round": "1",
+          "team_key": "423.l.432.t.2",
+          "player_key": "423.p.2",
+          "cost": null
+        }
+      ]
+    }
+  },
+  {
+    "season": "2024",
+    "data_type": "transactions",
+    "data": {
+      "transactions": [
+        {
+          "transaction_key": "423.l.432.tr.2",
+          "type": "trade",
+          "timestamp": "1725400000",
+          "faab_bid": null,
+          "items": [
+            {
+              "player_key": "423.p.1",
+              "type": "trade",
+              "source_team_key": "423.l.432.t.1",
+              "destination_team_key": "423.l.432.t.2"
+            },
+            {
+              "player_key": "423.p.2",
+              "type": "trade",
+              "source_team_key": "423.l.432.t.2",
+              "destination_team_key": "423.l.432.t.1"
+            }
+          ]
+        },
+        {
+          "transaction_key": "423.l.432.tr.1",
+          "type": "add",
+          "timestamp": "1726000000",
+          "faab_bid": "3",
+          "items": [
+            {
+              "player_key": "423.p.3",
+              "type": "add",
+              "source_team_key": null,
+              "destination_team_key": "423.l.432.t.3"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "season": "2024",
+    "data_type": "game_weeks",
+    "data": {
+      "game_weeks": [
+        {
+          "week": "1",
+          "start": "2024-09-05",
+          "end": "2024-09-09"
+        },
+        {
+          "week": "2",
+          "start": "2024-09-10",
+          "end": "2024-09-16"
+        },
+        {
+          "week": "3",
+          "start": "2024-09-17",
+          "end": "2024-09-23"
+        }
+      ]
+    }
+  }
+]
