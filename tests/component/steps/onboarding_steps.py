@@ -436,6 +436,20 @@ def step_champion(context, team_name):
     assert team_name in champs, f"champions were {champs}"
 
 
+@then('the standings show only "{team_name}" as champion')
+def step_only_champion(context, team_name):
+    item = get_item(context, f"LEAGUE#{context.canonical}", "STANDINGS#2024")
+    champs = [row["team_name"] for row in item["data"] if row.get("champion") == "Yes"]
+    assert champs == [team_name], f"champions were {champs}"
+
+
+@then('the "{sk}" bracket has exactly one championship game won by "{team_id}"')
+def step_single_championship_game(context, sk, team_id):
+    item = get_item(context, f"LEAGUE#{context.canonical}", sk)
+    finals = [row for row in item["data"] if row.get("position") == 1]
+    assert [row["winner"] for row in finals] == [team_id], f"finals were {finals}"
+
+
 @then('every "{sk}" row shows games_played {games:d} and ties {ties:d}')
 def step_standings_games_ties(context, sk, games, ties):
     # A 0-0 unplayed week must not inflate games played or add a phantom tie.

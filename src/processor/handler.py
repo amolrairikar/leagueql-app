@@ -1136,12 +1136,85 @@ def _yahoo_lineups(
     return starters, bench
 
 
+def _classify_yahoo_playoff_tiers(matchups: list[dict]) -> list[str]:
+    """Return the ESPN-style playoff tier for each Yahoo matchup (same order as the input).
+
+    Yahoo only flags ``is_playoffs`` and ``is_consolation`` — and ``is_consolation`` marks the
+    bracket for teams that *missed* the playoffs. Placement games between playoff teams (3rd, 5th
+    place) come back as non-consolation playoff games, indistinguishable by flags from the title
+    path. So tier by elimination, per season in week order: a non-consolation playoff game is
+    ``WINNERS_BRACKET`` only while neither team has lost one yet (its loser is eliminated once the
+    week completes); otherwise it is a ``WINNERS_CONSOLATION_LADDER`` placement game. Consolation
+    games map to ESPN's ``LOSERS_CONSOLATION_LADDER``.
+    """
+    tiers = ["NONE"] * len(matchups)
+    by_season_week: dict[str, dict[int, list[int]]] = defaultdict(
+        lambda: defaultdict(list)
+    )
+    for idx, matchup in enumerate(matchups):
+        if not _is_true(matchup.get("is_playoffs")):
+            continue
+        if _is_true(matchup.get("is_consolation")):
+            tiers[idx] = "LOSERS_CONSOLATION_LADDER"
+            continue
+        week = _int_or_none(matchup.get("week")) or 0
+        by_season_week[matchup["season"]][week].append(idx)
+
+    for weeks in by_season_week.values():
+        eliminated: set[str] = set()
+        for week in sorted(weeks):
+            newly_eliminated = set()
+            for idx in weeks[week]:
+                matchup = matchups[idx]
+                team_keys = [t.get("team_key") for t in matchup.get("teams", [])]
+                if any(key in eliminated for key in team_keys):
+                    tiers[idx] = "WINNERS_CONSOLATION_LADDER"
+                    continue
+                tiers[idx] = "WINNERS_BRACKET"
+                winner = matchup.get("winner_team_key")
+                newly_eliminated.update(k for k in team_keys if winner and k != winner)
+            eliminated |= newly_eliminated
+    return tiers
+
+
+def _yahoo_week_for_timestamp(
+    timestamp_s: int | None, calendar: list[tuple[int, str]]
+) -> int | None:
+    """Map a transaction's epoch-seconds time to its Yahoo week via the season's week calendar.
+
+    ``calendar`` is ``[(week, end_date_iso)]`` sorted by week. The transaction belongs to the
+    first week whose end date is on/after its US-Eastern date (fixed UTC−5, so no tz database is
+    needed); earlier moves clamp to the first week, later ones to the last.
+    """
+    if timestamp_s is None or not calendar:
+        return None
+    local_date = (
+        (
+            datetime.datetime.fromtimestamp(timestamp_s, tz=datetime.timezone.utc)
+            - datetime.timedelta(hours=5)
+        )
+        .date()
+        .isoformat()
+    )
+    for week, end_date in calendar:
+        if local_date <= end_date:
+            return week
+    return calendar[-1][0]
+
+
 def compile_yahoo_transactions(
     raw_transactions: list[tuple[dict, str]],
     team_map: dict[str, dict[str, dict]],
     player_by_key: dict,
+    week_calendar_by_season: dict[str, list[tuple[int, str]]] | None = None,
 ) -> list[dict]:
-    """Build resolved transaction rows (shared view shape) from Yahoo transaction payloads."""
+    """Build resolved transaction rows (shared view shape) from Yahoo transaction payloads.
+
+    A trade item moves a player from its source team (a drop) to its destination team (an add),
+    matching the Sleeper trade shape. ``created`` is epoch milliseconds like ESPN/Sleeper, and
+    ``week`` is resolved from the season's week calendar when available.
+    """
+    week_calendar_by_season = week_calendar_by_season or {}
 
     def _resolve(player_key: Any, team_key: Any) -> dict:
         meta = player_by_key.get(player_key, {})
@@ -1157,12 +1230,13 @@ def compile_yahoo_transactions(
         season_teams = team_map.get(season, {})
         adds, drops, roster_ids = [], [], []
         for item in txn.get("items") or []:
-            if item.get("type") == "add":
+            item_type = item.get("type")
+            if item_type in ("add", "trade"):
                 dest = item.get("destination_team_key")
                 adds.append(_resolve(item.get("player_key"), dest))
                 if dest:
                     roster_ids.append(str(dest))
-            elif item.get("type") == "drop":
+            if item_type in ("drop", "trade"):
                 src = item.get("source_team_key")
                 drops.append(_resolve(item.get("player_key"), src))
                 if src:
@@ -1172,13 +1246,16 @@ def compile_yahoo_transactions(
             txn_type = "trade"
         else:
             txn_type = "waiver" if txn.get("faab_bid") is not None else "free_agent"
+        timestamp_s = _int_or_none(txn.get("timestamp"))
         rows.append(
             {
                 "season": season,
                 "transaction_id": txn.get("transaction_key"),
                 "type": txn_type,
-                "week": None,
-                "created": txn.get("timestamp"),
+                "week": _yahoo_week_for_timestamp(
+                    timestamp_s, week_calendar_by_season.get(season, [])
+                ),
+                "created": timestamp_s * 1000 if timestamp_s is not None else None,
                 "roster_ids": roster_ids,
                 "teams": [
                     {
@@ -1220,6 +1297,8 @@ def _register_yahoo_raw_data(
     # (season, team_key, week) -> list of roster rows, used to attach matchup lineups.
     roster_lookup: dict[tuple[str, str, str], list[dict]] = defaultdict(list)
     matchup_items: list[dict] = []
+    # season -> [(week, end_date_iso)] sorted by week, used to place transactions in weeks.
+    week_calendar_by_season: dict[str, list[tuple[int, str]]] = {}
 
     for item in raw_data:
         season = item["season"]
@@ -1283,6 +1362,12 @@ def _register_yahoo_raw_data(
         elif data_type == "transactions":
             for txn in data.get("transactions", []):
                 raw_transactions.append((txn, season))
+        elif data_type == "game_weeks":
+            week_calendar_by_season[season] = sorted(
+                (_int_or_none(w.get("week")), str(w.get("end")))
+                for w in data.get("game_weeks", [])
+                if _int_or_none(w.get("week")) is not None and w.get("end")
+            )
 
     # Dedupe members by (id, season) so the TEAMS join is 1:1.
     seen_members = set()
@@ -1299,7 +1384,8 @@ def _register_yahoo_raw_data(
         team["rankCalculatedFinal"] = rank_by_season.get((team["season"], team["id"]))
 
     # Build ESPN-shaped matchup rows (with starter/bench lineups joined from rosters).
-    for matchup in matchup_items:
+    tiers = _classify_yahoo_playoff_tiers(matchup_items)
+    for matchup, tier in zip(matchup_items, tiers):
         teams = matchup.get("teams", [])
         if len(teams) < 2:
             continue  # bye week / incomplete matchup
@@ -1320,14 +1406,6 @@ def _register_yahoo_raw_data(
             winner, loser = b_id, a_id
         else:
             winner = loser = "TIE"
-        if _is_true(matchup.get("is_playoffs")):
-            tier = (
-                "WINNERS_CONSOLATION_LADDER"
-                if _is_true(matchup.get("is_consolation"))
-                else "WINNERS_BRACKET"
-            )
-        else:
-            tier = "NONE"
 
         a_starters, a_bench = _yahoo_lineups(roster_lookup, season, a_id, week)
         b_starters, b_bench = _yahoo_lineups(roster_lookup, season, b_id, week)
@@ -1362,6 +1440,7 @@ def _register_yahoo_raw_data(
         raw_transactions=raw_transactions,
         team_map=build_yahoo_team_map(all_members, all_teams),
         player_by_key=player_by_key,
+        week_calendar_by_season=week_calendar_by_season,
     )
     return {
         "members": all_members,

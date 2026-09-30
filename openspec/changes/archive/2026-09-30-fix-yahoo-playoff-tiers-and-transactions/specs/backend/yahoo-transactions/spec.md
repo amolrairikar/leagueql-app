@@ -1,12 +1,4 @@
-# yahoo-transactions Specification
-
-## Purpose
-Build a precomputed transactions view for Yahoo leagues — completed adds, drops, and trades — with
-Yahoo player keys resolved to names/positions and team keys resolved to team labels. The processor
-writes it to DynamoDB and it is read through the query API under `queryType=TRANSACTIONS#{season}`,
-matching the ESPN and Sleeper transactions views.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Fetch Yahoo transactions per onboarded season
 Onboarding or refreshing a Yahoo league SHALL fetch the league's transactions for each onboarded
@@ -62,10 +54,3 @@ within the DynamoDB per-item size limit.
 - **WHEN** a season has more stored transactions than fit in a single item under the DynamoDB
   per-item size limit
 - **THEN** the rows are split across multiple size-bounded items with no row dropped or duplicated
-
-### Requirement: Resolve players and teams gracefully
-The processor SHALL tolerate unknown Yahoo players and unresolvable teams without failing the run.
-
-#### Scenario: Unknown player falls back to null
-- **WHEN** a transaction references a player key that cannot be resolved to a name/position
-- **THEN** the row is written with a null player name rather than failing the run
