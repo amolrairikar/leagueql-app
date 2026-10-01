@@ -1366,3 +1366,111 @@ class TestLambdaHandlerImpl:
         ):
             processor_handler._lambda_handler_impl(_s3_event(), MagicMock())
         assert write_meta.call_args[1]["league_name"] is None
+
+
+class TestReadYahooLineupStore:
+    def test_returns_parsed_store(self, processor_handler):
+        mock_s3 = MagicMock()
+        body = MagicMock()
+        body.read.return_value = json.dumps({"weeks": {"1": []}}).encode("utf-8")
+        mock_s3.get_object.return_value = {"Body": body}
+        with patch.object(processor_handler, "s3_client", mock_s3):
+            store = processor_handler.read_yahoo_lineup_store(
+                "bucket", "raw-api-data/abc", "2025"
+            )
+        assert store == {"weeks": {"1": []}}
+        assert mock_s3.get_object.call_args.kwargs["Key"] == (
+            "raw-api-data/abc/yahoo_rosters/2025.json"
+        )
+
+    @pytest.mark.parametrize("code", ["NoSuchKey", "404"])
+    def test_missing_store_is_none(self, processor_handler, code):
+        mock_s3 = MagicMock()
+        mock_s3.get_object.side_effect = botocore.exceptions.ClientError(
+            {"Error": {"Code": code}}, "GetObject"
+        )
+        with patch.object(processor_handler, "s3_client", mock_s3):
+            assert (
+                processor_handler.read_yahoo_lineup_store("bucket", "p", "2025") is None
+            )
+
+    def test_other_errors_propagate(self, processor_handler):
+        mock_s3 = MagicMock()
+        mock_s3.get_object.side_effect = botocore.exceptions.ClientError(
+            {"Error": {"Code": "AccessDenied"}}, "GetObject"
+        )
+        with (
+            patch.object(processor_handler, "s3_client", mock_s3),
+            pytest.raises(botocore.exceptions.ClientError),
+        ):
+            processor_handler.read_yahoo_lineup_store("bucket", "p", "2025")
+
+
+class TestReprocessSeasons:
+    """backend/data-processing-pipeline: the lineup backfill rebuilds exactly one season."""
+
+    def _run(self, processor_handler, manifest, metadata):
+        mock_s3 = MagicMock()
+        resp = _manifest_response(manifest)
+        resp["Metadata"].update(metadata)
+        mock_s3.get_object.return_value = resp
+        read_keys: list = []
+        write_meta = MagicMock()
+        read_store = MagicMock(return_value=None)
+
+        def fake_read(bucket, key, version_id=None):
+            read_keys.append((key, version_id))
+            if version_id:
+                return manifest  # previous manifest: same seasons -> latest only
+            if key.endswith(("players.json", "player_stats.json")):
+                return {}
+            return [{"data_type": "users", "data": []}]
+
+        with (
+            patch.multiple(
+                processor_handler,
+                s3_client=mock_s3,
+                get_previous_version_id=MagicMock(return_value="v-prev"),
+                read_s3_object=MagicMock(side_effect=fake_read),
+                read_yahoo_lineup_store=read_store,
+                register_raw_data=MagicMock(
+                    return_value={"league_name_by_season": {"2019": "Old Name"}}
+                ),
+                dataframe_to_dynamo_items=MagicMock(return_value=[]),
+                write_items=MagicMock(),
+                write_metadata_items=write_meta,
+                QUERIES={
+                    name: {**q, "YAHOO": "SELECT 1"} if isinstance(q, dict) else q
+                    for name, q in _FAKE_QUERIES.items()
+                },
+            ),
+            patch.object(processor_handler.duckdb, "connect", return_value=MagicMock()),
+        ):
+            processor_handler._lambda_handler_impl(_s3_event(), MagicMock())
+        return read_keys, write_meta, read_store
+
+    def test_only_listed_season_processed(self, processor_handler):
+        read_keys, write_meta, read_store = self._run(
+            processor_handler,
+            {"YAHOO": ["2019", "2020", "2025"]},
+            {"reprocess_seasons": "2019"},
+        )
+        season_files = [key for key, _ in read_keys if key.startswith("raw/")]
+        assert [k.rsplit("/", 1)[-1] for k in season_files] == ["2019.json"]
+        # No previous-manifest diff is read.
+        assert all(version_id is None for _, version_id in read_keys)
+        # The season's lineup store is merged in for Yahoo.
+        read_store.assert_called_once_with("bucket", "raw/canonical-abc", "2019")
+        # Not a data refresh: no last_refresh_at bump, no rename to the old season's name.
+        assert write_meta.call_args.kwargs["refresh"] is False
+        assert write_meta.call_args.kwargs["league_name"] is None
+
+    def test_normal_yahoo_refresh_still_reads_store_and_bumps_refresh(
+        self, processor_handler
+    ):
+        _, write_meta, read_store = self._run(
+            processor_handler, {"YAHOO": ["2019"]}, {}
+        )
+        read_store.assert_called_once()
+        assert write_meta.call_args.kwargs["refresh"] is True
+        assert write_meta.call_args.kwargs["league_name"] == "Old Name"

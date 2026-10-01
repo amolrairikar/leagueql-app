@@ -35,7 +35,6 @@ def _league_meta(league_key, league_id, season, renew=None, **extra):
         "start_week": "1",
         "end_week": "17",
         "current_week": "5",
-        "num_teams": "2",
     }
     if renew:
         meta["renew"] = renew
@@ -158,30 +157,35 @@ class TestBuildRequestUrls:
             if dt.startswith("matchups_week")
         )
         assert matchup_weeks == [1, 2, 3, 4, 5]
-        # num_teams=2 -> one weekly roster+stats call per team, per week.
-        roster_urls = {dt: url for _, dt, url in urls if dt.startswith("rosters")}
-        assert set(roster_urls) == {
-            f"rosters_week{w}_t{t}" for w in range(1, 6) for t in (1, 2)
-        }
-        assert roster_urls["rosters_week3_t2"].endswith(
-            "/team/461.l.100.t.2/roster;week=3/players/stats;type=week;week=3?format=json"
-        )
+        # Per-team weekly rosters are left to the lineup backfill.
+        assert not [dt for dt in data_types if dt.startswith("rosters")]
+        # 6 per-season sub-resources + 1 scoreboard per week.
+        assert len(urls) == 6 + 5
         assert all(
             url.endswith("?format=json") or ";week=" in url for _, _, url in urls
         )
 
-    def test_skips_rosters_without_num_teams(self, yc):
-        meta = _league_meta("461.l.100", "100", "2025")
-        del meta["num_teams"]
-        payload = _user_leagues_payload([("461", meta)])
-        with patch("requests.get") as mock_get:
-            mock_get.return_value = MagicMock(
-                **{"json.return_value": payload, "raise_for_status": MagicMock()}
-            )
-            client = yc.YahooClient("100", "user_1", token_provider=lambda: "tok")
-        data_types = [dt for _, dt, _ in client._build_request_urls()]
-        assert not [dt for dt in data_types if dt.startswith("rosters")]
-        assert "matchups_week1" in data_types
+
+class TestTeamRosterHelpers:
+    def test_team_roster_url(self, yc):
+        assert yc.team_roster_url("461.l.100.t.2", 3) == (
+            "https://fantasysports.yahooapis.com/fantasy/v2/team/461.l.100.t.2"
+            "/roster;week=3/players/stats;type=week;week=3?format=json"
+        )
+
+    def test_parse_team_roster(self, yc):
+        rows = yc.parse_team_roster(_team_roster_payload("470.l.1676376.t.2"), 2)
+        assert [r["player_key"] for r in rows] == [
+            "470.p.40896",
+            "470.p.31908",
+            "470.p.100007",
+        ]
+        assert {r["team_key"] for r in rows} == {"470.l.1676376.t.2"}
+        assert {r["week"] for r in rows} == {"2"}
+        assert rows[0]["points"] == "14.74"
+
+    def test_parse_team_roster_empty_payload(self, yc):
+        assert yc.parse_team_roster({}, 2) == []
 
 
 class TestFilters:
@@ -349,6 +353,7 @@ class TestFilters:
                                 "is_playoffs": "0",
                                 "is_consolation": "0",
                                 "winner_team_key": "461.l.100.t.1",
+                                "status": "postevent",
                                 "0": {
                                     "teams": {
                                         "0": {
@@ -378,6 +383,7 @@ class TestFilters:
         m = out["matchups"][0]
         assert m["week"] == "1"
         assert m["winner_team_key"] == "461.l.100.t.1"
+        assert m["status"] == "postevent"
         assert m["teams"] == [
             {"team_key": "461.l.100.t.1", "points": "100.5"},
             {"team_key": "461.l.100.t.2", "points": "90.0"},
@@ -536,45 +542,10 @@ class TestProcessApiResults:
         processed = client._process_api_results(results)
         assert processed[0]["data"]["name"] == "My League"
 
-    def test_merges_per_team_rosters_into_one_weekly_record(self, client):
-        results = [
-            {
-                "season": "2026",
-                "data_type": "rosters_week2_t1",
-                "data": _team_roster_payload("470.l.1676376.t.1"),
-            },
-            {
-                "season": "2026",
-                "data_type": "matchups_week2",
-                "data": _league_payload("scoreboard", {"0": {"matchups": {}}}),
-            },
-            {
-                "season": "2026",
-                "data_type": "rosters_week2_t2",
-                "data": _team_roster_payload("470.l.1676376.t.2"),
-            },
-            {
-                "season": "2026",
-                "data_type": "rosters_week3_t1",
-                "data": _team_roster_payload("470.l.1676376.t.1"),
-            },
-        ]
-        processed = client._process_api_results(results)
-        assert [p["data_type"] for p in processed] == [
-            "rosters_week2",
-            "matchups_week2",
-            "rosters_week3",
-        ]
-        week2 = processed[0]["data"]["rosters"]
-        assert len(week2) == 6
-        assert {r["team_key"] for r in week2} == {
-            "470.l.1676376.t.1",
-            "470.l.1676376.t.2",
-        }
-        assert {r["week"] for r in week2} == {"2"}
-        week3 = processed[2]["data"]["rosters"]
-        assert len(week3) == 3
-        assert {r["week"] for r in week3} == {"3"}
+    def test_rejects_unknown_data_type(self, client):
+        results = [{"season": "2025", "data_type": "rosters_week2", "data": {}}]
+        with pytest.raises(ValueError, match="Invalid data_type"):
+            client._process_api_results(results)
 
     def test_raises_on_failed_fetch(self, client):
         results = [{"season": "2025", "data_type": "settings", "data": None}]

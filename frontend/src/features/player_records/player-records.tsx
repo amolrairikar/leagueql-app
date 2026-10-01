@@ -10,6 +10,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { LineupPendingNote } from '@/features/lineup_backfill/lineup-pending-note';
+import { useLineupBackfill } from '@/features/lineup_backfill/use-lineup-backfill';
 import {
   getAllMatchups,
   type MatchupItem,
@@ -304,10 +306,21 @@ function PlayerRecordsContent({
 
   const matchups = result.ok ? result.data : EMPTY_MATCHUPS;
   const colorMap = useMemo(() => buildTeamColorMap(matchups), [matchups]);
+  // Seasons whose player scores are still being backfilled are left out of the
+  // boards (frontend/lineup-data-status) rather than ranked on missing lineups.
+  const { pendingSeasons, failedSeasons } = useLineupBackfill();
+  const excludedSeasons = useMemo(
+    () => [...pendingSeasons, ...failedSeasons],
+    [pendingSeasons, failedSeasons],
+  );
+  const lineupMatchups = useMemo(
+    () => matchups.filter((m) => !excludedSeasons.includes(String(m.season))),
+    [matchups, excludedSeasons],
+  );
   // Season/manager options span both phases so switching phase never empties them.
   const everyRecord = useMemo(
-    () => extractEntries(matchups, colorMap),
-    [matchups, colorMap],
+    () => extractEntries(lineupMatchups, colorMap),
+    [lineupMatchups, colorMap],
   );
   const seasons = useMemo(
     () =>
@@ -334,12 +347,12 @@ function PlayerRecordsContent({
   const allRecords = useMemo(
     () =>
       extractEntries(
-        matchups.filter(
+        lineupMatchups.filter(
           (m) => isRegularSeasonMatchup(m) === (phase === 'regular'),
         ),
         colorMap,
       ),
-    [matchups, colorMap, phase],
+    [lineupMatchups, colorMap, phase],
   );
 
   const positionCards = useMemo(() => {
@@ -392,6 +405,11 @@ function PlayerRecordsContent({
 
   return (
     <>
+      {season === 'all' && excludedSeasons.length > 0 && (
+        <div className="mb-4">
+          <LineupPendingNote seasons={excludedSeasons} />
+        </div>
+      )}
       <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 mb-5">
         <div className="flex items-center gap-2.5">
           <span className="text-[12px] font-medium text-muted-foreground w-16 sm:w-auto">

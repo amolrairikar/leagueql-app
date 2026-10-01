@@ -198,6 +198,14 @@ def get_league(
             # Drives the auto-refresh checkbox prefill / sidebar toggle
             # (backend/scheduled-league-auto-refresh). Absent on older leagues → not enrolled.
             "auto_refresh_enabled": bool(metadata.get("auto_refresh_enabled")),
+            # Yahoo seasons whose weekly lineups are still being backfilled, or whose backfill
+            # couldn't finish yet (backend/yahoo-lineup-backfill); drives the lineup bell.
+            "pending_lineup_seasons": sorted(
+                metadata.get("pending_lineup_seasons", []), key=int
+            ),
+            "failed_lineup_seasons": sorted(
+                metadata.get("failed_lineup_seasons", []), key=int
+            ),
         },
     )
 

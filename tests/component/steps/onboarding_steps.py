@@ -484,3 +484,28 @@ def step_matchup_stores_unplayed(context, sk):
         if float(row["team_a_score"]) == 0 and float(row["team_b_score"]) == 0
     ]
     assert unplayed, f"no 0-0 matchup found in {sk}: {item['data']}"
+
+
+@then('the onboarded league has lineup-pending seasons "{seasons}"')
+def step_lineup_pending(context, seasons):
+    # backend/league-onboarding: Yahoo seasons defer weekly lineups to the backfill.
+    item = get_item(context, f"LEAGUE#{context.canonical}", "METADATA")
+    expected = set(seasons.split(","))
+    assert set(item.get("pending_lineup_seasons", set())) == expected, item
+
+
+@then("a lineup backfill is queued for the onboarded league")
+def step_backfill_queued(context):
+    messages = context.sqs.receive_message(
+        QueueUrl=context.backfill_queue_url, MaxNumberOfMessages=10
+    ).get("Messages", [])
+    bodies = [json.loads(m["Body"]) for m in messages]
+    assert {"canonical_league_id": context.canonical, "attempt": 0} in bodies, bodies
+
+
+@then("no lineup backfill is queued")
+def step_no_backfill_queued(context):
+    messages = context.sqs.receive_message(
+        QueueUrl=context.backfill_queue_url, MaxNumberOfMessages=10
+    ).get("Messages", [])
+    assert not messages, messages

@@ -70,3 +70,73 @@ def step_assert_league_lookup(context):
         f"LEAGUE_LOOKUP for {context.test_league_id} not found in DynamoDB after onboarding"
     )
     assert item.get("canonical_league_id", {}).get("S") == context.test_canonical_id
+    # Every onboarded Yahoo season starts lineup-pending and the backfill works newest-first;
+    # the backfill steps wait on just this season so the wait stays bounded however many
+    # older seasons the league has. Taken from LEAGUE_LOOKUP, not pending_lineup_seasons,
+    # since a small backfill may already have cleared it.
+    context.newest_season = max(item["seasons"]["SS"], key=int)
+
+
+def _metadata(context) -> dict:
+    resp = context.dynamodb_client.get_item(
+        TableName=context.table_name,
+        Key={
+            "PK": {"S": f"LEAGUE#{context.test_canonical_id}"},
+            "SK": {"S": "METADATA"},
+        },
+        ConsistentRead=True,
+    )
+    return resp.get("Item", {})
+
+
+@then("the lineup backfill completes the newest season within {minutes:d} minutes")
+def step_poll_backfill_complete(context, minutes):
+    season = context.newest_season
+    deadline = datetime.now(timezone.utc) + timedelta(minutes=minutes)
+    while datetime.now(timezone.utc) < deadline:
+        item = _metadata(context)
+        failed = item.get("failed_lineup_seasons", {}).get("SS", [])
+        assert season not in failed, (
+            f"lineup backfill marked season {season} failed (revoked link / no access / "
+            "retries exhausted) — check the leagueql-yahoo-lineup-backfill logs"
+        )
+        if season not in item.get("pending_lineup_seasons", {}).get("SS", []):
+            return
+        time.sleep(10)
+    raise AssertionError(
+        f"season {season} still lineup-pending after {minutes} minutes; if Yahoo "
+        "throttled the backfill (999), its retry is queued ~15 minutes out"
+    )
+
+
+@then(
+    "the processor attaches lineups to the newest season's matchups within {minutes:d} minutes"
+)
+def step_poll_matchup_lineups(context, minutes):
+    season = context.newest_season
+    store_key = f"raw-api-data/{context.test_canonical_id}/yahoo_rosters/{season}.json"
+    store = json.loads(
+        context.s3_client.get_object(Bucket=context.s3_bucket, Key=store_key)[
+            "Body"
+        ].read()
+    )
+    assert store["weeks"], f"lineup store {store_key} has no weeks"
+    week = min(store["weeks"], key=int)
+    # Completion re-triggers the processor via the manifest; its rebuild is asynchronous.
+    deadline = datetime.now(timezone.utc) + timedelta(minutes=minutes)
+    while datetime.now(timezone.utc) < deadline:
+        resp = context.dynamodb_client.get_item(
+            TableName=context.table_name,
+            Key={
+                "PK": {"S": f"LEAGUE#{context.test_canonical_id}"},
+                "SK": {"S": f"MATCHUPS#{season}#WEEK#{int(week):02d}"},
+            },
+        )
+        rows = resp.get("Item", {}).get("data", {}).get("L", [])
+        if any(row["M"].get("team_a_starters", {}).get("L") for row in rows):
+            return
+        time.sleep(10)
+    raise AssertionError(
+        f"MATCHUPS#{season}#WEEK#{int(week):02d} has no starters {minutes} minutes "
+        "after the backfill completed"
+    )

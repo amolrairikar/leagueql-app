@@ -62,3 +62,24 @@ Feature: Matchups and box scores (frontend/matchups)
     When I open the matchups page
     And I open the live-week matchup
     Then I see the head-to-head consistency stat
+
+  Scenario: A Yahoo season with pending player scores shows a box score placeholder (frontend/lineup-data-status)
+    Given a Yahoo season whose player scores are still loading
+    When I open the Yahoo matchups page
+    And I open the week 1 matchup
+    Then I see the box score placeholder "Player scores still loading"
+    And I see the team score "120.00"
+    But I do not see the player "Pat Quarterback"
+
+  Scenario: A Yahoo season with backfilled player scores shows the lineups (frontend/lineup-data-status)
+    Given a Yahoo season whose player scores are loaded
+    When I open the Yahoo matchups page
+    And I open the week 1 matchup
+    Then I see the player "Pat Quarterback"
+    But I do not see the box score placeholder "Player scores still loading"
+
+  Scenario: A Yahoo season with pending player scores notes the missing top scorers (frontend/lineup-data-status)
+    Given a Yahoo season whose player scores are still loading
+    When I open the Yahoo matchups page
+    And I open the live-week matchup
+    Then I see the note "Player scores for 2024 are still loading"

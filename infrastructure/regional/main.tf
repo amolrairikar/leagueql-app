@@ -24,6 +24,7 @@ locals {
   player_metadata_role_arn  = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-sleeper-player-metadata-fetcher-role"
   league_refresh_role_arn   = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-league-refresh-role"
   discord_notifier_role_arn = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-discord-notifier-role"
+  lineup_backfill_role_arn  = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-lineup-backfill-role"
   admin_report_role_arn     = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-admin-report-role"
 
   # Sleeper player stats refresher runs as a Fargate task (see backend/sleeper-player-stats-refresher). Roles are
@@ -95,12 +96,105 @@ module "onboarder_lambda" {
     # SAME shared credential KMS key/region as Yahoo tokens (no separate key, no extra IAM grant).
     ESPN_KMS_KEY_ID = "arn:aws:kms:us-east-1:${local.account_id}:alias/leagueql-yahoo-token-${var.environment}"
     ESPN_KMS_REGION = "us-east-1"
+
+    # Yahoo onboards/refreshes queue the paced lineup backfill (backend/yahoo-lineup-backfill).
+    LINEUP_BACKFILL_QUEUE_URL = aws_sqs_queue.lineup_backfill[0].url
   }
 
   tags = {
     environment = var.environment
     project     = "leagueql"
     managed-by  = "terraform"
+  }
+}
+
+# Yahoo lineup backfill (backend/yahoo-lineup-backfill). Yahoo onboards/refreshes skip per-team
+# weekly rosters (they trip Yahoo's 999 throttle) and queue a message here instead; a second
+# Lambda from the onboarder package fills each season's lineups in at a paced, low rate,
+# re-queuing itself with a delay when Yahoo throttles. Messages that keep erroring land in the DLQ.
+resource "aws_sqs_queue" "lineup_backfill_dlq" {
+  count                     = local.region == "east" ? 1 : 0
+  name                      = "leagueql-yahoo-lineup-backfill-dlq-${var.environment}"
+  message_retention_seconds = 1209600
+  sqs_managed_sse_enabled   = true
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    managed-by  = "terraform"
+  }
+}
+
+resource "aws_sqs_queue" "lineup_backfill" {
+  count = local.region == "east" ? 1 : 0
+  name  = "leagueql-yahoo-lineup-backfill-${var.environment}"
+  # Must be at least the consumer Lambda's timeout (900s) so an in-flight message isn't
+  # redelivered to a second run mid-backfill.
+  visibility_timeout_seconds = 960
+  message_retention_seconds  = 1209600
+  sqs_managed_sse_enabled    = true
+  redrive_policy = jsonencode({
+    deadLetterTargetArn = aws_sqs_queue.lineup_backfill_dlq[0].arn
+    maxReceiveCount     = 3
+  })
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    managed-by  = "terraform"
+  }
+}
+
+module "lineup_backfill_lambda" {
+  source = "../modules/lambda"
+  count  = local.region == "east" ? 1 : 0
+
+  function_name        = "leagueql-yahoo-lineup-backfill-${var.environment}"
+  function_description = "Paced Yahoo weekly lineup/player-points backfill (SQS consumer)"
+  role_arn             = local.lineup_backfill_role_arn
+  handler              = "lineup_backfill.lambda_handler"
+  memory_size          = 512
+  # A season is ~200 paced requests (~1/s); the handler checkpoints and re-queues itself when
+  # under a minute remains, so a long season spans runs safely.
+  timeout       = 900
+  log_retention = 7
+  s3_bucket     = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
+  # Same package as the onboarder: reuses its Yahoo roster parsing and the token engine.
+  s3_key = "lambda-code-artifacts/onboarder-lambda.zip"
+
+  environment_variables = {
+    DYNAMODB_TABLE_NAME       = "leagueql-table-${var.environment}"
+    S3_BUCKET_NAME            = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
+    LINEUP_BACKFILL_QUEUE_URL = aws_sqs_queue.lineup_backfill[0].url
+    # Seconds between Yahoo requests; raise it (no code change) if 999s stay frequent.
+    LINEUP_BACKFILL_REQUEST_INTERVAL = "1.0"
+
+    ENVIRONMENT                        = var.environment
+    OTEL_EXPORTER_TOKEN_SSM_PARAM      = "/leagueql/${var.environment}/betterstack/source_token"
+    OTEL_EXPORTER_OTLP_TRACES_ENDPOINT = local.betterstack_otlp_traces_endpoint
+
+    YAHOO_CLIENT_ID_SSM_PARAM = "/leagueql/${var.environment}/yahoo/client_id"
+    YAHOO_KMS_KEY_ID          = "arn:aws:kms:us-east-1:${local.account_id}:alias/leagueql-yahoo-token-${var.environment}"
+    YAHOO_KMS_REGION          = "us-east-1"
+    YAHOO_REDIRECT_URI        = var.yahoo_redirect_uri
+  }
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    managed-by  = "terraform"
+  }
+}
+
+resource "aws_lambda_event_source_mapping" "lineup_backfill" {
+  count            = local.region == "east" ? 1 : 0
+  event_source_arn = aws_sqs_queue.lineup_backfill[0].arn
+  function_name    = module.lineup_backfill_lambda[0].lambda_arn
+  batch_size       = 1
+
+  # At most two backfills run at once across all leagues, bounding total Yahoo traffic.
+  scaling_config {
+    maximum_concurrency = 2
   }
 }
 
@@ -799,6 +893,33 @@ resource "aws_cloudwatch_metric_alarm" "onboarder_dlq_messages" {
 
   dimensions = {
     QueueName = aws_sqs_queue.onboarder_dlq[0].name
+  }
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    managed-by  = "terraform"
+  }
+}
+
+# A lineup backfill message that errored on 3 deliveries was moved to the DLQ.
+resource "aws_cloudwatch_metric_alarm" "lineup_backfill_dlq_messages" {
+  count               = local.region == "east" && var.environment == "prod" ? 1 : 0
+  alarm_name          = "leagueql-yahoo-lineup-backfill-dlq-${var.environment}-messages"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "ApproximateNumberOfMessagesVisible"
+  namespace           = "AWS/SQS"
+  period              = 300
+  statistic           = "Maximum"
+  threshold           = 0
+  alarm_description   = "A Yahoo lineup backfill message failed repeatedly and was moved to the DLQ"
+  alarm_actions       = [aws_sns_topic.lambda_alerts[0].arn]
+  ok_actions          = [aws_sns_topic.lambda_alerts[0].arn]
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    QueueName = aws_sqs_queue.lineup_backfill_dlq[0].name
   }
 
   tags = {

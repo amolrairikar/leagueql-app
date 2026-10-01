@@ -146,5 +146,12 @@ export interface GetLeagueResponse {
      * the sidebar auto-refresh toggle. Absent/false on leagues onboarded before opt-in.
      */
     auto_refresh_enabled?: boolean;
+    /**
+     * Yahoo seasons whose weekly lineups/player points are still being backfilled
+     * (backend/yahoo-lineup-backfill). Empty/absent for every other league.
+     */
+    pending_lineup_seasons?: string[];
+    /** Yahoo seasons whose lineup backfill couldn't finish yet (retried automatically). */
+    failed_lineup_seasons?: string[];
   };
 }

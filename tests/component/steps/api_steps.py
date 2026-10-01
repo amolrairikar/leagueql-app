@@ -550,6 +550,33 @@ def step_seed_last_refresh(context, canonical, days):
     )
 
 
+@given(
+    'league "{canonical}" has lineup-pending seasons "{pending}" and failed "{failed}"'
+)
+def step_seed_lineup_status(context, canonical, pending, failed):
+    # backend/yahoo-lineup-backfill bookkeeping on METADATA (string sets).
+    context.ddb_resource.Table(context.table_name).update_item(
+        Key={"PK": f"LEAGUE#{canonical}", "SK": "METADATA"},
+        UpdateExpression="SET pending_lineup_seasons = :p, failed_lineup_seasons = :f",
+        ExpressionAttributeValues={
+            ":p": set(pending.split(",")),
+            ":f": set(failed.split(",")),
+        },
+    )
+
+
+@then('the response data field "{field}" is the list "{values}"')
+def step_data_field_list(context, field, values):
+    actual = context.response.json()["data"].get(field)
+    assert actual == values.split(","), f"{field}={actual!r}"
+
+
+@then('the response data field "{field}" is an empty list')
+def step_data_field_empty_list(context, field):
+    actual = context.response.json()["data"].get(field)
+    assert actual == [], f"{field}={actual!r}"
+
+
 @given('league "{canonical}" was last accessed {minutes:d} minutes ago')
 def step_seed_last_accessed(context, canonical, minutes):
     # Seed a recent last_accessed_at and stash it so a later assertion can confirm

@@ -610,3 +610,80 @@ class TestCompileYahooTransactions:
         # 1700000000 = 2023-11-14 22:13 UTC -> 17:13 ET on Nov 14 -> week 2.
         assert grouped["transactions"][0]["week"] == 2
         assert grouped["transactions"][0]["created"] == 1700000000000
+
+
+def _store_row(team_key, player_key, slot, points):
+    return {
+        "team_key": team_key,
+        "week": "1",
+        "player_key": player_key,
+        "player_name": player_key,
+        "position": "WR",
+        "selected_position": slot,
+        "points": points,
+    }
+
+
+_STORE = {
+    "weeks": {
+        "1": [
+            _store_row("461.l.100.t.1", "461.p.1", "QB", "60.5"),
+            _store_row("461.l.100.t.1", "461.p.4", "WR", "40.0"),
+            _store_row("461.l.100.t.1", "461.p.5", "BN", "7.0"),
+            _store_row("461.l.100.t.2", "461.p.2", "RB", "90.0"),
+        ]
+    }
+}
+
+
+def _without_rosters():
+    return [r for r in _raw_data() if not r["data_type"].startswith("rosters")]
+
+
+class TestMergeYahooLineupStores:
+    """backend/data-processing-pipeline: backfilled lineups are merged into matchups."""
+
+    @staticmethod
+    def _matchup(processor_handler, raw):
+        grouped = processor_handler._register_yahoo_raw_data(raw, _METADATA, _STATS)
+        return grouped["matchups"][0]
+
+    def test_store_lineups_attached_and_starters_sum_to_score(self, processor_handler):
+        raw = processor_handler.merge_yahoo_lineup_stores(
+            _without_rosters(), {"2025": _STORE}
+        )
+        m = self._matchup(processor_handler, raw)
+        a_starters = sum(p["points_scored"] for p in m["team_a_starters"])
+        b_starters = sum(p["points_scored"] for p in m["team_b_starters"])
+        assert a_starters == m["team_a_score"] == 100.5
+        assert b_starters == m["team_b_score"] == 90.0
+        assert [p["player_id"] for p in m["team_a_bench"]] == ["461.p.5"]
+
+    def test_store_overrides_in_file_rosters_for_the_same_week(self, processor_handler):
+        raw = processor_handler.merge_yahoo_lineup_stores(_raw_data(), {"2025": _STORE})
+        assert [r["data_type"] for r in raw].count("rosters_week1") == 1
+        m = self._matchup(processor_handler, raw)
+        assert "Bench Guy" not in [p["full_name"] for p in m["team_a_bench"]]
+
+    def test_legacy_in_file_rosters_used_without_store(self, processor_handler):
+        raw = processor_handler.merge_yahoo_lineup_stores(_raw_data(), {"2025": None})
+        m = self._matchup(processor_handler, raw)
+        assert [s["full_name"] for s in m["team_a_starters"]] == ["QB One"]
+
+    def test_store_keeps_in_file_weeks_it_does_not_cover(self, processor_handler):
+        store = {"weeks": {"2": []}}
+        raw = processor_handler.merge_yahoo_lineup_stores(_raw_data(), {"2025": store})
+        assert [
+            r["data_type"] for r in raw if r["data_type"].startswith("rosters")
+        ] == [
+            "rosters_week1",
+            "rosters_week2",
+        ]
+
+    def test_no_lineups_yields_empty_lineups(self, processor_handler):
+        raw = processor_handler.merge_yahoo_lineup_stores(
+            _without_rosters(), {"2025": None}
+        )
+        m = self._matchup(processor_handler, raw)
+        assert m["team_a_starters"] == m["team_a_bench"] == []
+        assert m["team_a_score"] == 100.5

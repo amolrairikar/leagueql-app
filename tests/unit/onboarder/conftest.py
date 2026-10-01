@@ -29,6 +29,7 @@ def _bootstrap_onboarder():
             "sleeper_client",
             "yahoo_client",
             "onboarding_service",
+            "lineup_backfill",
             "handler",
         ]
     }
@@ -51,6 +52,7 @@ def _bootstrap_onboarder():
             "sleeper_client",
             "yahoo_client",
             "onboarding_service",
+            "lineup_backfill",
         ]:
             mod = _load_module(f"onboarder.{bare}", _SRC / f"{bare}.py")
             sys.modules[bare] = mod
@@ -96,6 +98,11 @@ def onboarder_yahoo_client():
 @pytest.fixture(scope="session")
 def onboarder_onboarding_service():
     return sys.modules["onboarder.onboarding_service"]
+
+
+@pytest.fixture(scope="session")
+def onboarder_lineup_backfill():
+    return sys.modules["onboarder.lineup_backfill"]
 
 
 @pytest.fixture(scope="session")

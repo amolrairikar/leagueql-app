@@ -22,6 +22,21 @@ Feature: League metadata and job status APIs (backend/league-metadata, backend/j
     Then the API responds with status 200
     And the response data field "last_refresh_at" is present
 
+  Scenario: Lineup backfill status is reported (backend/league-metadata, backend/yahoo-lineup-backfill)
+    Given a LEAGUE_LOOKUP exists for league "100" platform "SLEEPER" canonical "canon-1"
+    And league "canon-1" has lineup-pending seasons "2025,2019" and failed "2018"
+    When I GET "/leagues/100?platform=SLEEPER"
+    Then the API responds with status 200
+    And the response data field "pending_lineup_seasons" is the list "2019,2025"
+    And the response data field "failed_lineup_seasons" is the list "2018"
+
+  Scenario: A league without lineup backfill status returns empty lists (backend/league-metadata)
+    Given a LEAGUE_LOOKUP exists for league "100" platform "SLEEPER" canonical "canon-1"
+    When I GET "/leagues/100?platform=SLEEPER"
+    Then the API responds with status 200
+    And the response data field "pending_lineup_seasons" is an empty list
+    And the response data field "failed_lineup_seasons" is an empty list
+
   Scenario: An un-onboarded league returns 404
     When I GET "/leagues/404?platform=SLEEPER"
     Then the API responds with status 404

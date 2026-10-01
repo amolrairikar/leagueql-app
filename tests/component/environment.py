@@ -200,6 +200,10 @@ def _load_handlers(context) -> None:
     context.onboarder_handler = _load_module(
         "onboarder.handler", _SRC / "onboarder" / "handler.py"
     )
+    # backend/yahoo-lineup-backfill: a second Lambda from the onboarder package.
+    context.lineup_backfill = _load_module(
+        "onboarder.lineup_backfill", _SRC / "onboarder" / "lineup_backfill.py"
+    )
 
     # --- processor (overwrites bare ``utils``/``queries`` for its own load) -
     processor_pkg = types.ModuleType("processor")
@@ -290,6 +294,12 @@ def before_all(context):
     )
     kms_key = boto3.client("kms", region_name=REGION).create_key()
     os.environ["YAHOO_KMS_KEY_ID"] = kms_key["KeyMetadata"]["KeyId"]
+    # backend/yahoo-lineup-backfill: Yahoo onboards/refreshes queue a lineup backfill here.
+    context.sqs = boto3.client("sqs", region_name=REGION)
+    context.backfill_queue_url = context.sqs.create_queue(
+        QueueName="lineup-backfill-test"
+    )["QueueUrl"]
+    os.environ["LINEUP_BACKFILL_QUEUE_URL"] = context.backfill_queue_url
 
     context.region = REGION
     context.table_name = TABLE_NAME
@@ -351,6 +361,7 @@ def after_scenario(context, scenario):
     context.main.app.dependency_overrides.pop(routes.get_authenticated_user, None)
     _clear_table(context)
     _clear_bucket(context)
+    context.sqs.purge_queue(QueueUrl=context.backfill_queue_url)
 
 
 def after_all(context):

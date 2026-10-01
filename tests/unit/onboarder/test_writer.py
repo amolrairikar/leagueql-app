@@ -438,3 +438,137 @@ class TestWriteLeagueRecordsAutoRefresh:
         assert len(items) == 1
         assert "Update" in items[0]
         assert items[0]["Update"]["Key"]["SK"] == {"S": "LEAGUE_LOOKUP"}
+
+
+class TestWriteLeagueRecordsLineupPending:
+    """backend/yahoo-lineup-backfill: Yahoo seasons are marked lineup-pending on METADATA."""
+
+    @staticmethod
+    def _items(onboarder_writer, **kwargs):
+        mock_ddb = MagicMock()
+        with patch.object(onboarder_writer, "_dynamodb", mock_ddb):
+            onboarder_writer.write_league_records(
+                league_id="123",
+                platform="YAHOO",
+                canonical_league_id="canonical-abc",
+                seasons=["2024", "2025"],
+                **kwargs,
+            )
+        return mock_ddb.transact_write_items.call_args[1]["TransactItems"]
+
+    @staticmethod
+    def _metadata_update(items):
+        return next(
+            i["Update"]
+            for i in items
+            if "Update" in i and i["Update"]["Key"]["SK"] == {"S": "METADATA"}
+        )
+
+    def test_onboard_marks_seasons_pending(self, onboarder_writer):
+        items = self._items(
+            onboarder_writer,
+            request_type="ONBOARD",
+            lineup_pending_seasons=["2024", "2025"],
+        )
+        assert items[0]["Put"]["Item"]["pending_lineup_seasons"] == {
+            "SS": ["2024", "2025"]
+        }
+
+    def test_onboard_without_pending_omits_attribute(self, onboarder_writer):
+        items = self._items(onboarder_writer, request_type="ONBOARD")
+        assert "pending_lineup_seasons" not in items[0]["Put"]["Item"]
+
+    def test_refresh_adds_pending_and_clears_failed(self, onboarder_writer):
+        items = self._items(
+            onboarder_writer,
+            request_type="REFRESH",
+            lineup_pending_seasons=["2019", "2025"],
+        )
+        update = self._metadata_update(items)
+        assert update["UpdateExpression"] == (
+            "ADD pending_lineup_seasons :pl DELETE failed_lineup_seasons :pl"
+        )
+        assert update["ExpressionAttributeValues"] == {":pl": {"SS": ["2019", "2025"]}}
+
+    def test_refresh_combines_auto_refresh_and_pending_in_one_update(
+        self, onboarder_writer
+    ):
+        # A transaction may touch METADATA only once.
+        items = self._items(
+            onboarder_writer,
+            request_type="REFRESH",
+            auto_refresh=False,
+            lineup_pending_seasons=["2025"],
+        )
+        metadata_ops = [
+            i
+            for i in items
+            if "Update" in i and i["Update"]["Key"]["SK"] == {"S": "METADATA"}
+        ]
+        assert len(metadata_ops) == 1
+        update = metadata_ops[0]["Update"]
+        assert update["UpdateExpression"] == (
+            "SET auto_refresh_enabled = :ar "
+            "ADD pending_lineup_seasons :pl DELETE failed_lineup_seasons :pl"
+        )
+        assert update["ExpressionAttributeValues"][":ar"] == {"BOOL": False}
+
+    def test_migrate_marks_destination_seasons_pending(self, onboarder_writer):
+        items = self._items(
+            onboarder_writer,
+            request_type="MIGRATE",
+            lineup_pending_seasons=["2025"],
+        )
+        assert items[0]["Put"]["Item"]["SK"] == {"S": "LEAGUE_LOOKUP"}
+        update = self._metadata_update(items)
+        assert update["UpdateExpression"] == (
+            "ADD pending_lineup_seasons :pl DELETE failed_lineup_seasons :pl"
+        )
+
+
+class TestReadFailedLineupSeasons:
+    def test_returns_sorted_failed_seasons(self, onboarder_writer):
+        mock_ddb = MagicMock()
+        mock_ddb.get_item.return_value = {
+            "Item": {"failed_lineup_seasons": {"SS": ["2021", "2019"]}}
+        }
+        with patch.object(onboarder_writer, "_dynamodb", mock_ddb):
+            assert onboarder_writer.read_failed_lineup_seasons("abc") == [
+                "2019",
+                "2021",
+            ]
+        key = mock_ddb.get_item.call_args.kwargs["Key"]
+        assert key == {"PK": {"S": "LEAGUE#abc"}, "SK": {"S": "METADATA"}}
+
+    @pytest.mark.parametrize("response", [{}, {"Item": {}}])
+    def test_empty_when_absent(self, onboarder_writer, response):
+        mock_ddb = MagicMock()
+        mock_ddb.get_item.return_value = response
+        with patch.object(onboarder_writer, "_dynamodb", mock_ddb):
+            assert onboarder_writer.read_failed_lineup_seasons("abc") == []
+
+
+class TestSendLineupBackfillMessage:
+    def test_sends_message_with_attempt_and_delay(self, onboarder_writer, monkeypatch):
+        monkeypatch.setenv("LINEUP_BACKFILL_QUEUE_URL", "https://sqs/queue")
+        mock_sqs = MagicMock()
+        with patch.object(onboarder_writer, "_sqs", mock_sqs):
+            onboarder_writer.send_lineup_backfill_message(
+                "abc", attempt=2, delay_seconds=900
+            )
+        kwargs = mock_sqs.send_message.call_args.kwargs
+        assert kwargs["QueueUrl"] == "https://sqs/queue"
+        assert json.loads(kwargs["MessageBody"]) == {
+            "canonical_league_id": "abc",
+            "attempt": 2,
+        }
+        assert kwargs["DelaySeconds"] == 900
+
+    def test_defaults(self, onboarder_writer, monkeypatch):
+        monkeypatch.setenv("LINEUP_BACKFILL_QUEUE_URL", "https://sqs/queue")
+        mock_sqs = MagicMock()
+        with patch.object(onboarder_writer, "_sqs", mock_sqs):
+            onboarder_writer.send_lineup_backfill_message("abc")
+        kwargs = mock_sqs.send_message.call_args.kwargs
+        assert json.loads(kwargs["MessageBody"])["attempt"] == 0
+        assert kwargs["DelaySeconds"] == 0

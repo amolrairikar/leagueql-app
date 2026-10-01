@@ -28,3 +28,9 @@ Feature: Player records (frontend/player-records)
     Given the player data fails to load
     When I open the player records page
     Then I see "Failed to load scoring records."
+
+  Scenario: A Yahoo season with pending player scores is left out with a note (frontend/lineup-data-status)
+    Given a Yahoo league whose 2024 player scores are still loading
+    When I open the Yahoo player records page
+    Then I see the note "Player scores for 2024 are still loading"
+    And I do not see the player "Pat Quarterback"

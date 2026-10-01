@@ -10,6 +10,7 @@ Feature: Onboard-to-processed pipeline (backend/league-onboarding, backend/data-
     Then the onboarder returns status 200
     And a LEAGUE_LOOKUP exists for onboarded league "100" platform "SLEEPER"
     And a METADATA item exists for the onboarded league
+    And no lineup backfill is queued
     When the processor processes the onboarded league
     Then a JOB_STATUS "COMPLETED" exists for the job
     And the league has at least one "TEAMS#2024" item
@@ -39,6 +40,9 @@ Feature: Onboard-to-processed pipeline (backend/league-onboarding, backend/data-
     Then the onboarder returns status 200
     And a LEAGUE_LOOKUP exists for onboarded league "431" platform "YAHOO"
     And a METADATA item exists for the onboarded league
+    # backend/league-onboarding: weekly lineups are deferred to the lineup backfill.
+    And the onboarded league has lineup-pending seasons "2024"
+    And a lineup backfill is queued for the onboarded league
     When the processor processes the onboarded league
     Then a JOB_STATUS "COMPLETED" exists for the job
     And the league has at least one "TEAMS#2024" item
@@ -278,3 +282,36 @@ Feature: Onboard-to-processed pipeline (backend/league-onboarding, backend/data-
     And a JOB_STATUS "FAILED" exists for the job
     And the JOB_STATUS failure_code is "NOT_STARTED"
     And no METADATA item exists for the onboarded league
+
+  Scenario: The Yahoo lineup backfill fills in weekly player points (backend/yahoo-lineup-backfill, backend/data-processing-pipeline)
+    Given Yahoo player metadata and stats are cached in S3
+    When the onboarder runs an ONBOARD for "YAHOO" league "433" with fixture "yahoo/raw_data_2024_no_rosters.json"
+    Then the onboarder returns status 200
+    And the onboarded league has lineup-pending seasons "2024"
+    And a lineup backfill is queued for the onboarded league
+    And the default caller is a member of the onboarded league
+    When the processor processes the onboarded league
+    And the lineup backfill runs with Yahoo rosters from fixture "yahoo/backfill_rosters_2024.json"
+    Then the lineup backfill outcome is "completed"
+    And the lineup store for season "2024" has weeks "1,15"
+    And the manifest asks the processor to rebuild season "2024"
+    And the onboarded league has no lineup-pending seasons
+    When the processor processes the onboarded league
+    Then the league has at least one "MATCHUPS#2024" item
+    When I GET "/leagues/433/query?platform=YAHOO&queryType=MATCHUPS%232024%23WEEK%2301"
+    Then the API responds with status 200
+    And the week 1 matchup lists "Josh QB" as a starter with 25 points
+
+  Scenario: A league deleted mid-backfill is dropped without leaving data behind (backend/yahoo-lineup-backfill, backend/delete-league)
+    When the onboarder runs an ONBOARD for "YAHOO" league "435" with fixture "yahoo/raw_data_2024_no_rosters.json"
+    And the league is deleted while the lineup backfill fetches Yahoo rosters from fixture "yahoo/backfill_rosters_2024.json"
+    Then the lineup backfill outcome is "league_deleted"
+    And no METADATA item exists for the onboarded league
+    And no lineup store exists for the onboarded league
+
+  Scenario: A throttled Yahoo lineup backfill leaves the season pending and retries later (backend/yahoo-lineup-backfill)
+    When the onboarder runs an ONBOARD for "YAHOO" league "434" with fixture "yahoo/raw_data_2024_no_rosters.json"
+    And the lineup backfill runs and Yahoo throttles it
+    Then the lineup backfill outcome is "throttled"
+    And the onboarded league has lineup-pending seasons "2024"
+    And a throttled lineup backfill retry is queued for the onboarded league

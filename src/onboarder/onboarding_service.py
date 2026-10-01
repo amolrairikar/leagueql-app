@@ -5,7 +5,12 @@ import uuid
 from espn_client import ESPNClient
 from sleeper_client import SleeperClient
 from utils import logger
-from writer import upload_results_to_s3, write_league_records
+from writer import (
+    read_failed_lineup_seasons,
+    send_lineup_backfill_message,
+    upload_results_to_s3,
+    write_league_records,
+)
 from yahoo_client import YahooClient
 
 
@@ -90,6 +95,7 @@ class OnboardingService:
         # from the fetched data keeps METADATA/LEAGUE_LOOKUP consistent with the S3 files
         # written by upload_results_to_s3 (which also groups by the seasons in raw_data).
         onboarded_seasons = sorted({str(record["season"]) for record in raw_data})
+        lineup_pending_seasons = self._lineup_pending_seasons(onboarded_seasons)
         logger.info("Updating job onboarding status in DynamoDB")
         write_league_records(
             league_id=self.league_id,
@@ -100,6 +106,7 @@ class OnboardingService:
             is_new_season_refresh=self.is_new_season_refresh,
             owner_user_id=self.owner_user_id,
             auto_refresh=self.auto_refresh,
+            lineup_pending_seasons=lineup_pending_seasons,
         )
         logger.info("Wrote job onboarding status to DynamoDB")
         logger.info(
@@ -115,6 +122,37 @@ class OnboardingService:
             reprocess_all=self.reprocess_all,
         )
         logger.info("Wrote raw data to S3")
+        if lineup_pending_seasons:
+            self._queue_lineup_backfill()
+
+    def _lineup_pending_seasons(self, onboarded_seasons: list[str]) -> list[str]:
+        """Seasons the Yahoo lineup backfill must fill in (backend/yahoo-lineup-backfill).
+
+        Yahoo onboards/refreshes no longer fetch per-team weekly rosters, so every onboarded
+        season becomes lineup-pending. A REFRESH also re-queues seasons whose backfill
+        previously exhausted its retries. Other platforms fetch lineups inline: none.
+        """
+        if self.platform != "YAHOO":
+            return []
+        seasons = set(onboarded_seasons)
+        if self.request_type == "REFRESH":
+            seasons |= set(read_failed_lineup_seasons(self.canonical_league_id))
+        return sorted(seasons)
+
+    def _queue_lineup_backfill(self) -> None:
+        """Queue the league's lineup backfill; best-effort (a later refresh re-queues)."""
+        try:
+            send_lineup_backfill_message(self.canonical_league_id)
+            logger.info(
+                "Queued lineup backfill: canonical_league_id=%s",
+                self.canonical_league_id,
+            )
+        except Exception as e:  # noqa: BLE001 — the onboard itself already succeeded
+            logger.error(
+                "Failed to queue lineup backfill for %s: %s",
+                self.canonical_league_id,
+                e,
+            )
 
     def _build_client(
         self,

@@ -18,6 +18,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from '@/components/ui/chart';
+import { LineupPendingNote } from '@/features/lineup_backfill/lineup-pending-note';
 import type {
   MatchupPreviewData,
   TeamPreviewStats,
@@ -550,11 +551,14 @@ export function MatchupPreviewCard({
   left,
   right,
   data,
+  lineupPendingSeason,
   onClose,
 }: {
   left: PreviewSide;
   right: PreviewSide;
   data: MatchupPreviewData;
+  /** Set when the season's player scores are still loading (frontend/lineup-data-status). */
+  lineupPendingSeason?: string;
   onClose?: () => void;
 }) {
   return (
@@ -687,10 +691,14 @@ export function MatchupPreviewCard({
       {/* Top scorers */}
       <Card className="p-4">
         <SecLabel>Top scorers this season</SecLabel>
-        <div className="grid grid-cols-1 sm:grid-cols-2">
-          <TopScorersColumn side={left} stats={data.teamA} align="left" />
-          <TopScorersColumn side={right} stats={data.teamB} align="right" />
-        </div>
+        {lineupPendingSeason ? (
+          <LineupPendingNote seasons={[lineupPendingSeason]} />
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2">
+            <TopScorersColumn side={left} stats={data.teamA} align="left" />
+            <TopScorersColumn side={right} stats={data.teamB} align="right" />
+          </div>
+        )}
       </Card>
     </div>
   );

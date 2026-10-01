@@ -1060,6 +1060,25 @@ components:
             are always auto-refreshed). Drives the connect-form checkbox prefill and the sidebar
             auto-refresh toggle. False (default) on leagues onboarded before opt-in.
           example: false
+        pending_lineup_seasons:
+          type: array
+          items:
+            type: string
+          description: >
+            Seasons (ascending) whose weekly lineups and player points are still being backfilled
+            (backend/yahoo-lineup-backfill). Yahoo only; empty for every other league and once a
+            Yahoo league is fully backfilled. Drives the lineup notification bell and the
+            per-feature pending state.
+          example: ["2019", "2020"]
+        failed_lineup_seasons:
+          type: array
+          items:
+            type: string
+          description: >
+            Seasons (ascending) whose lineup backfill couldn't finish yet (repeated Yahoo
+            throttling or a permanent error). They are retried automatically on the next
+            scheduled refresh. Empty when there are none.
+          example: []
 
     APIResponse:
       type: object

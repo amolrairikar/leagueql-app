@@ -6,7 +6,12 @@ import Matchups from '../matchups';
 
 import type { MatchupItem } from '@/components/api/types';
 import { LEAGUE, MATCHUPS, WEEKLY_STANDINGS } from '@/test/fixtures';
-import { leagueQuery, leagueQueryError, server } from '@/test/msw/server';
+import {
+  leagueMetadata,
+  leagueQuery,
+  leagueQueryError,
+  server,
+} from '@/test/msw/server';
 import { renderRoute } from '@/test/render';
 
 const feature = loadFeature('src/features/matchups/__tests__/matchups.feature');
@@ -313,6 +318,92 @@ defineFeature(feature, (test) => {
     });
     then('I see the head-to-head consistency stat', async () => {
       expect(await screen.findByText('Consistency (σ)')).toBeTruthy();
+    });
+  });
+
+  // frontend/lineup-data-status: Yahoo seasons whose lineups are still backfilling.
+  const YAHOO_LEAGUE = { ...LEAGUE, platform: 'YAHOO' as const };
+  const givenYahooSeason = (pending: string[]) => () => {
+    server.use(
+      leagueMetadata({ seasons: ['2024'], pending_lineup_seasons: pending }),
+      leagueQuery({
+        MATCHUPS: [forWeek(1, 120, 100), forWeek(2, 0, 0)],
+        WEEKLY_STANDINGS,
+      }),
+    );
+  };
+  const openYahooMatchups = async () => {
+    await renderRoute(<Matchups />, {
+      route: '/matchups',
+      league: YAHOO_LEAGUE,
+    });
+  };
+  const openWeek1 = async () => {
+    await userEvent.click(await screen.findByRole('button', { name: 'Wk 1' }));
+    await userEvent.click(await screen.findByText(/View box score/));
+  };
+
+  test('A Yahoo season with pending player scores shows a box score placeholder (frontend/lineup-data-status)', ({
+    given,
+    when,
+    and,
+    then,
+    but,
+  }) => {
+    given(
+      'a Yahoo season whose player scores are still loading',
+      givenYahooSeason(['2024']),
+    );
+    when('I open the Yahoo matchups page', openYahooMatchups);
+    and('I open the week 1 matchup', openWeek1);
+    then(/^I see the box score placeholder "(.*)"$/, async (text) => {
+      expect((await screen.findAllByText(text)).length).toBeGreaterThan(0);
+    });
+    and(/^I see the team score "(.*)"$/, async (score) => {
+      expect((await screen.findAllByText(score)).length).toBeGreaterThan(0);
+    });
+    but(/^I do not see the player "(.*)"$/, (name) => {
+      expect(screen.queryByText(name)).not.toBeInTheDocument();
+    });
+  });
+
+  test('A Yahoo season with backfilled player scores shows the lineups (frontend/lineup-data-status)', ({
+    given,
+    when,
+    and,
+    then,
+    but,
+  }) => {
+    given(
+      'a Yahoo season whose player scores are loaded',
+      givenYahooSeason([]),
+    );
+    when('I open the Yahoo matchups page', openYahooMatchups);
+    and('I open the week 1 matchup', openWeek1);
+    then(/^I see the player "(.*)"$/, async (name) => {
+      expect((await screen.findAllByText(name)).length).toBeGreaterThan(0);
+    });
+    but(/^I do not see the box score placeholder "(.*)"$/, (text) => {
+      expect(screen.queryByText(text)).not.toBeInTheDocument();
+    });
+  });
+
+  test('A Yahoo season with pending player scores notes the missing top scorers (frontend/lineup-data-status)', ({
+    given,
+    when,
+    and,
+    then,
+  }) => {
+    given(
+      'a Yahoo season whose player scores are still loading',
+      givenYahooSeason(['2024']),
+    );
+    when('I open the Yahoo matchups page', openYahooMatchups);
+    and('I open the live-week matchup', async () => {
+      await userEvent.click(await screen.findByText(/View matchup preview/));
+    });
+    then(/^I see the note "(.*)"$/, async (text) => {
+      expect(await screen.findByText(new RegExp(text))).toBeInTheDocument();
     });
   });
 });

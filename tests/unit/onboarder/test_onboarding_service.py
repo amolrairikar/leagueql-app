@@ -382,3 +382,105 @@ class TestOnboardingServiceRun:
             svc.run()
 
         assert mock_ddb.call_args.kwargs["auto_refresh"] is True
+
+
+class TestLineupBackfillQueueing:
+    """backend/yahoo-lineup-backfill: Yahoo runs mark seasons pending and queue the backfill."""
+
+    @staticmethod
+    def _service(module, platform="YAHOO", request_type="ONBOARD"):
+        svc = module.OnboardingService.__new__(module.OnboardingService)
+        svc.league_id = "100"
+        svc.platform = platform
+        svc.request_type = request_type
+        svc.is_new_season_refresh = False
+        svc.owner_user_id = "user_1"
+        svc.reprocess_all = False
+        svc.auto_refresh = None
+        svc.latest_season = None
+        svc.canonical_league_id = "canon-1"
+        svc.client = MagicMock()
+        svc.client.get_seasons.return_value = ["2024", "2025"]
+
+        async def fake_fetch():
+            return [
+                {"season": "2024", "data_type": "settings", "data": {}},
+                {"season": "2025", "data_type": "settings", "data": {}},
+            ]
+
+        svc.client.fetch_all = fake_fetch
+        return svc
+
+    def test_yahoo_onboard_marks_all_seasons_pending_and_queues(
+        self, onboarder_onboarding_service
+    ):
+        svc = self._service(onboarder_onboarding_service)
+        with (
+            patch.object(
+                onboarder_onboarding_service, "write_league_records"
+            ) as mock_ddb,
+            patch.object(onboarder_onboarding_service, "upload_results_to_s3"),
+            patch.object(
+                onboarder_onboarding_service, "read_failed_lineup_seasons"
+            ) as mock_failed,
+            patch.object(
+                onboarder_onboarding_service, "send_lineup_backfill_message"
+            ) as mock_send,
+        ):
+            svc.run()
+        assert mock_ddb.call_args.kwargs["lineup_pending_seasons"] == ["2024", "2025"]
+        mock_failed.assert_not_called()
+        mock_send.assert_called_once_with("canon-1")
+
+    def test_yahoo_refresh_requeues_failed_seasons(self, onboarder_onboarding_service):
+        svc = self._service(onboarder_onboarding_service, request_type="REFRESH")
+        with (
+            patch.object(
+                onboarder_onboarding_service, "write_league_records"
+            ) as mock_ddb,
+            patch.object(onboarder_onboarding_service, "upload_results_to_s3"),
+            patch.object(
+                onboarder_onboarding_service,
+                "read_failed_lineup_seasons",
+                return_value=["2019"],
+            ),
+            patch.object(onboarder_onboarding_service, "send_lineup_backfill_message"),
+        ):
+            svc.run()
+        assert mock_ddb.call_args.kwargs["lineup_pending_seasons"] == [
+            "2019",
+            "2024",
+            "2025",
+        ]
+
+    def test_queue_failure_does_not_fail_run(self, onboarder_onboarding_service):
+        svc = self._service(onboarder_onboarding_service)
+        with (
+            patch.object(onboarder_onboarding_service, "write_league_records"),
+            patch.object(
+                onboarder_onboarding_service, "upload_results_to_s3"
+            ) as mock_s3,
+            patch.object(
+                onboarder_onboarding_service,
+                "send_lineup_backfill_message",
+                side_effect=RuntimeError("sqs down"),
+            ),
+        ):
+            svc.run()
+        mock_s3.assert_called_once()
+
+    @pytest.mark.parametrize("platform", ["ESPN", "SLEEPER"])
+    def test_other_platforms_not_queued(self, onboarder_onboarding_service, platform):
+        svc = self._service(onboarder_onboarding_service, platform=platform)
+        with (
+            patch.object(
+                onboarder_onboarding_service, "write_league_records"
+            ) as mock_ddb,
+            patch.object(onboarder_onboarding_service, "upload_results_to_s3"),
+            patch.object(
+                onboarder_onboarding_service, "send_lineup_backfill_message"
+            ) as mock_send,
+        ):
+            svc.run()
+        assert mock_ddb.call_args.kwargs["lineup_pending_seasons"] == []
+        mock_send.assert_not_called()
