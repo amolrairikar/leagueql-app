@@ -400,6 +400,17 @@ module "lineup-backfill-lambda-role" {
         ]
       },
       {
+        # Cleans up lineup stores checkpointed after the league was deleted mid-run.
+        Sid    = "DeleteOrphanedLineupStores"
+        Effect = "Allow"
+        Action = [
+          "s3:DeleteObject"
+        ]
+        Resource = [
+          "${local.primary_bucket_arn}/raw-api-data/*/yahoo_rosters/*"
+        ]
+      },
+      {
         # METADATA bookkeeping/lease, plus the token engine storing a refreshed Yahoo token.
         Sid    = "ReadWriteDynamoDB"
         Effect = "Allow"

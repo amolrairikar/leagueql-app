@@ -108,6 +108,43 @@ def step_run_backfill_throttled(context):
     _run_backfill(context, lambda url, **_: _Response(999))
 
 
+def _delete_league(context):
+    """Mirror DELETE /leagues: drop METADATA and every raw S3 object for the league."""
+    context.ddb_resource.Table(context.table_name).delete_item(
+        Key={"PK": f"LEAGUE#{context.canonical}", "SK": "METADATA"}
+    )
+    listed = context.s3.list_objects_v2(
+        Bucket=context.bucket_name, Prefix=f"raw-api-data/{context.canonical}/"
+    )
+    for obj in listed.get("Contents", []):
+        context.s3.delete_object(Bucket=context.bucket_name, Key=obj["Key"])
+
+
+@when(
+    'the league is deleted while the lineup backfill fetches Yahoo rosters from fixture "{fixture}"'
+)
+def step_run_backfill_league_deleted(context, fixture):
+    responses = _yahoo_responses(context, fixture)
+    deleted = []
+
+    def get(url, **_):
+        if not deleted:
+            _delete_league(context)
+            deleted.append(True)
+        return _Response(200, responses[url])
+
+    _run_backfill(context, get)
+
+
+@then("no lineup store exists for the onboarded league")
+def step_no_lineup_store(context):
+    listed = context.s3.list_objects_v2(
+        Bucket=context.bucket_name,
+        Prefix=f"raw-api-data/{context.canonical}/yahoo_rosters/",
+    )
+    assert not listed.get("Contents"), listed
+
+
 @then('the lineup backfill outcome is "{outcome}"')
 def step_backfill_outcome(context, outcome):
     assert context.backfill_result == {"outcomes": [outcome]}, context.backfill_result

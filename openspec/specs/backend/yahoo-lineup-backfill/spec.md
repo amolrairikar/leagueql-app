@@ -99,6 +99,11 @@ the league still exists, it SHALL mark the season failed.
 - **WHEN** the league was deleted after the backfill was queued
 - **THEN** the run exits without fetching or writing anything
 
+#### Scenario: League deleted during a run
+- **WHEN** the league is deleted while a backfill run is fetching or publishing its season
+- **THEN** the run stops without retrying, does not recreate the league's metadata, and removes
+  any lineup store it saved after the delete
+
 ### Requirement: Publish a completed season
 When all of a season's finished weeks are in its lineup store, the backfill SHALL have the
 processor rebuild only that season (`backend/data-processing-pipeline` "Select seasons to

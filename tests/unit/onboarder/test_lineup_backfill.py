@@ -77,7 +77,17 @@ class _FakeS3:
         self.puts.append(Key)
 
     def copy_object(self, **kwargs):
+        if kwargs["CopySource"]["Key"] not in self.objects:
+            raise _client_error("NoSuchKey")
         self.copies.append(kwargs)
+
+    def list_objects_v2(self, Bucket, Prefix):
+        keys = [k for k in self.objects if k.startswith(Prefix)]
+        return {"Contents": [{"Key": k} for k in keys]} if keys else {}
+
+    def delete_objects(self, Bucket, Delete):
+        for obj in Delete["Objects"]:
+            self.objects.pop(obj["Key"], None)
 
 
 class _Response:
@@ -174,6 +184,13 @@ class TestLease:
         assert lb.run_backfill(LEAGUE, 0, ctx) == "league_missing"
         env.ddb.update_item.assert_not_called()
         env.get.assert_not_called()
+
+    def test_missing_league_cleans_up_orphaned_store(self, lb, env, ctx):
+        env.ddb.get_item.return_value = {}
+        env.s3.objects[STORE_KEY] = {"weeks": {"1": []}}
+        assert lb.run_backfill(LEAGUE, 0, ctx) == "league_missing"
+        assert STORE_KEY not in env.s3.objects
+        assert SEASON_KEY in env.s3.objects
 
     def test_lease_held_exits_without_fetching(self, lb, env, ctx):
         env.ddb.update_item.side_effect = _client_error(
@@ -300,6 +317,52 @@ class TestCompletion:
         assert "DELETE pending_lineup_seasons :s" in _update_expressions(env.ddb)
         # Last pending season -> no further message.
         env.send.assert_not_called()
+
+
+class TestLeagueDeletedMidRun:
+    def test_missing_manifest_drops_league_and_cleans_up_store(self, lb, env, ctx):
+        # The delete removed the manifest (and METADATA) after the season file was read.
+        del env.s3.objects[MANIFEST_KEY]
+        assert lb.run_backfill(LEAGUE, 0, ctx) == "league_deleted"
+        assert STORE_KEY not in env.s3.objects
+        # Never marks complete (which would recreate a ghost METADATA item) or re-queues.
+        assert "DELETE pending_lineup_seasons :s" not in _update_expressions(env.ddb)
+        env.send.assert_not_called()
+        assert _update_expressions(env.ddb)[-1] == "REMOVE lineup_backfill_lease_until"
+
+    def test_copy_unexpected_error_propagates(self, lb, env, ctx):
+        env.s3.copy_object = MagicMock(side_effect=_client_error("AccessDenied"))
+        with pytest.raises(botocore.exceptions.ClientError):
+            lb.run_backfill(LEAGUE, 0, ctx)
+
+    def test_metadata_gone_at_completion(self, lb, env, ctx):
+        env.ddb.update_item.side_effect = [
+            None,  # acquire lease
+            _client_error("ConditionalCheckFailedException"),  # mark complete
+            _client_error("ConditionalCheckFailedException"),  # release lease
+        ]
+        assert lb.run_backfill(LEAGUE, 0, ctx) == "league_deleted"
+        complete = env.ddb.update_item.call_args_list[1].kwargs
+        assert complete["ConditionExpression"] == "attribute_exists(PK)"
+        assert STORE_KEY not in env.s3.objects
+
+    def test_metadata_gone_when_marking_failed(self, lb, env, ctx):
+        env.get.side_effect = [_Response(403)]
+        env.ddb.update_item.side_effect = [
+            None,
+            _client_error("ConditionalCheckFailedException"),
+            _client_error("ConditionalCheckFailedException"),
+        ]
+        assert lb.run_backfill(LEAGUE, 0, ctx) == "league_deleted"
+
+    def test_season_set_update_unexpected_error_propagates(self, lb, env, ctx):
+        env.ddb.update_item.side_effect = [
+            None,
+            _client_error("InternalServerError"),
+            None,
+        ]
+        with pytest.raises(botocore.exceptions.ClientError):
+            lb.run_backfill(LEAGUE, 0, ctx)
 
 
 class TestThrottle:

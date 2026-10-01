@@ -302,6 +302,13 @@ Feature: Onboard-to-processed pipeline (backend/league-onboarding, backend/data-
     Then the API responds with status 200
     And the week 1 matchup lists "Josh QB" as a starter with 25 points
 
+  Scenario: A league deleted mid-backfill is dropped without leaving data behind (backend/yahoo-lineup-backfill, backend/delete-league)
+    When the onboarder runs an ONBOARD for "YAHOO" league "435" with fixture "yahoo/raw_data_2024_no_rosters.json"
+    And the league is deleted while the lineup backfill fetches Yahoo rosters from fixture "yahoo/backfill_rosters_2024.json"
+    Then the lineup backfill outcome is "league_deleted"
+    And no METADATA item exists for the onboarded league
+    And no lineup store exists for the onboarded league
+
   Scenario: A throttled Yahoo lineup backfill leaves the season pending and retries later (backend/yahoo-lineup-backfill)
     When the onboarder runs an ONBOARD for "YAHOO" league "434" with fixture "yahoo/raw_data_2024_no_rosters.json"
     And the lineup backfill runs and Yahoo throttles it

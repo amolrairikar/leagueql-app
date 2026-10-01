@@ -70,6 +70,10 @@ class OutOfTime(Exception):
     """The Lambda is close to its timeout; progress is saved and the run re-queued."""
 
 
+class LeagueDeleted(Exception):
+    """The league (METADATA / raw data) was deleted while the run was in progress."""
+
+
 def _request_interval() -> float:
     """Seconds between Yahoo requests (paced well under Yahoo's throttle)."""
     return float(os.environ.get("LINEUP_BACKFILL_REQUEST_INTERVAL", "1.0"))
@@ -135,24 +139,39 @@ def _release_lease(canonical_league_id: str, lease_until: int) -> None:
     except botocore.exceptions.ClientError as e:
         if e.response["Error"]["Code"] != "ConditionalCheckFailedException":
             raise
-        logger.warning("Lineup backfill lease for %s was retaken", canonical_league_id)
+        logger.warning(
+            "Lineup backfill lease for %s was retaken or the league was deleted",
+            canonical_league_id,
+        )
+
+
+def _update_season_sets(
+    canonical_league_id: str, season: str, update_expression: str
+) -> None:
+    """Apply a pending/failed set update, never recreating a deleted league's METADATA."""
+    try:
+        _dynamodb.update_item(
+            TableName=_table(),
+            Key=_metadata_key(canonical_league_id),
+            UpdateExpression=update_expression,
+            ConditionExpression="attribute_exists(PK)",
+            ExpressionAttributeValues={":s": {"SS": [season]}},
+        )
+    except botocore.exceptions.ClientError as e:
+        if e.response["Error"]["Code"] == "ConditionalCheckFailedException":
+            raise LeagueDeleted(canonical_league_id) from e
+        raise
 
 
 def _mark_complete(canonical_league_id: str, season: str) -> None:
-    _dynamodb.update_item(
-        TableName=_table(),
-        Key=_metadata_key(canonical_league_id),
-        UpdateExpression="DELETE pending_lineup_seasons :s",
-        ExpressionAttributeValues={":s": {"SS": [season]}},
-    )
+    _update_season_sets(canonical_league_id, season, "DELETE pending_lineup_seasons :s")
 
 
 def _mark_failed(canonical_league_id: str, season: str) -> None:
-    _dynamodb.update_item(
-        TableName=_table(),
-        Key=_metadata_key(canonical_league_id),
-        UpdateExpression="DELETE pending_lineup_seasons :s ADD failed_lineup_seasons :s",
-        ExpressionAttributeValues={":s": {"SS": [season]}},
+    _update_season_sets(
+        canonical_league_id,
+        season,
+        "DELETE pending_lineup_seasons :s ADD failed_lineup_seasons :s",
     )
 
 
@@ -180,6 +199,16 @@ def _write_store(canonical_league_id: str, season: str, store: dict) -> None:
         Body=json.dumps(store),
         ContentType="application/json",
     )
+
+
+def _delete_lineup_stores(canonical_league_id: str) -> None:
+    """Remove lineup stores a run checkpointed after its league was deleted."""
+    response = _s3.list_objects_v2(
+        Bucket=_bucket(), Prefix=f"raw-api-data/{canonical_league_id}/yahoo_rosters/"
+    )
+    keys = [{"Key": obj["Key"]} for obj in response.get("Contents", [])]
+    if keys:
+        _s3.delete_objects(Bucket=_bucket(), Delete={"Objects": keys, "Quiet": True})
 
 
 def completed_weeks(season_records: list[dict]) -> dict[str, list[str]]:
@@ -214,14 +243,19 @@ def _publish_season(canonical_league_id: str, season: str) -> None:
     """
     key = f"raw-api-data/{canonical_league_id}/manifest.json"
     metadata = inject_context({"reprocess_seasons": season})
-    _s3.copy_object(
-        Bucket=_bucket(),
-        Key=key,
-        CopySource={"Bucket": _bucket(), "Key": key},
-        MetadataDirective="REPLACE",
-        Metadata=metadata,
-        ContentType="application/json",
-    )
+    try:
+        _s3.copy_object(
+            Bucket=_bucket(),
+            Key=key,
+            CopySource={"Bucket": _bucket(), "Key": key},
+            MetadataDirective="REPLACE",
+            Metadata=metadata,
+            ContentType="application/json",
+        )
+    except botocore.exceptions.ClientError as e:
+        if e.response["Error"]["Code"] in ("NoSuchKey", "404"):
+            raise LeagueDeleted(canonical_league_id) from e
+        raise
 
 
 # --------------------------------------------------------------------------------------
@@ -313,48 +347,70 @@ def run_backfill(canonical_league_id: str, attempt: int, lambda_context: Any) ->
         logger.info(
             "League %s no longer exists; dropping backfill", canonical_league_id
         )
+        # A run interrupted by the delete (throttle / timeout) may have re-created a store.
+        _delete_lineup_stores(canonical_league_id)
         return "league_missing"
     lease_until = _acquire_lease(canonical_league_id)
     if lease_until is None:
         logger.info("Lineup backfill already running for %s", canonical_league_id)
         return "lease_held"
     try:
-        pending = metadata.get("pending_lineup_seasons", {}).get("SS", [])
-        if not pending:
-            return "nothing_pending"
-        season = _newest(pending)
-        owner = metadata.get("owner_user_id", {}).get("S")
-        try:
-            if not owner:
-                raise PermanentBackfillError("league has no owner to authorize Yahoo")
-            backfill_season(canonical_league_id, season, owner, lambda_context)
-        except YahooThrottled as e:
-            return _handle_throttle(canonical_league_id, season, pending, attempt, e)
-        except PermanentBackfillError as e:
-            logger.error(
-                "Lineup backfill failed permanently: canonical_league_id=%s season=%s %s",
-                canonical_league_id,
-                season,
-                e,
-            )
-            _mark_failed(canonical_league_id, season)
-            return "failed"
-        except OutOfTime:
-            send_lineup_backfill_message(canonical_league_id, attempt=attempt)
-            return "out_of_time"
-
-        _publish_season(canonical_league_id, season)
-        _mark_complete(canonical_league_id, season)
-        logger.info(
-            "Lineup backfill completed: canonical_league_id=%s season=%s",
-            canonical_league_id,
-            season,
+        return _run_pending_season(
+            canonical_league_id, metadata, attempt, lambda_context
         )
-        if set(pending) - {season}:
-            send_lineup_backfill_message(canonical_league_id)
-        return "completed"
+    except LeagueDeleted:
+        logger.info(
+            "League %s was deleted during lineup backfill; dropping it",
+            canonical_league_id,
+        )
+        # Checkpoints written after the delete would otherwise orphan the store in S3.
+        _delete_lineup_stores(canonical_league_id)
+        return "league_deleted"
     finally:
         _release_lease(canonical_league_id, lease_until)
+
+
+def _run_pending_season(
+    canonical_league_id: str,
+    metadata: dict[str, Any],
+    attempt: int,
+    lambda_context: Any,
+) -> str:
+    """Backfill and publish the league's newest pending season (lease already held)."""
+    pending = metadata.get("pending_lineup_seasons", {}).get("SS", [])
+    if not pending:
+        return "nothing_pending"
+    season = _newest(pending)
+    owner = metadata.get("owner_user_id", {}).get("S")
+    try:
+        if not owner:
+            raise PermanentBackfillError("league has no owner to authorize Yahoo")
+        backfill_season(canonical_league_id, season, owner, lambda_context)
+    except YahooThrottled as e:
+        return _handle_throttle(canonical_league_id, season, pending, attempt, e)
+    except PermanentBackfillError as e:
+        logger.error(
+            "Lineup backfill failed permanently: canonical_league_id=%s season=%s %s",
+            canonical_league_id,
+            season,
+            e,
+        )
+        _mark_failed(canonical_league_id, season)
+        return "failed"
+    except OutOfTime:
+        send_lineup_backfill_message(canonical_league_id, attempt=attempt)
+        return "out_of_time"
+
+    _publish_season(canonical_league_id, season)
+    _mark_complete(canonical_league_id, season)
+    logger.info(
+        "Lineup backfill completed: canonical_league_id=%s season=%s",
+        canonical_league_id,
+        season,
+    )
+    if set(pending) - {season}:
+        send_lineup_backfill_message(canonical_league_id)
+    return "completed"
 
 
 def _handle_throttle(

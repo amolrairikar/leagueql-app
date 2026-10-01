@@ -35,6 +35,8 @@ _YAHOO_ONBOARDER_ENV_VARS = [
     "YAHOO_KMS_REGION",
     "YAHOO_CLIENT_ID_SSM_PARAM",
     "YAHOO_REDIRECT_URI",
+    # The onboarder queues the lineup backfill here (backend/yahoo-lineup-backfill).
+    "LINEUP_BACKFILL_QUEUE_URL",
 ]
 
 
@@ -66,7 +68,11 @@ def _copy_onboarder_yahoo_env() -> None:
     for name in _YAHOO_ONBOARDER_ENV_VARS:
         if name in deployed:
             os.environ.setdefault(name, deployed[name])
-    missing = [v for v in _YAHOO_ONBOARDER_ENV_VARS[:3] if not os.environ.get(v)]
+    missing = [
+        v
+        for v in _YAHOO_ONBOARDER_ENV_VARS
+        if v != "YAHOO_REDIRECT_URI" and not os.environ.get(v)
+    ]
     if missing:
         raise OSError(
             f"Missing Yahoo onboarder environment variables: {', '.join(missing)}"
@@ -176,6 +182,8 @@ def before_all(context):
 
     context.table_name = os.environ["DYNAMODB_TABLE_NAME"]
     context.dynamodb_client = boto3.client("dynamodb", region_name="us-east-1")
+    context.s3_client = boto3.client("s3", region_name="us-east-1")
+    context.s3_bucket = os.environ["S3_BUCKET_NAME"]
     context.test_league_id = test_league_id
 
     # Snapshot → cleanup DELETE (may remove the token) → restore, so the test owner's
