@@ -21,6 +21,8 @@ export function leagueMetadata(data: {
   onboarded_at?: string;
   last_refresh_at?: string | null;
   auto_refresh_enabled?: boolean;
+  pending_lineup_seasons?: string[];
+  failed_lineup_seasons?: string[];
 }) {
   return http.get(`${API}/leagues/:id`, () =>
     HttpResponse.json({
@@ -32,6 +34,8 @@ export function leagueMetadata(data: {
         onboarded_at: data.onboarded_at ?? null,
         last_refresh_at: data.last_refresh_at ?? null,
         auto_refresh_enabled: data.auto_refresh_enabled ?? false,
+        pending_lineup_seasons: data.pending_lineup_seasons ?? [],
+        failed_lineup_seasons: data.failed_lineup_seasons ?? [],
       },
     }),
   );

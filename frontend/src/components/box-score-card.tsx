@@ -1,6 +1,7 @@
 import { X } from 'lucide-react';
 
 import { TeamAvatar } from '@/components/team-avatar';
+import { useLineupBackfill } from '@/features/lineup_backfill/use-lineup-backfill';
 import { LineupEfficiencyChip } from '@/features/lineup_efficiency/lineup-efficiency-chip';
 import type { PlayerStat } from '@/features/matchups/api-calls';
 import { UI_COLORS } from '@/lib/color-constants';
@@ -33,6 +34,9 @@ export function BoxScoreCard({
   season: string;
   onClose?: () => void;
 }) {
+  // A Yahoo season whose lineups are still being backfilled has empty starters/bench;
+  // show a placeholder instead of an empty/zero-point lineup (frontend/lineup-data-status).
+  const lineupPending = useLineupBackfill().isLineupUnavailable(season);
   return (
     <div className="relative">
       {onClose && (
@@ -61,7 +65,7 @@ export function BoxScoreCard({
               <div className="text-[11px] text-muted-foreground">
                 {left.teamName}
               </div>
-              <LineupEfficiencyChip side={left} />
+              {!lineupPending && <LineupEfficiencyChip side={left} />}
             </div>
           </div>
           <div className="text-center">
@@ -94,7 +98,7 @@ export function BoxScoreCard({
               <div className="text-[11px] text-muted-foreground">
                 {right.teamName}
               </div>
-              <LineupEfficiencyChip side={right} />
+              {!lineupPending && <LineupEfficiencyChip side={right} />}
             </div>
           </div>
         </div>
@@ -118,7 +122,7 @@ export function BoxScoreCard({
                   <div className="text-[11px] text-muted-foreground">
                     {side.teamName}
                   </div>
-                  <LineupEfficiencyChip side={side} />
+                  {!lineupPending && <LineupEfficiencyChip side={side} />}
                 </div>
                 {side.isWinner && (
                   <span
@@ -132,107 +136,124 @@ export function BoxScoreCard({
                   </span>
                 )}
               </div>
-              <table
-                className="w-full text-[12px]"
-                style={{ tableLayout: 'fixed' }}
-              >
-                <thead>
-                  <tr>
-                    <th
-                      className="text-left text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground px-3.5 py-2 border-b border-border/50 bg-muted"
-                      style={{ width: '52px' }}
-                    >
-                      Pos
-                    </th>
-                    <th className="text-left text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground px-3.5 py-2 border-b border-border/50 bg-muted">
-                      Player
-                    </th>
-                    <th
-                      className="text-right text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground px-3.5 py-2 border-b border-border/50 bg-muted"
-                      style={{ width: '64px' }}
-                    >
-                      Pts
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[...side.starters]
-                    .sort(
-                      (a, b) =>
-                        (FANTASY_POSITION_ORDER[a.fantasy_position ?? ''] ??
-                          99) -
-                        (FANTASY_POSITION_ORDER[b.fantasy_position ?? ''] ??
-                          99),
-                    )
-                    .map((p) => (
-                      <tr
-                        key={p.player_id}
-                        className="border-b border-border/50 last:border-0"
-                      >
-                        <td className="px-3.5 py-2.5 text-[11px] font-medium text-muted-foreground">
-                          {p.fantasy_position ?? p.position}
-                        </td>
-                        <td className="px-3.5 py-2.5 text-[12px] text-foreground truncate">
-                          {p.full_name}
-                        </td>
-                        <td className="px-3.5 py-2.5 text-right text-[12px] tabular-nums text-foreground">
-                          {Number(p.points_scored).toFixed(2)}
-                        </td>
-                      </tr>
-                    ))}
-                  <tr className="bg-muted">
-                    <td
-                      colSpan={2}
-                      className="px-3.5 py-2.5 text-[12px] font-medium text-muted-foreground"
-                    >
+              {lineupPending ? (
+                <div className="text-[12px]">
+                  <div className="px-3.5 py-6 text-center text-[12px] text-muted-foreground italic">
+                    Player scores still loading
+                  </div>
+                  <div className="flex justify-between bg-muted px-3.5 py-2.5">
+                    <span className="font-medium text-muted-foreground">
                       Total
-                    </td>
-                    <td className="px-3.5 py-2.5 text-right font-medium text-foreground tabular-nums">
+                    </span>
+                    <span className="font-medium text-foreground tabular-nums">
                       {Number(side.score).toFixed(2)}
-                    </td>
-                  </tr>
-                  {side.bench.length === 0 &&
-                    platform === 'ESPN' &&
-                    Number(season) < 2018 && (
-                      <tr>
-                        <td
-                          colSpan={3}
-                          className="px-3.5 py-2.5 text-[11px] text-muted-foreground italic"
-                        >
-                          Bench data unavailable for ESPN seasons prior to 2018.
-                        </td>
-                      </tr>
-                    )}
-                  {side.bench.length > 0 && (
-                    <>
-                      <tr className="bg-muted">
-                        <td
-                          colSpan={3}
-                          className="px-3.5 py-1.5 text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground"
-                        >
-                          Bench
-                        </td>
-                      </tr>
-                      {side.bench.map((p) => (
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <table
+                  className="w-full text-[12px]"
+                  style={{ tableLayout: 'fixed' }}
+                >
+                  <thead>
+                    <tr>
+                      <th
+                        className="text-left text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground px-3.5 py-2 border-b border-border/50 bg-muted"
+                        style={{ width: '52px' }}
+                      >
+                        Pos
+                      </th>
+                      <th className="text-left text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground px-3.5 py-2 border-b border-border/50 bg-muted">
+                        Player
+                      </th>
+                      <th
+                        className="text-right text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground px-3.5 py-2 border-b border-border/50 bg-muted"
+                        style={{ width: '64px' }}
+                      >
+                        Pts
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[...side.starters]
+                      .sort(
+                        (a, b) =>
+                          (FANTASY_POSITION_ORDER[a.fantasy_position ?? ''] ??
+                            99) -
+                          (FANTASY_POSITION_ORDER[b.fantasy_position ?? ''] ??
+                            99),
+                      )
+                      .map((p) => (
                         <tr
                           key={p.player_id}
                           className="border-b border-border/50 last:border-0"
                         >
                           <td className="px-3.5 py-2.5 text-[11px] font-medium text-muted-foreground">
-                            {p.position}
+                            {p.fantasy_position ?? p.position}
                           </td>
-                          <td className="px-3.5 py-2.5 text-[12px] text-muted-foreground truncate">
+                          <td className="px-3.5 py-2.5 text-[12px] text-foreground truncate">
                             {p.full_name}
                           </td>
-                          <td className="px-3.5 py-2.5 text-right text-[12px] tabular-nums text-muted-foreground">
+                          <td className="px-3.5 py-2.5 text-right text-[12px] tabular-nums text-foreground">
                             {Number(p.points_scored).toFixed(2)}
                           </td>
                         </tr>
                       ))}
-                    </>
-                  )}
-                </tbody>
-              </table>
+                    <tr className="bg-muted">
+                      <td
+                        colSpan={2}
+                        className="px-3.5 py-2.5 text-[12px] font-medium text-muted-foreground"
+                      >
+                        Total
+                      </td>
+                      <td className="px-3.5 py-2.5 text-right font-medium text-foreground tabular-nums">
+                        {Number(side.score).toFixed(2)}
+                      </td>
+                    </tr>
+                    {side.bench.length === 0 &&
+                      platform === 'ESPN' &&
+                      Number(season) < 2018 && (
+                        <tr>
+                          <td
+                            colSpan={3}
+                            className="px-3.5 py-2.5 text-[11px] text-muted-foreground italic"
+                          >
+                            Bench data unavailable for ESPN seasons prior to
+                            2018.
+                          </td>
+                        </tr>
+                      )}
+                    {side.bench.length > 0 && (
+                      <>
+                        <tr className="bg-muted">
+                          <td
+                            colSpan={3}
+                            className="px-3.5 py-1.5 text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground"
+                          >
+                            Bench
+                          </td>
+                        </tr>
+                        {side.bench.map((p) => (
+                          <tr
+                            key={p.player_id}
+                            className="border-b border-border/50 last:border-0"
+                          >
+                            <td className="px-3.5 py-2.5 text-[11px] font-medium text-muted-foreground">
+                              {p.position}
+                            </td>
+                            <td className="px-3.5 py-2.5 text-[12px] text-muted-foreground truncate">
+                              {p.full_name}
+                            </td>
+                            <td className="px-3.5 py-2.5 text-right text-[12px] tabular-nums text-muted-foreground">
+                              {Number(p.points_scored).toFixed(2)}
+                            </td>
+                          </tr>
+                        ))}
+                      </>
+                    )}
+                  </tbody>
+                </table>
+              )}
             </div>
           ))}
         </div>

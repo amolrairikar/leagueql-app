@@ -6,7 +6,12 @@ import PlayerRecords from '../player-records';
 
 import type { MatchupItem } from '@/components/api/types';
 import { LEAGUE, MATCHUPS } from '@/test/fixtures';
-import { leagueQuery, leagueQueryError, server } from '@/test/msw/server';
+import {
+  leagueMetadata,
+  leagueQuery,
+  leagueQueryError,
+  server,
+} from '@/test/msw/server';
 import { renderRoute } from '@/test/render';
 
 // The played week 1, plus an unplayed 0-0 placeholder week 2 whose starters include a
@@ -161,6 +166,32 @@ defineFeature(feature, (test) => {
     });
     then(/^I see "(.*)"$/, async (text) => {
       expect((await screen.findAllByText(text)).length).toBeGreaterThan(0);
+    });
+  });
+
+  test('A Yahoo season with pending player scores is left out with a note (frontend/lineup-data-status)', ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    given('a Yahoo league whose 2024 player scores are still loading', () => {
+      server.use(
+        leagueMetadata({ seasons: ['2024'], pending_lineup_seasons: ['2024'] }),
+        leagueQuery({ MATCHUPS }),
+      );
+    });
+    when('I open the Yahoo player records page', async () => {
+      await renderRoute(<PlayerRecords />, {
+        route: '/player_records',
+        league: { ...LEAGUE, platform: 'YAHOO' },
+      });
+    });
+    then(/^I see the note "(.*)"$/, async (text) => {
+      expect(await screen.findByText(new RegExp(text))).toBeInTheDocument();
+    });
+    and(/^I do not see the player "(.*)"$/, (name) => {
+      expect(screen.queryByText(name)).not.toBeInTheDocument();
     });
   });
 });

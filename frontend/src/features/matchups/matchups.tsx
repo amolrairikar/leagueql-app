@@ -3,6 +3,7 @@ import { Suspense, use, useEffect, useMemo, useRef, useState } from 'react';
 import { BoxScoreCard, type BoxScoreSide } from '@/components/box-score-card';
 import { TeamAvatar } from '@/components/team-avatar';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useLineupBackfill } from '@/features/lineup_backfill/use-lineup-backfill';
 import {
   getSeasonMatchups,
   getSeasonWeeklyStandings,
@@ -453,6 +454,7 @@ function MatchupsContent({
             key={selectedMatchup}
             matchup={activeMatchup}
             matchups={allMatchups}
+            season={season}
             onClose={() => onMatchupSelect(null)}
           />
         ) : (
@@ -471,12 +473,17 @@ function MatchupsContent({
 function MatchupPreviewView({
   matchup,
   matchups,
+  season,
   onClose,
 }: {
   matchup: ProcessedMatchup;
   matchups: MatchupItem[];
+  season: string;
   onClose: () => void;
 }) {
+  // Top scorers come from weekly lineups, which may still be backfilling
+  // (frontend/lineup-data-status).
+  const lineupPending = useLineupBackfill().isLineupUnavailable(season);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -494,6 +501,7 @@ function MatchupPreviewView({
         left={toPreviewSide(matchup.teamA)}
         right={toPreviewSide(matchup.teamB)}
         data={data}
+        lineupPendingSeason={lineupPending ? season : undefined}
         onClose={onClose}
       />
     </div>

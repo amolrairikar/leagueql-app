@@ -140,6 +140,9 @@ the league will not appear as onboarded and a retry will re-run the full onboard
 | `active_platform` | String | No | Current platform the league is served from after an ESPN → Sleeper migration. Set to the destination platform when a migration is initiated; before any migration `platform` is authoritative. Enum: `ESPN`, `SLEEPER`, `YAHOO`. |
 | `migrated_from` | String | No | Source platform recorded when a league is migrated to a new platform (e.g. `ESPN` when migrating ESPN → Sleeper). Enum: `ESPN`, `SLEEPER`, `YAHOO`. |
 | `migrated_at` | String | No | ISO 8601 (UTC) timestamp of when a platform migration was initiated (set together with `active_platform` and `migrated_from`). |
+| `pending_lineup_seasons` | String Set | No | Yahoo only (backend/yahoo-lineup-backfill). Seasons whose weekly lineups and player points the lineup backfill hasn't filled in yet. The onboarder `ADD`s every onboarded season (ONBOARD/MIGRATE) or the refreshed season plus any `failed_lineup_seasons` (REFRESH). The backfill `DELETE`s a season once it has stored that season's lineups and re-triggered the processor. Returned by `GET /leagues/{leagueId}`. |
+| `failed_lineup_seasons` | String Set | No | Yahoo only (backend/yahoo-lineup-backfill). Seasons whose backfill exhausted its throttle retries (8 consecutive Yahoo `999`s) or hit a permanent error (revoked Yahoo link, `403`/`404`). The next Yahoo REFRESH moves them back to `pending_lineup_seasons`. Returned by `GET /leagues/{leagueId}`. |
+| `lineup_backfill_lease_until` | Number | No | Yahoo only (backend/yahoo-lineup-backfill). Epoch seconds until which a running lineup backfill holds the league. Set conditionally (only if absent or expired) so at most one backfill runs per league, and removed when the run ends. A crashed run's lease expires on its own after 15 minutes. |
 
 **Example:**
 ```json
@@ -877,3 +880,14 @@ rejects any state past `expires_at`. A ~10-minute `ttl` reaps unused states.
 }
 ```
 </details>
+
+## Related S3 objects
+
+The precomputed views above are built from raw platform payloads that the onboarder stores in S3.
+The DynamoDB items refer to these keys indirectly, through `canonical_league_id`.
+
+| Key | Written by | Contents |
+|---|---|---|
+| `raw-api-data/{canonical_league_id}/{season}.json` | Onboarder | A list of `{season, data_type, data}` records for one season. Yahoo matchup rows carry `status` (`preevent`/`midevent`/`postevent`). |
+| `raw-api-data/{canonical_league_id}/manifest.json` | Onboarder; lineup backfill (self-copy) | `{"<PLATFORM>": [seasons…]}`. Writing it (`ObjectCreated:*`) triggers the processor. Object metadata: `correlation_id`, W3C trace context, `reprocess_all=true` (rebuild every season), or `reprocess_seasons=<comma list>` (rebuild exactly those seasons, without bumping `last_refresh_at` or `league_name`; backend/yahoo-lineup-backfill). |
+| `raw-api-data/{canonical_league_id}/yahoo_rosters/{season}.json` | Lineup backfill | Yahoo lineup store (backend/yahoo-lineup-backfill): `{"weeks": {"<week>": [{team_key, week, player_key, player_name, position, selected_position, points}]}}`. It is written after every fetched week so a run can resume. The processor merges it into that season's matchups, and its weeks take precedence over any `rosters_week{W}` records in the season file. |

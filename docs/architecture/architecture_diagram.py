@@ -87,6 +87,10 @@ with Diagram(
             onboarder = Lambda("Onboarder\nLambda")
             dlq = SimpleQueueServiceSqs("Onboarder DLQ\n(prod)")
             processor = Lambda("Processor Lambda\n(DuckDB transforms)")
+            backfill_queue = SimpleQueueServiceSqs(
+                "Yahoo lineup\nbackfill queue\n(+ DLQ)"
+            )
+            lineup_backfill = Lambda("Yahoo lineup\nbackfill Lambda\n(paced, max 2)")
 
         with Cluster("Scheduled jobs (EventBridge)"):
             evb = Eventbridge("EventBridge\nrules")
@@ -126,6 +130,16 @@ with Diagram(
     # Yahoo onboarding decrypts the owner's stored token to authenticate the fetch.
     onboarder >> Edge(label="decrypt Yahoo token") >> kms
     onboarder >> Edge(label="raw payloads +\nmanifest.json") >> s3
+    # backend/yahoo-lineup-backfill: Yahoo onboards/refreshes queue a paced backfill of weekly
+    # lineups; it re-queues itself (delayed) on Yahoo 999s and self-copies the manifest so the
+    # processor rebuilds the backfilled season.
+    onboarder >> Edge(label="queue lineup\nbackfill (Yahoo)") >> backfill_queue
+    backfill_queue >> Edge(label="SQS trigger") >> lineup_backfill
+    lineup_backfill >> Edge(label="re-queue\n(delay on 999)") >> backfill_queue
+    lineup_backfill >> Edge(label="per-team weekly\nrosters (paced)") >> yahoo
+    lineup_backfill >> Edge(label="lineup store +\nmanifest self-copy") >> s3
+    lineup_backfill >> Edge(label="pending/failed\nseasons + lease") >> ddb
+    lineup_backfill >> Edge(label="decrypt Yahoo token") >> kms
     (
         s3
         >> Edge(color="darkorange", style="dashed", label="S3 event\n(manifest)")

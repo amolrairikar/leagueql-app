@@ -33,6 +33,7 @@ import IntegrationsPage from '@/features/integrations/integrations-page';
 import { NAV_LINKS } from '@/features/landing_page/constants';
 import LeagueQLLanding from '@/features/landing_page/landing-page';
 import type { NavLinkItem } from '@/features/landing_page/types';
+import { LineupBackfillBell } from '@/features/lineup_backfill/lineup-backfill-bell';
 import ManagerComparison from '@/features/manager_comparison/manager-comparison';
 import ManagerHistory from '@/features/manager_history/manager-history';
 import MatchupRecords from '@/features/matchup_records/matchup-records';
@@ -87,6 +88,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
               {NAV_LINKS.map((link: NavLinkItem) => (
                 <NavLink key={link.label} {...link} />
               ))}
+              <LineupBackfillBell />
               <div className="ml-2">
                 <ModeToggle />
               </div>

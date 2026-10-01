@@ -13,6 +13,7 @@ from common.tracing import inject_context
 _retry_config = botocore.config.Config(retries={"mode": "standard"})
 _s3 = boto3.client("s3", config=_retry_config)
 _dynamodb = boto3.client("dynamodb", config=_retry_config)
+_sqs = boto3.client("sqs", config=_retry_config)
 
 
 def upload_results_to_s3(
@@ -159,6 +160,67 @@ def write_pending_league_lookup(
         raise
 
 
+def _metadata_update(
+    table_name: str,
+    canonical_league_id: str,
+    auto_refresh: bool | None,
+    lineup_pending_seasons: list[str] | None,
+) -> dict[str, Any]:
+    """Build the transaction's single METADATA Update for a REFRESH or MIGRATE."""
+    set_parts: list[str] = []
+    other_parts: list[str] = []
+    values: dict[str, Any] = {}
+    if auto_refresh is not None:
+        set_parts.append("auto_refresh_enabled = :ar")
+        values[":ar"] = {"BOOL": bool(auto_refresh)}
+    if lineup_pending_seasons:
+        other_parts.append("ADD pending_lineup_seasons :pl")
+        other_parts.append("DELETE failed_lineup_seasons :pl")
+        values[":pl"] = {"SS": lineup_pending_seasons}
+    expression = " ".join(
+        ([f"SET {', '.join(set_parts)}"] if set_parts else []) + other_parts
+    )
+    return {
+        "Update": {
+            "TableName": table_name,
+            "Key": {
+                "PK": {"S": f"LEAGUE#{canonical_league_id}"},
+                "SK": {"S": "METADATA"},
+            },
+            "UpdateExpression": expression,
+            "ExpressionAttributeValues": values,
+        }
+    }
+
+
+def read_failed_lineup_seasons(canonical_league_id: str) -> list[str]:
+    """Return the league's ``failed_lineup_seasons`` (empty when absent or no METADATA)."""
+    response = _dynamodb.get_item(
+        TableName=os.environ["DYNAMODB_TABLE_NAME"],
+        Key={
+            "PK": {"S": f"LEAGUE#{canonical_league_id}"},
+            "SK": {"S": "METADATA"},
+        },
+        ProjectionExpression="failed_lineup_seasons",
+    )
+    return sorted(
+        response.get("Item", {}).get("failed_lineup_seasons", {}).get("SS", [])
+    )
+
+
+def send_lineup_backfill_message(
+    canonical_league_id: str, attempt: int = 0, delay_seconds: int = 0
+) -> None:
+    """Queue a lineup backfill run for a league (backend/yahoo-lineup-backfill)."""
+    _sqs.send_message(
+        QueueUrl=os.environ["LINEUP_BACKFILL_QUEUE_URL"],
+        MessageBody=json.dumps(
+            {"canonical_league_id": canonical_league_id, "attempt": attempt}
+        ),
+        DelaySeconds=delay_seconds,
+    )
+
+
 def write_league_records(
     league_id: str,
     platform: str,
@@ -168,6 +230,7 @@ def write_league_records(
     is_new_season_refresh: bool = False,
     owner_user_id: str | None = None,
     auto_refresh: bool | None = None,
+    lineup_pending_seasons: list[str] | None = None,
 ) -> None:
     """
     Writes the league's METADATA (on first onboard) and LEAGUE_LOOKUP records.
@@ -192,6 +255,10 @@ def write_league_records(
             migrate must not reset an explicit user choice); a bool writes it onto METADATA — set on
             the new METADATA item for ONBOARD, or applied to the existing METADATA via an update for
             a user-initiated REFRESH.
+        lineup_pending_seasons: Yahoo seasons whose weekly lineups the lineup backfill must
+            fill in (backend/yahoo-lineup-backfill). Added to METADATA's
+            ``pending_lineup_seasons`` and removed from ``failed_lineup_seasons`` (a refresh
+            re-queues previously failed seasons). ``None``/empty leaves both untouched.
     """
     try:
         table_name = os.environ["DYNAMODB_TABLE_NAME"]
@@ -223,6 +290,12 @@ def write_league_records(
                     }
                 },
             ]
+            if lineup_pending_seasons:
+                transact_items.append(
+                    _metadata_update(
+                        table_name, canonical_league_id, None, lineup_pending_seasons
+                    )
+                )
         elif request_type == "REFRESH":
             if is_new_season_refresh:
                 league_lookup_operation = {
@@ -266,22 +339,17 @@ def write_league_records(
             # (backend/scheduled-league-auto-refresh). Only apply it when explicitly provided
             # (auto_refresh is not None); a scheduled/new-season refresh passes None and must
             # leave the owner's existing choice on METADATA untouched. METADATA always exists
-            # for a refresh (the league is already onboarded), so a plain SET is safe.
-            if auto_refresh is not None:
+            # for a refresh (the league is already onboarded), so a plain SET is safe. The
+            # lineup-pending bookkeeping shares the same single METADATA update (a transaction
+            # may touch an item only once).
+            if auto_refresh is not None or lineup_pending_seasons:
                 transact_items.append(
-                    {
-                        "Update": {
-                            "TableName": table_name,
-                            "Key": {
-                                "PK": {"S": f"LEAGUE#{canonical_league_id}"},
-                                "SK": {"S": "METADATA"},
-                            },
-                            "UpdateExpression": "SET auto_refresh_enabled = :ar",
-                            "ExpressionAttributeValues": {
-                                ":ar": {"BOOL": bool(auto_refresh)}
-                            },
-                        }
-                    }
+                    _metadata_update(
+                        table_name,
+                        canonical_league_id,
+                        auto_refresh,
+                        lineup_pending_seasons,
+                    )
                 )
         else:
             metadata_item = {
@@ -299,6 +367,10 @@ def write_league_records(
             # Record the scheduled auto-refresh opt-in on first onboard. Absent choice
             # (system onboard) defaults to opted-out (backend/scheduled-league-auto-refresh).
             metadata_item["auto_refresh_enabled"] = {"BOOL": bool(auto_refresh)}
+            # Yahoo onboards defer weekly lineups to the lineup backfill
+            # (backend/yahoo-lineup-backfill); every onboarded season starts lineup-pending.
+            if lineup_pending_seasons:
+                metadata_item["pending_lineup_seasons"] = {"SS": lineup_pending_seasons}
             transact_items = [
                 {
                     "Put": {

@@ -300,6 +300,151 @@ module "onboarding-lambda-role" {
         Resource = [
           aws_kms_key.yahoo_tokens.arn
         ]
+      },
+      {
+        # backend/yahoo-lineup-backfill: Yahoo onboards/refreshes queue the lineup backfill.
+        Sid    = "QueueYahooLineupBackfill"
+        Effect = "Allow"
+        Action = [
+          "sqs:SendMessage"
+        ]
+        Resource = [
+          "arn:aws:sqs:us-east-1:${var.account_id}:leagueql-yahoo-lineup-backfill-${var.environment}"
+        ]
+      }
+    ]
+  })
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    managed-by  = "terraform"
+  }
+}
+
+# backend/yahoo-lineup-backfill: the SQS-driven Lambda (onboarder package) that fills in Yahoo
+# weekly lineups. It reads/writes raw season data + the lineup store, self-copies the manifest to
+# re-trigger the processor, maintains METADATA lineup bookkeeping + its lease, re-queues itself,
+# and refreshes/decrypts the owner's Yahoo token.
+module "lineup-backfill-lambda-role" {
+  source           = "../../modules/iam-role"
+  role_name        = "leagueql-${var.environment}-lineup-backfill-role"
+  role_description = "Execution role for the Yahoo lineup backfill lambda."
+  trust_policy_json = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+      }
+    ]
+  })
+  role_policy_json = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "CreateLogGroups"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup"
+        ]
+        Resource = [
+          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/lambda/leagueql-yahoo-lineup-backfill-${var.environment}"
+        ]
+      },
+      {
+        Sid    = "CreateLogEvents"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ],
+        Resource = [
+          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/lambda/leagueql-yahoo-lineup-backfill-${var.environment}:*"
+        ]
+      },
+      {
+        Sid    = "ReadOtelTokenSsmParameter"
+        Effect = "Allow"
+        Action = [
+          "ssm:GetParameter"
+        ]
+        Resource = [
+          "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/betterstack/source_token"
+        ]
+      },
+      {
+        # ListBucket lets a missing lineup store surface as NoSuchKey (not AccessDenied).
+        Sid    = "S3ListBucket"
+        Effect = "Allow"
+        Action = [
+          "s3:ListBucket"
+        ],
+        Resource = [
+          local.primary_bucket_arn
+        ]
+      },
+      {
+        # GetObject + PutObject on the same keys also covers the manifest self-copy.
+        Sid    = "ReadWriteS3RawPrefix"
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject"
+        ]
+        Resource = [
+          "${local.primary_bucket_arn}/raw-api-data/*"
+        ]
+      },
+      {
+        # METADATA bookkeeping/lease, plus the token engine storing a refreshed Yahoo token.
+        Sid    = "ReadWriteDynamoDB"
+        Effect = "Allow"
+        Action = [
+          "dynamodb:GetItem",
+          "dynamodb:PutItem",
+          "dynamodb:UpdateItem"
+        ]
+        Resource = [
+          module.dynamodb.primary_table_arn
+        ]
+      },
+      {
+        Sid    = "ConsumeAndRequeueBackfillMessages"
+        Effect = "Allow"
+        Action = [
+          "sqs:ReceiveMessage",
+          "sqs:DeleteMessage",
+          "sqs:GetQueueAttributes",
+          "sqs:SendMessage"
+        ]
+        Resource = [
+          "arn:aws:sqs:us-east-1:${var.account_id}:leagueql-yahoo-lineup-backfill-${var.environment}"
+        ]
+      },
+      {
+        Sid    = "ReadYahooClientIdSsmParameter"
+        Effect = "Allow"
+        Action = [
+          "ssm:GetParameter"
+        ]
+        Resource = [
+          "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/yahoo/client_id"
+        ]
+      },
+      {
+        Sid    = "EncryptDecryptYahooTokens"
+        Effect = "Allow"
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt"
+        ]
+        Resource = [
+          aws_kms_key.yahoo_tokens.arn
+        ]
       }
     ]
   })

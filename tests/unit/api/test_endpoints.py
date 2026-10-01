@@ -2126,6 +2126,41 @@ class TestOwnerGate:
         mock_get.assert_not_called()
 
 
+class TestGetLeagueLineupStatus:
+    """get_league reports lineup backfill status (backend/league-metadata)."""
+
+    def _get(self, client, mock_table, league_lookup_item, metadata):
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": metadata},
+        ]
+        mock_table.query.return_value = {
+            "Items": [{"seasons": {"2024"}, "canonical_league_id": "canonical-abc"}]
+        }
+        response = client.get("/leagues/123?platform=SLEEPER")
+        assert response.status_code == 200
+        return response.json()["data"]
+
+    def test_pending_and_failed_seasons_sorted(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        metadata = {
+            **league_metadata_item,
+            "pending_lineup_seasons": {"2025", "2019", "2024"},
+            "failed_lineup_seasons": {"2018"},
+        }
+        data = self._get(client, mock_table, league_lookup_item, metadata)
+        assert data["pending_lineup_seasons"] == ["2019", "2024", "2025"]
+        assert data["failed_lineup_seasons"] == ["2018"]
+
+    def test_absent_status_returns_empty_lists(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        data = self._get(client, mock_table, league_lookup_item, league_metadata_item)
+        assert data["pending_lineup_seasons"] == []
+        assert data["failed_lineup_seasons"] == []
+
+
 class TestGetLeagueIsOwner:
     """get_league returns is_owner and member-gates ESPN reads (backend/league-authorization)."""
 

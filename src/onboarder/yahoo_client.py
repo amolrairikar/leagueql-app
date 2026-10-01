@@ -155,6 +155,9 @@ def _filter_matchups(
                 "is_playoffs": flat.get("is_playoffs"),
                 "is_consolation": flat.get("is_consolation"),
                 "winner_team_key": flat.get("winner_team_key"),
+                # preevent / midevent / postevent — the lineup backfill only fetches weeks
+                # whose matchups are all finished.
+                "status": flat.get("status"),
                 "teams": parsed,
             }
         )
@@ -197,6 +200,23 @@ def _filter_rosters(
             }
         )
     return {"rosters": rows}
+
+
+def team_roster_url(team_key: str, week: int | str) -> str:
+    """URL for one team's weekly roster with each player's weekly points.
+
+    Only the single-team form returns ``player_points``; every ``teams`` collection variant
+    (league-wide or ``teams;team_keys=``) silently drops them.
+    """
+    return (
+        f"{YAHOO_BASE_URL}/team/{team_key}/roster;week={week}"
+        f"/players/stats;type=week;week={week}?format=json"
+    )
+
+
+def parse_team_roster(data: dict[str, Any], week: int | str) -> list[dict[str, Any]]:
+    """Parse a ``team_roster_url`` response into that team's roster rows for ``week``."""
+    return _filter_rosters(data, "", f"rosters_week{week}")["rosters"]
 
 
 def _filter_draft_picks(data: dict[str, Any], _season: str, _dt: str) -> dict[str, Any]:
@@ -378,7 +398,6 @@ class YahooClient:
                 "start_week": _to_int(league.get("start_week"), 1),
                 "end_week": _to_int(league.get("end_week"), 17),
                 "current_week": _to_int(league.get("current_week"), None),
-                "num_teams": _to_int(league.get("num_teams"), 0),
             }
         seasons = sorted(self._season_meta)
         logger.info(
@@ -428,13 +447,9 @@ class YahooClient:
             for data_type in DATA_FETCH_TYPES:
                 urls.append((season, data_type, sub_map[data_type]))
             last_week = meta.get("current_week") or meta["end_week"]
-            num_teams = meta.get("num_teams") or 0
-            if not num_teams:
-                logger.warning(
-                    "Yahoo season has no num_teams; skipping weekly rosters: season=%s league_key=%s",
-                    season,
-                    key,
-                )
+            # Weekly per-team rosters (player points) are not fetched here: they multiply the
+            # request count by the team count and trip Yahoo's 999 throttle, so the paced lineup
+            # backfill (backend/yahoo-lineup-backfill) fetches them afterwards.
             for week in range(meta["start_week"], last_week + 1):
                 urls.append(
                     (
@@ -443,18 +458,6 @@ class YahooClient:
                         f"{YAHOO_BASE_URL}/league/{key}/scoreboard;week={week}?format=json",
                     )
                 )
-                # Weekly player points only come back on the per-team roster call (the
-                # league-wide teams/roster variant silently drops player stats). Team keys are
-                # always {league_key}.t.1..N; the per-team results are merged back into one
-                # rosters_week{W} record in _process_api_results.
-                for team_id in range(1, num_teams + 1):
-                    urls.append(
-                        (
-                            season,
-                            f"rosters_week{week}_t{team_id}",
-                            f"{YAHOO_BASE_URL}/team/{key}.t.{team_id}/roster;week={week}/players/stats;type=week;week={week}?format=json",
-                        )
-                    )
         logger.info(
             "Built Yahoo request URLs: league_id=%s total_requests=%d",
             self.league_id,
@@ -513,31 +516,12 @@ class YahooClient:
     def _process_api_results(
         self, results: Sequence[dict[str, Any] | BaseException]
     ) -> list[dict[str, Any]]:
-        """Validate results and apply the per-type Yahoo filters.
-
-        Per-team weekly roster results (``rosters_week{W}_t{T}``) are merged into a single
-        ``rosters_week{W}`` record per season/week, at the position of the first one.
-        """
-        processed: list[dict[str, Any]] = []
-        merged_rosters: dict[tuple[str, str], list[dict[str, Any]]] = {}
+        """Validate results and apply the per-type Yahoo filters."""
+        processed = []
         for result in validate_api_results(results):
             season = result["season"]
             data_type = result["data_type"]
             data = result["data"]
-            if data_type.startswith("rosters"):
-                week_type = data_type.split("_t", 1)[0]
-                rows = _filter_rosters(data, season, data_type)["rosters"]
-                if (season, week_type) not in merged_rosters:
-                    merged_rosters[(season, week_type)] = []
-                    processed.append(
-                        {
-                            "season": season,
-                            "data_type": week_type,
-                            "data": {"rosters": merged_rosters[(season, week_type)]},
-                        }
-                    )
-                merged_rosters[(season, week_type)].extend(rows)
-                continue
             if data_type.startswith("matchups"):
                 filter_fn = _filter_matchups
             else:

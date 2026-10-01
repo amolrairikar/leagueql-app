@@ -566,6 +566,62 @@ def get_previous_version_id(bucket: str, key: str) -> str | None:
     return None
 
 
+def read_yahoo_lineup_store(bucket: str, prefix: str, season: str) -> dict | None:
+    """Read a season's Yahoo lineup store written by the lineup backfill, if any.
+
+    ``{prefix}/yahoo_rosters/{season}.json`` holds ``{"weeks": {"<W>": [roster rows]}}``
+    (backend/yahoo-lineup-backfill); absent until the backfill has stored a week.
+    """
+    try:
+        response = s3_client.get_object(
+            Bucket=bucket, Key=f"{prefix}/yahoo_rosters/{season}.json"
+        )
+    except botocore.exceptions.ClientError as e:
+        if e.response["Error"]["Code"] in ("NoSuchKey", "404"):
+            return None
+        raise
+    return json.loads(response["Body"].read().decode("utf-8"))
+
+
+def merge_yahoo_lineup_stores(
+    raw_data: list[dict], stores: dict[str, dict | None]
+) -> list[dict]:
+    """Attach backfilled weekly rosters to the Yahoo raw records.
+
+    A stored week replaces any ``rosters_week{W}`` record carried in the raw season file
+    (leagues onboarded when the onboarder still fetched rosters inline); weeks the store
+    doesn't have keep their in-file rosters.
+    """
+    stored_weeks = {
+        (season, str(week))
+        for season, store in stores.items()
+        if store
+        for week in store.get("weeks", {})
+    }
+    merged = [
+        record
+        for record in raw_data
+        if not (
+            str(record.get("data_type", "")).startswith("rosters_week")
+            and (
+                str(record.get("season")),
+                str(record["data_type"]).removeprefix("rosters_week"),
+            )
+            in stored_weeks
+        )
+    ]
+    for season, store in stores.items():
+        for week, rows in sorted((store or {}).get("weeks", {}).items()):
+            merged.append(
+                {
+                    "season": season,
+                    "data_type": f"rosters_week{week}",
+                    "data": {"rosters": rows},
+                }
+            )
+    return merged
+
+
 def resolve_seasons_to_process(
     current_seasons: list[str],
     previous_seasons: list[str] | None,
@@ -2188,6 +2244,11 @@ def _lambda_handler_impl(event, context) -> None:
     # is rebuilt from the raw season files already in S3, rather than only the latest
     # season the normal refresh diff would select.
     reprocess_all = manifest_metadata.get("reprocess_all") == "true"
+    # The Yahoo lineup backfill (backend/yahoo-lineup-backfill) re-triggers the processor for
+    # exactly the season(s) whose lineups it just filled in.
+    reprocess_seasons = [
+        s for s in manifest_metadata.get("reprocess_seasons", "").split(",") if s
+    ]
 
     # Continue the onboarder's trace across the S3 event (backend/otel-tracing): the heavy
     # processing and its DynamoDB/S3 child spans hang off this span. A no-op when
@@ -2200,6 +2261,7 @@ def _lambda_handler_impl(event, context) -> None:
             previous_version_id=previous_version_id,
             manifest=manifest,
             reprocess_all=reprocess_all,
+            reprocess_seasons=reprocess_seasons,
         )
 
 
@@ -2211,6 +2273,7 @@ def _process_manifest(
     previous_version_id: str | None,
     manifest: dict,
     reprocess_all: bool,
+    reprocess_seasons: list[str] | None = None,
 ) -> None:
     """Build and persist every precomputed view for the onboarded league.
 
@@ -2221,17 +2284,20 @@ def _process_manifest(
     all_seasons = manifest[platform]
     prefix = "/".join(key.split("/")[:2])
 
-    previous_seasons = None
-    if previous_version_id and not reprocess_all:
-        previous_manifest = read_s3_object(
-            bucket=bucket, key=key, version_id=previous_version_id
-        )
-        previous_seasons = previous_manifest.get(platform, [])
+    if reprocess_seasons:
+        seasons_to_process = [s for s in all_seasons if s in set(reprocess_seasons)]
+    else:
+        previous_seasons = None
+        if previous_version_id and not reprocess_all:
+            previous_manifest = read_s3_object(
+                bucket=bucket, key=key, version_id=previous_version_id
+            )
+            previous_seasons = previous_manifest.get(platform, [])
 
-    seasons_to_process = resolve_seasons_to_process(
-        current_seasons=all_seasons,
-        previous_seasons=previous_seasons,
-    )
+        seasons_to_process = resolve_seasons_to_process(
+            current_seasons=all_seasons,
+            previous_seasons=previous_seasons,
+        )
     logger.info(
         "Seasons to process: %s (all seasons in manifest: %s)",
         seasons_to_process,
@@ -2258,6 +2324,15 @@ def _process_manifest(
 
     if failed_seasons:
         raise RuntimeError(f"Failed to load seasons from S3: {failed_seasons}")
+
+    if platform == "YAHOO":
+        raw_data = merge_yahoo_lineup_stores(
+            raw_data,
+            {
+                season: read_yahoo_lineup_store(bucket, prefix, season)
+                for season in seasons_to_process
+            },
+        )
 
     player_metadata: dict = {}
     player_stats: dict = {}
@@ -2428,8 +2503,11 @@ def _process_manifest(
             ],
         )
 
+    # A lineup-backfill rebuild of an older season is not a data refresh: it must not bump
+    # last_refresh_at (which drives the refresh cooldown) or rename the league after that
+    # older season.
     write_metadata_items(
         league_id=canonical_league_id,
-        refresh=previous_version_id is not None,
-        league_name=league_name,
+        refresh=previous_version_id is not None and not reprocess_seasons,
+        league_name=None if reprocess_seasons else league_name,
     )

@@ -1,0 +1,63 @@
+[
+  {
+    "season": "2024",
+    "data_type": "rosters_week1",
+    "data": {
+      "rosters": [
+        {
+          "team_key": "423.l.431.t.1",
+          "week": "1",
+          "player_key": "423.p.1",
+          "player_name": "Josh QB",
+          "position": "QB",
+          "selected_position": "QB",
+          "points": "25.0"
+        },
+        {
+          "team_key": "423.l.431.t.1",
+          "week": "1",
+          "player_key": "423.p.9",
+          "player_name": "Benchy RB",
+          "position": "RB",
+          "selected_position": "BN",
+          "points": "2.0"
+        },
+        {
+          "team_key": "423.l.431.t.2",
+          "week": "1",
+          "player_key": "423.p.2",
+          "player_name": "Run Back",
+          "position": "RB",
+          "selected_position": "RB",
+          "points": "18.0"
+        }
+      ]
+    }
+  },
+  {
+    "season": "2024",
+    "data_type": "rosters_week15",
+    "data": {
+      "rosters": [
+        {
+          "team_key": "423.l.431.t.1",
+          "week": "15",
+          "player_key": "423.p.1",
+          "player_name": "Josh QB",
+          "position": "QB",
+          "selected_position": "QB",
+          "points": "30.0"
+        },
+        {
+          "team_key": "423.l.431.t.2",
+          "week": "15",
+          "player_key": "423.p.2",
+          "player_name": "Run Back",
+          "position": "RB",
+          "selected_position": "RB",
+          "points": "20.0"
+        }
+      ]
+    }
+  }
+]
