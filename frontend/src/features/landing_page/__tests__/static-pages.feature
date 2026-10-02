@@ -31,6 +31,10 @@ Feature: Public pages render (frontend/landing-page, frontend/instructions-docs,
     And I see "Yahoo"
     And I see "Beta"
 
+  Scenario: The Works with strip links to the feature request board
+    When I open the landing page
+    Then the "request" link points to "https://leagueql.supahub.com/en"
+
   Scenario: The Yahoo Beta badge explains how to report import issues
     When I open the landing page
     And I hover the Yahoo "Beta" badge

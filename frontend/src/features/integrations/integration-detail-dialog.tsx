@@ -47,8 +47,8 @@ export function IntegrationDetailDialog({
       }}
     >
       {integration && (
-        <DialogContent className="max-h-[calc(100vh-3rem)] overflow-y-auto sm:max-w-140">
-          <DialogHeader>
+        <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col gap-0 p-0 sm:max-w-140">
+          <DialogHeader className="p-6 pr-12 pb-4">
             <div className="flex flex-wrap gap-1.5">
               <Badge variant="secondary">
                 {CATEGORY_LABELS[integration.category]}
@@ -57,63 +57,65 @@ export function IntegrationDetailDialog({
             <DialogTitle>{integration.name}</DialogTitle>
           </DialogHeader>
 
-          <CategoryPreview
-            category={integration.category}
-            className="h-40 rounded-lg border"
-          />
-          <DialogDescription className="text-sm text-foreground">
-            {integration.description}
-          </DialogDescription>
+          <div className="flex min-h-0 flex-col gap-6 overflow-y-auto overscroll-contain px-6 pb-6">
+            <CategoryPreview
+              category={integration.category}
+              className="h-40 rounded-lg border"
+            />
+            <DialogDescription className="text-sm text-foreground">
+              {integration.description}
+            </DialogDescription>
 
-          <div>
-            <SectionHeading>Setup</SectionHeading>
-            <ol className="flex list-decimal flex-col gap-1 pl-5 text-sm">
-              {integration.setup_steps.map((step, i) => (
-                <li key={i}>{step}</li>
-              ))}
-            </ol>
-          </div>
-
-          <div>
-            <SectionHeading>Reads these files</SectionHeading>
-            <div className="flex flex-wrap gap-1.5">
-              {integration.views.map((view) => (
-                <ViewChip key={view}>{`<season>_${view}.json`}</ViewChip>
-              ))}
-            </div>
-          </div>
-
-          {integration.prompt && (
             <div>
-              <SectionHeading>Prompt</SectionHeading>
-              <pre className="rounded-lg border bg-muted px-3 py-2.5 font-mono text-xs leading-relaxed whitespace-pre-wrap">
-                {integration.prompt}
-              </pre>
+              <SectionHeading>Setup</SectionHeading>
+              <ol className="flex list-decimal flex-col gap-1 pl-5 text-sm">
+                {integration.setup_steps.map((step, i) => (
+                  <li key={i}>{step}</li>
+                ))}
+              </ol>
             </div>
-          )}
 
-          <DialogFooter>
+            <div>
+              <SectionHeading>Reads these files</SectionHeading>
+              <div className="flex flex-wrap gap-1.5">
+                {integration.views.map((view) => (
+                  <ViewChip key={view}>{`<season>_${view}.json`}</ViewChip>
+                ))}
+              </div>
+            </div>
+
             {integration.prompt && (
-              <Button
-                variant="outline"
-                className="cursor-pointer"
-                onClick={() => copy(integration.prompt ?? '')}
-              >
-                {copied ? <Check /> : <Copy />}
-                {copied ? 'Copied' : 'Copy prompt'}
-              </Button>
+              <div>
+                <SectionHeading>Prompt</SectionHeading>
+                <pre className="rounded-lg border bg-muted px-3 py-2.5 font-mono text-xs leading-relaxed whitespace-pre-wrap">
+                  {integration.prompt}
+                </pre>
+              </div>
             )}
-            <Button asChild className="cursor-pointer">
-              <a
-                href={integration.link}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Open project
-                <ExternalLink />
-              </a>
-            </Button>
-          </DialogFooter>
+
+            <DialogFooter>
+              {integration.prompt && (
+                <Button
+                  variant="outline"
+                  className="cursor-pointer"
+                  onClick={() => copy(integration.prompt ?? '')}
+                >
+                  {copied ? <Check /> : <Copy />}
+                  {copied ? 'Copied' : 'Copy prompt'}
+                </Button>
+              )}
+              <Button asChild className="cursor-pointer">
+                <a
+                  href={integration.link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Open project
+                  <ExternalLink />
+                </a>
+              </Button>
+            </DialogFooter>
+          </div>
         </DialogContent>
       )}
     </Dialog>

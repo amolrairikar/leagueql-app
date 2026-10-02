@@ -16,3 +16,16 @@ Feature: Draft grades (frontend/draft-grades)
     Given the draft grade data fails to load
     When I open the draft grades page
     Then I see "Failed to load draft data."
+
+  Scenario: Keepers are not suggested as alternatives
+    Given draft data where a bust's better alternative was a keeper
+    When I open the draft grades page
+    And I show the bust's alternatives
+    Then I see the alternative "Open Runner"
+    And I do not see "Kept Runner"
+
+  Scenario: A keeper bust shows no alternatives
+    Given draft data where the bust pick was a keeper
+    When I open the draft grades page
+    Then I do not see "Could have picked instead"
+    And the busts count is "1"

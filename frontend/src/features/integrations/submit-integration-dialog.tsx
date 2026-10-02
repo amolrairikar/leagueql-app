@@ -205,8 +205,8 @@ export function SubmitIntegrationDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-h-[calc(100vh-3rem)] overflow-y-auto sm:max-w-140">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col gap-0 p-0 sm:max-w-140">
+        <DialogHeader className="p-6 pr-12 pb-4">
           <DialogTitle>Submit your integration</DialogTitle>
           <DialogDescription>
             Share something you built on a LeagueQL export. Every submission is
@@ -214,222 +214,224 @@ export function SubmitIntegrationDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {submittedIssue !== null ? (
-          <div className="flex flex-col items-center gap-2 py-6 text-center">
-            <span className="grid size-10 place-items-center rounded-full bg-primary/10 text-primary">
-              <Check className="size-5" />
-            </span>
-            <p className="font-semibold">Submitted for review</p>
-            <p className="max-w-[40ch] text-sm text-muted-foreground">
-              Thanks! We have received your submission and will feature your
-              integration on this page if it&apos;s approved.
-            </p>
-            <Button
-              className="mt-2 cursor-pointer"
-              onClick={() => handleOpenChange(false)}
-            >
-              Done
-            </Button>
-          </div>
-        ) : (
-          <form
-            onSubmit={(event) => void handleSubmit(event)}
-            className="flex flex-col gap-4"
-          >
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="integration-name">Integration Name</Label>
-              <Input
-                id="integration-name"
-                value={form.name}
-                maxLength={LIMITS.name}
-                onChange={(e) => update('name', e.target.value)}
-              />
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="integration-category">Category</Label>
-              <Select
-                value={form.category}
-                onValueChange={(value) =>
-                  update('category', value as IntegrationCategory)
-                }
-              >
-                <SelectTrigger
-                  id="integration-category"
-                  className="w-full cursor-pointer"
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {CATEGORIES.map((category) => (
-                    <SelectItem
-                      key={category}
-                      value={category}
-                      className="cursor-pointer"
-                    >
-                      {CATEGORY_LABELS[category]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="integration-link">Link</Label>
-              <Input
-                id="integration-link"
-                type="url"
-                placeholder="https://"
-                value={form.link}
-                maxLength={LIMITS.link}
-                onChange={(e) => update('link', e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">
-                A repo, template or shared prompt that other leagues can open.
+        <div className="flex min-h-0 flex-col gap-6 overflow-y-auto overscroll-contain px-6 pb-6">
+          {submittedIssue !== null ? (
+            <div className="flex flex-col items-center gap-2 py-6 text-center">
+              <span className="grid size-10 place-items-center rounded-full bg-primary/10 text-primary">
+                <Check className="size-5" />
+              </span>
+              <p className="font-semibold">Submitted for review</p>
+              <p className="max-w-[40ch] text-sm text-muted-foreground">
+                Thanks! We have received your submission and will feature your
+                integration on this page if it&apos;s approved.
               </p>
-            </div>
-
-            <fieldset className="flex flex-col gap-1.5">
-              <legend className="mb-1.5 text-sm font-medium">
-                Views it reads
-              </legend>
-              <div className="flex flex-wrap gap-1.5">
-                {EXPORT_VIEWS.map((view) => (
-                  <label
-                    key={view}
-                    className={cn(
-                      'inline-flex cursor-pointer items-center gap-1.5 rounded-md border px-2 py-1 font-mono text-xs',
-                      form.views.includes(view) && 'border-primary',
-                    )}
-                  >
-                    <input
-                      type="checkbox"
-                      className="size-3.5 cursor-pointer accent-primary"
-                      checked={form.views.includes(view)}
-                      onChange={() => toggleView(view)}
-                    />
-                    {view}
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="integration-description">What it does</Label>
-              <textarea
-                id="integration-description"
-                className={TEXTAREA_CLASS}
-                value={form.description}
-                maxLength={LIMITS.description}
-                onChange={(e) => update('description', e.target.value)}
-              />
-            </div>
-
-            <fieldset className="flex flex-col gap-1.5">
-              <legend className="mb-1.5 text-sm font-medium">
-                Setup steps
-              </legend>
-              <ol className="flex flex-col gap-2">
-                {form.setupSteps.map((step, index) => (
-                  <li key={step.id} className="flex items-start gap-2">
-                    <span
-                      aria-hidden="true"
-                      className="mt-1.5 grid size-5 shrink-0 place-items-center rounded-full bg-muted text-[11px] font-semibold text-muted-foreground"
-                    >
-                      {index + 1}
-                    </span>
-                    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                      <textarea
-                        ref={(el) => {
-                          if (!el) {
-                            stepRefs.current.delete(step.id);
-                            return;
-                          }
-                          stepRefs.current.set(step.id, el);
-                          if (focusOnMountId.current === step.id) {
-                            focusOnMountId.current = null;
-                            el.focus();
-                          }
-                        }}
-                        aria-label={`Step ${index + 1}`}
-                        rows={1}
-                        className={cn(
-                          TEXTAREA_CLASS,
-                          'min-h-0 resize-none field-sizing-content',
-                        )}
-                        placeholder={stepPlaceholder(index, isPrompt)}
-                        value={step.text}
-                        maxLength={LIMITS.setupStep}
-                        onChange={(e) => updateStep(step.id, e.target.value)}
-                        onKeyDown={(e) => handleStepKeyDown(e, index)}
-                      />
-                      {step.text.length >= STEP_COUNTER_THRESHOLD && (
-                        <span className="self-end text-[11px] text-muted-foreground tabular-nums">
-                          {step.text.length}/{LIMITS.setupStep}
-                        </span>
-                      )}
-                    </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      className="shrink-0 cursor-pointer text-muted-foreground"
-                      aria-label={`Remove step ${index + 1}`}
-                      disabled={form.setupSteps.length === 1}
-                      onClick={() => removeStep(index)}
-                    >
-                      <X />
-                    </Button>
-                  </li>
-                ))}
-              </ol>
-              {canAddStep && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="self-start cursor-pointer"
-                  onClick={() => addStepAfter(form.setupSteps.length - 1)}
-                >
-                  <Plus />
-                  Add step
-                </Button>
-              )}
-              <p className="text-xs text-muted-foreground">
-                Up to {LIMITS.setupSteps} steps. Press Enter to start the next
-                one.
-                {isPrompt &&
-                  ' Include your prompt as its own step, e.g. "Paste this prompt: …".'}
-              </p>
-            </fieldset>
-
-            <p className="rounded-md bg-muted px-3 py-2.5 text-xs text-muted-foreground">
-              Don&apos;t include your league&apos;s data, cookies or tokens.
-              Integrations should work with anyone&apos;s export.
-            </p>
-
-            {error && <ErrorAlert message={error} />}
-
-            <DialogFooter>
               <Button
-                type="button"
-                variant="ghost"
-                className="cursor-pointer"
+                className="mt-2 cursor-pointer"
                 onClick={() => handleOpenChange(false)}
               >
-                Cancel
+                Done
               </Button>
-              <Button
-                type="submit"
-                className="cursor-pointer"
-                disabled={!canSubmit}
-              >
-                {loading && <Spinner />}
-                Submit for review
-              </Button>
-            </DialogFooter>
-          </form>
-        )}
+            </div>
+          ) : (
+            <form
+              onSubmit={(event) => void handleSubmit(event)}
+              className="flex flex-col gap-4"
+            >
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="integration-name">Integration Name</Label>
+                <Input
+                  id="integration-name"
+                  value={form.name}
+                  maxLength={LIMITS.name}
+                  onChange={(e) => update('name', e.target.value)}
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="integration-category">Category</Label>
+                <Select
+                  value={form.category}
+                  onValueChange={(value) =>
+                    update('category', value as IntegrationCategory)
+                  }
+                >
+                  <SelectTrigger
+                    id="integration-category"
+                    className="w-full cursor-pointer"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CATEGORIES.map((category) => (
+                      <SelectItem
+                        key={category}
+                        value={category}
+                        className="cursor-pointer"
+                      >
+                        {CATEGORY_LABELS[category]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="integration-link">Link</Label>
+                <Input
+                  id="integration-link"
+                  type="url"
+                  placeholder="https://"
+                  value={form.link}
+                  maxLength={LIMITS.link}
+                  onChange={(e) => update('link', e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  A repo, template or shared prompt that other leagues can open.
+                </p>
+              </div>
+
+              <fieldset className="flex flex-col gap-1.5">
+                <legend className="mb-1.5 text-sm font-medium">
+                  Views it reads
+                </legend>
+                <div className="flex flex-wrap gap-1.5">
+                  {EXPORT_VIEWS.map((view) => (
+                    <label
+                      key={view}
+                      className={cn(
+                        'inline-flex cursor-pointer items-center gap-1.5 rounded-md border px-2 py-1 font-mono text-xs',
+                        form.views.includes(view) && 'border-primary',
+                      )}
+                    >
+                      <input
+                        type="checkbox"
+                        className="size-3.5 cursor-pointer accent-primary"
+                        checked={form.views.includes(view)}
+                        onChange={() => toggleView(view)}
+                      />
+                      {view}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="integration-description">What it does</Label>
+                <textarea
+                  id="integration-description"
+                  className={TEXTAREA_CLASS}
+                  value={form.description}
+                  maxLength={LIMITS.description}
+                  onChange={(e) => update('description', e.target.value)}
+                />
+              </div>
+
+              <fieldset className="flex flex-col gap-1.5">
+                <legend className="mb-1.5 text-sm font-medium">
+                  Setup steps
+                </legend>
+                <ol className="flex flex-col gap-2">
+                  {form.setupSteps.map((step, index) => (
+                    <li key={step.id} className="flex items-start gap-2">
+                      <span
+                        aria-hidden="true"
+                        className="mt-1.5 grid size-5 shrink-0 place-items-center rounded-full bg-muted text-[11px] font-semibold text-muted-foreground"
+                      >
+                        {index + 1}
+                      </span>
+                      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                        <textarea
+                          ref={(el) => {
+                            if (!el) {
+                              stepRefs.current.delete(step.id);
+                              return;
+                            }
+                            stepRefs.current.set(step.id, el);
+                            if (focusOnMountId.current === step.id) {
+                              focusOnMountId.current = null;
+                              el.focus();
+                            }
+                          }}
+                          aria-label={`Step ${index + 1}`}
+                          rows={1}
+                          className={cn(
+                            TEXTAREA_CLASS,
+                            'min-h-0 resize-none field-sizing-content',
+                          )}
+                          placeholder={stepPlaceholder(index, isPrompt)}
+                          value={step.text}
+                          maxLength={LIMITS.setupStep}
+                          onChange={(e) => updateStep(step.id, e.target.value)}
+                          onKeyDown={(e) => handleStepKeyDown(e, index)}
+                        />
+                        {step.text.length >= STEP_COUNTER_THRESHOLD && (
+                          <span className="self-end text-[11px] text-muted-foreground tabular-nums">
+                            {step.text.length}/{LIMITS.setupStep}
+                          </span>
+                        )}
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        className="shrink-0 cursor-pointer text-muted-foreground"
+                        aria-label={`Remove step ${index + 1}`}
+                        disabled={form.setupSteps.length === 1}
+                        onClick={() => removeStep(index)}
+                      >
+                        <X />
+                      </Button>
+                    </li>
+                  ))}
+                </ol>
+                {canAddStep && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="self-start cursor-pointer"
+                    onClick={() => addStepAfter(form.setupSteps.length - 1)}
+                  >
+                    <Plus />
+                    Add step
+                  </Button>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Up to {LIMITS.setupSteps} steps. Press Enter to start the next
+                  one.
+                  {isPrompt &&
+                    ' Include your prompt as its own step, e.g. "Paste this prompt: …".'}
+                </p>
+              </fieldset>
+
+              <p className="rounded-md bg-muted px-3 py-2.5 text-xs text-muted-foreground">
+                Don&apos;t include your league&apos;s data, cookies or tokens.
+                Integrations should work with anyone&apos;s export.
+              </p>
+
+              {error && <ErrorAlert message={error} />}
+
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="cursor-pointer"
+                  onClick={() => handleOpenChange(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  className="cursor-pointer"
+                  disabled={!canSubmit}
+                >
+                  {loading && <Spinner />}
+                  Submit for review
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   );

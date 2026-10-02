@@ -47,9 +47,13 @@ function getAlts(
   // A pick with no scoring row has no point total to compare against, so it can
   // neither be an alternative nor have alternatives suggested for it.
   if (pick.total_points == null) return [];
+  // Keepers occupy a slot fixed by last year's draft, so nobody else could have
+  // been taken there — a keeper bust has no alternatives, and a keeper was never
+  // available to suggest as one.
+  if (pick.keeper) return [];
   return allPicks
     .filter((a) =>
-      a.total_points == null
+      a.total_points == null || a.keeper
         ? false
         : isAuction
           ? a.position === pick.position &&
