@@ -859,6 +859,19 @@ export default function LeagueQLLanding() {
               )}
             </span>
           ))}
+          <p className="w-full text-center text-sm text-muted-foreground">
+            Don&apos;t see your league&apos;s fantasy platform here? Submit a
+            feature{' '}
+            <a
+              href="https://leagueql.supahub.com/en"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-primary underline-offset-4 hover:underline"
+            >
+              request
+            </a>{' '}
+            to get it added!
+          </p>
         </div>
       </section>
 

@@ -166,6 +166,26 @@ defineFeature(feature, (test) => {
     });
   });
 
+  test('The Works with strip links to the feature request board', ({
+    when,
+    then,
+  }) => {
+    when('I open the landing page', async () => {
+      server.use(
+        http.get('https://api.leagueql.com/counts', () =>
+          HttpResponse.json({ leagueCount: 3 }),
+        ),
+      );
+      await renderRoute(<LeagueQLLanding />, { route: '/' });
+    });
+    then(/^the "(.*)" link points to "(.*)"$/, async (name, href) => {
+      expect(await screen.findByRole('link', { name })).toHaveAttribute(
+        'href',
+        href,
+      );
+    });
+  });
+
   test('The docs page renders', ({ when, then, and }) => {
     when('I open the docs page', async () => {
       await renderRoute(<InstructionsPage />, { route: '/docs' });

@@ -39,7 +39,7 @@ def invoke_onboarder(
             auto-refresh job supplies it for Yahoo so the onboarder can obtain that
             owner's OAuth token.
         reprocess_all: When True, flag the run as a backfill so the processor rebuilds
-            every season's views (not just the latest). Used by the Sleeper backfill
+            every season's views (not just the latest). Used by the league backfill
             script (backend/sleeper-transactions); default False leaves normal onboards/refreshes unchanged.
 
     Returns:
