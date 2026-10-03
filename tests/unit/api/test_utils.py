@@ -382,6 +382,87 @@ class TestAddLeagueMember:
             add_league_member("canonical-abc", "user_2")
         assert exc.value.status_code == 500
 
+    def test_indexes_member_for_user_leagues(self, mock_table):
+        # backend/user-leagues: redeeming an invite also indexes the caller.
+        from main import add_league_member
+
+        add_league_member("canonical-abc", "user_2")
+        kwargs = mock_table.put_item.call_args.kwargs
+        assert kwargs["Item"]["PK"] == "LEAGUE#canonical-abc"
+        assert kwargs["Item"]["SK"] == "MEMBER#user_2"
+        assert kwargs["Item"]["member_user_id"] == "user_2"
+        assert kwargs["ConditionExpression"] == "attribute_not_exists(PK)"
+
+    def test_already_indexed_is_idempotent(self, mock_table):
+        import botocore.exceptions
+        from main import add_league_member
+
+        mock_table.put_item.side_effect = botocore.exceptions.ClientError(
+            {"Error": {"Code": "ConditionalCheckFailedException"}}, "PutItem"
+        )
+        add_league_member("canonical-abc", "user_2")  # no raise
+
+    def test_index_write_failure_raises_500(self, mock_table):
+        import botocore.exceptions
+        from fastapi import HTTPException
+        from main import add_league_member
+
+        mock_table.put_item.side_effect = botocore.exceptions.ClientError(
+            {"Error": {"Code": "InternalError", "Message": "x"}}, "PutItem"
+        )
+        with pytest.raises(HTTPException) as exc:
+            add_league_member("canonical-abc", "user_2")
+        assert exc.value.status_code == 500
+
+
+class TestIndexLeagueMember:
+    def test_puts_member_item(self, mock_table):
+        from main import index_league_member
+
+        index_league_member("canonical-abc", "user_2")
+        assert mock_table.put_item.call_args.kwargs["Item"]["SK"] == "MEMBER#user_2"
+
+    def test_already_indexed_is_idempotent(self, mock_table):
+        import botocore.exceptions
+        from main import index_league_member
+
+        mock_table.put_item.side_effect = botocore.exceptions.ClientError(
+            {"Error": {"Code": "ConditionalCheckFailedException"}}, "PutItem"
+        )
+        index_league_member("canonical-abc", "user_2")  # no raise
+
+    def test_client_error_raises_500(self, mock_table):
+        import botocore.exceptions
+        from fastapi import HTTPException
+        from main import index_league_member
+
+        mock_table.put_item.side_effect = botocore.exceptions.ClientError(
+            {"Error": {"Code": "InternalError", "Message": "x"}}, "PutItem"
+        )
+        with pytest.raises(HTTPException) as exc:
+            index_league_member("canonical-abc", "user_2")
+        assert exc.value.status_code == 500
+
+
+class TestRecordSleeperLeagueOpen:
+    def test_puts_member_item(self, mock_table):
+        from main import record_sleeper_league_open
+
+        record_sleeper_league_open("canonical-abc", "user_2")
+        assert mock_table.put_item.call_args.kwargs["Item"]["SK"] == "MEMBER#user_2"
+
+    @pytest.mark.parametrize(
+        "code", ["ConditionalCheckFailedException", "InternalError"]
+    )
+    def test_errors_are_swallowed(self, mock_table, code):
+        import botocore.exceptions
+        from main import record_sleeper_league_open
+
+        mock_table.put_item.side_effect = botocore.exceptions.ClientError(
+            {"Error": {"Code": code, "Message": "x"}}, "PutItem"
+        )
+        record_sleeper_league_open("canonical-abc", "user_2")  # no raise
+
 
 class TestDeleteLeagueHelpers:
     def _setup_writer(self, mock_table):

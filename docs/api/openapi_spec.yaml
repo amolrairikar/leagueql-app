@@ -629,6 +629,80 @@ paths:
         uri: "arn:aws:apigateway:${aws_region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations"
         payloadFormatVersion: "2.0"
 
+  /me/leagues:
+    get:
+      summary: List the caller's leagues
+      description: >
+        Lists every league the authenticated caller owns, has joined by redeeming an
+        invite, or has opened on Sleeper (backend/user-leagues), newest first by
+        updated_at. Backed by the per-user membership index (GSI4). Each entry carries
+        the league's current platform and league ID (enough to open it), its unified
+        seasons, and an owner-only ESPN re-auth flag. Responds with
+        Cache-Control no-store.
+      operationId: getMyLeagues
+      responses:
+        "200":
+          description: The caller's leagues (possibly empty)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/APIResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          type: object
+                          required:
+                            - league_id
+                            - platform
+                            - seasons
+                            - espn_reauth_required
+                          properties:
+                            league_id:
+                              type: string
+                              description: League ID on the league's current platform (latest season for Sleeper)
+                              example: "1048211234567890123"
+                            platform:
+                              type: string
+                              enum: [ESPN, SLEEPER, YAHOO]
+                              description: Current platform (active_platform after a migration)
+                            league_name:
+                              type: string
+                              nullable: true
+                            seasons:
+                              type: array
+                              description: Onboarded seasons across all platforms, ascending
+                              items:
+                                type: string
+                              example: ["2022", "2023", "2024"]
+                            updated_at:
+                              type: string
+                              format: date-time
+                              nullable: true
+                              description: last_refresh_at, else onboarded_at
+                            migrated_from:
+                              type: string
+                              enum: [ESPN, SLEEPER, YAHOO]
+                              nullable: true
+                            espn_reauth_required:
+                              type: boolean
+                              description: >
+                                True only when the caller owns this auto-refreshed ESPN
+                                league and their stored ESPN cookies need re-entry
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      security:
+        - ClerkJWT: []
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        httpMethod: POST        # always POST for Lambda proxy, regardless of your route method
+        uri: "arn:aws:apigateway:${aws_region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations"
+        payloadFormatVersion: "2.0"   # use 2.0 for HTTP API (v2)
+
   /jobs/{jobId}:
     get:
       summary: Get the status of an onboard/refresh/migrate job

@@ -125,6 +125,30 @@ export interface ExportLeagueResponse {
   data: Record<string, Record<string, unknown[]>>;
 }
 
+/**
+ * One entry of `GET /me/leagues` (backend/user-leagues): a league the caller owns, joined by
+ * invite, or opened on Sleeper. `league_id` + `platform` are the league's *current* platform
+ * identity, so they can be passed straight to `getLeague` to open it.
+ */
+export interface MyLeague {
+  league_id: string;
+  platform: Platform;
+  league_name: string | null;
+  /** Onboarded seasons across all platforms, ascending. */
+  seasons: string[];
+  /** `last_refresh_at`, else `onboarded_at` (ISO 8601). */
+  updated_at: string | null;
+  /** Source platform when the league was migrated, else null. */
+  migrated_from: Platform | null;
+  /** True only for the owner of an auto-refreshed ESPN league whose stored cookies need re-entry. */
+  espn_reauth_required: boolean;
+}
+
+export interface GetMyLeaguesResponse {
+  detail: string;
+  data: MyLeague[];
+}
+
 export interface GetLeagueResponse {
   detail: string;
   data: {

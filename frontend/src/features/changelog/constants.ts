@@ -17,6 +17,18 @@ export interface ChangelogRelease {
 // Newest release first.
 export const CHANGELOG: ChangelogRelease[] = [
   {
+    version: '1.13.0',
+    date: 'October 3, 2026',
+    sections: [
+      {
+        title: 'Added',
+        items: [
+          'View your leagues from the home page. Once you\'re signed in, a new "View My Leagues" button next to Connect Your League lists every league you\'ve connected, joined from an invite link, or opened on Sleeper. Click one to jump straight into it without re-entering its league ID.',
+        ],
+      },
+    ],
+  },
+  {
     version: '1.12.0',
     date: 'September 28, 2026',
     sections: [

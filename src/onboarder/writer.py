@@ -8,6 +8,7 @@ import botocore.config
 import botocore.exceptions
 from utils import correlation_id_var, logger
 
+from common.league_members import member_transact_put
 from common.tracing import inject_context
 
 _retry_config = botocore.config.Config(retries={"mode": "standard"})
@@ -392,6 +393,14 @@ def write_league_records(
                     }
                 },
             ]
+            # Index the onboarding owner for GET /me/leagues (backend/user-leagues),
+            # atomically with METADATA. System onboards (no owner) index no one.
+            if owner_user_id:
+                transact_items.append(
+                    member_transact_put(
+                        table_name, canonical_league_id, owner_user_id, now_iso
+                    )
+                )
 
         logger.info(
             "Writing onboarding status to DynamoDB: canonical_league_id=%s request_type=%s is_new_season_refresh=%s",
