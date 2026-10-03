@@ -509,3 +509,65 @@ def step_no_backfill_queued(context):
         QueueUrl=context.backfill_queue_url, MaxNumberOfMessages=10
     ).get("Messages", [])
     assert not messages, messages
+
+
+def _standings_rows(context, sk):
+    item = get_item(context, f"LEAGUE#{context.canonical}", sk)
+    assert item, f"no {sk} item written"
+    return item["data"]
+
+
+def _owner_of(context, sk, manager):
+    owners = {
+        row["owner_id"]
+        for row in _standings_rows(context, sk)
+        if row.get("owner_username") == manager
+    }
+    assert len(owners) == 1, f"{manager} in {sk}: owner ids {owners}"
+    return owners.pop()
+
+
+@then('the "{sk}" champion is "{manager}"')
+def step_champion_manager(context, sk, manager):
+    champs = [
+        row["owner_username"]
+        for row in _standings_rows(context, sk)
+        if row.get("champion") == "Yes"
+    ]
+    assert champs == [manager], f"{sk} champions were {champs}"
+
+
+@then('the "{sk_a}" and "{sk_b}" champions have different owner ids')
+def step_champions_distinct_owners(context, sk_a, sk_b):
+    def champ_owner(sk):
+        owners = [
+            row["owner_id"]
+            for row in _standings_rows(context, sk)
+            if row.get("champion") == "Yes"
+        ]
+        assert len(owners) == 1, f"{sk} champions: {owners}"
+        return owners[0]
+
+    assert champ_owner(sk_a) != champ_owner(sk_b)
+
+
+@then('"{manager}" has the same owner id in "{sk_a}" and "{sk_b}"')
+def step_same_owner_across_seasons(context, manager, sk_a, sk_b):
+    assert _owner_of(context, sk_a, manager) == _owner_of(context, sk_b, manager)
+
+
+@when('I remember the owner ids in "{sk}"')
+def step_remember_owner_ids(context, sk):
+    context.remembered_owners = {
+        row["owner_username"]: row["owner_id"] for row in _standings_rows(context, sk)
+    }
+
+
+@then('the owner ids in "{sk}" are unchanged')
+def step_owner_ids_unchanged(context, sk):
+    current = {
+        row["owner_username"]: row["owner_id"] for row in _standings_rows(context, sk)
+    }
+    assert current == context.remembered_owners, (
+        f"before={context.remembered_owners} after={current}"
+    )

@@ -292,7 +292,14 @@ class TestFilters:
             },
         )
         out = yc._filter_teams(data, "2025", "teams")
-        assert out["members"] == [{"manager_id": "G1", "nickname": "Alice"}]
+        assert out["members"] == [
+            {
+                "manager_id": "G1",
+                "nickname": "Alice",
+                "guid": "G1",
+                "slot_manager_id": "1",
+            }
+        ]
         assert out["teams"] == [
             {
                 "team_key": "461.l.100.t.1",
@@ -300,6 +307,8 @@ class TestFilters:
                 "name": "Team A",
                 "logo": "http://logo",
                 "manager_id": "G1",
+                "guid": "G1",
+                "slot_manager_id": "1",
             }
         ]
 
@@ -308,7 +317,7 @@ class TestFilters:
         every manager; owner ids must come from the distinct per-league manager_id so teams
         don't all collapse onto one manager."""
 
-        def _team(idx, nick):
+        def _team(idx, nick, guid="--hidden--"):
             return {
                 "team": [
                     [
@@ -321,7 +330,7 @@ class TestFilters:
                                     "manager": {
                                         "manager_id": str(idx),
                                         "nickname": nick,
-                                        "guid": "MASKED",
+                                        "guid": guid,
                                     }
                                 }
                             ]
@@ -336,10 +345,47 @@ class TestFilters:
         )
         out = yc._filter_teams(data, "2025", "teams")
         assert out["members"] == [
-            {"manager_id": "1", "nickname": "Alice"},
-            {"manager_id": "2", "nickname": "Bob"},
+            {
+                "manager_id": "1",
+                "nickname": "Alice",
+                "guid": None,
+                "slot_manager_id": "1",
+            },
+            {
+                "manager_id": "2",
+                "nickname": "Bob",
+                "guid": None,
+                "slot_manager_id": "2",
+            },
         ]
         assert [t["manager_id"] for t in out["teams"]] == ["1", "2"]
+        assert [t["guid"] for t in out["teams"]] == [None, None]
+        assert [t["slot_manager_id"] for t in out["teams"]] == ["1", "2"]
+
+    def test_teams_real_guid_kept_per_team(self, yc):
+        """A real guid is used for its own team even when another team's guid is masked."""
+
+        def _team(idx, guid):
+            return {
+                "team": [
+                    [
+                        {"team_key": f"461.l.100.t.{idx}"},
+                        {"team_id": str(idx)},
+                        {
+                            "managers": [
+                                {"manager": {"manager_id": str(idx), "guid": guid}}
+                            ]
+                        },
+                    ]
+                ]
+            }
+
+        data = _league_payload(
+            "teams", {"0": _team(1, "G1"), "1": _team(2, "--hidden--"), "count": 2}
+        )
+        out = yc._filter_teams(data, "2025", "teams")
+        assert [t["manager_id"] for t in out["teams"]] == ["G1", "2"]
+        assert [t["guid"] for t in out["teams"]] == ["G1", None]
 
     def test_matchups(self, yc):
         data = _league_payload(

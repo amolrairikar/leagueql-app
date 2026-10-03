@@ -1,6 +1,7 @@
 import datetime
 import json
 import os
+import re
 from collections import defaultdict
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -19,6 +20,7 @@ from utils import correlation_id_var, logger, publish_failure
 
 from common.job_status import write_job_status
 from common.tracing import init_tracing, traced_handler
+from common.yahoo_members import real_guid
 
 # Continue the trace the onboarder propagated via the manifest's S3 metadata → Better
 # Stack (backend/otel-tracing). A no-op unless tracing is configured, so tests / unconfigured envs
@@ -581,6 +583,45 @@ def read_yahoo_lineup_store(bucket: str, prefix: str, season: str) -> dict | Non
             return None
         raise
     return json.loads(response["Body"].read().decode("utf-8"))
+
+
+def read_yahoo_identity_teams(
+    bucket: str, prefix: str, seasons: list[str]
+) -> dict[str, dict]:
+    """Read only the ``teams`` record of each listed Yahoo season file.
+
+    Used on incremental runs so cross-season owner identities are resolved against the
+    seasons that are not being rebuilt. A season that fails to load raises, because
+    resolving without it could renumber managers already written for that season.
+
+    Returns:
+        season → that season's ``teams`` record data (seasons without one are omitted).
+    """
+    if not seasons:
+        return {}
+    teams_by_season: dict[str, dict] = {}
+    failed = []
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = {
+            executor.submit(read_s3_object, bucket, f"{prefix}/{s}.json"): s
+            for s in seasons
+        }
+        for future in as_completed(futures):
+            season = futures[future]
+            try:
+                records = future.result()
+            except Exception as exc:  # noqa: BLE001 — report every failed season together
+                logger.error("Season %s teams could not be read: %s", season, exc)
+                failed.append(season)
+                continue
+            for record in records:
+                if record.get("data_type") == "teams":
+                    teams_by_season[season] = record.get("data") or {}
+    if failed:
+        raise RuntimeError(
+            f"Failed to load Yahoo teams for owner identities: {sorted(failed)}"
+        )
+    return teams_by_season
 
 
 def merge_yahoo_lineup_stores(
@@ -1233,6 +1274,137 @@ def _classify_yahoo_playoff_tiers(matchups: list[dict]) -> list[str]:
     return tiers
 
 
+# Yahoo's stock team logos (e.g. ".../apiv2/default/nfl/nfl_5.png", "nfl_10_d.png") are shared by
+# many unrelated teams, so they never identify a manager.
+_YAHOO_DEFAULT_LOGO_RE = re.compile(r"/default/|/nfl_\d+(?:_d)?\.png$")
+_YAHOO_HIDDEN_NICKNAME = "--hidden--"
+# Identity-linking signals, strongest first (backend/data-processing-pipeline).
+_YAHOO_IDENTITY_SIGNALS = ("guid", "nickname", "team_name", "logo")
+
+
+def _yahoo_team_signals(team: dict, nickname: Any) -> dict[str, str | None]:
+    """Normalize one raw Yahoo team row into its identity-linking signals.
+
+    ``guid`` comes from the explicit field (rows written with backend/yahoo-stable-owner-identity)
+    or, for legacy rows without it, from a non-numeric ``manager_id`` (an old guid-keyed row);
+    a numeric ``manager_id`` is only a slot number and is never a signal.
+    """
+    if "guid" in team:
+        guid = real_guid(team.get("guid"))
+    else:
+        manager_id = team.get("manager_id")
+        guid = (
+            real_guid(manager_id)
+            if isinstance(manager_id, str) and not manager_id.isdigit()
+            else None
+        )
+    nick = (nickname or "").strip().casefold() if isinstance(nickname, str) else ""
+    name = team.get("name")
+    name = name.strip().casefold() if isinstance(name, str) else ""
+    logo = team.get("logo")
+    logo = (
+        logo.strip()
+        if isinstance(logo, str) and not _YAHOO_DEFAULT_LOGO_RE.search(logo)
+        else ""
+    )
+    return {
+        "guid": guid,
+        "nickname": nick if nick and nick != _YAHOO_HIDDEN_NICKNAME else None,
+        "team_name": name or None,
+        "logo": logo or None,
+    }
+
+
+def resolve_yahoo_owner_identities(
+    teams_by_season: dict[str, dict],
+) -> dict[tuple[str, str], str]:
+    """Assign each person in a Yahoo league one owner id across all seasons.
+
+    Yahoo usually masks manager guids, and its per-league ``manager_id`` is a team *slot* that is
+    reassigned when managers come and go, so neither identifies a person across seasons. Teams
+    are linked season by season (ascending) to identities seen in **any** earlier season, by
+    real guid → nickname → team name → custom logo. A pass links a team only when exactly one
+    unclaimed identity matches and no other team in the season proposes that same identity, and
+    a value shared by two teams within one season is never used. An unmatched team starts a new
+    identity whose id is its real guid, else its own team key — never renumbered as seasons are
+    appended. Teams with no manager at all are left unmapped.
+
+    Args:
+        teams_by_season: season → the raw ``teams`` record data (``{"members", "teams"}``).
+
+    Returns:
+        ``{(season, team_key): owner_id}`` for every team with a manager.
+    """
+    identities: list[dict[str, Any]] = []
+    owner_by_team: dict[tuple[str, str], str] = {}
+
+    for season in sorted(teams_by_season, key=lambda s: _int_or_none(s) or 0):
+        data = teams_by_season[season] or {}
+        nickname_by_manager = {
+            m.get("manager_id"): m.get("nickname") for m in data.get("members") or []
+        }
+        rows = []
+        for team in data.get("teams") or []:
+            team_key = team.get("team_key")
+            if not team_key or (
+                team.get("manager_id") is None and not real_guid(team.get("guid"))
+            ):
+                continue
+            signals = _yahoo_team_signals(
+                team, nickname_by_manager.get(team.get("manager_id"))
+            )
+            rows.append({"team_key": team_key, "signals": signals, "identity": None})
+
+        # A value two teams share within this season can't tell them apart: drop it.
+        for signal in _YAHOO_IDENTITY_SIGNALS:
+            counts = defaultdict(int)
+            for row in rows:
+                if row["signals"][signal]:
+                    counts[row["signals"][signal]] += 1
+            for row in rows:
+                if counts.get(row["signals"][signal], 0) > 1:
+                    row["signals"][signal] = None
+
+        claimed: set[int] = set()
+        for signal in _YAHOO_IDENTITY_SIGNALS:
+            proposals: dict[int, int] = {}
+            for idx, row in enumerate(rows):
+                value = row["signals"][signal]
+                if row["identity"] is not None or not value:
+                    continue
+                candidates = [
+                    i
+                    for i, ident in enumerate(identities)
+                    if i not in claimed and value in ident[signal]
+                ]
+                if len(candidates) == 1:
+                    proposals[idx] = candidates[0]
+            proposed_counts = defaultdict(int)
+            for ident_idx in proposals.values():
+                proposed_counts[ident_idx] += 1
+            for idx, ident_idx in proposals.items():
+                if proposed_counts[ident_idx] == 1:
+                    rows[idx]["identity"] = ident_idx
+                    claimed.add(ident_idx)
+
+        for row in rows:
+            if row["identity"] is None:
+                identities.append(
+                    {
+                        "id": row["signals"]["guid"] or row["team_key"],
+                        **{signal: set() for signal in _YAHOO_IDENTITY_SIGNALS},
+                    }
+                )
+                row["identity"] = len(identities) - 1
+            ident = identities[row["identity"]]
+            for signal in _YAHOO_IDENTITY_SIGNALS:
+                if row["signals"][signal]:
+                    ident[signal].add(row["signals"][signal])
+            owner_by_team[(season, row["team_key"])] = ident["id"]
+
+    return owner_by_team
+
+
 def _yahoo_week_for_timestamp(
     timestamp_s: int | None, calendar: list[tuple[int, str]]
 ) -> int | None:
@@ -1334,6 +1506,7 @@ def _register_yahoo_raw_data(
     raw_data: list[dict],
     player_metadata: dict,
     player_stats: dict,
+    identity_teams: dict[str, dict] | None = None,
 ) -> dict[str, list[dict]]:
     """Parse raw Yahoo API data into grouped lists ready for DuckDB registration.
 
@@ -1341,8 +1514,14 @@ def _register_yahoo_raw_data(
     PLAYOFF_BRACKET transforms (and ``_build_espn_brackets``) can be reused; only DRAFT and
     the pre-compiled TRANSACTIONS view use Yahoo-specific handling. Player names/positions and
     season scoring come from the Yahoo player-data cache (``player_metadata``/``player_stats``).
+
+    Owner ids are the stable cross-season identities from ``resolve_yahoo_owner_identities``,
+    resolved over the ``teams`` records of every season: those in ``raw_data`` plus
+    ``identity_teams`` (the league's other seasons, which an incremental run does not
+    reprocess), so a manager keeps the id already written for earlier seasons.
     """
     all_members: list[dict] = []
+    teams_records: dict[str, dict] = {}
     all_teams: list[dict] = []
     all_matchups: list[dict] = []
     all_draft_picks: list[dict] = []
@@ -1379,6 +1558,7 @@ def _register_yahoo_raw_data(
                     row.get("rank")
                 )
         elif data_type == "teams":
+            teams_records[season] = data
             for member in data.get("members", []):
                 all_members.append(
                     {
@@ -1424,6 +1604,38 @@ def _register_yahoo_raw_data(
                 for w in data.get("game_weeks", [])
                 if _int_or_none(w.get("week")) is not None and w.get("end")
             )
+
+    # Replace per-season owner ids (a guid or, usually, a reassignable slot number) with each
+    # person's stable cross-season id, and key the member rows the same way so the TEAMS join
+    # (primaryOwner = member id) still resolves each team's display name for its season.
+    owner_by_team = resolve_yahoo_owner_identities(
+        {**(identity_teams or {}), **teams_records}
+    )
+    raw_owner_by_team = {
+        (season, team.get("team_key")): team.get("manager_id")
+        for season, record in teams_records.items()
+        for team in record.get("teams") or []
+    }
+    stable_owner_by_raw: dict[tuple[str, Any], str] = {}
+    for team in all_teams:
+        key = (team["season"], team["id"])
+        owner = owner_by_team.get(key)
+        if owner is not None:
+            stable_owner_by_raw[(team["season"], raw_owner_by_team.get(key))] = owner
+            team["owners"] = [owner]
+            team["primaryOwner"] = owner
+    for member in all_members:
+        member["id"] = stable_owner_by_raw.get(
+            (member["season"], member["id"]), member["id"]
+        )
+    # Per season: the onboarder's raw owner id (what the Yahoo members proxy returns) → stable
+    # id, over every known season, so a migration mapping can be translated.
+    yahoo_owner_ids_by_season: dict[str, dict[str, str]] = defaultdict(dict)
+    for season, record in {**(identity_teams or {}), **teams_records}.items():
+        for team in record.get("teams") or []:
+            stable = owner_by_team.get((season, team.get("team_key")))
+            if stable is not None and team.get("manager_id") is not None:
+                yahoo_owner_ids_by_season[season][team["manager_id"]] = stable
 
     # Dedupe members by (id, season) so the TEAMS join is 1:1.
     seen_members = set()
@@ -1508,6 +1720,7 @@ def _register_yahoo_raw_data(
         "transactions": transactions,
         "league_name_by_season": league_name_by_season,
         "league_settings_by_season": league_settings_by_season,
+        "yahoo_owner_ids_by_season": dict(yahoo_owner_ids_by_season),
     }
 
 
@@ -1937,6 +2150,7 @@ def register_raw_data(
     platform: str,
     player_metadata: dict | None = None,
     player_stats: dict | None = None,
+    identity_teams: dict[str, dict] | None = None,
 ) -> dict[str, list[dict]]:
     """
     Register raw API response data as DuckDB views, grouped by data_type.
@@ -1950,6 +2164,8 @@ def register_raw_data(
         platform: The fantasy platform the data originates from (e.g. 'ESPN', 'SLEEPER').
         player_metadata: Sleeper player ID → metadata mapping; only used when platform is SLEEPER.
         player_stats: Sleeper player ID → season → stat mapping; only used when platform is SLEEPER.
+        identity_teams: Yahoo only — season → ``teams`` record data for the league's seasons not in
+            ``raw_data``, so cross-season owner identities stay consistent on incremental runs.
 
     Returns:
         Dict containing the grouped data, including league_name_by_season for ESPN leagues.
@@ -1967,6 +2183,7 @@ def register_raw_data(
             raw_data,
             player_metadata=player_metadata or {},
             player_stats=player_stats or {},
+            identity_teams=identity_teams,
         )
     else:
         raise ValueError(f"Unsupported platform: {platform}")
@@ -1974,7 +2191,11 @@ def register_raw_data(
     for data_type, rows in grouped.items():
         # Season-keyed metadata dicts (not row lists) are returned in `grouped` for the
         # writer, but they are not DuckDB views and must not be registered as such.
-        if data_type in ("league_name_by_season", "league_settings_by_season"):
+        if data_type in (
+            "league_name_by_season",
+            "league_settings_by_season",
+            "yahoo_owner_ids_by_season",
+        ):
             continue
         if not rows and data_type in _EMPTY_VIEW_DTYPES:
             # DuckDB cannot register a 0-column frame, and downstream queries reference
@@ -2109,6 +2330,59 @@ def dataframe_to_dynamo_items(
             )
 
     return items
+
+
+# Set on a PLATFORM_MIGRATION#<from>#YAHOO item once its destination owner ids are translated.
+YAHOO_MIGRATION_RESOLVED_ATTR = "yahoo_owner_ids_resolved"
+# Platforms a league can migrate *to* Yahoo from. The mapping keys are known, so they are read
+# with GetItem (the processor role is not granted dynamodb:Query).
+_YAHOO_MIGRATION_SOURCES = ("ESPN", "SLEEPER")
+
+
+def translate_yahoo_migration_mappings(
+    canonical_league_id: str, stable_owner_by_raw_id: dict[str, str]
+) -> None:
+    """Rewrite an untranslated Yahoo migration mapping onto stable owner ids, once.
+
+    The migration's ``newPlatformOwnerId`` values come from the Yahoo members proxy, i.e. the
+    per-season raw owner id (usually a slot number) of the destination season. Each is mapped
+    through ``stable_owner_by_raw_id`` (that season's raw → stable ids); ``__not_returning__``
+    and unknown ids are left unchanged. The item is then flagged so later runs, whose latest
+    season may have reassigned slots, never translate it again (backend/data-processing-pipeline).
+    """
+    if not stable_owner_by_raw_id:
+        return
+    pk = f"LEAGUE#{canonical_league_id}"
+    for source in _YAHOO_MIGRATION_SOURCES:
+        sk = f"PLATFORM_MIGRATION#{source}#YAHOO"
+        item = table.get_item(Key={"PK": pk, "SK": sk}).get("Item")
+        if not item or item.get(YAHOO_MIGRATION_RESOLVED_ATTR):
+            continue
+        translated = [
+            {
+                **entry,
+                "newPlatformOwnerId": stable_owner_by_raw_id.get(
+                    entry.get("newPlatformOwnerId"), entry.get("newPlatformOwnerId")
+                ),
+            }
+            for entry in item.get("data") or []
+        ]
+        try:
+            table.update_item(
+                Key={"PK": pk, "SK": sk},
+                UpdateExpression="SET #d = :d, #r = :t",
+                ConditionExpression="attribute_not_exists(#r)",
+                ExpressionAttributeNames={
+                    "#d": "data",
+                    "#r": YAHOO_MIGRATION_RESOLVED_ATTR,
+                },
+                ExpressionAttributeValues={":d": translated, ":t": True},
+            )
+        except botocore.exceptions.ClientError as e:
+            if e.response["Error"]["Code"] != "ConditionalCheckFailedException":
+                raise
+            continue
+        logger.info("Translated Yahoo migration mapping %s to stable owner ids", sk)
 
 
 def write_items(
@@ -2325,6 +2599,16 @@ def _process_manifest(
     if failed_seasons:
         raise RuntimeError(f"Failed to load seasons from S3: {failed_seasons}")
 
+    # Yahoo owner identities are resolved across every season, so an incremental run also needs
+    # the teams records of the seasons it is not rebuilding (backend/data-processing-pipeline).
+    identity_teams: dict[str, dict] = {}
+    if platform == "YAHOO":
+        identity_teams = read_yahoo_identity_teams(
+            bucket,
+            prefix,
+            [s for s in all_seasons if s not in set(seasons_to_process)],
+        )
+
     if platform == "YAHOO":
         raw_data = merge_yahoo_lineup_stores(
             raw_data,
@@ -2385,7 +2669,15 @@ def _process_manifest(
         platform=platform,
         player_metadata=player_metadata,
         player_stats=player_stats,
+        identity_teams=identity_teams,
     )
+
+    if platform == "YAHOO":
+        latest_season = max(all_seasons, key=lambda s: _int_or_none(s) or 0)
+        translate_yahoo_migration_mappings(
+            canonical_league_id,
+            (grouped.get("yahoo_owner_ids_by_season") or {}).get(latest_season, {}),
+        )
 
     # Extract league name from most recent season
     league_name = None

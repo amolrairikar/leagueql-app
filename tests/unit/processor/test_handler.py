@@ -1456,7 +1456,13 @@ class TestReprocessSeasons:
             {"reprocess_seasons": "2019"},
         )
         season_files = [key for key, _ in read_keys if key.startswith("raw/")]
-        assert [k.rsplit("/", 1)[-1] for k in season_files] == ["2019.json"]
+        # 2019 is rebuilt; 2020 and 2025 are read only for their teams records so Yahoo owner
+        # identities stay consistent across seasons (backend/data-processing-pipeline).
+        assert sorted(k.rsplit("/", 1)[-1] for k in season_files) == [
+            "2019.json",
+            "2020.json",
+            "2025.json",
+        ]
         # No previous-manifest diff is read.
         assert all(version_id is None for _, version_id in read_keys)
         # The season's lineup store is merged in for Yahoo.
@@ -1474,3 +1480,58 @@ class TestReprocessSeasons:
         read_store.assert_called_once()
         assert write_meta.call_args.kwargs["refresh"] is True
         assert write_meta.call_args.kwargs["league_name"] == "Old Name"
+
+
+class TestYahooMigrationTranslationWiring:
+    """backend/data-processing-pipeline: a Yahoo run translates any migration mapping using
+    the latest season's raw → stable owner ids; other platforms never do."""
+
+    def _run(self, processor_handler, manifest, grouped):
+        mock_s3 = MagicMock()
+        mock_s3.get_object.return_value = _manifest_response(manifest)
+
+        def fake_read(bucket, key, version_id=None):
+            if key.endswith(("players.json", "player_stats.json")):
+                return {}
+            return [{"data_type": "teams", "data": {}}]
+
+        platform = next(iter(manifest))
+        translate = MagicMock()
+        with (
+            patch.multiple(
+                processor_handler,
+                s3_client=mock_s3,
+                get_previous_version_id=MagicMock(return_value=None),
+                read_s3_object=MagicMock(side_effect=fake_read),
+                read_yahoo_lineup_store=MagicMock(return_value=None),
+                register_raw_data=MagicMock(return_value=grouped),
+                translate_yahoo_migration_mappings=translate,
+                dataframe_to_dynamo_items=MagicMock(return_value=[]),
+                write_items=MagicMock(),
+                write_metadata_items=MagicMock(),
+                QUERIES={
+                    name: {**q, platform: "SELECT 1"} if isinstance(q, dict) else q
+                    for name, q in _FAKE_QUERIES.items()
+                },
+            ),
+            patch.object(processor_handler.duckdb, "connect", return_value=MagicMock()),
+        ):
+            processor_handler._lambda_handler_impl(_s3_event(), MagicMock())
+        return translate
+
+    def test_yahoo_uses_latest_season_mapping(self, processor_handler):
+        translate = self._run(
+            processor_handler,
+            {"YAHOO": ["2019", "2025"]},
+            {
+                "yahoo_owner_ids_by_season": {
+                    "2019": {"1": "old"},
+                    "2025": {"1": "stable-1"},
+                }
+            },
+        )
+        translate.assert_called_once_with("canonical-abc", {"1": "stable-1"})
+
+    def test_non_yahoo_never_translates(self, processor_handler):
+        translate = self._run(processor_handler, {"SLEEPER": ["2025"]}, {})
+        translate.assert_not_called()

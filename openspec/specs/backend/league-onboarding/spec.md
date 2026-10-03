@@ -191,9 +191,11 @@ logo from the Yahoo `/teams` payload. Because Yahoo returns a collection either 
 object (`{"0": {...}, "count": N}`, used for large collections like teams and roster players) or as
 a plain list (`[{...}]`, used for small nested sub-collections like `managers` and `team_logos`),
 the parsing SHALL handle both shapes so owner ids, display names, and logos populate. Each team's
-primary-owner id SHALL be unique within the league: the manager `guid` SHALL be used when it is
-present for every team and distinct across the league; otherwise the per-league `manager_id` SHALL
-be used, so leagues where Yahoo masks the guid do not collapse every team onto one manager.
+primary-owner id SHALL be unique within the league: a team's manager `guid` SHALL be used when it
+is real (not a masked value such as `--hidden--` or `--`, and not empty) and unique within the
+league; otherwise that team's per-league `manager_id` SHALL be used. Each raw team row SHALL also
+carry the real `guid` (null when masked or absent) and the Yahoo slot `manager_id` as separate
+fields.
 
 #### Scenario: Managers and logos parsed from list-shaped sub-collections
 - **WHEN** a Yahoo `/teams` response returns each team's `managers` and `team_logos` as plain lists
@@ -205,14 +207,21 @@ be used, so leagues where Yahoo masks the guid do not collapse every team onto o
 - **THEN** the same fields are parsed identically
 
 #### Scenario: Masked or duplicate guids fall back to manager_id
-- **WHEN** Yahoo returns the same (masked) manager `guid` for every team, or omits it
-- **THEN** each team's primary-owner id comes from its distinct per-league `manager_id`, so every
-  team keeps a distinct owner and the correct manager name rather than collapsing onto the first
+- **WHEN** Yahoo returns a masked manager `guid` (e.g. `--hidden--`) or omits it for a team, or two
+  teams in the same league report the same non-masked guid
+- **THEN** each affected team's primary-owner id comes from its distinct per-league `manager_id`,
+  so every team keeps a distinct owner and the correct manager name rather than collapsing onto
+  the first, and a masked or absent guid is recorded as a null `guid` on the raw team row
 
 #### Scenario: Distinct guids preserved for cross-season continuity
-- **WHEN** Yahoo exposes a distinct guid for every team (e.g. a private league)
-- **THEN** those guids are used as the owner ids so the same manager stays continuous across
-  seasons
+- **WHEN** a team's manager has a real guid that no other team in the league shares
+- **THEN** that guid is used as the team's owner id, even if other teams in the league fall back
+  to their `manager_id`, so that manager stays continuous across seasons
+
+#### Scenario: Raw team row keeps guid and slot id separately
+- **WHEN** a Yahoo season's teams are written to the raw season data
+- **THEN** each team row carries `guid` (the real guid or null) and `slot_manager_id` (Yahoo's
+  per-league `manager_id`) in addition to the resolved owner id
 
 ### Requirement: Persist the auto-refresh opt-in on onboard and refresh
 

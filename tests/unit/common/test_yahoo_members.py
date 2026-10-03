@@ -186,6 +186,24 @@ class TestParseManagers:
         assert parse_managers(_teams_payload([])) == []
 
 
+class TestRealGuid:
+    @pytest.mark.parametrize(
+        "value, expected",
+        [
+            ("G1", "G1"),
+            ("  G1 ", "G1"),
+            ("--hidden--", None),
+            ("--", None),
+            ("", None),
+            ("   ", None),
+            (None, None),
+            (123, None),
+        ],
+    )
+    def test_normalizes(self, value, expected):
+        assert yahoo_members.real_guid(value) == expected
+
+
 class TestResolveTeamOwnerIds:
     @staticmethod
     def _team_flat(**manager_fields):
@@ -205,12 +223,37 @@ class TestResolveTeamOwnerIds:
         ]
         assert yahoo_members.resolve_team_owner_ids(flats) == ["1", "2"]
 
-    def test_partial_guids_fall_back_to_manager_id(self):
+    def test_missing_guid_falls_back_for_that_team_only(self):
         flats = [
             self._team_flat(manager_id="1"),
             self._team_flat(manager_id="2", guid="G2"),
         ]
-        assert yahoo_members.resolve_team_owner_ids(flats) == ["1", "2"]
+        assert yahoo_members.resolve_team_owner_ids(flats) == ["1", "G2"]
+
+    def test_all_masked_guids_fall_back_to_manager_id(self):
+        flats = [
+            self._team_flat(manager_id="1", guid="--hidden--"),
+            self._team_flat(manager_id="2", guid="--hidden--"),
+            self._team_flat(manager_id="3", guid="--"),
+        ]
+        assert yahoo_members.resolve_team_owner_ids(flats) == ["1", "2", "3"]
+
+    def test_mixed_real_and_masked_guids(self):
+        flats = [
+            self._team_flat(manager_id="1", guid="G1"),
+            self._team_flat(manager_id="2", guid="--hidden--"),
+            self._team_flat(manager_id="3", guid=""),
+            self._team_flat(manager_id="4", guid="G4"),
+        ]
+        assert yahoo_members.resolve_team_owner_ids(flats) == ["G1", "2", "3", "G4"]
+
+    def test_duplicate_guid_falls_back_for_those_teams_only(self):
+        flats = [
+            self._team_flat(manager_id="1", guid="DUP"),
+            self._team_flat(manager_id="2", guid="DUP"),
+            self._team_flat(manager_id="3", guid="G3"),
+        ]
+        assert yahoo_members.resolve_team_owner_ids(flats) == ["1", "2", "G3"]
 
     def test_no_manager(self):
         assert yahoo_members.resolve_team_owner_ids([{}]) == [None]
