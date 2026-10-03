@@ -15,7 +15,6 @@ import botocore.config
 import botocore.exceptions
 import duckdb
 import pandas as pd
-from boto3.dynamodb.conditions import Key
 from queries import QUERIES
 from utils import correlation_id_var, logger, publish_failure
 
@@ -2335,6 +2334,9 @@ def dataframe_to_dynamo_items(
 
 # Set on a PLATFORM_MIGRATION#<from>#YAHOO item once its destination owner ids are translated.
 YAHOO_MIGRATION_RESOLVED_ATTR = "yahoo_owner_ids_resolved"
+# Platforms a league can migrate *to* Yahoo from. The mapping keys are known, so they are read
+# with GetItem (the processor role is not granted dynamodb:Query).
+_YAHOO_MIGRATION_SOURCES = ("ESPN", "SLEEPER")
 
 
 def translate_yahoo_migration_mappings(
@@ -2351,12 +2353,10 @@ def translate_yahoo_migration_mappings(
     if not stable_owner_by_raw_id:
         return
     pk = f"LEAGUE#{canonical_league_id}"
-    response = table.query(
-        KeyConditionExpression=Key("PK").eq(pk)
-        & Key("SK").begins_with("PLATFORM_MIGRATION#")
-    )
-    for item in response.get("Items", []):
-        if not item["SK"].endswith("#YAHOO") or item.get(YAHOO_MIGRATION_RESOLVED_ATTR):
+    for source in _YAHOO_MIGRATION_SOURCES:
+        sk = f"PLATFORM_MIGRATION#{source}#YAHOO"
+        item = table.get_item(Key={"PK": pk, "SK": sk}).get("Item")
+        if not item or item.get(YAHOO_MIGRATION_RESOLVED_ATTR):
             continue
         translated = [
             {
@@ -2369,7 +2369,7 @@ def translate_yahoo_migration_mappings(
         ]
         try:
             table.update_item(
-                Key={"PK": pk, "SK": item["SK"]},
+                Key={"PK": pk, "SK": sk},
                 UpdateExpression="SET #d = :d, #r = :t",
                 ConditionExpression="attribute_not_exists(#r)",
                 ExpressionAttributeNames={
@@ -2382,9 +2382,7 @@ def translate_yahoo_migration_mappings(
             if e.response["Error"]["Code"] != "ConditionalCheckFailedException":
                 raise
             continue
-        logger.info(
-            "Translated Yahoo migration mapping %s to stable owner ids", item["SK"]
-        )
+        logger.info("Translated Yahoo migration mapping %s to stable owner ids", sk)
 
 
 def write_items(

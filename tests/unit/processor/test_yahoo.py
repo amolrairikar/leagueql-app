@@ -1191,17 +1191,39 @@ class TestTranslateYahooMigrationMappings:
         assert item["data"][0]["newPlatformOwnerId"] == "1"
         assert "yahoo_owner_ids_resolved" not in item
 
-    def test_empty_mapping_skips_query(self, processor_handler):
+    def test_empty_mapping_skips_reads(self, processor_handler):
         with patch.object(processor_handler, "table") as table:
             processor_handler.translate_yahoo_migration_mappings("canon", {})
+        table.get_item.assert_not_called()
+
+    def test_sleeper_source_translated(self, processor_handler, migration_table):
+        _put_mapping(migration_table, "PLATFORM_MIGRATION#SLEEPER#YAHOO", ["1"])
+        processor_handler.translate_yahoo_migration_mappings("canon", {"1": "S1"})
+        item = migration_table.get_item(
+            Key={"PK": "LEAGUE#canon", "SK": "PLATFORM_MIGRATION#SLEEPER#YAHOO"}
+        )["Item"]
+        assert item["data"][0]["newPlatformOwnerId"] == "S1"
+        assert item["yahoo_owner_ids_resolved"] is True
+
+    def test_uses_get_item_not_query(self, processor_handler):
+        """The processor role is granted GetItem/UpdateItem but not Query."""
+        table = MagicMock()
+        table.get_item.return_value = {}
+        with patch.object(processor_handler, "table", table):
+            processor_handler.translate_yahoo_migration_mappings("canon", {"1": "X"})
         table.query.assert_not_called()
+        assert [c.kwargs["Key"]["SK"] for c in table.get_item.call_args_list] == [
+            "PLATFORM_MIGRATION#ESPN#YAHOO",
+            "PLATFORM_MIGRATION#SLEEPER#YAHOO",
+        ]
+        table.update_item.assert_not_called()
 
     def test_concurrent_translation_is_tolerated(self, processor_handler):
         import botocore.exceptions
 
         table = MagicMock()
-        table.query.return_value = {
-            "Items": [{"SK": "PLATFORM_MIGRATION#ESPN#YAHOO", "data": []}]
+        table.get_item.return_value = {
+            "Item": {"SK": "PLATFORM_MIGRATION#ESPN#YAHOO", "data": []}
         }
         table.update_item.side_effect = botocore.exceptions.ClientError(
             {"Error": {"Code": "ConditionalCheckFailedException"}}, "UpdateItem"
@@ -1213,8 +1235,8 @@ class TestTranslateYahooMigrationMappings:
         import botocore.exceptions
 
         table = MagicMock()
-        table.query.return_value = {
-            "Items": [{"SK": "PLATFORM_MIGRATION#ESPN#YAHOO", "data": []}]
+        table.get_item.return_value = {
+            "Item": {"SK": "PLATFORM_MIGRATION#ESPN#YAHOO", "data": []}
         }
         table.update_item.side_effect = botocore.exceptions.ClientError(
             {"Error": {"Code": "ProvisionedThroughputExceededException"}}, "UpdateItem"
