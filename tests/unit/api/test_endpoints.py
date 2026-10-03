@@ -2869,6 +2869,114 @@ class TestGetLeagueAutoRefreshFlag:
         assert response.json()["data"]["auto_refresh_enabled"] is False
 
 
+class TestGetLeagueEspnReauth:
+    """espn_reauth_required tells the owner their auto-refresh cookies need re-entry
+    (backend/league-metadata)."""
+
+    def _espn_metadata(self, league_metadata_item, **overrides):
+        item = {
+            **league_metadata_item,
+            "platform": "ESPN",
+            "auto_refresh_enabled": True,
+        }
+        item.update(overrides)
+        return item
+
+    def _get(self, client, mock_table, league_lookup_item, metadata, credentials):
+        responses = [{"Item": league_lookup_item}, {"Item": metadata}]
+        if credentials is not None:
+            responses.append(credentials)
+        mock_table.get_item.side_effect = responses
+        mock_table.query.return_value = {
+            "Items": [{"seasons": {"2024"}, "canonical_league_id": "canonical-abc"}]
+        }
+        response = client.get("/leagues/123?platform=ESPN")
+        assert response.status_code == 200
+        return response.json()["data"]
+
+    def test_owner_with_rejected_cookies(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        data = self._get(
+            client,
+            mock_table,
+            league_lookup_item,
+            self._espn_metadata(league_metadata_item),
+            {"Item": {"PK": "USER#x", "auth_failed_at": "2026-10-01T09:00:00+00:00"}},
+        )
+        assert data["espn_reauth_required"] is True
+        assert data["espn_credentials_failed_at"] == "2026-10-01T09:00:00+00:00"
+        cred_key = mock_table.get_item.call_args_list[-1].kwargs["Key"]
+        assert cred_key["SK"] == "ESPN_CREDENTIALS"
+
+    def test_owner_with_missing_cookies(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        data = self._get(
+            client,
+            mock_table,
+            league_lookup_item,
+            self._espn_metadata(league_metadata_item),
+            {},
+        )
+        assert data["espn_reauth_required"] is True
+        assert data["espn_credentials_failed_at"] is None
+
+    def test_owner_with_healthy_cookies(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        data = self._get(
+            client,
+            mock_table,
+            league_lookup_item,
+            self._espn_metadata(league_metadata_item),
+            {"Item": {"PK": "USER#x"}},
+        )
+        assert data["espn_reauth_required"] is False
+        assert data["espn_credentials_failed_at"] is None
+
+    def test_credential_read_error_reports_no_reauth(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": self._espn_metadata(league_metadata_item)},
+            botocore.exceptions.ClientError(
+                {"Error": {"Code": "InternalServerError"}}, "GetItem"
+            ),
+        ]
+        mock_table.query.return_value = {
+            "Items": [{"seasons": {"2024"}, "canonical_league_id": "canonical-abc"}]
+        }
+        response = client.get("/leagues/123?platform=ESPN")
+        assert response.status_code == 200
+        assert response.json()["data"]["espn_reauth_required"] is False
+
+    @pytest.mark.parametrize(
+        "overrides",
+        [
+            {"auto_refresh_enabled": False},
+            {"owner_user_id": "someone-else"},
+            {"platform": "SLEEPER"},
+            {"active_platform": "YAHOO"},
+        ],
+    )
+    def test_not_computed_outside_owner_enrolled_espn(
+        self, client, mock_table, league_lookup_item, league_metadata_item, overrides
+    ):
+        data = self._get(
+            client,
+            mock_table,
+            league_lookup_item,
+            self._espn_metadata(league_metadata_item, **overrides),
+            None,
+        )
+        assert data["espn_reauth_required"] is False
+        assert data["espn_credentials_failed_at"] is None
+        # The credential item is never read for these callers.
+        assert mock_table.get_item.call_count == 2
+
+
 class TestOnboardForwardsAutoRefresh:
     def test_auto_refresh_forwarded_in_invoke(
         self, client, mock_table, mock_lambda_client

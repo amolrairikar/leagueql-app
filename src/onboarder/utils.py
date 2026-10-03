@@ -25,6 +25,17 @@ _MAX_LOGGED_BODY_CHARS = 2000
 
 publish_failure = partial(_publish_failure, subject="LeagueQL Onboarder Failure")
 
+# Upstream statuses meaning the platform rejected the caller's credentials.
+AUTH_REJECTED_STATUSES = frozenset({401, 403})
+
+
+class UpstreamAuthError(RuntimeError):
+    """Every season failed and every failed request was rejected for auth (401/403).
+
+    A ``RuntimeError`` so existing callers still treat it as a failed fetch; the handler
+    classifies it as ``ESPN_AUTH`` for ESPN instead of ``UPSTREAM`` (backend/league-onboarding).
+    """
+
 
 def matchup_weeks(season: str | int) -> range:
     """
@@ -207,7 +218,17 @@ async def fetch_one(
                 data_type,
                 describe_fetch_error(e),
             )
-            return {"season": season, "data_type": data_type, "data": None}
+            # Carry the upstream status so validate_api_results can tell an all-auth
+            # rejection (expired cookies) from a genuine upstream outage.
+            error_status = (
+                e.status if isinstance(e, aiohttp.ClientResponseError) else None
+            )
+            return {
+                "season": season,
+                "data_type": data_type,
+                "data": None,
+                "error_status": error_status,
+            }
 
 
 def validate_api_results(
@@ -221,8 +242,9 @@ def validate_api_results(
     seasons whose every fetch succeeded — a season with any failed fetch is dropped so its
     accessible siblings can still onboard (backend/league-onboarding: "Onboard seasons
     resiliently"). Dropped seasons are logged. Onboarding fails as a whole (``RuntimeError``,
-    surfaced by the handler as ``UPSTREAM``/502) only when *every* season failed. Empty input
-    returns ``[]``.
+    surfaced by the handler as ``UPSTREAM``/502) only when *every* season failed; when every
+    failed request was also rejected for auth (401/403) it raises ``UpstreamAuthError`` instead,
+    so expired credentials are not reported as an upstream outage. Empty input returns ``[]``.
 
     Args:
         results: Raw results from asyncio.gather, which may include BaseException instances.
@@ -233,6 +255,7 @@ def validate_api_results(
     """
     failed_seasons: set[str] = set()
     seen_seasons: set[str] = set()
+    failure_statuses: list[int | None] = []
     for result in results:
         if isinstance(result, BaseException):
             logger.error("Unhandled exception in gather: %s", result)
@@ -246,6 +269,7 @@ def validate_api_results(
         seen_seasons.add(season)
         if result["data"] is None:
             failed_seasons.add(season)
+            failure_statuses.append(result.get("error_status"))
 
     if failed_seasons:
         logger.warning(
@@ -254,6 +278,10 @@ def validate_api_results(
         )
 
     if seen_seasons and seen_seasons <= failed_seasons:
+        if all(status in AUTH_REJECTED_STATUSES for status in failure_statuses):
+            raise UpstreamAuthError(
+                f"Credentials rejected for all seasons: {sorted(failed_seasons)}"
+            )
         raise RuntimeError(
             f"Failed to get data for all seasons: {sorted(failed_seasons)}"
         )

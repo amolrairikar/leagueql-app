@@ -529,6 +529,65 @@ class TestGetLeaguesToRefreshEspn:
             result = league_refresh_utils.get_leagues_to_refresh(2026)
         assert result == []
 
+    def _espn_pages(self):
+        return [
+            {
+                "Items": [
+                    {
+                        "canonical_league_id": {"S": "e-canon"},
+                        "league_id": {"S": "e-2026"},
+                        "seasons": {"SS": ["2026"]},
+                    }
+                ]
+            }
+        ]
+
+    @staticmethod
+    def _get_item_by_sk(credentials_item):
+        metadata = {
+            "Item": {
+                "owner_user_id": {"S": "user-7"},
+                "auto_refresh_enabled": {"BOOL": True},
+            }
+        }
+
+        def _side_effect(**kwargs):
+            if kwargs["Key"]["SK"]["S"] == "ESPN_CREDENTIALS":
+                return credentials_item
+            return metadata
+
+        return _side_effect
+
+    def test_skips_espn_league_whose_owner_cookies_were_rejected(
+        self, league_refresh_utils
+    ):
+        mock_ddb = MagicMock()
+        mock_ddb.query.side_effect = _query_side_effect(espn_pages=self._espn_pages())
+        mock_ddb.get_item.side_effect = self._get_item_by_sk(
+            {"Item": {"auth_failed_at": {"S": "2026-10-01T09:00:00+00:00"}}}
+        )
+        with patch.object(league_refresh_utils, "_dynamodb_client", mock_ddb):
+            result = league_refresh_utils.get_leagues_to_refresh(2026)
+        assert result == []
+        cred_call = mock_ddb.get_item.call_args_list[-1].kwargs
+        assert cred_call["Key"] == {
+            "PK": {"S": "USER#user-7"},
+            "SK": {"S": "ESPN_CREDENTIALS"},
+        }
+        assert cred_call["ProjectionExpression"] == "auth_failed_at"
+
+    @pytest.mark.parametrize("credentials_item", [{"Item": {}}, {}])
+    def test_selects_espn_league_with_unflagged_or_missing_cookies(
+        self, league_refresh_utils, credentials_item
+    ):
+        # Missing cookies are not skipped here: the onboarder records ESPN_AUTH for them.
+        mock_ddb = MagicMock()
+        mock_ddb.query.side_effect = _query_side_effect(espn_pages=self._espn_pages())
+        mock_ddb.get_item.side_effect = self._get_item_by_sk(credentials_item)
+        with patch.object(league_refresh_utils, "_dynamodb_client", mock_ddb):
+            result = league_refresh_utils.get_leagues_to_refresh(2026)
+        assert [r["league_id"] for r in result] == ["e-2026"]
+
 
 class TestGetLeaguesToRefreshAllPlatforms:
     def test_returns_all_three_platforms(self, league_refresh_utils):

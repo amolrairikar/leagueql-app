@@ -40,3 +40,13 @@ Feature: Owner-gated sidebar actions (backend/league-authorization / frontend/ow
     And I see the "Delete League" action
     And I see the "Transfer Ownership" action
     And I do not see the "Refresh League" action
+    And I do not see the "Update ESPN Cookies" action
+
+  Scenario: An auto-refreshed ESPN owner whose saved cookies were rejected sees Update ESPN Cookies
+    Given I am the owner of the current auto-refreshed ESPN league whose saved cookies ESPN rejected
+    When I render the sidebar
+    Then I see the "Update ESPN Cookies" action
+    And I see the "Turn Off Auto-Refresh" action
+    And I do not see the "Refresh League" action
+    When I open the "Update ESPN Cookies" action
+    Then the cookie dialog opens with automatic refresh already checked

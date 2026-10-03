@@ -779,7 +779,7 @@ class TestLambdaHandlerEspnAutoRefresh:
         }
         svc = self._running_service()
         cred_client = MagicMock()
-        cred_client.get_credentials.return_value = ("swid-val", "s2-val")
+        cred_client.get_stored_credentials.return_value = ("swid-val", "s2-val", 1700)
         with (
             patch.object(
                 onboarder_handler, "OnboardingService", return_value=svc
@@ -793,7 +793,8 @@ class TestLambdaHandlerEspnAutoRefresh:
             result = onboarder_handler.lambda_handler(event, MagicMock())
 
         assert result["statusCode"] == 200
-        cred_client.get_credentials.assert_called_once_with("user-7")
+        cred_client.get_stored_credentials.assert_called_once_with("user-7")
+        cred_client.mark_auth_failed.assert_not_called()
         kwargs = mock_cls.call_args.kwargs
         assert kwargs["swid_cookie"] == "swid-val"
         assert kwargs["espn_s2_cookie"] == "s2-val"
@@ -810,8 +811,8 @@ class TestLambdaHandlerEspnAutoRefresh:
             "body": {"leagueId": "e-2026", "platform": "ESPN", "season": "2026"},
         }
         cred_client = MagicMock()
-        cred_client.get_credentials.side_effect = onboarder_handler.ESPNReauthRequired(
-            "none"
+        cred_client.get_stored_credentials.side_effect = (
+            onboarder_handler.ESPNReauthRequired("none")
         )
         with (
             patch.object(onboarder_handler, "OnboardingService") as mock_cls,
@@ -829,6 +830,163 @@ class TestLambdaHandlerEspnAutoRefresh:
         mock_cls.assert_not_called()
         # The failure is recorded as the non-paging ESPN_AUTH re-link signal.
         assert mock_wjs.call_args.kwargs["failure_code"] == "ESPN_AUTH"
+
+    def _scheduled_event(self):
+        return {
+            "requestType": "REFRESH",
+            "canonicalLeagueId": "espn-canon",
+            "ownerUserId": "user-7",
+            "body": {"leagueId": "e-2026", "platform": "ESPN", "season": "2026"},
+        }
+
+    def _stored_cred_client(self):
+        cred_client = MagicMock()
+        cred_client.get_stored_credentials.return_value = ("swid-val", "s2-val", 1700)
+        return cred_client
+
+    def test_scheduled_refresh_discovery_401_flags_stored_cookies(
+        self, onboarder_handler
+    ):
+        # Season discovery (sync requests) is rejected: ESPN_AUTH and the exact stored
+        # version is flagged for the owner.
+        err = requests.exceptions.HTTPError("401")
+        err.response = MagicMock(status_code=401)
+        cred_client = self._stored_cred_client()
+        with (
+            patch.object(onboarder_handler, "OnboardingService", side_effect=err),
+            patch.object(
+                onboarder_handler, "espn_credentials_from_env", return_value=cred_client
+            ),
+            patch.object(onboarder_handler, "write_job_status") as mock_wjs,
+            patch.object(onboarder_handler, "publish_failure") as mock_pub,
+        ):
+            onboarder_handler.lambda_handler(self._scheduled_event(), MagicMock())
+
+        assert mock_wjs.call_args.kwargs["failure_code"] == "ESPN_AUTH"
+        cred_client.mark_auth_failed.assert_called_once_with("user-7", 1700)
+        mock_pub.assert_not_called()
+
+    def test_scheduled_refresh_run_http_401_flags_stored_cookies(
+        self, onboarder_handler
+    ):
+        err = requests.exceptions.HTTPError("401")
+        err.response = MagicMock(status_code=401)
+        svc = self._running_service()
+        svc.run.side_effect = err
+        cred_client = self._stored_cred_client()
+        with (
+            patch.object(onboarder_handler, "OnboardingService", return_value=svc),
+            patch.object(
+                onboarder_handler, "espn_credentials_from_env", return_value=cred_client
+            ),
+            patch.object(onboarder_handler, "write_job_status") as mock_wjs,
+        ):
+            onboarder_handler.lambda_handler(self._scheduled_event(), MagicMock())
+
+        assert mock_wjs.call_args.kwargs["failure_code"] == "ESPN_AUTH"
+        cred_client.mark_auth_failed.assert_called_once_with("user-7", 1700)
+
+    @pytest.mark.parametrize("during", ["init", "run"])
+    def test_scheduled_refresh_all_fetches_rejected_flags_and_does_not_page(
+        self, onboarder_handler, during
+    ):
+        # Every async per-week fetch 401s: UpstreamAuthError -> ESPN_AUTH, no alert.
+        err = onboarder_handler.UpstreamAuthError("Credentials rejected")
+        svc = self._running_service()
+        if during == "run":
+            svc.run.side_effect = err
+            service_patch = {"return_value": svc}
+        else:
+            service_patch = {"side_effect": err}
+        cred_client = self._stored_cred_client()
+        with (
+            patch.object(onboarder_handler, "OnboardingService", **service_patch),
+            patch.object(
+                onboarder_handler, "espn_credentials_from_env", return_value=cred_client
+            ),
+            patch.object(onboarder_handler, "write_job_status") as mock_wjs,
+            patch.object(onboarder_handler, "publish_failure") as mock_pub,
+        ):
+            result = onboarder_handler.lambda_handler(
+                self._scheduled_event(), MagicMock()
+            )
+
+        assert result["statusCode"] == 502
+        assert mock_wjs.call_args.kwargs["failure_code"] == "ESPN_AUTH"
+        cred_client.mark_auth_failed.assert_called_once_with("user-7", 1700)
+        mock_pub.assert_not_called()
+
+    def test_scheduled_refresh_upstream_error_does_not_flag(self, onboarder_handler):
+        svc = self._running_service()
+        svc.run.side_effect = RuntimeError("ESPN down")
+        cred_client = self._stored_cred_client()
+        with (
+            patch.object(onboarder_handler, "OnboardingService", return_value=svc),
+            patch.object(
+                onboarder_handler, "espn_credentials_from_env", return_value=cred_client
+            ),
+            patch.object(onboarder_handler, "write_job_status") as mock_wjs,
+            patch.object(onboarder_handler, "publish_failure"),
+        ):
+            onboarder_handler.lambda_handler(self._scheduled_event(), MagicMock())
+
+        assert mock_wjs.call_args.kwargs["failure_code"] == "UPSTREAM"
+        cred_client.mark_auth_failed.assert_not_called()
+
+    def test_flag_failure_does_not_change_recorded_failure(self, onboarder_handler):
+        err = requests.exceptions.HTTPError("401")
+        err.response = MagicMock(status_code=401)
+        cred_client = self._stored_cred_client()
+        cred_client.mark_auth_failed.side_effect = RuntimeError("dynamo down")
+        with (
+            patch.object(onboarder_handler, "OnboardingService", side_effect=err),
+            patch.object(
+                onboarder_handler, "espn_credentials_from_env", return_value=cred_client
+            ),
+            patch.object(onboarder_handler, "write_job_status") as mock_wjs,
+        ):
+            result = onboarder_handler.lambda_handler(
+                self._scheduled_event(), MagicMock()
+            )
+
+        assert result["statusCode"] == 502
+        assert mock_wjs.call_args.kwargs["failure_code"] == "ESPN_AUTH"
+
+    def test_user_supplied_cookies_rejected_are_not_flagged(self, onboarder_handler):
+        event = self._scheduled_event()
+        event["body"] = {**event["body"], "swid": "{S}", "s2": "s2"}
+        err = requests.exceptions.HTTPError("401")
+        err.response = MagicMock(status_code=401)
+        cred_client = self._stored_cred_client()
+        with (
+            patch.object(onboarder_handler, "OnboardingService", side_effect=err),
+            patch.object(
+                onboarder_handler, "espn_credentials_from_env", return_value=cred_client
+            ),
+            patch.object(onboarder_handler, "write_job_status") as mock_wjs,
+        ):
+            onboarder_handler.lambda_handler(event, MagicMock())
+
+        assert mock_wjs.call_args.kwargs["failure_code"] == "ESPN_AUTH"
+        cred_client.get_stored_credentials.assert_not_called()
+        cred_client.mark_auth_failed.assert_not_called()
+
+    def test_upstream_auth_error_on_non_espn_stays_upstream(self, onboarder_handler):
+        event = {
+            "requestType": "ONBOARD",
+            "correlation_id": "corr-1",
+            "body": {"leagueId": "123", "platform": "SLEEPER"},
+        }
+        svc = MagicMock()
+        svc.canonical_league_id = "canonical-abc"
+        svc.run.side_effect = onboarder_handler.UpstreamAuthError("rejected")
+        with (
+            patch.object(onboarder_handler, "OnboardingService", return_value=svc),
+            patch.object(onboarder_handler, "write_job_status") as mock_wjs,
+            patch.object(onboarder_handler, "publish_failure"),
+        ):
+            onboarder_handler.lambda_handler(event, MagicMock())
+        assert mock_wjs.call_args.kwargs["failure_code"] == "UPSTREAM"
 
     def test_optin_onboard_stores_cookies(self, onboarder_handler):
         # A user-initiated ESPN onboard that opts in stores the supplied cookies after a

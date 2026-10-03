@@ -57,16 +57,19 @@ defineFeature(feature, (test) => {
     });
   }
 
-  async function renderDialog() {
-    await renderRoute(<RefreshLeagueDialog open onOpenChange={vi.fn()} />, {
-      league: espnLeague,
-    });
+  async function renderDialog(reauth = false) {
+    await renderRoute(
+      <RefreshLeagueDialog open onOpenChange={vi.fn()} reauth={reauth} />,
+      { league: espnLeague },
+    );
   }
 
   /** Fill the SWID/espn_s2 inputs (real timers), then submit under fake timers. */
-  async function enterCookiesAndRefresh(opts: { autoRefresh?: boolean } = {}) {
+  async function enterCookiesAndRefresh(
+    opts: { autoRefresh?: boolean; reauth?: boolean } = {},
+  ) {
     const user = userEvent.setup();
-    await renderDialog();
+    await renderDialog(opts.reauth);
     await user.type(
       screen.getByPlaceholderText('Enter your SWID'),
       'swidcookie',
@@ -177,6 +180,48 @@ defineFeature(feature, (test) => {
       'I enter my ESPN cookies, enable auto-refresh, and refresh from the dialog',
       async () => {
         await enterCookiesAndRefresh({ autoRefresh: true });
+      },
+    );
+    then('the refresh request opted into auto-refresh', () => {
+      expect(capturedBody?.autoRefresh).toBe(true);
+    });
+    and('the dashboard reloads with the fresh data', () => {
+      expect(reload).toHaveBeenCalled();
+    });
+  });
+
+  test('Updating rejected cookies keeps the league on auto-refresh', ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    let capturedBody: { autoRefresh?: boolean } | null = null;
+    given(
+      /^refreshing my ESPN league will complete successfully and the current season is "(.*)"$/,
+      (season) => {
+        stubReload();
+        server.use(
+          sleeperNflState(season),
+          http.post(`${API}/leagues`, async ({ request }) => {
+            capturedBody = (await request.json()) as { autoRefresh?: boolean };
+            return HttpResponse.json(
+              {
+                detail: 'Successfully triggered refresh',
+                data: { correlation_id: 'corr-1' },
+              },
+              { status: 201 },
+            );
+          }),
+          jobCompleted,
+          getLeagueOk,
+        );
+      },
+    );
+    when(
+      'I enter my ESPN cookies in the Update ESPN Cookies dialog and submit without touching the opt-in',
+      async () => {
+        await enterCookiesAndRefresh({ reauth: true });
       },
     );
     then('the refresh request opted into auto-refresh', () => {

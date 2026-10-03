@@ -51,20 +51,29 @@ const POLL_INITIAL_DELAY_MS = 5000;
  * (`429` cooldown / `409` up to date or in progress) still enrolls the league
  * server-side (backend/league-refresh), so the dialog confirms auto-refresh is on
  * and reloads into the enrolled state when closed.
+ *
+ * In `reauth` mode (an auto-refreshed league whose stored cookies ESPN rejected,
+ * `espn_reauth_required`) the dialog is titled "Update ESPN Cookies" and the
+ * opt-in starts checked, so submitting re-stores the cookies — via a successful
+ * refresh or the blocked-refresh enrollment — which clears the rejection and
+ * resumes automatic refresh (backend/espn-credential-storage).
  */
 export function RefreshLeagueDialog({
   open,
   onOpenChange,
+  reauth = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  reauth?: boolean;
 }) {
   const { leagueId } = getLeagueCookies();
   const [swid, setSwid] = useState('');
   const [espnS2, setEspnS2] = useState('');
   // Opt into scheduled auto-refresh. Defaults off: the manual action only appears
-  // for a league not already enrolled (backend/scheduled-league-auto-refresh).
-  const [autoRefresh, setAutoRefresh] = useState(false);
+  // for a league not already enrolled (backend/scheduled-league-auto-refresh). In
+  // reauth mode the league is already enrolled, so keep it opted in.
+  const [autoRefresh, setAutoRefresh] = useState(reauth);
   const [loading, setLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -181,7 +190,7 @@ export function RefreshLeagueDialog({
       reset();
       setSwid('');
       setEspnS2('');
-      setAutoRefresh(false);
+      setAutoRefresh(reauth);
     }
   }
 
@@ -189,10 +198,14 @@ export function RefreshLeagueDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle className="text-center">Refresh League</DialogTitle>
+          <DialogTitle className="text-center">
+            {reauth ? 'Update ESPN Cookies' : 'Refresh League'}
+          </DialogTitle>
           <DialogDescription>
-            Enter your ESPN cookies to pull your league&apos;s latest data. Your
-            cookies are sent once and cleared from your browser afterward.
+            {reauth
+              ? 'ESPN rejected your saved cookies, so automatic refresh is paused. Enter your current ESPN cookies to resume it.'
+              : "Enter your ESPN cookies to pull your league's latest data."}{' '}
+            Your cookies are sent once and cleared from your browser afterward.
           </DialogDescription>
         </DialogHeader>
         <EspnCredentialFields

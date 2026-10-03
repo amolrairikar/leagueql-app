@@ -62,6 +62,9 @@ _ENV = {
     "YAHOO_CLIENT_ID_SSM_PARAM": "/leagueql/test/yahoo/client_id",
     "YAHOO_REDIRECT_URI": "https://api.test/leagues/yahoo/oauth/callback",
     "YAHOO_CONNECT_RETURN_URL": "https://app.test/",
+    # backend/espn-credential-storage: the onboarder pins its KMS client to this region to
+    # decrypt the owner's stored ESPN cookies on a scheduled refresh.
+    "ESPN_KMS_REGION": REGION,
     "AWS_DEFAULT_REGION": REGION,
     "AWS_ACCESS_KEY_ID": "testing",
     "AWS_SECRET_ACCESS_KEY": "testing",

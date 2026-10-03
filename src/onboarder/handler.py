@@ -4,7 +4,7 @@ import uuid
 import requests
 from onboarding_service import OnboardingService
 from sleeper_client import resolve_sleeper_canonical_league_id
-from utils import correlation_id_var, logger, publish_failure
+from utils import UpstreamAuthError, correlation_id_var, logger, publish_failure
 from writer import write_pending_league_lookup
 
 from common.espn_credentials import ESPNReauthRequired
@@ -21,12 +21,44 @@ from common.tracing import init_tracing, traced_handler
 init_tracing("leagueql-onboarder")
 
 
+def _classify_runtime_error(exc: RuntimeError, body: dict) -> str:
+    """Map a fetch ``RuntimeError`` to a failure code.
+
+    ``UpstreamAuthError`` (every season rejected with 401/403) on an ESPN league means the
+    cookies were rejected, so it is the non-paging ``ESPN_AUTH``; anything else is ``UPSTREAM``
+    (backend/league-onboarding).
+    """
+    if isinstance(exc, UpstreamAuthError) and body.get("platform") == "ESPN":
+        return "ESPN_AUTH"
+    return "UPSTREAM"
+
+
+def _flag_rejected_stored_credentials(
+    failure_code: str, stored_credentials: tuple[str, int | None] | None
+) -> None:
+    """Flag the owner's stored ESPN cookies when this run used them and ESPN rejected them.
+
+    ``stored_credentials`` is ``(owner_user_id, updated_at)`` for a scheduled refresh that used
+    stored cookies, else ``None`` (user-supplied cookies are never flagged). Best-effort: a
+    failure is logged and never changes the recorded failure (backend/espn-credential-storage).
+    """
+    if failure_code != "ESPN_AUTH" or stored_credentials is None:
+        return
+    owner_user_id, version = stored_credentials
+    try:
+        if espn_credentials_from_env().mark_auth_failed(owner_user_id, version):
+            logger.warning("Flagged stored ESPN credentials as rejected by ESPN")
+    except Exception as e:  # noqa: BLE001 — best-effort flag
+        logger.error("Failed to flag rejected ESPN credentials: %s", e)
+
+
 def _record_failure(
     request_type: str,
     failure_code: str,
     body: dict | None = None,
     canonical_league_id: str | None = None,
     error_detail: str | None = None,
+    stored_credentials: tuple[str, int | None] | None = None,
 ) -> None:
     """Write a FAILED JOB_STATUS item so the failure reaches the user (best-effort).
 
@@ -34,10 +66,12 @@ def _record_failure(
     additionally publish an SNS alert. Expected user errors (INVALID_INPUT,
     ESPN_AUTH, NOT_FOUND) are recorded for the user but never page us. Centralizing
     the decision here keeps it keyed off the classified ``failure_code``, so an
-    HTTPError classified as ESPN_AUTH/NOT_FOUND no longer triggers an alert.
+    HTTPError classified as ESPN_AUTH/NOT_FOUND no longer triggers an alert. An ESPN_AUTH
+    from a run that used stored cookies also flags those cookies as rejected.
     """
     body = body or {}
     league_id = body.get("leagueId")
+    _flag_rejected_stored_credentials(failure_code, stored_credentials)
     write_job_status(
         correlation_id_var.get(),
         "FAILED",
@@ -208,6 +242,9 @@ def _handle(event, context) -> dict[str, str | int]:
     # cookies (or a re-auth signal) surfaces as the non-paging ESPN_AUTH failure.
     espn_s2_cookie = body.get("s2")
     swid_cookie = body.get("swid")
+    # (owner_user_id, updated_at) of the stored cookies this run used, so an ESPN rejection can
+    # flag exactly that version for the owner (backend/espn-credential-storage).
+    stored_credentials: tuple[str, int | None] | None = None
     if (
         body.get("platform") == "ESPN"
         and not espn_s2_cookie
@@ -215,9 +252,10 @@ def _handle(event, context) -> dict[str, str | int]:
         and owner_user_id
     ):
         try:
-            swid_cookie, espn_s2_cookie = espn_credentials_from_env().get_credentials(
-                owner_user_id
+            swid_cookie, espn_s2_cookie, stored_version = (
+                espn_credentials_from_env().get_stored_credentials(owner_user_id)
             )
+            stored_credentials = (owner_user_id, stored_version)
         except ESPNReauthRequired as e:
             logger.warning(
                 "No stored ESPN cookies for owner of league %s; recording ESPN_AUTH: %s",
@@ -283,6 +321,7 @@ def _handle(event, context) -> dict[str, str | int]:
             body,
             canonical_league_id,
             error_detail=str(e),
+            stored_credentials=stored_credentials,
         )
         return {
             "statusCode": 502,
@@ -298,7 +337,12 @@ def _handle(event, context) -> dict[str, str | int]:
             "Runtime error occurred while initializing onboarding service: %s", e
         )
         _record_failure(
-            request_type, "UPSTREAM", body, canonical_league_id, error_detail=str(e)
+            request_type,
+            _classify_runtime_error(e, body),
+            body,
+            canonical_league_id,
+            error_detail=str(e),
+            stored_credentials=stored_credentials,
         )
         return {
             "statusCode": 502,
@@ -411,6 +455,7 @@ def _handle(event, context) -> dict[str, str | int]:
             body,
             onboarding_service.canonical_league_id,
             error_detail=str(e),
+            stored_credentials=stored_credentials,
         )
         return {
             "statusCode": 502,
@@ -425,10 +470,11 @@ def _handle(event, context) -> dict[str, str | int]:
         logger.error("Runtime error occurred while running onboarding service: %s", e)
         _record_failure(
             request_type,
-            "UPSTREAM",
+            _classify_runtime_error(e, body),
             body,
             onboarding_service.canonical_league_id,
             error_detail=str(e),
+            stored_credentials=stored_credentials,
         )
         return {
             "statusCode": 502,

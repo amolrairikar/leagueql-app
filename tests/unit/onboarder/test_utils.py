@@ -281,7 +281,12 @@ class TestFetchOne:
                 url_data=("2023", "matchups_12", "http://x"),
             )
 
-        assert result == {"season": "2023", "data_type": "matchups_12", "data": None}
+        assert result == {
+            "season": "2023",
+            "data_type": "matchups_12",
+            "data": None,
+            "error_status": 401,
+        }
         mock_logger.error.assert_called_once()
         args = mock_logger.error.call_args[0]
         assert args[2] == "2023"
@@ -304,6 +309,7 @@ class TestFetchOne:
             )
 
         assert result["data"] is None
+        assert result["error_status"] is None
         assert "Exhausted retries" in mock_logger.error.call_args[0][4]
 
 
@@ -366,6 +372,31 @@ class TestValidateApiResults:
         ]
         with pytest.raises(RuntimeError, match="all seasons"):
             onboarder_utils.validate_api_results(results)
+
+    def test_all_auth_rejections_raise_upstream_auth_error(self, onboarder_utils):
+        results = [
+            {"season": "2018", "data_type": "users", "data": None, "error_status": 401},
+            {"season": "2019", "data_type": "users", "data": None, "error_status": 403},
+        ]
+        with pytest.raises(onboarder_utils.UpstreamAuthError, match="rejected"):
+            onboarder_utils.validate_api_results(results)
+
+    def test_mixed_failure_statuses_raise_plain_runtime_error(self, onboarder_utils):
+        results = [
+            {"season": "2018", "data_type": "users", "data": None, "error_status": 401},
+            {"season": "2019", "data_type": "users", "data": None, "error_status": 500},
+        ]
+        with pytest.raises(RuntimeError) as exc_info:
+            onboarder_utils.validate_api_results(results)
+        assert not isinstance(exc_info.value, onboarder_utils.UpstreamAuthError)
+
+    def test_partial_auth_failure_keeps_good_season(self, onboarder_utils):
+        results = [
+            {"season": "2018", "data_type": "users", "data": None, "error_status": 401},
+            {"season": "2024", "data_type": "users", "data": [{"id": 1}]},
+        ]
+        validated = onboarder_utils.validate_api_results(results)
+        assert {r["season"] for r in validated} == {"2024"}
 
     def test_skipped_seasons_logged(self, onboarder_utils, monkeypatch):
         mock_logger = MagicMock()

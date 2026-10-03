@@ -46,6 +46,7 @@ import ExtensionPrivacyPage from '@/features/privacy/extension-privacy-page';
 import PrivacyPage from '@/features/privacy/privacy-page';
 import SeasonStandings from '@/features/season_standings/season-standings';
 import { AppSidebar } from '@/features/sidebar/app-sidebar';
+import { EspnReauthBanner } from '@/features/sidebar/espn-reauth-banner';
 import { HeaderAccount } from '@/features/sidebar/header-account';
 import { RefreshReminderBanner } from '@/features/sidebar/refresh-reminder-banner';
 import { SleeperStaleSeasonBanner } from '@/features/sidebar/sleeper-stale-season-banner';
@@ -96,6 +97,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
             </div>
           </header>
           <Banner />
+          <EspnReauthBanner />
           <RefreshReminderBanner />
           <SleeperStaleSeasonBanner />
           <ErrorBoundary resetKeys={[location.pathname]}>

@@ -16,6 +16,12 @@ Feature: In-dashboard ESPN refresh dialog (frontend/navigation-sidebar / fronten
     Then the refresh request opted into auto-refresh
     And the dashboard reloads with the fresh data
 
+  Scenario: Updating rejected cookies keeps the league on auto-refresh
+    Given refreshing my ESPN league will complete successfully and the current season is "2026"
+    When I enter my ESPN cookies in the Update ESPN Cookies dialog and submit without touching the opt-in
+    Then the refresh request opted into auto-refresh
+    And the dashboard reloads with the fresh data
+
   Scenario: A refresh blocked by the weekly cooldown shows a benign notice
     Given refreshing my ESPN league is blocked by the weekly cooldown with message "This league can only be refreshed once per week."
     When I enter my ESPN cookies and refresh from the dialog

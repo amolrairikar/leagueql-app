@@ -675,3 +675,58 @@ def step_owner_ids_unchanged(context, sk):
     assert current == context.remembered_owners, (
         f"before={context.remembered_owners} after={current}"
     )
+
+
+@given("the default user has stored ESPN cookies")
+def step_store_real_espn_cookies(context):
+    # Real KMS-encrypted cookies (moto KMS) so the onboarder's scheduled-refresh path can
+    # decrypt them (backend/espn-credential-storage).
+    from common.espn_credentials import from_env
+
+    from_env().store_credentials(context.default_user, "{STORED-SWID}", "stored-s2")
+
+
+@when(
+    'the scheduled refresh runs for ESPN league "{league_id}" canonical "{canonical}" '
+    "and ESPN rejects every request"
+)
+def step_scheduled_espn_refresh_rejected(context, league_id, canonical):
+    # A scheduled refresh (owner id, no cookies) whose stored cookies ESPN now rejects: every
+    # per-week fetch comes back 401, run through the real validate_api_results
+    # (backend/league-onboarding).
+    _patch_build_client(
+        context,
+        [
+            {
+                "season": "2024",
+                "data_type": "matchups_week7",
+                "data": None,
+                "error_status": 401,
+            }
+        ],
+        validate=True,
+    )
+    publish = MagicMock()
+    publish_patch = patch.object(context.onboarder_handler, "publish_failure", publish)
+    context.onboarder_publish_mock = publish_patch.start()
+    context._patches.append(publish_patch)
+    context.canonical = canonical
+    _run_onboarder(
+        context,
+        "ESPN",
+        league_id,
+        "REFRESH",
+        {"season": "2024"},
+        {"ownerUserId": context.default_user},
+    )
+
+
+@then("no onboarder failure alert was published")
+def step_no_onboarder_alert(context):
+    context.onboarder_publish_mock.assert_not_called()
+
+
+@then("the default user's stored ESPN cookies are flagged as rejected")
+def step_espn_cookies_flagged(context):
+    item = get_item(context, f"USER#{context.default_user}", "ESPN_CREDENTIALS")
+    assert item is not None and item.get("auth_failed_at"), item
