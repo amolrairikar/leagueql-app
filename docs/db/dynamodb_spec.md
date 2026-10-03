@@ -7,7 +7,7 @@
 | Table name | `fantasy-football-recap-db` |
 | Billing mode | On-demand (pay-per-request) |
 | Primary key | `PK` (String) + `SK` (String) |
-| GSIs | `GSI1` - Get all league IDs for a canonical league ID; `GSI2` - Look up a league by platform and league ID; `GSI3` - List all onboarded leagues (sparse index over METADATA items) |
+| GSIs | `GSI1` - Get all league IDs for a canonical league ID; `GSI2` - Look up a league by platform and league ID; `GSI3` - List all onboarded leagues (sparse index over METADATA items); `GSI4` - List a user's leagues (sparse index over MEMBER items) |
 | TTL | Enabled on the `ttl` attribute (Unix epoch seconds). JOB_STATUS items set it (~24h, reaping old onboard/refresh/migrate jobs) and OAUTH_STATE items set it (~10min, reaping unused Yahoo OAuth states); items without a `ttl` attribute never expire |
 
 ---
@@ -48,6 +48,18 @@ stays sparse. Projection is `INCLUDE` of the dashboard display fields (`platform
 |---|---|---|---|
 | `SK` | String | Partition key | Base-table sort key; always `METADATA` for indexed items |
 | `onboarded_at` | String | Sort key | ISO 8601 timestamp of when the league was onboarded |
+
+### GSI4: User leagues index
+Sparse index used by `GET /me/leagues` (`backend/user-leagues`) to list every league a user owns,
+has joined through an invite, or has opened on Sleeper, with a single
+`member_user_id = :clerk_user_id` query. Only MEMBER items carry `member_user_id`, so no other
+item type is indexed. Projection is `KEYS_ONLY`: the canonical league ID comes from the projected
+base-table `PK`, and league details are read from METADATA afterwards.
+
+| Attribute | Type | Role | Description |
+|---|---|---|---|
+| `member_user_id` | String | Partition key | Clerk user ID of the member |
+| `joined_at` | String | Sort key | ISO 8601 timestamp of when the user was first indexed for the league |
 
 ---
 
@@ -883,6 +895,40 @@ rejects any state past `expires_at`. A ~10-minute `ttl` reaps unused states.
   "created_at": 1725235200,
   "expires_at": 1725235800,
   "ttl": 1725235800
+}
+```
+</details>
+
+<details>
+<summary><b>MEMBER</b></summary>
+
+One item per (league, user) in the per-user league membership index (`backend/user-leagues`). It's a
+**read index for listing only**. Authorization still uses METADATA `owner_user_id` / `members`.
+It's written with a conditional put (`attribute_not_exists(PK)`), so it's idempotent and
+`joined_at` never changes, when:
+
+- a user onboards a league (the owner, in the same transaction as METADATA; this one Put is unconditional, like the METADATA Put, so a retried onboard can't cancel the transaction),
+- a user redeems an invite (`POST /leagues/{id}/accept-invite`),
+- a user claims ownership (`POST /leagues/{id}/claim-ownership`; the previous owner keeps their item),
+- a signed-in user opens a Sleeper league (`GET /leagues/{id}`, best-effort).
+
+Because it lives in the league's partition, deleting the league removes it, and a platform
+migration (same canonical ID) keeps it. There's no role attribute: ownership is read from METADATA.
+
+| Attribute | Type | Required | Description |
+|---|---|---|---|
+| `PK` | String | Yes | `LEAGUE#{canonical_league_id}` |
+| `SK` | String | Yes | `MEMBER#{clerk_user_id}` |
+| `member_user_id` | String | Yes | Clerk user ID (GSI4 partition key) |
+| `joined_at` | String | Yes | ISO 8601 (UTC) timestamp of when the user was first indexed (GSI4 sort key). Backfilled items use the league's `onboarded_at` |
+
+**Example:**
+```json
+{
+  "PK": "LEAGUE#uuid-string",
+  "SK": "MEMBER#user_2abc123",
+  "member_user_id": "user_2abc123",
+  "joined_at": "2026-10-03T18:00:00Z"
 }
 ```
 </details>

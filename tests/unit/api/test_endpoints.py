@@ -2218,6 +2218,78 @@ class TestGetLeagueIsOwner:
         assert response.status_code == 200
         assert response.json()["data"]["is_owner"] is False
 
+    @staticmethod
+    def _member_puts(mock_table):
+        return [
+            c.kwargs["Item"]
+            for c in mock_table.put_item.call_args_list
+            if c.kwargs.get("Item", {}).get("SK", "").startswith("MEMBER#")
+        ]
+
+    def test_sleeper_open_indexes_caller(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        # backend/user-leagues: opening a Sleeper league adds it to the caller's list.
+        league_metadata_item["platform"] = "SLEEPER"
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+        ]
+        self._seasons_query(mock_table)
+        _as_user("user_2")
+        response = client.get("/leagues/123?platform=SLEEPER")
+        assert response.status_code == 200
+        puts = self._member_puts(mock_table)
+        assert len(puts) == 1
+        assert puts[0]["PK"] == "LEAGUE#canonical-abc"
+        assert puts[0]["member_user_id"] == "user_2"
+
+    def test_migrated_to_sleeper_open_indexes_caller(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        league_metadata_item["platform"] = "ESPN"
+        league_metadata_item["active_platform"] = "SLEEPER"
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+        ]
+        self._seasons_query(mock_table)
+        response = client.get("/leagues/123?platform=SLEEPER")
+        assert response.status_code == 200
+        assert len(self._member_puts(mock_table)) == 1
+
+    def test_sleeper_index_failure_keeps_200(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        import botocore.exceptions
+
+        league_metadata_item["platform"] = "SLEEPER"
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+        ]
+        self._seasons_query(mock_table)
+        mock_table.put_item.side_effect = botocore.exceptions.ClientError(
+            {"Error": {"Code": "InternalError", "Message": "x"}}, "PutItem"
+        )
+        response = client.get("/leagues/123?platform=SLEEPER")
+        assert response.status_code == 200
+        assert response.json()["data"]["league_name"] == "Test League"
+
+    @pytest.mark.parametrize("platform", ["ESPN", "YAHOO"])
+    def test_gated_open_writes_no_index_entry(
+        self, client, mock_table, league_lookup_item, league_metadata_item, platform
+    ):
+        league_metadata_item["platform"] = platform
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+        ]
+        self._seasons_query(mock_table)
+        response = client.get(f"/leagues/123?platform={platform}")
+        assert response.status_code == 200
+        assert self._member_puts(mock_table) == []
+
     def test_espn_non_member_returns_403(
         self, client, mock_table, league_lookup_item, league_metadata_item
     ):
@@ -2596,6 +2668,27 @@ class TestClaimOwnershipEndpoint:
         kwargs = mock_table.update_item.call_args.kwargs
         assert kwargs["ExpressionAttributeValues"][":caller"] == "user_2"
         assert "owner_user_id" in kwargs["UpdateExpression"]
+        # backend/user-leagues: the new owner is indexed for GET /me/leagues.
+        item = mock_table.put_item.call_args.kwargs["Item"]
+        assert item["SK"] == "MEMBER#user_2"
+        assert item["PK"] == "LEAGUE#canonical-abc"
+
+    def test_index_failure_returns_500(self, client, mock_table, league_lookup_item):
+        import botocore.exceptions
+
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": self._meta_with_token("tok", self._future())},
+        ]
+        mock_table.update_item.return_value = {}
+        mock_table.put_item.side_effect = botocore.exceptions.ClientError(
+            {"Error": {"Code": "InternalError", "Message": "x"}}, "PutItem"
+        )
+        _as_user("user_2")
+        response = client.post(
+            "/leagues/123/claim-ownership?platform=SLEEPER", json={"token": "tok"}
+        )
+        assert response.status_code == 500
 
     def test_no_token_returns_404(self, client, mock_table, league_lookup_item):
         mock_table.get_item.side_effect = [

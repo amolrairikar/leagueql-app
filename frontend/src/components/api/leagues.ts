@@ -2,6 +2,7 @@ import type {
   Platform,
   MatchupItem,
   GetLeagueResponse,
+  GetMyLeaguesResponse,
   ExportLeagueResponse,
 } from './types';
 
@@ -71,6 +72,17 @@ export function getLeague(
   if (isDemoMode()) return getDemoLeague();
   const params = new URLSearchParams({ platform });
   return apiClient.get<GetLeagueResponse>(`/leagues/${leagueId}?${params}`);
+}
+
+/**
+ * List every league the signed-in caller owns, joined by invite, or opened on Sleeper
+ * (backend/user-leagues), newest first. Uncached: the list changes as soon as the caller
+ * connects or joins a league.
+ */
+export function getMyLeagues(): Promise<GetMyLeaguesResponse> {
+  return apiClient.get<GetMyLeaguesResponse>('/me/leagues', undefined, {
+    skipCache: true,
+  });
 }
 
 export function getAllMatchups(

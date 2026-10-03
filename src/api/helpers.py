@@ -7,7 +7,7 @@ SNS failure alerting lives in the shared ``common.sns`` module.
 """
 
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from datetime import datetime, timezone
 from decimal import Decimal
 from functools import partial
@@ -24,6 +24,7 @@ from main import (
 )
 
 from common.job_status import JOB_TTL_SECONDS
+from common.league_members import MEMBER_INDEX_NAME, put_league_member
 from common.sns import publish_failure as _publish_failure
 
 # Binds the API's SNS subject; the shared implementation handles the no-op guard,
@@ -314,6 +315,168 @@ def get_league_seasons(canonical_league_id: str) -> list[str]:
         seasons.update(item.get("seasons", set()))
 
     return sorted(seasons)
+
+
+_BATCH_GET_MAX_KEYS = 100
+_BATCH_GET_MAX_ATTEMPTS = 4
+
+
+def _member_canonical_ids(clerk_user_id: str) -> list[str]:
+    """Return the canonical ids of every league ``clerk_user_id`` is indexed in (GSI4)."""
+    kwargs: dict[str, Any] = {
+        "IndexName": MEMBER_INDEX_NAME,
+        "KeyConditionExpression": Key("member_user_id").eq(clerk_user_id),
+    }
+    canonical_ids: list[str] = []
+    while True:
+        response = main.table.query(**kwargs)
+        canonical_ids.extend(
+            item["PK"].removeprefix("LEAGUE#") for item in response.get("Items", [])
+        )
+        last_key = response.get("LastEvaluatedKey")
+        if not last_key:
+            return canonical_ids
+        kwargs["ExclusiveStartKey"] = last_key
+
+
+def _batch_get_metadata(canonical_ids: list[str]) -> dict[str, dict]:
+    """BatchGetItem the METADATA items for ``canonical_ids``, keyed by canonical id.
+
+    Chunks to the 100-key BatchGetItem limit and retries ``UnprocessedKeys`` with a short
+    backoff. Missing items are simply absent from the result.
+
+    Raises:
+        botocore.exceptions.ClientError: On a DynamoDB error.
+        RuntimeError: If keys are still unprocessed after the retry budget.
+    """
+    table_name = main.DYNAMODB_TABLE_NAME
+    found: dict[str, dict] = {}
+    for start in range(0, len(canonical_ids), _BATCH_GET_MAX_KEYS):
+        keys = [
+            {"PK": f"LEAGUE#{cid}", "SK": "METADATA"}
+            for cid in canonical_ids[start : start + _BATCH_GET_MAX_KEYS]
+        ]
+        request: dict[str, Any] = {table_name: {"Keys": keys}}
+        for attempt in range(_BATCH_GET_MAX_ATTEMPTS):
+            response = main.dynamodb_resource.batch_get_item(RequestItems=request)
+            for item in response.get("Responses", {}).get(table_name, []):
+                found[item["PK"].removeprefix("LEAGUE#")] = item
+            request = response.get("UnprocessedKeys") or {}
+            if not request:
+                break
+            time.sleep(0.05 * 2**attempt)
+        else:
+            raise RuntimeError("METADATA batch get left unprocessed keys")
+    return found
+
+
+def _league_lookups(canonical_league_id: str) -> list[dict]:
+    """Return the LEAGUE_LOOKUP items (GSI1 projection: PK + seasons) for a league."""
+    response = main.table.query(
+        IndexName="GSI1",
+        KeyConditionExpression=Key("canonical_league_id").eq(canonical_league_id),
+    )
+    return response.get("Items", [])
+
+
+def _user_league_entry(canonical_league_id: str, metadata: dict) -> dict | None:
+    """Build one ``GET /me/leagues`` entry, or None if the league has no usable lookup.
+
+    The entry's ``league_id`` is the lookup on the league's current platform with the
+    latest onboarded season (a Sleeper league has one id per season; a migrated league
+    has lookups on both platforms). Pending lookups (no ``seasons``) are ignored.
+    """
+    platform = metadata.get("active_platform") or metadata.get("platform")
+    seasons: set[str] = set()
+    best: tuple[int, str] | None = None
+    for item in _league_lookups(canonical_league_id):
+        item_seasons = item.get("seasons") or set()
+        if not item_seasons:
+            continue
+        seasons.update(item_seasons)
+        # PK = LEAGUE#{league_id}#PLATFORM#{platform}
+        lookup_league_id, _, lookup_platform = (
+            item["PK"].removeprefix("LEAGUE#").partition("#PLATFORM#")
+        )
+        if lookup_platform != platform:
+            continue
+        latest = max(int(s) for s in item_seasons)
+        if best is None or latest > best[0]:
+            best = (latest, lookup_league_id)
+    if best is None:
+        logger.warning(
+            "No usable %s lookup for indexed league %s; omitting",
+            platform,
+            canonical_league_id,
+        )
+        return None
+    return {
+        "league_id": best[1],
+        "platform": platform,
+        "league_name": metadata.get("league_name"),
+        "seasons": sorted(seasons),
+        "updated_at": metadata.get("last_refresh_at") or metadata.get("onboarded_at"),
+        "migrated_from": metadata.get("migrated_from"),
+        "espn_reauth_required": False,
+    }
+
+
+def list_user_leagues(
+    clerk_user_id: str, espn_reauth_status: Callable[[str], tuple[bool, str | None]]
+) -> list[dict]:
+    """List every league ``clerk_user_id`` is indexed in (backend/user-leagues).
+
+    Queries the GSI4 membership index, batch-reads each league's METADATA, and resolves its
+    current platform league id + unified seasons from GSI1. Index entries whose METADATA or
+    lookups are gone are skipped. Sorted by ``updated_at`` (last refresh, else onboard time),
+    newest first.
+
+    Args:
+        clerk_user_id: The authenticated caller.
+        espn_reauth_status: Returns ``(reauth_required, failed_at)`` for a user's stored ESPN
+            cookies. Called at most once, and only if the caller owns an auto-refreshed ESPN
+            league, so ``espn_reauth_required`` is never true for a non-owner.
+
+    Returns:
+        The list of league entries.
+
+    Raises:
+        HTTPException: 500 on a DynamoDB failure.
+    """
+    try:
+        canonical_ids = _member_canonical_ids(clerk_user_id)
+        if not canonical_ids:
+            return []
+        metadata_by_id = _batch_get_metadata(canonical_ids)
+        leagues: list[dict] = []
+        reauth_required: bool | None = None
+        for canonical_id in canonical_ids:
+            metadata = metadata_by_id.get(canonical_id)
+            if metadata is None:
+                logger.warning(
+                    "Indexed league %s has no METADATA; omitting", canonical_id
+                )
+                continue
+            entry = _user_league_entry(canonical_id, metadata)
+            if entry is None:
+                continue
+            if (
+                metadata.get("owner_user_id") == clerk_user_id
+                and entry["platform"] == "ESPN"
+                and metadata.get("auto_refresh_enabled")
+            ):
+                if reauth_required is None:
+                    reauth_required = espn_reauth_status(clerk_user_id)[0]
+                entry["espn_reauth_required"] = reauth_required
+            leagues.append(entry)
+    except (botocore.exceptions.ClientError, RuntimeError) as e:
+        logger.error("Failed to list leagues for user: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve your leagues",
+        )
+    leagues.sort(key=lambda entry: entry["updated_at"] or "", reverse=True)
+    return leagues
 
 
 def _query_all_keys(query_kwargs: dict) -> list[dict]:
@@ -750,7 +913,9 @@ def add_league_member(canonical_league_id: str, clerk_user_id: str) -> None:
 
     Idempotent: ``ADD`` to a DynamoDB string set is a no-op when the value is
     already present. Used by the ESPN membership-verification flow once the
-    caller's cookies are confirmed valid for the league.
+    caller's cookies are confirmed valid for the league. Also indexes the caller for
+    ``GET /me/leagues`` (backend/user-leagues); that write is idempotent too, so a
+    failure surfaces as a retryable ``500``.
 
     Args:
         canonical_league_id: The canonical league ID.
@@ -762,11 +927,52 @@ def add_league_member(canonical_league_id: str, clerk_user_id: str) -> None:
             UpdateExpression="ADD members :m",
             ExpressionAttributeValues={":m": {clerk_user_id}},
         )
+        put_league_member(main.table, canonical_league_id, clerk_user_id)
     except botocore.exceptions.ClientError as e:
         logger.error("Failed to add member to league %s: %s", canonical_league_id, e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to record league membership",
+        )
+
+
+def index_league_member(canonical_league_id: str, clerk_user_id: str) -> None:
+    """
+    Index a caller in a league's membership index (backend/user-leagues).
+
+    Idempotent (an existing entry is left unchanged). A DynamoDB failure is raised
+    as a retryable ``500``.
+
+    Args:
+        canonical_league_id: The canonical league ID.
+        clerk_user_id: The Clerk user ID to index.
+    """
+    try:
+        put_league_member(main.table, canonical_league_id, clerk_user_id)
+    except botocore.exceptions.ClientError as e:
+        logger.error("Failed to index member for league %s: %s", canonical_league_id, e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to record league membership",
+        )
+
+
+def record_sleeper_league_open(canonical_league_id: str, clerk_user_id: str) -> None:
+    """
+    Best-effort index of a caller who opened a Sleeper league (backend/user-leagues).
+
+    Sleeper reads are open, so this is the only way a Sleeper viewer is recorded. Any
+    DynamoDB failure is logged and swallowed so it never breaks the league read.
+
+    Args:
+        canonical_league_id: The canonical league ID.
+        clerk_user_id: The Clerk user ID who opened the league.
+    """
+    try:
+        put_league_member(main.table, canonical_league_id, clerk_user_id)
+    except botocore.exceptions.ClientError as e:
+        logger.warning(
+            "Failed to index Sleeper open for league %s: %s", canonical_league_id, e
         )
 
 

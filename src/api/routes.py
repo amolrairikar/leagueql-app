@@ -46,7 +46,9 @@ from helpers import (
     get_league_metadata,
     get_league_seasons,
     get_nfl_state,
+    index_league_member,
     is_job_in_progress,
+    list_user_leagues,
     lookup_league,
     owner_has_other_optedin_espn_leagues,
     owner_has_other_yahoo_leagues,
@@ -54,6 +56,7 @@ from helpers import (
     read_view,
     record_integration_submission,
     record_league_access,
+    record_sleeper_league_open,
     require_league_member,
     require_league_owner,
     set_active_job,
@@ -332,13 +335,17 @@ def get_league(
         canonical_league_id, clerk_user_id, platform, metadata=metadata
     )
     record_league_access(canonical_league_id, metadata)
+    effective_platform = metadata.get("active_platform") or metadata.get("platform")
+    # Sleeper reads are open, so opening one is how a viewer joins their league list
+    # (backend/user-leagues). Best-effort; never affects this response.
+    if effective_platform == Platform.SLEEPER.value:
+        record_sleeper_league_open(canonical_league_id, clerk_user_id)
     seasons = get_league_seasons(canonical_league_id=canonical_league_id)
     is_owner = metadata.get("owner_user_id") == clerk_user_id
     # Tell the owner of an auto-refreshed ESPN league when its stored cookies were rejected (or
     # are missing), since the scheduled refresh can't proceed until they re-enter them
     # (backend/league-metadata). Never computed for other callers, so nothing leaks to members.
     espn_reauth_required, espn_credentials_failed_at = False, None
-    effective_platform = metadata.get("active_platform") or metadata.get("platform")
     if (
         is_owner
         and effective_platform == Platform.ESPN.value
@@ -373,6 +380,22 @@ def get_league(
             ),
         },
     )
+
+
+@router.get("/me/leagues", status_code=status.HTTP_200_OK)
+def get_my_leagues(
+    response: Response,
+    clerk_user_id: Annotated[str, Depends(get_authenticated_user)],
+) -> APIResponse:
+    """List every league the caller owns, joined by invite, or opened on Sleeper.
+
+    Backed by the per-user membership index (backend/user-leagues). Each entry carries the
+    league's current platform + league id (enough to open it), unified seasons, last-updated
+    time, migration source, and an owner-only ESPN re-auth flag. Newest first.
+    """
+    leagues = list_user_leagues(clerk_user_id, espn_credentials.get_reauth_status)
+    response.headers["Cache-Control"] = "no-store"
+    return APIResponse(detail=f"Found {len(leagues)} league(s)", data=leagues)
 
 
 INTEGRATION_SUBMIT_FAILED = "Couldn't submit right now. Try again in a few minutes."
@@ -1289,6 +1312,9 @@ def claim_ownership(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to claim ownership",
         )
+    # Index the new owner for GET /me/leagues (backend/user-leagues). The previous owner
+    # stays in `members` and keeps their own entry.
+    index_league_member(canonical_league_id, clerk_user_id)
 
     return APIResponse(detail="Ownership claimed")
 

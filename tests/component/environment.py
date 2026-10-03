@@ -106,6 +106,8 @@ def _create_table() -> None:
             {"AttributeName": "platform", "AttributeType": "S"},
             {"AttributeName": "league_id", "AttributeType": "S"},
             {"AttributeName": "onboarded_at", "AttributeType": "S"},
+            {"AttributeName": "member_user_id", "AttributeType": "S"},
+            {"AttributeName": "joined_at", "AttributeType": "S"},
         ],
         GlobalSecondaryIndexes=[
             {
@@ -148,6 +150,16 @@ def _create_table() -> None:
                         "owner_user_id",
                     ],
                 },
+            },
+            # GSI4: sparse per-user league membership index over MEMBER items
+            # (backend/user-leagues). Mirrors infrastructure/modules/dynamodb/main.tf.
+            {
+                "IndexName": "GSI4",
+                "KeySchema": [
+                    {"AttributeName": "member_user_id", "KeyType": "HASH"},
+                    {"AttributeName": "joined_at", "KeyType": "RANGE"},
+                ],
+                "Projection": {"ProjectionType": "KEYS_ONLY"},
             },
         ],
     )

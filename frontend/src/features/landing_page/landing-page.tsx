@@ -1,9 +1,15 @@
 import { SignIn, useUser } from '@clerk/react';
-import { ArrowRight, ChevronRight, HelpCircle } from 'lucide-react';
+import {
+  ArrowRight,
+  ChevronDown,
+  ChevronRight,
+  HelpCircle,
+} from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { getLeague } from '@/components/api/leagues';
+import { getLeague, getMyLeagues } from '@/components/api/leagues';
+import type { MyLeague } from '@/components/api/types';
 import Footer from '@/components/footer';
 import { Spinner } from '@/components/spinner';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -35,11 +41,13 @@ import { pollForCompletion } from '@/features/connect_league/poll';
 import {
   FEATURES,
   HOW_STEPS,
+  MY_LEAGUES_FALLBACK,
   PLATFORMS,
   SUPPORT_EMAIL,
   YAHOO_BETA_SUPPORT_NOTE,
 } from '@/features/landing_page/constants';
 import { Faq } from '@/features/landing_page/faq';
+import { MyLeaguesPanel } from '@/features/landing_page/my-leagues';
 import { ProductShowcase } from '@/features/landing_page/product-showcase';
 import type { Feature, HowStep } from '@/features/landing_page/types';
 import { API_BASE_URL, ApiError, clearApiCache } from '@/lib/api-client';
@@ -53,6 +61,7 @@ import {
   setLeagueCookies,
 } from '@/lib/cookie-handler';
 import { DEMO_SEASONS } from '@/lib/demo-constants';
+import { toResult, type Result } from '@/lib/result';
 import { getCurrentNflSeason } from '@/lib/season';
 
 const LOADING_PHASES = [
@@ -158,6 +167,14 @@ export default function LeagueQLLanding() {
   const navigate = useNavigate();
   const [authOpen, setAuthOpen] = useState(false);
   const [showConnectForm, setShowConnectForm] = useState(false);
+  // Signed-in "View My Leagues" panel (frontend/landing-page). Mutually exclusive with the
+  // Connect form. The list is requested on first expand and held as a never-rejecting
+  // promise the panel reads with `use()`; the count feeds the button's pill.
+  const [showMyLeagues, setShowMyLeagues] = useState(false);
+  const [myLeagues, setMyLeagues] = useState<Promise<
+    Result<MyLeague[]>
+  > | null>(null);
+  const [myLeaguesCount, setMyLeaguesCount] = useState<number | null>(null);
   const [platform, setPlatform] = useState<Platform>('ESPN');
   // ESPN private-league credentials entered inline (only sent when onboarding a
   // not-yet-onboarded league). Held in React state, never browser storage;
@@ -295,10 +312,31 @@ export default function LeagueQLLanding() {
 
   function handleConnectLeague() {
     if (isSignedIn) {
+      setShowMyLeagues(false);
       setShowConnectForm(true);
     } else {
       setAuthOpen(true);
     }
+  }
+
+  function loadMyLeagues() {
+    const request = toResult(
+      getMyLeagues().then((r) => r.data),
+      MY_LEAGUES_FALLBACK,
+    );
+    setMyLeagues(request);
+    setMyLeaguesCount(null);
+    void request.then((r) => setMyLeaguesCount(r.ok ? r.data.length : null));
+  }
+
+  function handleToggleMyLeagues() {
+    if (showMyLeagues) {
+      setShowMyLeagues(false);
+      return;
+    }
+    setShowConnectForm(false);
+    setShowMyLeagues(true);
+    if (!myLeagues) loadMyLeagues();
   }
 
   function handleViewDemo() {
@@ -637,7 +675,7 @@ export default function LeagueQLLanding() {
           full history — from the first draft pick to the last championship.
         </p>
 
-        <div className="flex gap-3 mt-9 animate-[fadeUp_0.6s_0.55s_both]">
+        <div className="flex flex-wrap justify-center gap-3 mt-9 animate-[fadeUp_0.6s_0.55s_both]">
           <Button
             size="lg"
             className="text-[0.82rem] px-6 cursor-pointer"
@@ -645,6 +683,30 @@ export default function LeagueQLLanding() {
           >
             Connect Your League <ArrowRight />
           </Button>
+
+          {isSignedIn && (
+            <Button
+              variant="outline"
+              size="lg"
+              className="text-[0.82rem] px-6 cursor-pointer aria-expanded:border-primary aria-expanded:bg-primary/10 aria-expanded:text-primary"
+              aria-expanded={showMyLeagues}
+              aria-controls="my-leagues-panel"
+              onClick={handleToggleMyLeagues}
+            >
+              View My Leagues
+              {myLeaguesCount !== null && (
+                <span
+                  aria-label={`${myLeaguesCount} leagues`}
+                  className="rounded-full bg-muted px-1.5 font-mono text-[11px] text-muted-foreground"
+                >
+                  {myLeaguesCount}
+                </span>
+              )}
+              <ChevronDown
+                className={`transition-transform motion-reduce:transition-none ${showMyLeagues ? 'rotate-180' : ''}`}
+              />
+            </Button>
+          )}
 
           <Button
             variant="outline"
@@ -655,6 +717,14 @@ export default function LeagueQLLanding() {
             View Demo
           </Button>
         </div>
+
+        {showMyLeagues && myLeagues && (
+          <MyLeaguesPanel
+            leagues={myLeagues}
+            onRetry={loadMyLeagues}
+            onConnect={handleConnectLeague}
+          />
+        )}
 
         {showConnectForm && (
           <div className="mt-8 w-full max-w-lg animate-[fadeUp_0.4s_both]">

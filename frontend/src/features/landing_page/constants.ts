@@ -157,3 +157,7 @@ export const HOW_STEPS: HowStep[] = [
 ];
 
 export const FOOTER_LINKS: string[] = ['About', 'Privacy', 'GitHub'];
+
+// Inline error for a failed `GET /me/leagues` (frontend/landing-page "View My Leagues").
+export const MY_LEAGUES_FALLBACK =
+  "Couldn't load your leagues. Check your connection and try again.";

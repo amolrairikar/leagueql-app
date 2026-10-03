@@ -62,6 +62,18 @@ resource "aws_dynamodb_table" "global_table" {
     type = "S"
   }
 
+  # Only league membership items (SK = MEMBER#{clerk_user_id}) carry
+  # `member_user_id` / `joined_at`, so GSI4 (below) is a sparse per-user index.
+  attribute {
+    name = "member_user_id"
+    type = "S"
+  }
+
+  attribute {
+    name = "joined_at"
+    type = "S"
+  }
+
   global_secondary_index {
     name               = "GSI1"
     projection_type    = "INCLUDE"
@@ -101,6 +113,24 @@ resource "aws_dynamodb_table" "global_table" {
     }
     key_schema {
       attribute_name = "onboarded_at"
+      key_type       = "RANGE"
+    }
+  }
+
+  # GSI4: sparse per-user league membership index (backend/user-leagues). One
+  # LEAGUE#{id} / MEMBER#{clerk_user_id} item per (league, user) is written on
+  # onboard, invite redemption, ownership claim, and Sleeper open; a single
+  # `member_user_id = :uid` Query lists that user's leagues. KEYS_ONLY because the
+  # canonical league id is in the projected PK and details come from METADATA.
+  global_secondary_index {
+    name            = "GSI4"
+    projection_type = "KEYS_ONLY"
+    key_schema {
+      attribute_name = "member_user_id"
+      key_type       = "HASH"
+    }
+    key_schema {
+      attribute_name = "joined_at"
       key_type       = "RANGE"
     }
   }

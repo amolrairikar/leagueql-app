@@ -166,6 +166,32 @@ class TestWriteLeagueRecords:
         assert metadata_item["owner_user_id"] == {"S": "user_1"}
         assert metadata_item["members"] == {"SS": ["user_1"]}
 
+    def test_onboard_indexes_owner_atomically(self, onboarder_writer, monkeypatch):
+        # backend/user-leagues: the owner's MEMBER item rides in the same transaction as
+        # METADATA, with joined_at = onboarded_at. Unconditional, so a retried onboard
+        # can't cancel the transaction on an already-written item.
+        monkeypatch.setenv("DYNAMODB_TABLE_NAME", "test-table")
+        mock_ddb = MagicMock()
+        with patch.object(onboarder_writer, "_dynamodb", mock_ddb):
+            onboarder_writer.write_league_records(
+                league_id="123",
+                platform="ESPN",
+                canonical_league_id="canonical-abc",
+                seasons=["2024"],
+                request_type="ONBOARD",
+                owner_user_id="user_1",
+            )
+        items = mock_ddb.transact_write_items.call_args[1]["TransactItems"]
+        assert len(items) == 3
+        member_put = items[2]["Put"]
+        assert member_put["Item"]["PK"] == {"S": "LEAGUE#canonical-abc"}
+        assert member_put["Item"]["SK"] == {"S": "MEMBER#user_1"}
+        assert member_put["Item"]["member_user_id"] == {"S": "user_1"}
+        assert (
+            member_put["Item"]["joined_at"] == items[0]["Put"]["Item"]["onboarded_at"]
+        )
+        assert "ConditionExpression" not in member_put
+
     def test_onboard_without_owner_omits_owner_and_members(
         self, onboarder_writer, monkeypatch
     ):
@@ -185,6 +211,16 @@ class TestWriteLeagueRecords:
         ]["Item"]
         assert "owner_user_id" not in metadata_item
         assert "members" not in metadata_item
+        # ...and index no one (backend/user-leagues).
+        items = mock_ddb.transact_write_items.call_args[1]["TransactItems"]
+        assert not any(
+            i.get("Put", {})
+            .get("Item", {})
+            .get("SK", {})
+            .get("S", "")
+            .startswith("MEMBER#")
+            for i in items
+        )
 
     def test_migrate_writes_only_lookup_no_metadata(
         self, onboarder_writer, monkeypatch
