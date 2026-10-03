@@ -1,11 +1,13 @@
 import { screen } from '@testing-library/react';
 import { defineFeature, loadFeature } from 'jest-cucumber';
+import { http, HttpResponse } from 'msw';
 
 import ManagerComparison from '../manager-comparison';
 
 import type { MatchupItem } from '@/components/api/types';
-import { LEAGUE, MATCHUPS } from '@/test/fixtures';
-import { leagueQuery, server } from '@/test/msw/server';
+import { ErrorBoundary } from '@/components/error-boundary';
+import { LEAGUE, MATCHUPS, STANDINGS } from '@/test/fixtures';
+import { API, leagueQuery, server } from '@/test/msw/server';
 import { renderRoute } from '@/test/render';
 
 // Alice beat Bob in week 1; week 2 is an unplayed 0-0 placeholder between the same
@@ -96,6 +98,89 @@ defineFeature(feature, (test) => {
     });
     then(/^I see "(.*)"$/, async (text) => {
       expect((await screen.findAllByText(text)).length).toBeGreaterThan(0);
+    });
+  });
+
+  test('Championships come from the standings champion flag', ({
+    given,
+    when,
+    then,
+  }) => {
+    given(
+      'Alice is the standings champion and no matchup is labeled Finals',
+      () => {
+        // The matchups carry no "Finals" label (e.g. a league whose title game was not
+        // in week 17); the title still counts because STANDINGS flags the champion.
+        server.use(
+          leagueQuery({
+            MATCHUPS,
+            SEASON_STANDINGS: STANDINGS,
+            PLATFORM_MIGRATION: [],
+          }),
+        );
+      },
+    );
+    when('I open the manager comparison page', async () => {
+      await renderRoute(<ManagerComparison />, {
+        route: '/manager_comparison',
+        league: LEAGUE,
+      });
+    });
+    then(
+      /^the Championships row shows "(.*)" for "(.*)" and "(.*)" for "(.*)"$/,
+      async (leftCount, leftName, rightCount, rightName) => {
+        // Managers are ordered by name, so the left column is Alice and the right Bob.
+        expect([leftName, rightName]).toEqual(['Alice', 'Bob']);
+        const label = await screen.findByText('Championships');
+        expect(
+          label.previousElementSibling?.querySelector('span'),
+        ).toHaveTextContent(leftCount);
+        expect(
+          label.nextElementSibling?.querySelector('span'),
+        ).toHaveTextContent(rightCount);
+      },
+    );
+  });
+
+  test('A standings load failure surfaces an error', ({
+    given,
+    when,
+    then,
+  }) => {
+    given(
+      'matchups load but the standings query fails with a server error',
+      () => {
+        server.use(
+          http.get(`${API}/leagues/:id/query`, ({ request }) => {
+            const queryType =
+              new URL(request.url).searchParams.get('queryType') ?? '';
+            if (queryType.startsWith('SEASON_STANDINGS')) {
+              return HttpResponse.json(
+                { detail: 'Internal Server Error' },
+                { status: 500 },
+              );
+            }
+            if (queryType.startsWith('MATCHUPS')) {
+              return HttpResponse.json({ data: MATCHUPS });
+            }
+            return HttpResponse.json({ detail: 'No data' }, { status: 404 });
+          }),
+        );
+      },
+    );
+    when(
+      'I open the manager comparison page inside the app error boundary',
+      async () => {
+        await renderRoute(
+          <ErrorBoundary>
+            <ManagerComparison />
+          </ErrorBoundary>,
+          { route: '/manager_comparison', league: LEAGUE },
+        );
+      },
+    );
+    then(/^I see "(.*)"$/, async (text) => {
+      expect(await screen.findByText(text)).toBeInTheDocument();
     });
   });
 });

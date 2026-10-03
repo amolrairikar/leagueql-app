@@ -82,23 +82,16 @@ QUERIES = {
             t2.primary_owner_id AS team_b_primary_owner_id,
             t2.secondary_owner_id AS team_b_secondary_owner_id,
             m.playoff_tier_type AS playoff_tier_type,
+            -- Winners-bracket rounds are named by how many rounds remain before the
+            -- season's final (set by the processor from league settings or the Sleeper
+            -- bracket), so leagues whose playoffs end before week 17 are labeled correctly.
             CASE
                 WHEN m.playoff_tier_type = 'WINNERS_BRACKET' THEN
-                    CASE
-                        WHEN CAST(m.season AS INTEGER) < 2021 THEN
-                            CASE
-                                WHEN CAST(m.week AS INTEGER) = 14 THEN 'Quarterfinals'
-                                WHEN CAST(m.week AS INTEGER) = 15 THEN 'Semifinals'
-                                WHEN CAST(m.week AS INTEGER) = 16 THEN 'Finals'
-                                ELSE NULL
-                            END
-                        ELSE
-                            CASE
-                                WHEN CAST(m.week AS INTEGER) = 15 THEN 'Quarterfinals'
-                                WHEN CAST(m.week AS INTEGER) = 16 THEN 'Semifinals'
-                                WHEN CAST(m.week AS INTEGER) = 17 THEN 'Finals'
-                                ELSE NULL
-                            END
+                    CASE CAST(m.playoff_total_rounds AS INTEGER) - CAST(m.playoff_round_num AS INTEGER)
+                        WHEN 0 THEN 'Finals'
+                        WHEN 1 THEN 'Semifinals'
+                        WHEN 2 THEN 'Quarterfinals'
+                        ELSE 'Round ' || CAST(CAST(m.playoff_round_num AS INTEGER) AS VARCHAR)
                     END
                 WHEN m.playoff_tier_type = 'WINNERS_CONSOLATION_LADDER' THEN 'Winners Consolation'
                 WHEN m.playoff_tier_type = 'NONE' THEN NULL
@@ -135,23 +128,14 @@ QUERIES = {
             t2.primary_owner_id AS team_b_primary_owner_id,
             t2.secondary_owner_id AS team_b_secondary_owner_id,
             m.playoff_tier_type AS playoff_tier_type,
+            -- Same round naming as the ESPN/Yahoo transform; Sleeper rounds come from its bracket.
             CASE
                 WHEN m.playoff_tier_type = 'WINNERS_BRACKET' THEN
-                    CASE
-                        WHEN CAST(m.team_a_season AS INTEGER) < 2021 THEN
-                            CASE
-                                WHEN CAST(m.team_a_week AS INTEGER) = 14 THEN 'Quarterfinals'
-                                WHEN CAST(m.team_a_week AS INTEGER) = 15 THEN 'Semifinals'
-                                WHEN CAST(m.team_a_week AS INTEGER) = 16 THEN 'Finals'
-                                ELSE NULL
-                            END
-                        ELSE
-                            CASE
-                                WHEN CAST(m.team_a_week AS INTEGER) = 15 THEN 'Quarterfinals'
-                                WHEN CAST(m.team_a_week AS INTEGER) = 16 THEN 'Semifinals'
-                                WHEN CAST(m.team_a_week AS INTEGER) = 17 THEN 'Finals'
-                                ELSE NULL
-                            END
+                    CASE CAST(m.playoff_total_rounds AS INTEGER) - CAST(m.playoff_round_num AS INTEGER)
+                        WHEN 0 THEN 'Finals'
+                        WHEN 1 THEN 'Semifinals'
+                        WHEN 2 THEN 'Quarterfinals'
+                        ELSE 'Round ' || CAST(CAST(m.playoff_round_num AS INTEGER) AS VARCHAR)
                     END
                 WHEN m.playoff_tier_type = 'WINNERS_CONSOLATION_LADDER' THEN 'Winners Consolation'
                 WHEN m.playoff_tier_type = 'NONE' THEN NULL
@@ -349,30 +333,21 @@ QUERIES = {
             (weekly_rank - 1) AS vs_league_losses
         FROM league_rankings
     ),
-    -- The champion is the winner of the season's title game: the lone winners-bracket game in
-    -- its last winners-bracket week (rather than a fixed week, so leagues whose playoffs end
-    -- before week 17 still get one). A last week with several games is a mid-playoffs round,
-    -- so no champion is named yet.
-    winners_bracket_weeks AS (
-        SELECT
-            season,
-            CAST(week AS INTEGER) AS week_num,
-            COUNT(*) AS games,
-            ROW_NUMBER() OVER (PARTITION BY season ORDER BY CAST(week AS INTEGER) DESC) AS recency
-        FROM matchups_output
-        WHERE playoff_tier_type = 'WINNERS_BRACKET'
-        GROUP BY season, CAST(week AS INTEGER)
-    ),
+    -- The champion is the winner of the season's decided title game: the winners-bracket
+    -- game labeled 'Finals' (the season's final round, from league settings or the Sleeper
+    -- bracket). An unplayed 0-0 final is a TIE and names no champion, nor does a season
+    -- still in its earlier rounds. If several weeks carry a Finals game (a multi-week
+    -- Sleeper final), the latest week decides.
     champion AS (
         SELECT
-            m.season,
-            m.winner AS champion_team_id
-        FROM matchups_output m
-        INNER JOIN winners_bracket_weeks w
-            ON (m.season = w.season AND CAST(m.week AS INTEGER) = w.week_num)
-        WHERE m.playoff_tier_type = 'WINNERS_BRACKET'
-            AND w.recency = 1
-            AND w.games = 1
+            season,
+            winner AS champion_team_id
+        FROM matchups_output
+        WHERE playoff_tier_type = 'WINNERS_BRACKET'
+            AND playoff_round = 'Finals'
+            AND winner IS NOT NULL
+            AND winner NOT IN ('TIE', '')
+        QUALIFY ROW_NUMBER() OVER (PARTITION BY season ORDER BY CAST(week AS INTEGER) DESC) = 1
     )
     SELECT
         p.season,

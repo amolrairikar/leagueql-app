@@ -477,7 +477,7 @@ class TestStandingsChampion:
         return sorted(df.loc[df["champion"] == "Yes", "team_id"])
 
     @staticmethod
-    def _game(week, a, b, tier):
+    def _game(week, a, b, tier, playoff_round=None, **extra):
         return {
             "week": str(week),
             "team_a_id": a,
@@ -485,6 +485,8 @@ class TestStandingsChampion:
             "team_a_score": 100.0,
             "team_b_score": 90.0,
             "playoff_tier_type": tier,
+            "playoff_round": playoff_round,
+            **extra,
         }
 
     def test_title_game_before_week_17(self, processor_handler):
@@ -492,21 +494,54 @@ class TestStandingsChampion:
         games = [
             self._game(1, "a", "b", "NONE"),
             self._game(1, "c", "d", "NONE"),
-            self._game(15, "a", "b", "WINNERS_BRACKET"),
-            self._game(15, "c", "d", "WINNERS_BRACKET"),
-            self._game(16, "a", "c", "WINNERS_BRACKET"),
+            self._game(15, "a", "b", "WINNERS_BRACKET", "Semifinals"),
+            self._game(15, "c", "d", "WINNERS_BRACKET", "Semifinals"),
+            self._game(16, "a", "c", "WINNERS_BRACKET", "Finals"),
         ]
         assert self._standings(processor_handler, games) == ["a"]
 
+    def test_final_in_matchup_period_15(self, processor_handler):
+        """Two-week rounds: semifinals in period 14, final in period 15."""
+        games = [
+            self._game(13, "a", "b", "NONE"),
+            self._game(13, "c", "d", "NONE"),
+            self._game(14, "a", "b", "WINNERS_BRACKET", "Semifinals"),
+            self._game(14, "c", "d", "WINNERS_BRACKET", "Semifinals"),
+            self._game(15, "c", "a", "WINNERS_BRACKET", "Finals"),
+            self._game(
+                15, "b", "d", "WINNERS_CONSOLATION_LADDER", "Winners Consolation"
+            ),
+        ]
+        assert self._standings(processor_handler, games) == ["c"]
+
     def test_mid_playoffs_names_no_champion(self, processor_handler):
-        """The latest winners-bracket week is still the semifinals -> no champion yet."""
+        """Only the semifinals have been played -> no champion yet."""
         games = [
             self._game(1, "a", "b", "NONE"),
             self._game(1, "c", "d", "NONE"),
-            self._game(15, "a", "b", "WINNERS_BRACKET"),
-            self._game(15, "c", "d", "WINNERS_BRACKET"),
+            self._game(15, "a", "b", "WINNERS_BRACKET", "Semifinals"),
+            self._game(15, "c", "d", "WINNERS_BRACKET", "Semifinals"),
         ]
         assert self._standings(processor_handler, games) == []
+
+    def test_unplayed_placeholder_final_names_no_champion(self, processor_handler):
+        """A 0-0 scheduled final is a TIE, not a decided title game."""
+        games = [
+            self._game(1, "a", "b", "NONE"),
+            self._game(15, "a", "b", "WINNERS_BRACKET", "Semifinals"),
+            self._game(15, "c", "d", "WINNERS_BRACKET", "Semifinals"),
+            self._game(16, "a", "c", "WINNERS_BRACKET", "Finals", winner="TIE"),
+        ]
+        assert self._standings(processor_handler, games) == []
+
+    def test_multi_week_final_latest_week_decides(self, processor_handler):
+        """Two weeks labeled Finals (multi-week Sleeper final) -> one champion."""
+        games = [
+            self._game(1, "a", "b", "NONE"),
+            self._game(16, "a", "b", "WINNERS_BRACKET", "Finals"),
+            self._game(17, "b", "a", "WINNERS_BRACKET", "Finals"),
+        ]
+        assert self._standings(processor_handler, games) == ["b"]
 
 
 _TXN_TEAM_MAP = {

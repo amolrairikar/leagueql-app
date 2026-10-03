@@ -1,5 +1,6 @@
 import datetime
 import json
+import math
 import os
 import re
 from collections import defaultdict
@@ -104,12 +105,13 @@ def build_league_settings_row(
     the platform did not provide: playoff start week falls back to
     ``default_playoff_week_start``, regular-season length to ``playoff_week_start - 1``,
     and the playoff-team count to 6.
+
+    ``playoff_week_start_assumed`` records whether the start week was defaulted. It is
+    internal (stripped before the item is written, see ``_PRIVATE_SETTINGS_KEYS``) and only
+    gates ``playoff_structure``.
     """
-    pws = (
-        playoff_week_start
-        if isinstance(playoff_week_start, int) and playoff_week_start > 0
-        else default_playoff_week_start(season)
-    )
+    has_pws = isinstance(playoff_week_start, int) and playoff_week_start > 0
+    pws = playoff_week_start if has_pws else default_playoff_week_start(season)
     rsw = (
         regular_season_weeks
         if isinstance(regular_season_weeks, int) and regular_season_weeks > 0
@@ -124,8 +126,126 @@ def build_league_settings_row(
         # default (6) was used, so the UI can label its cutoff line as assumed.
         "num_playoff_teams_assumed": not has_npt,
         "playoff_week_start": pws,
+        "playoff_week_start_assumed": not has_pws,
         "regular_season_weeks": rsw,
     }
+
+
+# Settings-row keys used only inside the processor; never persisted on LEAGUE_SETTINGS.
+_PRIVATE_SETTINGS_KEYS = frozenset({"playoff_week_start_assumed"})
+
+
+def playoff_structure(settings_row: dict | None) -> tuple[int, int] | None:
+    """
+    Derive a season's winners-bracket structure from its league settings.
+
+    Returns ``(first_playoff_week, total_rounds)`` with ``total_rounds =
+    ceil(log2(num_playoff_teams))`` (a 6-team bracket is 3 rounds with round-1 byes). Weeks
+    are in the platform's own matchup-week units, the same as ``playoff_week_start``.
+
+    Returns None when the settings are missing, either value was defaulted rather than
+    supplied by the platform, or the playoff-team count is below 2 — callers then fall back
+    to the observed winners-bracket weeks (``observed_playoff_rounds``).
+    """
+    if not settings_row:
+        return None
+    if settings_row.get("num_playoff_teams_assumed") or settings_row.get(
+        "playoff_week_start_assumed"
+    ):
+        return None
+    num_teams = settings_row.get("num_playoff_teams")
+    if not isinstance(num_teams, int) or num_teams < 2:
+        return None
+    return settings_row["playoff_week_start"], math.ceil(math.log2(num_teams))
+
+
+def observed_playoff_rounds(
+    games_by_week: dict[int, int],
+) -> tuple[dict[int, int], int | None]:
+    """
+    Number a season's winners-bracket rounds from the weeks they were observed in.
+
+    Used when the season has no settings-derived structure. Rounds are numbered 1..k in
+    week order. Once the last week holds exactly one game (the title game), the bracket is
+    complete and ``total_rounds`` is k; otherwise the playoffs are still in progress and
+    ``total_rounds`` is None, so no round is treated as the final.
+
+    Args:
+        games_by_week: winners-bracket week → number of winners-bracket games that week.
+
+    Returns:
+        (week → round number, total rounds or None).
+    """
+    weeks = sorted(games_by_week)
+    week_to_round = {w: i + 1 for i, w in enumerate(weeks)}
+    complete = bool(weeks) and games_by_week[weeks[-1]] == 1
+    return week_to_round, (len(weeks) if complete else None)
+
+
+def resolve_playoff_rounds(
+    games_by_week: dict[int, int],
+    settings_row: dict | None,
+    season: str,
+) -> tuple[dict[int, int], int | None]:
+    """
+    Map each winners-bracket week of a season to its round, and give the total rounds.
+
+    Uses the settings-derived structure (``playoff_structure``) when available and
+    consistent with the observed weeks; otherwise falls back to ``observed_playoff_rounds``.
+    A structure that places an observed week outside ``1..total_rounds`` (e.g. playoff
+    settings changed after games were played) is logged and ignored.
+    """
+    structure = playoff_structure(settings_row)
+    if structure is not None:
+        first_week, total_rounds = structure
+        week_to_round = {w: w - first_week + 1 for w in games_by_week}
+        if all(1 <= r <= total_rounds for r in week_to_round.values()):
+            return week_to_round, total_rounds
+        logger.warning(
+            "Season %s winners-bracket weeks %s fall outside the settings-derived playoff "
+            "structure (first week %s, %s rounds); using observed weeks instead.",
+            season,
+            sorted(games_by_week),
+            first_week,
+            total_rounds,
+        )
+    return observed_playoff_rounds(games_by_week)
+
+
+def annotate_playoff_rounds(
+    all_matchups: list[dict],
+    league_settings_by_season: dict[str, dict],
+    week_key: str = "week",
+    season_key: str = "season",
+) -> None:
+    """
+    Set ``playoff_round_num`` / ``playoff_total_rounds`` on every matchup row in place.
+
+    Winners-bracket rows get their round (see ``resolve_playoff_rounds``); every other row
+    gets None for both, so the columns always exist for the MATCHUPS transform's
+    ``playoff_round`` label and the bracket builder. Used by ESPN and Yahoo, whose
+    matchups carry no round of their own (Sleeper takes rounds from its bracket instead).
+    """
+    games_by_season: dict[str, dict[int, int]] = defaultdict(lambda: defaultdict(int))
+    for m in all_matchups:
+        if m["playoff_tier_type"] == "WINNERS_BRACKET":
+            games_by_season[m[season_key]][int(m[week_key])] += 1
+
+    rounds_by_season = {
+        season: resolve_playoff_rounds(
+            dict(games), league_settings_by_season.get(season), season
+        )
+        for season, games in games_by_season.items()
+    }
+
+    for m in all_matchups:
+        m["playoff_round_num"] = None
+        m["playoff_total_rounds"] = None
+        if m["playoff_tier_type"] != "WINNERS_BRACKET":
+            continue
+        week_to_round, total_rounds = rounds_by_season[m[season_key]]
+        m["playoff_round_num"] = week_to_round[int(m[week_key])]
+        m["playoff_total_rounds"] = total_rounds
 
 
 @dataclass(frozen=True)
@@ -714,11 +834,16 @@ def _build_espn_brackets(all_matchups: list[dict]) -> list[dict]:
     Bye matchups (team_b_id empty) are skipped — bye teams appear with null team_from
     in the next round, which the frontend uses to detect and render the bye card.
 
-    Final-round positions: WB final = 1 (championship); consolation finals = 3 or 5
-    based on whether both teams came from WB losses (3rd place) or consolation (5th place).
+    Round numbers come from the winners-bracket rows' ``playoff_round_num`` (see
+    ``annotate_playoff_rounds``), so they follow the league's settings rather than the
+    weeks seen so far. Only games in the season's final round (``playoff_total_rounds``)
+    get placements: WB final = 1 (championship); consolation finals = 3 or 5 based on
+    whether both teams came from WB losses (3rd place) or consolation (5th place). A
+    season whose total is unknown (in-progress fallback) gets no placements.
 
     Args:
-        all_matchups: List of ESPN matchup dicts already built by _register_espn_raw_data.
+        all_matchups: ESPN/Yahoo matchup dicts already annotated by
+            ``annotate_playoff_rounds``.
 
     Returns:
         List of bracket entry dicts with match_id, round, team_1, team_2, winner, loser,
@@ -735,8 +860,23 @@ def _build_espn_brackets(all_matchups: list[dict]) -> list[dict]:
 
     all_brackets: list[dict] = []
     for season, matchups in by_season.items():
-        unique_weeks = sorted({int(m["week"]) for m in matchups})
-        week_to_round = {w: i + 1 for i, w in enumerate(unique_weeks)}
+        # Rounds come from the winners-bracket rows (annotate_playoff_rounds). Placement
+        # games share their week's round; a placement week with no winners-bracket game
+        # is offset from the earliest winners-bracket week.
+        week_to_round: dict[int, int] = {}
+        total_rounds: int | None = None
+        for m in matchups:
+            if m["playoff_tier_type"] == "WINNERS_BRACKET":
+                week_to_round[int(m["week"])] = int(m["playoff_round_num"])
+                total_rounds = m["playoff_total_rounds"]
+        if not week_to_round:
+            continue
+        first_week = min(week_to_round)
+        for m in matchups:
+            week = int(m["week"])
+            week_to_round.setdefault(
+                week, week - first_week + week_to_round[first_week]
+            )
         matchups.sort(key=lambda x: (int(x["week"]), str(x["team_a_id"])))
 
         match_id_counter = 1
@@ -797,10 +937,11 @@ def _build_espn_brackets(all_matchups: list[dict]) -> list[dict]:
                             prev_match_id, outcome = result
                             entry[from_key] = json.dumps({outcome: prev_match_id})
 
-        if bracket_entries:
-            max_round = max(e["round"] for e in bracket_entries)
+        # Only the season's final round carries placements, so a partly-played bracket
+        # (or an in-progress one whose total is unknown) has no championship match.
+        if total_rounds is not None:
             for entry in bracket_entries:
-                if entry["round"] != max_round:
+                if entry["round"] != total_rounds:
                     continue
                 if entry["position"] is None:
                     entry["position"] = 1  # WB final = championship
@@ -1109,6 +1250,7 @@ def _register_espn_raw_data(
             for record in item["data"].get("transactions", []):
                 raw_transactions.append((record, item["season"]))
 
+    annotate_playoff_rounds(all_matchups, league_settings_by_season)
     brackets = _build_espn_brackets(all_matchups)
     # Resolve transaction player IDs from the season's scoring-totals view (the
     # kona_player_info fetch), matching how the Sleeper path resolves from cached
@@ -1709,6 +1851,7 @@ def _register_yahoo_raw_data(
             }
         )
 
+    annotate_playoff_rounds(all_matchups, league_settings_by_season)
     brackets = _build_espn_brackets(all_matchups)
     seasons = {item["season"] for item in raw_data}
     player_scoring_totals = compile_yahoo_player_scoring_totals(
@@ -1846,11 +1989,20 @@ def _register_sleeper_raw_data(
     # Winners-bracket entries per season, collected so we can trace the
     # championship path and flag off-path games as winners consolation games.
     winners_entries_by_season: dict[str, list[dict]] = defaultdict(list)
+    # Total winners-bracket rounds per season. Sleeper lists every round up front (later
+    # rounds before their teams are known), so this is read before unseeded entries are
+    # skipped and stays correct mid-playoffs.
+    winners_total_rounds_by_season: dict[str, int] = {}
     for item in raw_data:
         if item["data_type"] in ("playoff_bracket", "losers_bracket"):
             # A season with no playoffs yet carries an empty (or absent) bracket;
             # `or []` guards against a null payload so it yields no rows, not a crash.
             for entry in item["data"] or []:
+                round_num = _int_or_none(entry.get("r"))
+                if item["data_type"] == "playoff_bracket" and round_num is not None:
+                    winners_total_rounds_by_season[item["season"]] = max(
+                        winners_total_rounds_by_season.get(item["season"], 0), round_num
+                    )
                 t1, t2 = entry.get("t1"), entry.get("t2")
                 if t1 is None or t2 is None:
                     continue
@@ -1918,6 +2070,7 @@ def _register_sleeper_raw_data(
             tier = "WINNERS_BRACKET" if on_path else "WINNERS_CONSOLATION_LADDER"
             bracket_by_season[season][frozenset([entry["t1"], entry["t2"]])] = {
                 "tier": tier,
+                "round": _int_or_none(entry.get("r")),
             }
 
     # Pre-pass: collect roster_positions and the playoff start week per season so
@@ -2002,6 +2155,12 @@ def _register_sleeper_raw_data(
                     playoff_tier_type = (
                         bracket_entry["tier"] if bracket_entry else "LOSERS_BRACKET"
                     )
+                # Winners-bracket games take their round from the Sleeper bracket, which
+                # already accounts for multi-week rounds (backend/data-processing-pipeline).
+                playoff_round_num = playoff_total_rounds = None
+                if playoff_tier_type == "WINNERS_BRACKET":
+                    playoff_round_num = bracket_entry["round"]
+                    playoff_total_rounds = winners_total_rounds_by_season.get(season)
                 team_a_starters_stats, team_a_starter_ids = (
                     compile_sleeper_starter_stats(
                         starters=team_a.get("starters", []),
@@ -2041,6 +2200,8 @@ def _register_sleeper_raw_data(
                         "team_b_starters": team_b_starters_stats,
                         "team_b_bench": team_b_bench_stats,
                         "playoff_tier_type": playoff_tier_type,
+                        "playoff_round_num": playoff_round_num,
+                        "playoff_total_rounds": playoff_total_rounds,
                         "winner": winner,
                         "loser": loser,
                         "team_a_week": week,
@@ -2817,7 +2978,13 @@ def _process_manifest(
                 {
                     "PK": f"LEAGUE#{canonical_league_id}",
                     "SK": f"LEAGUE_SETTINGS#{season}",
-                    "data": [{k: sanitize_value(v) for k, v in row.items()}],
+                    "data": [
+                        {
+                            k: sanitize_value(v)
+                            for k, v in row.items()
+                            if k not in _PRIVATE_SETTINGS_KEYS
+                        }
+                    ],
                 }
                 for season, row in league_settings_by_season.items()
             ],

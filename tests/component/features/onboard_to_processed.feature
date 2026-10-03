@@ -152,6 +152,28 @@ Feature: Onboard-to-processed pipeline (backend/league-onboarding, backend/data-
     And a query response row has "week" equal to "1"
     And a query response row has "week" equal to "2"
 
+  Scenario: An ESPN league with two-week playoff rounds labels its rounds and champion from its settings (backend/data-processing-pipeline)
+    # 13 regular-season matchup periods, a 4-team playoff and two-week rounds: the semifinals
+    # are matchup period 14 and the final is matchup period 15 (not week 17). Team B beats
+    # Team A in the final; Team D beats Team C for 3rd place.
+    When the onboarder runs an ONBOARD for "ESPN" league "805" with fixture "espn/raw_data_2024_two_week_rounds.json"
+    Then the onboarder returns status 200
+    And the default caller is a member of the onboarded league
+    When the processor processes the onboarded league
+    Then a JOB_STATUS "COMPLETED" exists for the job
+    And the standings show only "Team B" as champion
+    And the "PLAYOFF_BRACKET#2024" bracket has exactly one championship game won by "2"
+    When I GET "/leagues/805/query?platform=ESPN&queryType=MATCHUPS%232024%23WEEK%2314"
+    Then the API responds with status 200
+    And the query response has 2 row(s)
+    And a query response row has "playoff_round" equal to "Semifinals"
+    And no query response row has "playoff_round" equal to "Finals"
+    When I GET "/leagues/805/query?platform=ESPN&queryType=MATCHUPS%232024%23WEEK%2315"
+    Then the API responds with status 200
+    And the query response has 2 row(s)
+    And a query response row has "playoff_round" equal to "Finals"
+    And a query response row has "playoff_round" equal to "Winners Consolation"
+
   Scenario: An ESPN league with no current-season transactions writes no TRANSACTIONS item (backend/espn-transactions)
     When the onboarder runs an ONBOARD for "ESPN" league "810" with fixture "espn/raw_data_no_transactions_2024.json"
     Then the onboarder returns status 200

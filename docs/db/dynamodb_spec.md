@@ -234,7 +234,7 @@ Represents matchups for a given week in the fantasy league.
 | `team_b_primary_owner_id` | String | Platform user ID of team B's primary owner |
 | `team_b_secondary_owner_id` | String \| null | Platform user ID of team B's co-owner |
 | `playoff_tier_type` | String | Playoff bracket type. Enum: `NONE`, `WINNERS_BRACKET`, `WINNERS_CONSOLATION_LADDER` (placement games, e.g. 3rd/5th place), `LOSERS_BRACKET`, `LOSERS_CONSOLATION_LADDER` (ESPN/Yahoo consolation bracket for non-playoff teams) |
-| `playoff_round` | String \| null | Human-readable round name; `WINNERS_BRACKET` → `"Quarterfinals"`/`"Semifinals"`/`"Finals"`, `WINNERS_CONSOLATION_LADDER` → `"Winners Consolation"`, `LOSERS_BRACKET`/`LOSERS_CONSOLATION_LADDER` → `"Losers Bracket"`; null for regular season (`NONE`) |
+| `playoff_round` | String \| null | Human-readable round name. `WINNERS_BRACKET` rounds are named by how many rounds remain before the season's final: `"Finals"`, `"Semifinals"`, `"Quarterfinals"`, else `"Round N"` (N counted from the first playoff round). The final comes from the league settings (first playoff week + `ceil(log2(num_playoff_teams))` rounds; Sleeper uses its bracket's rounds). When the settings were defaulted, it comes from the observed winners-bracket weeks, and an in-progress bracket is labeled `"Round N"` throughout. `WINNERS_CONSOLATION_LADDER` → `"Winners Consolation"`, `LOSERS_BRACKET`/`LOSERS_CONSOLATION_LADDER` → `"Losers Bracket"`; null for regular season (`NONE`) |
 | `winner` | String | Team ID of the winner |
 | `loser` | String | Team ID of the loser |
 | `week` | String | Week number (e.g. `"1"`) |

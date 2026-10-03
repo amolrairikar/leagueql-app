@@ -1,0 +1,246 @@
+[
+  {
+    "season": "2024",
+    "data_type": "users",
+    "data": {
+      "members": [
+        {
+          "id": "{M1}",
+          "displayName": "user1"
+        },
+        {
+          "id": "{M2}",
+          "displayName": "user2"
+        },
+        {
+          "id": "{M3}",
+          "displayName": "user3"
+        },
+        {
+          "id": "{M4}",
+          "displayName": "user4"
+        }
+      ],
+      "teams": [
+        {
+          "id": 1,
+          "name": "Team A",
+          "logo": "",
+          "owners": [
+            "{M1}"
+          ],
+          "rankCalculatedFinal": 2,
+          "primaryOwner": "{M1}"
+        },
+        {
+          "id": 2,
+          "name": "Team B",
+          "logo": "",
+          "owners": [
+            "{M2}"
+          ],
+          "rankCalculatedFinal": 1,
+          "primaryOwner": "{M2}"
+        },
+        {
+          "id": 3,
+          "name": "Team C",
+          "logo": "",
+          "owners": [
+            "{M3}"
+          ],
+          "rankCalculatedFinal": 4,
+          "primaryOwner": "{M3}"
+        },
+        {
+          "id": 4,
+          "name": "Team D",
+          "logo": "",
+          "owners": [
+            "{M4}"
+          ],
+          "rankCalculatedFinal": 3,
+          "primaryOwner": "{M4}"
+        }
+      ]
+    }
+  },
+  {
+    "season": "2024",
+    "data_type": "settings",
+    "data": {
+      "settings": {
+        "name": "ESPN Two-Week Rounds League",
+        "scheduleSettings": {
+          "playoffTeamCount": 4,
+          "matchupPeriodCount": 13,
+          "playoffMatchupPeriodLength": 2
+        }
+      }
+    }
+  },
+  {
+    "season": "2024",
+    "data_type": "matchups_week1",
+    "data": {
+      "matchups": [
+        {
+          "matchupPeriodId": 1,
+          "playoffTierType": "NONE",
+          "home": {
+            "teamId": 1,
+            "totalPoints": "100.0",
+            "rosterForMatchupPeriod": {},
+            "rosterForCurrentScoringPeriod": {}
+          },
+          "away": {
+            "teamId": 2,
+            "totalPoints": "90.0",
+            "rosterForMatchupPeriod": {},
+            "rosterForCurrentScoringPeriod": {}
+          }
+        },
+        {
+          "matchupPeriodId": 1,
+          "playoffTierType": "NONE",
+          "home": {
+            "teamId": 3,
+            "totalPoints": "95.0",
+            "rosterForMatchupPeriod": {},
+            "rosterForCurrentScoringPeriod": {}
+          },
+          "away": {
+            "teamId": 4,
+            "totalPoints": "85.0",
+            "rosterForMatchupPeriod": {},
+            "rosterForCurrentScoringPeriod": {}
+          }
+        }
+      ]
+    }
+  },
+  {
+    "season": "2024",
+    "data_type": "matchups_week14",
+    "data": {
+      "matchups": [
+        {
+          "matchupPeriodId": 14,
+          "playoffTierType": "WINNERS_BRACKET",
+          "home": {
+            "teamId": 1,
+            "totalPoints": "220.0",
+            "rosterForMatchupPeriod": {},
+            "rosterForCurrentScoringPeriod": {}
+          },
+          "away": {
+            "teamId": 4,
+            "totalPoints": "200.0",
+            "rosterForMatchupPeriod": {},
+            "rosterForCurrentScoringPeriod": {}
+          }
+        },
+        {
+          "matchupPeriodId": 14,
+          "playoffTierType": "WINNERS_BRACKET",
+          "home": {
+            "teamId": 2,
+            "totalPoints": "210.0",
+            "rosterForMatchupPeriod": {},
+            "rosterForCurrentScoringPeriod": {}
+          },
+          "away": {
+            "teamId": 3,
+            "totalPoints": "190.0",
+            "rosterForMatchupPeriod": {},
+            "rosterForCurrentScoringPeriod": {}
+          }
+        }
+      ]
+    }
+  },
+  {
+    "season": "2024",
+    "data_type": "matchups_week15",
+    "data": {
+      "matchups": [
+        {
+          "matchupPeriodId": 15,
+          "playoffTierType": "WINNERS_BRACKET",
+          "home": {
+            "teamId": 1,
+            "totalPoints": "205.0",
+            "rosterForMatchupPeriod": {},
+            "rosterForCurrentScoringPeriod": {}
+          },
+          "away": {
+            "teamId": 2,
+            "totalPoints": "230.0",
+            "rosterForMatchupPeriod": {},
+            "rosterForCurrentScoringPeriod": {}
+          }
+        },
+        {
+          "matchupPeriodId": 15,
+          "playoffTierType": "WINNERS_CONSOLATION_LADDER",
+          "home": {
+            "teamId": 4,
+            "totalPoints": "180.0",
+            "rosterForMatchupPeriod": {},
+            "rosterForCurrentScoringPeriod": {}
+          },
+          "away": {
+            "teamId": 3,
+            "totalPoints": "170.0",
+            "rosterForMatchupPeriod": {},
+            "rosterForCurrentScoringPeriod": {}
+          }
+        }
+      ]
+    }
+  },
+  {
+    "season": "2024",
+    "data_type": "draft_picks",
+    "data": {
+      "draft_picks": [
+        {
+          "id": 1,
+          "teamId": 1,
+          "playerId": 111,
+          "roundId": 1,
+          "roundPickNumber": 1,
+          "overallPickNumber": 1,
+          "keeper": false,
+          "reservedForKeeper": false,
+          "autoDraftTypeId": 0,
+          "bidAmount": 0,
+          "lineupSlotId": 0,
+          "memberId": "{M1}",
+          "nominatingTeamId": 0,
+          "tradeLocked": false
+        }
+      ]
+    }
+  },
+  {
+    "season": "2024",
+    "data_type": "player_scoring_totals",
+    "data": {
+      "player_scoring_totals": [
+        {
+          "player_id": 111,
+          "player_name": "Joe Burrow",
+          "position": 1,
+          "total_points": 300
+        },
+        {
+          "player_id": 222,
+          "player_name": "Joe Mixon",
+          "position": 2,
+          "total_points": 150
+        }
+      ]
+    }
+  }
+]

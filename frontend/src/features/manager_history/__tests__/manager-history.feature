@@ -28,3 +28,9 @@ Feature: Manager history (frontend/manager-history)
     Given the manager history data fails to load
     When I open the manager history page
     Then I see "Failed to load manager data."
+
+  Scenario: Runner-up of an early final
+    Given manager history data where Alice lost a "Finals" game played in matchup period 15
+    When I open the manager history page
+    Then the season card shows the "Runner-up" result pill
+    And the season card shows the finish "2nd"
