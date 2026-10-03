@@ -341,3 +341,18 @@ Feature: Onboard-to-processed pipeline (backend/league-onboarding, backend/data-
     Then a JOB_STATUS "COMPLETED" exists for the job
     And the owner ids in "STANDINGS#2024" are unchanged
     And "Manager A" has the same owner id in "STANDINGS#2023" and "STANDINGS#2024"
+
+  Scenario: A backfill still rebuilds every season when the lineup backfill rewrites the manifest first (backend/data-processing-pipeline)
+    # The backfill's manifest write (reprocess_all) is copied by the lineup backfill
+    # (reprocess_seasons=2024) before the processor run it triggered reads the manifest. That run
+    # must still act on its own version: rebuild every season under the backfill's job.
+    Given Yahoo player metadata and stats are cached in S3
+    When the onboarder runs an ONBOARD for "YAHOO" league "438" with fixture "yahoo/raw_data_slot_changes.json"
+    And the processor processes the onboarded league
+    And the "STANDINGS#2023" item is deleted
+    And the onboarder runs a backfill REFRESH for "YAHOO" league "438" with fixture "yahoo/raw_data_slot_changes_2024.json"
+    And I remember the current manifest version
+    And the lineup backfill republishes season "2024" before the processor runs
+    And the processor processes the remembered manifest version
+    Then a JOB_STATUS "COMPLETED" exists for the job
+    And the league has at least one "STANDINGS#2023" item

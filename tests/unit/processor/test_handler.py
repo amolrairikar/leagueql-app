@@ -46,6 +46,92 @@ class TestReadS3Object:
             processor_handler.read_s3_object("bucket", "key")
 
 
+def _versions(*ids):
+    """Versions of key "k", oldest first (``ids[0]`` oldest, ``ids[-1]`` newest)."""
+    return {
+        "Versions": [
+            {
+                "Key": "k",
+                "VersionId": vid,
+                "LastModified": dt.datetime(2024, 1, 1 + i, tzinfo=dt.timezone.utc),
+            }
+            for i, vid in enumerate(ids)
+        ]
+    }
+
+
+class TestGetPreviousVersionIdRelativeToTrigger:
+    """backend/data-processing-pipeline: the previous manifest is relative to the version
+    that triggered the run, not the newest version in the bucket."""
+
+    @pytest.mark.parametrize(
+        "trigger, expected",
+        [
+            ("v3", "v2"),  # trigger is the newest
+            ("v2", "v1"),  # a later write (v3) landed before the run read the manifest
+            ("v1", None),  # trigger is the oldest
+            ("missing", None),  # trigger not listed -> treated as no previous manifest
+        ],
+    )
+    def test_previous_of_triggering_version(self, processor_handler, trigger, expected):
+        mock_s3 = MagicMock()
+        mock_s3.list_object_versions.return_value = _versions("v1", "v2", "v3")
+        with patch.object(processor_handler, "s3_client", mock_s3):
+            assert (
+                processor_handler.get_previous_version_id("b", "k", version_id=trigger)
+                == expected
+            )
+
+    def test_without_version_id_uses_second_newest(self, processor_handler):
+        mock_s3 = MagicMock()
+        mock_s3.list_object_versions.return_value = _versions("v1", "v2", "v3")
+        with patch.object(processor_handler, "s3_client", mock_s3):
+            assert processor_handler.get_previous_version_id("b", "k") == "v2"
+
+
+class TestReadsTriggeringManifestVersion:
+    """backend/data-processing-pipeline: the run reads the manifest version its S3 event names."""
+
+    def _run(self, processor_handler, event):
+        mock_s3 = MagicMock()
+        mock_s3.get_object.return_value = _manifest_response({"SLEEPER": ["2024"]})
+        previous = MagicMock(return_value=None)
+        with (
+            patch.multiple(
+                processor_handler,
+                s3_client=mock_s3,
+                get_previous_version_id=previous,
+                read_s3_object=MagicMock(return_value=[]),
+                register_raw_data=MagicMock(return_value={}),
+                dataframe_to_dynamo_items=MagicMock(return_value=[]),
+                write_items=MagicMock(),
+                write_metadata_items=MagicMock(),
+                QUERIES=_FAKE_QUERIES,
+            ),
+            patch.object(processor_handler.duckdb, "connect", return_value=MagicMock()),
+        ):
+            processor_handler._lambda_handler_impl(event, MagicMock())
+        return mock_s3, previous
+
+    def test_reads_event_version(self, processor_handler):
+        event = _s3_event()
+        event["Records"][0]["s3"]["object"]["versionId"] = "v-trigger"
+        mock_s3, previous = self._run(processor_handler, event)
+        mock_s3.get_object.assert_called_once_with(
+            Bucket="bucket",
+            Key="raw/canonical-abc/manifest.json",
+            VersionId="v-trigger",
+        )
+        assert previous.call_args.kwargs["version_id"] == "v-trigger"
+
+    def test_event_without_version_reads_latest(self, processor_handler):
+        mock_s3, previous = self._run(processor_handler, _s3_event())
+        mock_s3.get_object.assert_called_once_with(
+            Bucket="bucket", Key="raw/canonical-abc/manifest.json"
+        )
+        assert previous.call_args.kwargs["version_id"] is None
+
+
 class TestGetPreviousVersionId:
     def test_returns_second_most_recent_version(self, processor_handler):
         mock_s3 = MagicMock()

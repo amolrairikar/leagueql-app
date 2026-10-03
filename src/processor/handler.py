@@ -548,24 +548,38 @@ def read_s3_object(bucket: str, key: str, version_id: str | None = None) -> Any:
         raise
 
 
-def get_previous_version_id(bucket: str, key: str) -> str | None:
+def get_previous_version_id(
+    bucket: str, key: str, version_id: str | None = None
+) -> str | None:
     """
-    Returns the VersionId of the second-most-recent version of an S3 object,
-    or None if no prior version exists.
+    Returns the VersionId of the version written just before ``version_id``, or None.
+
+    With ``version_id`` (the version whose S3 event triggered this run), the previous version
+    is the one immediately older than it, so a manifest written again after the trigger
+    (e.g. by the Yahoo lineup backfill) can't shift it. Without ``version_id``, it is the
+    second-most-recent version (unversioned events).
 
     Args:
         bucket: The S3 bucket containing the object.
         key: The key corresponding to the object location within the bucket.
+        version_id: The triggering version, when the event carries one.
 
     Returns:
-        The VersionId string of the previous version, or None.
+        The VersionId string of the previous version, or None when there is none (or the
+        triggering version is not listed — the caller then rebuilds every season).
     """
     response = s3_client.list_object_versions(Bucket=bucket, Prefix=key)
     versions = [v for v in response.get("Versions", []) if v["Key"] == key]
+    # S3 returns a key's versions newest-first; keep that order for same-second writes and
+    # only sort when needed (stable sort, so ties keep S3's order).
     versions.sort(key=lambda v: v["LastModified"], reverse=True)
-    if len(versions) > 1:
-        return versions[1]["VersionId"]
-    return None
+    ids = [v["VersionId"] for v in versions]
+    if version_id is None:
+        return ids[1] if len(ids) > 1 else None
+    if version_id not in ids:
+        return None
+    index = ids.index(version_id)
+    return ids[index + 1] if index + 1 < len(ids) else None
 
 
 def read_yahoo_lineup_store(bucket: str, prefix: str, season: str) -> dict | None:
@@ -2494,6 +2508,10 @@ def _lambda_handler_impl(event, context) -> None:
         put_request_principal = record["userIdentity"]["principalId"].split(":")[-1]
         bucket = record["s3"]["bucket"]["name"]
         key = record["s3"]["object"]["key"]
+        # The exact manifest version this event is for. Another writer (the Yahoo lineup
+        # backfill's self-copy) can replace the manifest before this run reads it, so the run
+        # must read its own version or it would act on the other write's metadata.
+        version_id = record["s3"]["object"].get("versionId")
     except (KeyError, IndexError) as e:
         raise ValueError(f"Unexpected S3 event structure: missing key {e}") from e
 
@@ -2505,10 +2523,20 @@ def _lambda_handler_impl(event, context) -> None:
         return
     canonical_league_id = key.split("/")[1]
 
-    previous_version_id = get_previous_version_id(bucket=bucket, key=key)
-    logger.info("Previous version ID for %s: %s", key, previous_version_id)
+    previous_version_id = get_previous_version_id(
+        bucket=bucket, key=key, version_id=version_id
+    )
+    logger.info(
+        "Triggering version ID for %s: %s; previous version ID: %s",
+        key,
+        version_id,
+        previous_version_id,
+    )
 
-    manifest_response = s3_client.get_object(Bucket=bucket, Key=key)
+    get_kwargs = {"Bucket": bucket, "Key": key}
+    if version_id:
+        get_kwargs["VersionId"] = version_id
+    manifest_response = s3_client.get_object(**get_kwargs)
     manifest = json.loads(manifest_response["Body"].read().decode("utf-8"))
     logger.info("Successfully read manifest file")
 
