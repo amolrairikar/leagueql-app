@@ -11,6 +11,7 @@ from unittest.mock import MagicMock, patch
 
 import botocore.exceptions
 import duckdb
+import pandas as pd
 import pytest
 
 
@@ -188,6 +189,12 @@ class TestGetPreviousVersionId:
             assert processor_handler.get_previous_version_id("b", "k") is None
 
 
+def _annotated_brackets(processor_handler, matchups, settings=None):
+    """Build brackets the way the processor does: annotate rounds, then build."""
+    processor_handler.annotate_playoff_rounds(matchups, settings or {})
+    return processor_handler._build_espn_brackets(matchups)
+
+
 class TestBuildESPNBracketsBranches:
     def test_team_2_wins_round_one(self, processor_handler):
         # Covers the `elif winner == team_2` branch.
@@ -202,7 +209,7 @@ class TestBuildESPNBracketsBranches:
                 "loser": 1,
             }
         ]
-        result = processor_handler._build_espn_brackets(matchups)
+        result = _annotated_brackets(processor_handler, matchups)
         assert result[0]["winner"] == "2"
 
     def test_playoff_tie_has_no_winner(self, processor_handler):
@@ -219,7 +226,7 @@ class TestBuildESPNBracketsBranches:
                 "loser": "TIE",
             }
         ]
-        result = processor_handler._build_espn_brackets(matchups)
+        result = _annotated_brackets(processor_handler, matchups)
         assert result[0]["winner"] is None
         assert result[0]["loser"] is None
 
@@ -246,7 +253,7 @@ class TestBuildESPNBracketsBranches:
                 "loser": "",
             },
         ]
-        result = processor_handler._build_espn_brackets(matchups)
+        result = _annotated_brackets(processor_handler, matchups)
         round_two = next(e for e in result if e["round"] == 2)
         assert round_two["team_1_from"] is None  # empty team got no back-link
 
@@ -391,6 +398,7 @@ class TestRegisterESPNRawDataMatchups:
             "num_playoff_teams": 4,
             "num_playoff_teams_assumed": False,
             "playoff_week_start": 15,
+            "playoff_week_start_assumed": False,
             "regular_season_weeks": 14,
         }
 
@@ -694,6 +702,7 @@ class TestRegisterSleeperRawDataBranches:
             "num_playoff_teams": 6,
             "num_playoff_teams_assumed": False,
             "playoff_week_start": 15,
+            "playoff_week_start_assumed": False,
             "regular_season_weeks": 14,
         }
 
@@ -1027,6 +1036,7 @@ class TestLambdaHandlerImpl:
                     "season": "2024",
                     "num_playoff_teams": 6,
                     "playoff_week_start": 15,
+                    "playoff_week_start_assumed": False,
                     "regular_season_weeks": 14,
                 }
             },
@@ -1064,6 +1074,8 @@ class TestLambdaHandlerImpl:
         assert len(settings_items) == 1
         assert settings_items[0]["data"][0]["num_playoff_teams"] == 6
         assert settings_items[0]["data"][0]["regular_season_weeks"] == 14
+        # The internal assumed-start-week flag is never persisted.
+        assert "playoff_week_start_assumed" not in settings_items[0]["data"][0]
 
     def test_sleeper_refresh_reads_previous_manifest_and_player_data(
         self, processor_handler
@@ -1621,3 +1633,369 @@ class TestYahooMigrationTranslationWiring:
     def test_non_yahoo_never_translates(self, processor_handler):
         translate = self._run(processor_handler, {"SLEEPER": ["2025"]}, {})
         translate.assert_not_called()
+
+
+def _espn_settings_item(season="2024", matchup_period_count=13, playoff_team_count=4):
+    schedule = {}
+    if matchup_period_count is not None:
+        schedule["matchupPeriodCount"] = matchup_period_count
+    if playoff_team_count is not None:
+        schedule["playoffTeamCount"] = playoff_team_count
+    return {
+        "season": season,
+        "data_type": "settings",
+        "data": {"settings": {"name": "League", "scheduleSettings": schedule}},
+    }
+
+
+def _espn_matchup(period, home, away, tier, home_pts="110.0", away_pts="100.0"):
+    return {
+        "matchupPeriodId": period,
+        "playoffTierType": tier,
+        "home": {"teamId": home, "totalPoints": home_pts},
+        "away": {"teamId": away, "totalPoints": away_pts},
+    }
+
+
+def _espn_matchups_item(period, matchups, season="2024"):
+    return {
+        "season": season,
+        "data_type": f"matchups_week{period}",
+        "data": {"matchups": matchups},
+    }
+
+
+# A 4-team ESPN playoff with two-week rounds after 13 regular-season matchup periods:
+# semifinals are matchup period 14 and the final is matchup period 15.
+_TWO_WEEK_ROUND_SEASON = [
+    _espn_settings_item(),
+    _espn_matchups_item(13, [_espn_matchup(13, 1, 2, "NONE")]),
+    _espn_matchups_item(
+        14,
+        [
+            _espn_matchup(14, 1, 4, "WINNERS_BRACKET"),
+            _espn_matchup(14, 2, 3, "WINNERS_BRACKET"),
+            _espn_matchup(14, 5, 6, "LOSERS_CONSOLATION_LADDER"),
+        ],
+    ),
+    _espn_matchups_item(
+        15,
+        [
+            _espn_matchup(15, 1, 2, "WINNERS_BRACKET"),
+            _espn_matchup(15, 4, 3, "WINNERS_CONSOLATION_LADDER"),
+        ],
+    ),
+]
+
+
+class TestAnnotatePlayoffRounds:
+    def test_two_week_rounds_use_settings(self, processor_handler):
+        result = processor_handler._register_espn_raw_data(_TWO_WEEK_ROUND_SEASON)
+        rounds = {
+            (m["week"], m["team_a_id"]): (
+                m["playoff_round_num"],
+                m["playoff_total_rounds"],
+            )
+            for m in result["matchups"]
+        }
+        assert rounds[(14, 1)] == (1, 2)
+        assert rounds[(14, 2)] == (1, 2)
+        assert rounds[(15, 1)] == (2, 2)
+        # Non-winners-bracket rows carry no round.
+        assert rounds[(13, 1)] == (None, None)
+        assert rounds[(14, 5)] == (None, None)
+        assert rounds[(15, 4)] == (None, None)
+
+    def test_semifinals_only_still_two_rounds(self, processor_handler):
+        result = processor_handler._register_espn_raw_data(_TWO_WEEK_ROUND_SEASON[:3])
+        semis = [
+            m for m in result["matchups"] if m["week"] == 14 and m["team_a_id"] < 5
+        ]
+        assert {(m["playoff_round_num"], m["playoff_total_rounds"]) for m in semis} == {
+            (1, 2)
+        }
+
+    def test_defaulted_settings_fall_back_to_observed_weeks(self, processor_handler):
+        raw = [_espn_settings_item(playoff_team_count=None)] + _TWO_WEEK_ROUND_SEASON[
+            1:
+        ]
+        result = processor_handler._register_espn_raw_data(raw)
+        final = next(
+            m for m in result["matchups"] if m["week"] == 15 and m["team_a_id"] == 1
+        )
+        assert (final["playoff_round_num"], final["playoff_total_rounds"]) == (2, 2)
+
+    def test_defaulted_settings_in_progress_has_no_total(self, processor_handler):
+        raw = [_espn_settings_item(playoff_team_count=None)] + _TWO_WEEK_ROUND_SEASON[
+            1:3
+        ]
+        result = processor_handler._register_espn_raw_data(raw)
+        semi = next(
+            m for m in result["matchups"] if m["week"] == 14 and m["team_a_id"] == 1
+        )
+        assert (semi["playoff_round_num"], semi["playoff_total_rounds"]) == (1, None)
+
+    def test_yahoo_rows_use_settings(self, processor_handler):
+        # Yahoo weeks are strings; a 4-team playoff starting week 16 ends in week 17.
+        matchups = [
+            {"season": "2025", "week": "16", "playoff_tier_type": "WINNERS_BRACKET"},
+            {"season": "2025", "week": "16", "playoff_tier_type": "WINNERS_BRACKET"},
+            {"season": "2025", "week": "10", "playoff_tier_type": "NONE"},
+        ]
+        settings = {
+            "2025": processor_handler.build_league_settings_row(
+                season="2025", playoff_week_start=16, num_playoff_teams=4
+            )
+        }
+        processor_handler.annotate_playoff_rounds(matchups, settings)
+        assert [
+            (m["playoff_round_num"], m["playoff_total_rounds"]) for m in matchups
+        ] == [
+            (1, 2),
+            (1, 2),
+            (None, None),
+        ]
+
+
+def _sleeper_week(week, pairs):
+    return {
+        "season": "2024",
+        "data_type": f"matchupsweek{week}",
+        "data": [
+            {
+                "matchup_id": i,
+                "roster_id": roster,
+                "points": pts,
+                "starters": [],
+                "starters_points": [],
+            }
+            for i, pair in enumerate(pairs, start=1)
+            for roster, pts in zip(pair, (110.0, 100.0))
+        ],
+    }
+
+
+class TestSleeperPlayoffRounds:
+    def test_rounds_follow_bracket_including_unseeded_final(self, processor_handler):
+        # 6-team, 3-round winners bracket. The final (round 3) is listed but not yet
+        # seeded, so it has no teams; the total must still be 3 rounds.
+        raw = [
+            {
+                "season": "2024",
+                "data_type": "league_settings",
+                "data": {"settings": {"playoff_week_start": 15, "playoff_teams": 6}},
+            },
+            {
+                "season": "2024",
+                "data_type": "playoff_bracket",
+                "data": [
+                    {"r": 1, "m": 1, "t1": 3, "t2": 6, "w": 3, "l": 6},
+                    {"r": 1, "m": 2, "t1": 4, "t2": 5, "w": 4, "l": 5},
+                    {"r": 2, "m": 3, "t1": 1, "t2": 4, "t2_from": {"w": 2}},
+                    {"r": 2, "m": 4, "t1": 2, "t2": 3, "t2_from": {"w": 1}},
+                    {"r": 3, "m": 5, "t1_from": {"w": 3}, "t2_from": {"w": 4}, "p": 1},
+                ],
+            },
+            _sleeper_week(14, [(1, 2)]),
+            _sleeper_week(16, [(1, 4), (2, 3)]),
+        ]
+        result = processor_handler._register_sleeper_raw_data(raw, {}, {})
+        by_week = {
+            (m["team_a_week"], m["team_a_roster_id"]): (
+                m["playoff_tier_type"],
+                m["playoff_round_num"],
+                m["playoff_total_rounds"],
+            )
+            for m in result["matchups"]
+        }
+        assert by_week[(16, 1)] == ("WINNERS_BRACKET", 2, 3)
+        assert by_week[(16, 2)] == ("WINNERS_BRACKET", 2, 3)
+        assert by_week[(14, 1)] == ("NONE", None, None)
+
+
+def _matchup_labels(processor_handler, platform, matchups):
+    """Run a platform's MATCHUPS transform over registered matchup rows."""
+    id_keys = (
+        ("team_a_roster_id", "team_b_roster_id", "team_a_season")
+        if platform == "SLEEPER"
+        else ("team_a_id", "team_b_id", "season")
+    )
+    teams = {(str(m[k]), str(m[id_keys[2]])) for m in matchups for k in id_keys[:2]}
+    con = duckdb.connect()
+    con.register("matchups", pd.DataFrame(matchups))
+    con.register(
+        "teams_output",
+        pd.DataFrame(
+            [
+                {
+                    "team_id": team_id,
+                    "season": season,
+                    "display_name": team_id,
+                    "team_name": f"Team {team_id}",
+                    "team_logo": None,
+                    "primary_owner_id": team_id,
+                    "secondary_owner_id": None,
+                }
+                for team_id, season in teams
+            ]
+        ),
+    )
+    df = con.sql(processor_handler.QUERIES["MATCHUPS"][platform]).df()
+    con.close()
+    return {
+        (int(r["week"]), r["team_a_id"]): r["playoff_round"]
+        for r in df.to_dict("records")
+    }
+
+
+class TestPlayoffRoundLabels:
+    def test_final_played_before_week_17(self, processor_handler):
+        grouped = processor_handler._register_espn_raw_data(_TWO_WEEK_ROUND_SEASON)
+        labels = _matchup_labels(processor_handler, "ESPN", grouped["matchups"])
+        assert labels[(15, "1")] == "Finals"
+        assert labels[(14, "1")] == "Semifinals"
+        assert labels[(14, "2")] == "Semifinals"
+        # Non-winners tiers keep their labels.
+        assert labels[(15, "4")] == "Winners Consolation"
+        assert labels[(14, "5")] == "Losers Bracket"
+        assert pd.isna(labels[(13, "1")])
+
+    def test_labels_before_the_final_is_played(self, processor_handler):
+        grouped = processor_handler._register_espn_raw_data(_TWO_WEEK_ROUND_SEASON[:3])
+        labels = _matchup_labels(processor_handler, "ESPN", grouped["matchups"])
+        assert labels[(14, "1")] == "Semifinals"
+        assert "Finals" not in labels.values()
+
+    def test_six_team_bracket_names_three_rounds(self, processor_handler):
+        raw = [
+            _espn_settings_item(matchup_period_count=14, playoff_team_count=6),
+            _espn_matchups_item(15, [_espn_matchup(15, 3, 6, "WINNERS_BRACKET")]),
+            _espn_matchups_item(16, [_espn_matchup(16, 1, 3, "WINNERS_BRACKET")]),
+            _espn_matchups_item(17, [_espn_matchup(17, 1, 2, "WINNERS_BRACKET")]),
+        ]
+        grouped = processor_handler._register_espn_raw_data(raw)
+        labels = _matchup_labels(processor_handler, "ESPN", grouped["matchups"])
+        assert labels == {
+            (15, "3"): "Quarterfinals",
+            (16, "1"): "Semifinals",
+            (17, "1"): "Finals",
+        }
+
+    def test_in_progress_with_defaulted_settings_is_round_n(self, processor_handler):
+        raw = [_espn_settings_item(playoff_team_count=None)] + _TWO_WEEK_ROUND_SEASON[
+            1:3
+        ]
+        grouped = processor_handler._register_espn_raw_data(raw)
+        labels = _matchup_labels(processor_handler, "ESPN", grouped["matchups"])
+        assert labels[(14, "1")] == "Round 1"
+        assert labels[(14, "2")] == "Round 1"
+
+    def test_sleeper_labels_follow_bracket_rounds(self, processor_handler):
+        raw = [
+            {
+                "season": "2024",
+                "data_type": "league_settings",
+                "data": {"settings": {"playoff_week_start": 15, "playoff_teams": 6}},
+            },
+            {
+                "season": "2024",
+                "data_type": "playoff_bracket",
+                "data": [
+                    {"r": 1, "m": 1, "t1": 3, "t2": 6, "w": 3, "l": 6},
+                    {"r": 1, "m": 2, "t1": 4, "t2": 5, "w": 4, "l": 5},
+                    {"r": 2, "m": 3, "t1": 1, "t2": 4, "t2_from": {"w": 2}},
+                    {"r": 2, "m": 4, "t1": 2, "t2": 3, "t2_from": {"w": 1}},
+                    {"r": 3, "m": 5, "t1_from": {"w": 3}, "t2_from": {"w": 4}, "p": 1},
+                ],
+            },
+            _sleeper_week(15, [(3, 6), (4, 5)]),
+            _sleeper_week(16, [(1, 4), (2, 3)]),
+        ]
+        grouped = processor_handler._register_sleeper_raw_data(raw, {}, {})
+        labels = _matchup_labels(processor_handler, "SLEEPER", grouped["matchups"])
+        assert labels[(15, "3")] == "Quarterfinals"
+        assert labels[(16, "1")] == "Semifinals"
+        assert labels[(16, "2")] == "Semifinals"
+
+
+class TestSettingsDrivenBracket:
+    def test_semifinals_are_not_the_championship(self, processor_handler):
+        grouped = processor_handler._register_espn_raw_data(_TWO_WEEK_ROUND_SEASON[:3])
+        brackets = grouped["brackets"]
+        assert {b["round"] for b in brackets} == {1}
+        assert all(b["position"] is None for b in brackets)
+
+    def test_completed_bracket_has_final_at_last_round(self, processor_handler):
+        grouped = processor_handler._register_espn_raw_data(_TWO_WEEK_ROUND_SEASON)
+        champs = [b for b in grouped["brackets"] if b["position"] == 1]
+        assert len(champs) == 1
+        assert champs[0]["round"] == 2
+        assert champs[0]["winner"] == "1"
+        third = next(
+            b for b in grouped["brackets"] if b["team_1"] == "4" and b["round"] == 2
+        )
+        assert third["position"] == 3
+
+    def test_six_team_bracket_keeps_bye_links_null(self, processor_handler):
+        raw = [
+            _espn_settings_item(matchup_period_count=14, playoff_team_count=6),
+            _espn_matchups_item(
+                15,
+                [
+                    _espn_matchup(15, 3, 6, "WINNERS_BRACKET"),
+                    _espn_matchup(15, 4, 5, "WINNERS_BRACKET"),
+                ],
+            ),
+            _espn_matchups_item(
+                16,
+                [
+                    _espn_matchup(16, 1, 4, "WINNERS_BRACKET"),
+                    _espn_matchup(16, 2, 3, "WINNERS_BRACKET"),
+                ],
+            ),
+        ]
+        grouped = processor_handler._register_espn_raw_data(raw)
+        semi = next(b for b in grouped["brackets"] if b["team_1"] == "1")
+        assert semi["round"] == 2
+        assert semi["team_1_from"] is None  # bye team
+        assert json.loads(semi["team_2_from"]) == {"w": 2}
+        # The final (round 3) has not been played, so no match is the championship.
+        assert all(b["position"] is None for b in grouped["brackets"])
+
+    def test_placement_week_without_winners_game_is_offset(self, processor_handler):
+        matchups = [
+            {
+                "season": "2024",
+                "playoff_tier_type": "WINNERS_BRACKET",
+                "week": 15,
+                "team_a_id": 1,
+                "team_b_id": 2,
+                "winner": 1,
+                "loser": 2,
+            },
+            {
+                "season": "2024",
+                "playoff_tier_type": "WINNERS_CONSOLATION_LADDER",
+                "week": 16,
+                "team_a_id": 3,
+                "team_b_id": 4,
+                "winner": 3,
+                "loser": 4,
+            },
+        ]
+        brackets = _annotated_brackets(processor_handler, matchups)
+        assert {b["team_1"]: b["round"] for b in brackets} == {"1": 1, "3": 2}
+
+    def test_season_with_only_placement_games_is_skipped(self, processor_handler):
+        matchups = [
+            {
+                "season": "2024",
+                "playoff_tier_type": "WINNERS_CONSOLATION_LADDER",
+                "week": 16,
+                "team_a_id": 3,
+                "team_b_id": 4,
+                "winner": 3,
+                "loser": 4,
+            }
+        ]
+        assert _annotated_brackets(processor_handler, matchups) == []

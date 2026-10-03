@@ -11,7 +11,9 @@ import {
 import { BoxScoreCard, type BoxScoreSide } from '@/components/box-score-card';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
-  getAllSeasonsMatchups,
+  getComparisonData,
+  type ChampionStandingsItem,
+  type ComparisonData,
   type MatchupItem,
 } from '@/features/manager_comparison/api-calls';
 import { avatarColor } from '@/lib/color-constants';
@@ -130,6 +132,7 @@ function longestWinStreak(games: GameLog[], side: 'left' | 'right'): number {
 
 function buildManagers(
   matchups: MatchupItem[],
+  standings: ChampionStandingsItem[],
   migrationMapping: Map<string, string>,
 ): Manager[] {
   const ownerMap = new Map<
@@ -145,8 +148,13 @@ function buildManagers(
   >();
   // Distinct seasons each owner reached the winners bracket
   const playoffSeasons = new Map<string, Set<string>>();
-  // Championship wins (winner of the winners-bracket Finals) per owner
+  // Titles per owner, from the seasons whose STANDINGS row is flagged champion
   const championships = new Map<string, number>();
+  for (const row of standings) {
+    if (row.champion !== 'Yes') continue;
+    const owner = migrationMapping.get(row.owner_id) ?? row.owner_id;
+    championships.set(owner, (championships.get(owner) ?? 0) + 1);
+  }
 
   for (const m of matchups) {
     // Unplayed 0-0 placeholder weeks contribute no record, scores, or playoff data.
@@ -180,7 +188,7 @@ function buildManagers(
       else entry.ties++;
     }
 
-    // Playoff appearances and championships from the winners bracket
+    // Playoff appearances from the winners bracket
     if (m.playoff_tier_type === 'WINNERS_BRACKET') {
       const aOwner =
         migrationMapping.get(m.team_a_primary_owner_id) ??
@@ -191,14 +199,6 @@ function buildManagers(
       for (const owner of [aOwner, bOwner]) {
         if (!playoffSeasons.has(owner)) playoffSeasons.set(owner, new Set());
         playoffSeasons.get(owner)!.add(m.season);
-      }
-      if (
-        m.playoff_round === 'Finals' &&
-        m.winner !== 'TIE' &&
-        m.winner !== ''
-      ) {
-        const champOwner = m.winner === m.team_a_id ? aOwner : bOwner;
-        championships.set(champOwner, (championships.get(champOwner) ?? 0) + 1);
       }
     }
   }
@@ -459,16 +459,13 @@ function ManagerComparisonInner({
   matchupsPromise,
   platform,
 }: {
-  matchupsPromise: Promise<{
-    matchups: MatchupItem[];
-    migrationMapping: Map<string, string>;
-  }>;
+  matchupsPromise: Promise<ComparisonData>;
   platform: Platform;
 }) {
-  const { matchups, migrationMapping } = use(matchupsPromise);
+  const { matchups, standings, migrationMapping } = use(matchupsPromise);
   const managers = useMemo(
-    () => buildManagers(matchups, migrationMapping),
-    [matchups, migrationMapping],
+    () => buildManagers(matchups, standings, migrationMapping),
+    [matchups, standings, migrationMapping],
   );
 
   const [li, setLi] = useState(0);
@@ -726,9 +723,10 @@ export default function ManagerComparison() {
   const matchupsPromise = useMemo(
     () =>
       leagueId
-        ? getAllSeasonsMatchups(leagueId, platform)
-        : Promise.resolve({
-            matchups: [] as MatchupItem[],
+        ? getComparisonData(leagueId, platform)
+        : Promise.resolve<ComparisonData>({
+            matchups: [],
+            standings: [],
             migrationMapping: new Map<string, string>(),
           }),
     [leagueId, platform],

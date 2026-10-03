@@ -17,3 +17,13 @@ Feature: Manager comparison (frontend/manager-comparison)
     Given there is no comparison data
     When I open the manager comparison page
     Then I see "Not enough manager data to compare."
+
+  Scenario: Championships come from the standings champion flag
+    Given Alice is the standings champion and no matchup is labeled Finals
+    When I open the manager comparison page
+    Then the Championships row shows "1" for "Alice" and "0" for "Bob"
+
+  Scenario: A standings load failure surfaces an error
+    Given matchups load but the standings query fails with a server error
+    When I open the manager comparison page inside the app error boundary
+    Then I see "Something went wrong"

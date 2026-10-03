@@ -845,6 +845,12 @@ class TestRegisterRawData:
             processor_handler.register_raw_data([], con, platform="MYFANTASY")
 
 
+def _annotated_brackets(processor_handler, matchups, settings=None):
+    """Build brackets the way the processor does: annotate rounds, then build."""
+    processor_handler.annotate_playoff_rounds(matchups, settings or {})
+    return processor_handler._build_espn_brackets(matchups)
+
+
 class TestBuildESPNBrackets:
     def test_empty_matchups_returns_empty(self, processor_handler):
         result = processor_handler._build_espn_brackets([])
@@ -864,7 +870,7 @@ class TestBuildESPNBrackets:
                 "loser": 2,
             }
         ]
-        result = processor_handler._build_espn_brackets(matchups)
+        result = _annotated_brackets(processor_handler, matchups)
         assert result == []
 
     def test_playoff_matchups_create_bracket_entries(self, processor_handler):
@@ -888,7 +894,7 @@ class TestBuildESPNBrackets:
                 "loser": 3,
             },
         ]
-        result = processor_handler._build_espn_brackets(matchups)
+        result = _annotated_brackets(processor_handler, matchups)
         assert len(result) == 2
         final_entry = next(e for e in result if e["round"] == 2)
         assert final_entry["position"] == 1  # WB final = championship
@@ -905,7 +911,7 @@ class TestBuildESPNBrackets:
                 "loser": "",
             }
         ]
-        result = processor_handler._build_espn_brackets(matchups)
+        result = _annotated_brackets(processor_handler, matchups)
         assert result == []
 
     def test_consolation_final_position_set_correctly(self, processor_handler):
@@ -931,7 +937,13 @@ class TestBuildESPNBrackets:
                 "loser": 3,
             },
         ]
-        result = processor_handler._build_espn_brackets(matchups)
+        # A 4-team playoff starting week 15: week 16 is the final round.
+        settings = {
+            "2024": processor_handler.build_league_settings_row(
+                season="2024", playoff_week_start=15, num_playoff_teams=4
+            )
+        }
+        result = _annotated_brackets(processor_handler, matchups, settings)
         consolation_final = next(
             (e for e in result if e["position"] is not None and e["round"] == 2), None
         )
@@ -1820,6 +1832,7 @@ class TestBuildLeagueSettingsRow:
             "num_playoff_teams": 6,
             "num_playoff_teams_assumed": False,
             "playoff_week_start": 15,
+            "playoff_week_start_assumed": False,
             "regular_season_weeks": 14,
         }
 
@@ -1852,6 +1865,7 @@ class TestBuildLeagueSettingsRow:
         # No playoff_week_start and season < 2021 -> default 14, regular weeks 13.
         row = processor_handler.build_league_settings_row(season="2019")
         assert row["playoff_week_start"] == 14
+        assert row["playoff_week_start_assumed"] is True
         assert row["regular_season_weeks"] == 13
         assert row["num_playoff_teams"] == 6
 
@@ -1864,5 +1878,79 @@ class TestBuildLeagueSettingsRow:
             regular_season_weeks=bad,
         )
         assert row["playoff_week_start"] == 15
+        assert row["playoff_week_start_assumed"] is True
         assert row["regular_season_weeks"] == 14
         assert row["num_playoff_teams"] == 6
+
+
+def _settings(pws=14, npt=4, pws_assumed=False, npt_assumed=False):
+    return {
+        "season": "2024",
+        "playoff_week_start": pws,
+        "playoff_week_start_assumed": pws_assumed,
+        "num_playoff_teams": npt,
+        "num_playoff_teams_assumed": npt_assumed,
+    }
+
+
+class TestPlayoffStructure:
+    @pytest.mark.parametrize(
+        "pws,npt,expected",
+        [(14, 4, (14, 2)), (15, 6, (15, 3)), (15, 8, (15, 3)), (15, 2, (15, 1))],
+    )
+    def test_structure_from_settings(self, processor_handler, pws, npt, expected):
+        assert processor_handler.playoff_structure(_settings(pws, npt)) == expected
+
+    def test_assumed_start_week_yields_none(self, processor_handler):
+        assert processor_handler.playoff_structure(_settings(pws_assumed=True)) is None
+
+    def test_assumed_team_count_yields_none(self, processor_handler):
+        assert processor_handler.playoff_structure(_settings(npt_assumed=True)) is None
+
+    @pytest.mark.parametrize("npt", [1, 0, None])
+    def test_too_few_teams_yields_none(self, processor_handler, npt):
+        assert processor_handler.playoff_structure(_settings(npt=npt)) is None
+
+    def test_missing_settings_yields_none(self, processor_handler):
+        assert processor_handler.playoff_structure(None) is None
+
+
+class TestObservedPlayoffRounds:
+    def test_completed_two_week_season(self, processor_handler):
+        assert processor_handler.observed_playoff_rounds({14: 2, 15: 1}) == (
+            {14: 1, 15: 2},
+            2,
+        )
+
+    def test_completed_three_week_season(self, processor_handler):
+        assert processor_handler.observed_playoff_rounds({17: 1, 15: 2, 16: 2}) == (
+            {15: 1, 16: 2, 17: 3},
+            3,
+        )
+
+    def test_in_progress_season_has_no_total(self, processor_handler):
+        assert processor_handler.observed_playoff_rounds({14: 2}) == ({14: 1}, None)
+
+    def test_no_weeks(self, processor_handler):
+        assert processor_handler.observed_playoff_rounds({}) == ({}, None)
+
+
+class TestResolvePlayoffRounds:
+    def test_uses_settings_structure(self, processor_handler):
+        # Semifinals played only: settings still know the final is a later round.
+        assert processor_handler.resolve_playoff_rounds(
+            {14: 2}, _settings(14, 4), "2024"
+        ) == ({14: 1}, 2)
+
+    def test_falls_back_without_structure(self, processor_handler):
+        assert processor_handler.resolve_playoff_rounds(
+            {15: 2, 16: 1}, _settings(pws_assumed=True), "2024"
+        ) == ({15: 1, 16: 2}, 2)
+
+    def test_out_of_range_weeks_fall_back_and_warn(self, processor_handler):
+        with patch.object(processor_handler.logger, "warning") as warn:
+            result = processor_handler.resolve_playoff_rounds(
+                {16: 2, 17: 1}, _settings(14, 4), "2024"
+            )
+        assert result == ({16: 1, 17: 2}, 2)
+        warn.assert_called_once()

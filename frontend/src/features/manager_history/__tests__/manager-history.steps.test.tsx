@@ -33,6 +33,28 @@ const IN_PROGRESS_STANDINGS = STANDINGS.map((s) => ({
   champion: 'No',
 }));
 
+// A finalized season whose title game was matchup period 15 (two-week playoff rounds),
+// not week 17: Bob beat Alice in the "Finals". Bob has a final_rank; Alice has none, so
+// her 2nd-place finish must come from losing the final.
+const EARLY_FINAL_STANDINGS = STANDINGS.map((s) =>
+  s.owner_id === 'uA'
+    ? { ...s, final_rank: null, champion: 'No' }
+    : { ...s, final_rank: 1, champion: 'Yes' },
+);
+const EARLY_FINAL_MATCHUPS: MatchupItem[] = [
+  ...(MATCHUPS as MatchupItem[]),
+  {
+    ...(MATCHUPS[0] as MatchupItem),
+    week: '15',
+    team_a_score: 110,
+    team_b_score: 125,
+    playoff_tier_type: 'WINNERS_BRACKET',
+    playoff_round: 'Finals',
+    winner: '2',
+    loser: '1',
+  },
+];
+
 const feature = loadFeature(
   'src/features/manager_history/__tests__/manager-history.feature',
 );
@@ -165,6 +187,33 @@ defineFeature(feature, (test) => {
     });
     then(/^I see "(.*)"$/, async (text) => {
       expect((await screen.findAllByText(text)).length).toBeGreaterThan(0);
+    });
+  });
+
+  test('Runner-up of an early final', ({ given, when, then, and }) => {
+    given(
+      /^manager history data where Alice lost a "Finals" game played in matchup period 15$/,
+      () => {
+        server.use(
+          leagueQuery({
+            SEASON_STANDINGS: EARLY_FINAL_STANDINGS,
+            MATCHUPS: EARLY_FINAL_MATCHUPS,
+          }),
+        );
+      },
+    );
+    when('I open the manager history page', async () => {
+      await renderRoute(<ManagerHistory />, {
+        route: '/manager_history',
+        league: LEAGUE,
+      });
+    });
+    then(/^the season card shows the "(.*)" result pill$/, async (label) => {
+      // Default manager Alice lost the 2024 final.
+      expect(await screen.findByText(label)).toBeInTheDocument();
+    });
+    and(/^the season card shows the finish "(.*)"$/, (finish) => {
+      expect(screen.getAllByText(finish).length).toBeGreaterThan(0);
     });
   });
 });
