@@ -22,6 +22,21 @@ Feature: In-dashboard ESPN refresh dialog (frontend/navigation-sidebar / fronten
     Then I see the notice title "Refresh not available yet"
     And the dashboard does not reload
 
+  Scenario: An opted-in refresh blocked by the weekly cooldown still enables auto-refresh
+    Given refreshing my ESPN league is blocked by the weekly cooldown with message "This league can only be refreshed once per week."
+    When I enter my ESPN cookies, enable auto-refresh, and refresh from the dialog
+    Then the refresh request opted into auto-refresh
+    And I see the notice title "Automatic refresh enabled"
+    And the dashboard does not reload
+    When I close the dialog with Done
+    Then the dashboard reloads with the fresh data
+
+  Scenario: An opted-in blocked refresh with rejected cookies shows the backend error
+    Given refreshing my ESPN league is rejected with status 400 and message "Your ESPN cookies couldn't be verified."
+    When I enter my ESPN cookies, enable auto-refresh, and refresh from the dialog
+    Then I see an inline error "Your ESPN cookies couldn't be verified."
+    And the dashboard does not reload
+
   Scenario: Refreshing without cookies shows an inline error
     Given I open the refresh dialog for my ESPN league
     When I refresh from the dialog without entering cookies

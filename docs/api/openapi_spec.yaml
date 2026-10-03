@@ -290,6 +290,12 @@ paths:
         and writes precomputed views to DynamoDB. The requestType query parameter
         determines whether this is a new onboarding ("ONBOARD") or a refresh of an
         existing league's data ("REFRESH").
+
+        When an ESPN REFRESH with autoRefresh=true, swid and s2 is blocked (409 in progress /
+        up to date / offseason, or 429 weekly cooldown), the API still validates the cookies
+        against ESPN, stores them encrypted and sets auto_refresh_enabled on the league before
+        returning that 409/429, so the opt-in is not lost. Rejected cookies return 400 and an
+        ESPN outage returns 502, and nothing is stored in either case.
       operationId: onboardLeague
       parameters:
         - name: requestType
@@ -311,6 +317,8 @@ paths:
       responses:
         "201":
           $ref: "#/components/responses/OnboardSuccessResponse"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
         "409":
           $ref: "#/components/responses/ConflictError"
         "422":
@@ -319,6 +327,8 @@ paths:
           $ref: "#/components/responses/TooManyRequests"
         "500":
           $ref: "#/components/responses/InternalError"
+        "502":
+          $ref: "#/components/responses/BadGatewayError"
       security:
         - ClerkJWT: []
       x-amazon-apigateway-integration:
@@ -1195,8 +1205,9 @@ components:
           description: >
             Opt this ESPN league into scheduled auto-refresh
             (backend/scheduled-league-auto-refresh). When true, the supplied cookies are stored
-            encrypted at rest so the weekly refresh can reuse them; when false they are not
-            stored. Has no effect for Sleeper or Yahoo (always auto-refreshed); the frontend omits
+            encrypted at rest so the weekly refresh can reuse them (also when the REFRESH is
+            blocked by a 409/429, after the cookies are validated against ESPN); when false
+            they are not stored. Has no effect for Sleeper or Yahoo (always auto-refreshed); the frontend omits
             it for Yahoo.
           example: false
         s2:

@@ -363,6 +363,63 @@ def step_post_refresh(context, league_id, platform):
     )
 
 
+_OPTED_IN_SWID = "{SWID-COMPONENT}"
+_OPTED_IN_S2 = "s2-component-cookie"
+
+
+@given("ESPN responds to the cookie check with status {code:d}")
+def step_patch_espn_cookie_check(context, code):
+    # The blocked-refresh enrollment validates cookies with an ESPN mTeam read
+    # (backend/league-refresh); mock that external call at the HTTP boundary.
+    import requests
+    import routes
+
+    resp = MagicMock(status_code=code)
+    if code >= 400:
+        resp.raise_for_status.side_effect = requests.exceptions.HTTPError(response=resp)
+    patcher = patch.object(routes.http_requests, "get", MagicMock(return_value=resp))
+    patcher.start()
+    context._patches.append(patcher)
+
+
+@when('I POST an auto-refresh opted-in REFRESH of league "{league_id}" on "{platform}"')
+def step_post_opted_in_refresh(context, league_id, platform):
+    context.response = context.api.post(
+        "/leagues?requestType=REFRESH",
+        json={
+            "leagueId": league_id,
+            "platform": platform,
+            "season": "2025",
+            "swid": _OPTED_IN_SWID,
+            "s2": _OPTED_IN_S2,
+            "autoRefresh": True,
+        },
+    )
+
+
+@then("the default user's stored ESPN cookies decrypt to the submitted cookies")
+def step_assert_stored_espn_cookies(context):
+    from common.espn_credentials import EspnCredentialClient
+
+    item = get_item(context, f"USER#{context.default_user}", "ESPN_CREDENTIALS")
+    assert item is not None, "expected an ESPN_CREDENTIALS item"
+    assert item["swid"] != _OPTED_IN_SWID, "SWID stored in plaintext"
+    client = EspnCredentialClient(
+        table=context.main.table,
+        kms_client=context.main.kms_client,
+        kms_key_id=context.main.ESPN_KMS_KEY_ID,
+    )
+    assert client.get_credentials(context.default_user) == (
+        _OPTED_IN_SWID,
+        _OPTED_IN_S2,
+    )
+
+
+@then("the onboarder Lambda was not invoked")
+def step_lambda_not_invoked(context):
+    assert not context.main.lambda_client.invoke.called, "onboarder Lambda invoked"
+
+
 @given('the current NFL state is season "{season}" week "{week}"')
 def step_patch_api_nfl_state(context, season, week):
     # Patch the API's NFL-state fetch (routes imports get_nfl_state by name) so the
