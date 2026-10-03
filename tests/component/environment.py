@@ -294,6 +294,8 @@ def before_all(context):
     )
     kms_key = boto3.client("kms", region_name=REGION).create_key()
     os.environ["YAHOO_KMS_KEY_ID"] = kms_key["KeyMetadata"]["KeyId"]
+    # backend/espn-credential-storage: ESPN cookies share the Yahoo token key (as in prod).
+    os.environ["ESPN_KMS_KEY_ID"] = kms_key["KeyMetadata"]["KeyId"]
     # backend/yahoo-lineup-backfill: Yahoo onboards/refreshes queue a lineup backfill here.
     context.sqs = boto3.client("sqs", region_name=REGION)
     context.backfill_queue_url = context.sqs.create_queue(

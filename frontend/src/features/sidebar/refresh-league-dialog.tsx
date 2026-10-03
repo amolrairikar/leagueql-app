@@ -47,7 +47,10 @@ const POLL_INITIAL_DELAY_MS = 5000;
  *
  * ESPN cookies are transmitted once over HTTPS and cleared from the browser on
  * success; the manual-refresh action only appears for a league not enrolled in
- * auto-refresh, so the refresh is sent with the opt-in off.
+ * auto-refresh, so the opt-in defaults off. An opted-in refresh that is blocked
+ * (`429` cooldown / `409` up to date or in progress) still enrolls the league
+ * server-side (backend/league-refresh), so the dialog confirms auto-refresh is on
+ * and reloads into the enrolled state when closed.
  */
 export function RefreshLeagueDialog({
   open,
@@ -66,6 +69,8 @@ export function RefreshLeagueDialog({
   const [loadingMessage, setLoadingMessage] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [cooldownNotice, setCooldownNotice] = useState<string | null>(null);
+  // Set when an opted-in refresh was blocked but the league was still enrolled.
+  const [enrolled, setEnrolled] = useState(false);
 
   function reset() {
     setError(null);
@@ -119,6 +124,16 @@ export function RefreshLeagueDialog({
         (capturedError.status === 429 || capturedError.status === 409)
       ) {
         setCooldownNotice(capturedError.message);
+        if (autoRefresh) {
+          // The backend validated + stored the cookies and enrolled the league
+          // before returning the block, so they're no longer needed here.
+          setEnrolled(true);
+          clearEspnCookies();
+        }
+      } else if (capturedError?.status === 400) {
+        // An opted-in blocked refresh whose cookies ESPN rejected: the backend
+        // message tells the owner to re-enter them.
+        setError(capturedError.message);
       } else {
         setError('League refresh failed. Please try again.');
       }
@@ -151,21 +166,27 @@ export function RefreshLeagueDialog({
     window.location.reload();
   }
 
+  function handleOpenChange(next: boolean) {
+    // Ignore close attempts mid-refresh so the in-flight job isn't abandoned.
+    if (loading) return;
+    if (!next && enrolled) {
+      // Reload so the sidebar re-reads auto_refresh_enabled and swaps Refresh
+      // League for Turn Off Auto-Refresh.
+      clearApiCache();
+      window.location.reload();
+      return;
+    }
+    onOpenChange(next);
+    if (!next) {
+      reset();
+      setSwid('');
+      setEspnS2('');
+      setAutoRefresh(false);
+    }
+  }
+
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        // Ignore close attempts mid-refresh so the in-flight job isn't abandoned.
-        if (loading) return;
-        onOpenChange(next);
-        if (!next) {
-          reset();
-          setSwid('');
-          setEspnS2('');
-          setAutoRefresh(false);
-        }
-      }}
-    >
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle className="text-center">Refresh League</DialogTitle>
@@ -183,7 +204,7 @@ export function RefreshLeagueDialog({
             setSwid(nextSwid);
             setEspnS2(nextEspnS2);
           }}
-          disabled={loading}
+          disabled={loading || enrolled}
           showManualInstructions={false}
         />
         <div className="flex items-center gap-2">
@@ -192,7 +213,7 @@ export function RefreshLeagueDialog({
             type="checkbox"
             className="size-4 cursor-pointer accent-primary"
             checked={autoRefresh}
-            disabled={loading}
+            disabled={loading || enrolled}
             onChange={(e) => setAutoRefresh(e.target.checked)}
           />
           <div className="flex items-center gap-1.5">
@@ -214,7 +235,16 @@ export function RefreshLeagueDialog({
             </TooltipProvider>
           </div>
         </div>
-        {cooldownNotice && (
+        {cooldownNotice && enrolled && (
+          <Alert>
+            <AlertTitle>Automatic refresh enabled</AlertTitle>
+            <AlertDescription>
+              This league will now refresh automatically each week. It
+              wasn&apos;t refreshed just now: {cooldownNotice}
+            </AlertDescription>
+          </Alert>
+        )}
+        {cooldownNotice && !enrolled && (
           <Alert>
             <AlertTitle>Refresh not available yet</AlertTitle>
             <AlertDescription>{cooldownNotice}</AlertDescription>
@@ -236,28 +266,39 @@ export function RefreshLeagueDialog({
           </Alert>
         )}
         <DialogFooter>
-          <Button
-            className="cursor-pointer"
-            disabled={loading}
-            onClick={() => void handleRefresh()}
-          >
-            {loading ? (
-              <span className="flex items-center gap-2">
-                <Spinner className="size-4" />
-                {loadingMessage}
-              </span>
-            ) : (
-              'Refresh League'
-            )}
-          </Button>
-          <Button
-            variant="outline"
-            className="cursor-pointer"
-            disabled={loading}
-            onClick={() => onOpenChange(false)}
-          >
-            Cancel
-          </Button>
+          {enrolled ? (
+            <Button
+              className="cursor-pointer"
+              onClick={() => handleOpenChange(false)}
+            >
+              Done
+            </Button>
+          ) : (
+            <>
+              <Button
+                className="cursor-pointer"
+                disabled={loading}
+                onClick={() => void handleRefresh()}
+              >
+                {loading ? (
+                  <span className="flex items-center gap-2">
+                    <Spinner className="size-4" />
+                    {loadingMessage}
+                  </span>
+                ) : (
+                  'Refresh League'
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                className="cursor-pointer"
+                disabled={loading}
+                onClick={() => handleOpenChange(false)}
+              >
+                Cancel
+              </Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

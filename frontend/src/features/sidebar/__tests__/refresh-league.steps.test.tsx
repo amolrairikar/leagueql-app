@@ -216,6 +216,86 @@ defineFeature(feature, (test) => {
     });
   });
 
+  test('An opted-in refresh blocked by the weekly cooldown still enables auto-refresh', ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    let capturedBody: { autoRefresh?: boolean } | null = null;
+    given(
+      /^refreshing my ESPN league is blocked by the weekly cooldown with message "(.*)"$/,
+      (message) => {
+        stubReload();
+        server.use(
+          sleeperNflState('2026'),
+          http.post(`${API}/leagues`, async ({ request }) => {
+            capturedBody = (await request.json()) as { autoRefresh?: boolean };
+            return HttpResponse.json({ detail: message }, { status: 429 });
+          }),
+        );
+      },
+    );
+    when(
+      'I enter my ESPN cookies, enable auto-refresh, and refresh from the dialog',
+      async () => {
+        await enterCookiesAndRefresh({ autoRefresh: true });
+      },
+    );
+    then('the refresh request opted into auto-refresh', () => {
+      expect(capturedBody?.autoRefresh).toBe(true);
+    });
+    and(/^I see the notice title "(.*)"$/, (title) => {
+      expect(screen.getByText(title)).toBeInTheDocument();
+      expect(screen.getByText(/once per week/)).toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: /^refresh league$/i }),
+      ).not.toBeInTheDocument();
+    });
+    and('the dashboard does not reload', () => {
+      expect(reload).not.toHaveBeenCalled();
+    });
+    when('I close the dialog with Done', () => {
+      fireEvent.click(screen.getByRole('button', { name: /^done$/i }));
+    });
+    then('the dashboard reloads with the fresh data', () => {
+      expect(reload).toHaveBeenCalled();
+    });
+  });
+
+  test('An opted-in blocked refresh with rejected cookies shows the backend error', ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    given(
+      /^refreshing my ESPN league is rejected with status 400 and message "(.*)"$/,
+      (message) => {
+        stubReload();
+        server.use(
+          sleeperNflState('2026'),
+          http.post(`${API}/leagues`, () =>
+            HttpResponse.json({ detail: message }, { status: 400 }),
+          ),
+        );
+      },
+    );
+    when(
+      'I enter my ESPN cookies, enable auto-refresh, and refresh from the dialog',
+      async () => {
+        await enterCookiesAndRefresh({ autoRefresh: true });
+      },
+    );
+    then(/^I see an inline error "(.*)"$/, (message) => {
+      expect(screen.getByText(new RegExp(message))).toBeInTheDocument();
+      expect(screen.getByText('Refresh Failed')).toBeInTheDocument();
+    });
+    and('the dashboard does not reload', () => {
+      expect(reload).not.toHaveBeenCalled();
+    });
+  });
+
   test('Refreshing without cookies shows an inline error', ({
     given,
     when,

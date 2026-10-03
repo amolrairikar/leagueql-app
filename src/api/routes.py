@@ -105,6 +105,155 @@ def _format_cooldown_wait(remaining: timedelta) -> str:
     return f"{hours} hour{'s' if hours != 1 else ''}"
 
 
+def _refresh_block_reason(
+    canonical_league_id: str, league_metadata: dict
+) -> HTTPException | None:
+    """Return the ``409``/``429`` that blocks a refresh of this league, or ``None`` if allowed.
+
+    Covers, in order: a refresh already in progress (409), the weekly cooldown outside DEV (429),
+    the NFL offseason (409), and a league already current for the NFL state (409)
+    (backend/league-refresh).
+    """
+    if is_job_in_progress(league_metadata):
+        return HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A refresh is already in progress for this league",
+        )
+    last_refresh_at = league_metadata.get("last_refresh_at")
+    # The weekly cooldown is disabled in DEV so the refresh pipeline can be
+    # iterated on without waiting a week between test refreshes.
+    if last_refresh_at and os.environ.get("ENVIRONMENT") != "dev":
+        last_refresh_dt = datetime.fromisoformat(last_refresh_at)
+        now = datetime.now(timezone.utc)
+        # Measure the cooldown in whole UTC calendar days, not an exact 7x24h
+        # duration: the intent is "once per week", so a refresh 7 calendar days
+        # later is allowed at any time of day. An exact-duration check would
+        # wrongly reject a refresh a few hours short of the clock (e.g. last
+        # refreshed 10:00, retried 08:00 on day 7).
+        elapsed_days = (now.date() - last_refresh_dt.date()).days
+        if elapsed_days < REFRESH_COOLDOWN_DAYS:
+            allowed_date = last_refresh_dt.date() + timedelta(
+                days=REFRESH_COOLDOWN_DAYS
+            )
+            allowed_at = datetime(
+                allowed_date.year,
+                allowed_date.month,
+                allowed_date.day,
+                tzinfo=timezone.utc,
+            )
+            wait = _format_cooldown_wait(allowed_at - now)
+            return HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"This league can only be refreshed once per week. You can refresh again in {wait}.",
+            )
+
+    nfl_state = get_nfl_state()
+    if nfl_state is not None:
+        if nfl_state.get("season_type") == "off":
+            return HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="League is already up to date (NFL offseason).",
+            )
+        state_season = int(nfl_state["season"])
+        state_week = int(nfl_state["week"])
+        latest = get_latest_stored_matchup(canonical_league_id)
+        if latest is not None and latest >= (state_season, state_week):
+            return HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="League is already up to date.",
+            )
+    return None
+
+
+def _fetch_espn_league_teams(
+    espn_league_id: str, season: str, swid: str, s2: str
+) -> http_requests.Response:
+    """GET an ESPN league's ``mTeam`` view with the caller's cookies, raising on HTTP errors.
+
+    ``espn_league_id`` and ``season`` must already be digit-validated: both are interpolated into
+    the upstream ESPN URL.
+    """
+    espn_url = (
+        f"https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl"
+        f"/seasons/{season}/segments/0/leagues/{espn_league_id}?view=mTeam"
+    )
+    espn_response = http_requests.get(
+        espn_url,
+        cookies={"SWID": swid, "espn_s2": s2},
+        timeout=10,
+    )
+    espn_response.raise_for_status()
+    return espn_response
+
+
+def _enroll_blocked_espn_auto_refresh(
+    payload: OnboardingPayload, canonical_league_id: str, clerk_user_id: str
+) -> None:
+    """Enroll an ESPN league in auto-refresh when its opted-in refresh is blocked.
+
+    The onboarder never runs for a blocked refresh, so the cookies are first validated with a
+    lightweight ESPN read, then stored encrypted (backend/espn-credential-storage) and
+    ``auto_refresh_enabled`` is set on METADATA. Rejected cookies return ``400`` and ESPN
+    failures ``502`` with nothing stored; a storage/flag failure returns ``500`` so a 429/409 for
+    an opted-in request always means the league is enrolled.
+    """
+    if not payload.season:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A season is required to enable automatic refresh.",
+        )
+    try:
+        _fetch_espn_league_teams(
+            payload.leagueId, payload.season, payload.swid or "", payload.s2 or ""
+        )
+    except http_requests.exceptions.HTTPError as e:
+        status_code = e.response.status_code if e.response is not None else None
+        if status_code in (
+            status.HTTP_401_UNAUTHORIZED,
+            status.HTTP_403_FORBIDDEN,
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Your ESPN cookies couldn't be verified. Re-enter your SWID and "
+                "espn_s2 and try again.",
+            )
+        logger.error("ESPN API error verifying auto-refresh cookies: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Failed to verify ESPN cookies",
+        )
+    except http_requests.exceptions.RequestException as e:
+        logger.error("Request error verifying auto-refresh cookies: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Failed to reach ESPN API",
+        )
+
+    # Store the cookies before setting the flag: an enrolled league without stored cookies would
+    # fail its next scheduled refresh, while orphaned cookies are simply replaced next time.
+    try:
+        espn_credentials.store_credentials(clerk_user_id, payload.swid, payload.s2)
+        main.table.update_item(
+            Key={"PK": f"LEAGUE#{canonical_league_id}", "SK": "METADATA"},
+            UpdateExpression="SET auto_refresh_enabled = :ar",
+            ExpressionAttributeValues={":ar": True},
+        )
+    except Exception as e:  # noqa: BLE001 - surface any storage failure as a 500
+        logger.error(
+            "Failed to enable auto-refresh for blocked refresh of %s: %s",
+            canonical_league_id,
+            e,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to enable automatic refresh",
+        )
+    logger.info(
+        "Enrolled league %s in auto-refresh despite blocked refresh",
+        canonical_league_id,
+    )
+
+
 @router.get("/health", status_code=status.HTTP_200_OK)
 def health() -> APIResponse:
     """Public, unauthenticated liveness check for external uptime probes (backend/health-check-alerting)."""
@@ -366,54 +515,21 @@ def onboard_league(
         require_league_owner(
             canonical_league_id, clerk_user_id, metadata=league_metadata
         )
-        if is_job_in_progress(league_metadata):
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="A refresh is already in progress for this league",
-            )
-        last_refresh_at = league_metadata.get("last_refresh_at")
-        # The weekly cooldown is disabled in DEV so the refresh pipeline can be
-        # iterated on without waiting a week between test refreshes.
-        if last_refresh_at and os.environ.get("ENVIRONMENT") != "dev":
-            last_refresh_dt = datetime.fromisoformat(last_refresh_at)
-            now = datetime.now(timezone.utc)
-            # Measure the cooldown in whole UTC calendar days, not an exact 7x24h
-            # duration: the intent is "once per week", so a refresh 7 calendar days
-            # later is allowed at any time of day. An exact-duration check would
-            # wrongly reject a refresh a few hours short of the clock (e.g. last
-            # refreshed 10:00, retried 08:00 on day 7).
-            elapsed_days = (now.date() - last_refresh_dt.date()).days
-            if elapsed_days < REFRESH_COOLDOWN_DAYS:
-                allowed_date = last_refresh_dt.date() + timedelta(
-                    days=REFRESH_COOLDOWN_DAYS
+        blocked = _refresh_block_reason(canonical_league_id, league_metadata)
+        if blocked is not None:
+            # A blocked refresh still honors an ESPN auto-refresh opt-in: validate and store the
+            # supplied cookies and enroll the league, then return the original 429/409 so the
+            # caller learns the data itself wasn't refreshed (backend/league-refresh).
+            if (
+                payload.autoRefresh
+                and platform == Platform.ESPN
+                and payload.s2
+                and payload.swid
+            ):
+                _enroll_blocked_espn_auto_refresh(
+                    payload, canonical_league_id, clerk_user_id
                 )
-                allowed_at = datetime(
-                    allowed_date.year,
-                    allowed_date.month,
-                    allowed_date.day,
-                    tzinfo=timezone.utc,
-                )
-                wait = _format_cooldown_wait(allowed_at - now)
-                raise HTTPException(
-                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail=f"This league can only be refreshed once per week. You can refresh again in {wait}.",
-                )
-
-        nfl_state = get_nfl_state()
-        if nfl_state is not None:
-            if nfl_state.get("season_type") == "off":
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="League is already up to date (NFL offseason).",
-                )
-            state_season = int(nfl_state["season"])
-            state_week = int(nfl_state["week"])
-            latest = get_latest_stored_matchup(canonical_league_id)
-            if latest is not None and latest >= (state_season, state_week):
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="League is already up to date.",
-                )
+            raise blocked
 
     log_msg = (
         "Refreshing existing league" if canonical_league_id else "New league detected"
@@ -490,17 +606,10 @@ def get_espn_members(
     metadata = get_league_metadata(canonical_league_id=canonical_league_id)
     require_league_owner(canonical_league_id, clerk_user_id, metadata=metadata)
 
-    espn_url = (
-        f"https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl"
-        f"/seasons/{season}/segments/0/leagues/{espnLeagueId}?view=mTeam"
-    )
     try:
-        espn_response = http_requests.get(
-            espn_url,
-            cookies={"SWID": payload.swid, "espn_s2": payload.s2},
-            timeout=10,
+        espn_response = _fetch_espn_league_teams(
+            espnLeagueId, season, payload.swid, payload.s2
         )
-        espn_response.raise_for_status()
     except http_requests.exceptions.HTTPError as e:
         logger.error("ESPN API error fetching members: %s", e)
         raise HTTPException(

@@ -21,6 +21,13 @@ after the cookies have successfully authenticated against ESPN.
 - **THEN** the owner's `SWID` and `espn_s2` are written to `USER#{clerk_user_id} / ESPN_CREDENTIALS`
   with both values encrypted at rest, replacing any previously stored values for that user
 
+#### Scenario: Cookies stored on an opted-in blocked refresh
+
+- **WHEN** an ESPN refresh that opts into automatic refresh is blocked (`409`/`429`) and the
+  supplied cookies successfully authenticate against ESPN
+- **THEN** the owner's `SWID` and `espn_s2` are written encrypted to
+  `USER#{clerk_user_id} / ESPN_CREDENTIALS` even though no data refresh ran
+
 #### Scenario: Plaintext never disclosed
 
 - **WHEN** ESPN credentials are stored, read, or used

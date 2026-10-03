@@ -40,6 +40,29 @@ Feature: League refresh reprocesses in place (backend/league-refresh)
     Then the API responds with status 429
     And the API response detail contains "once per week"
 
+  Scenario: An opted-in ESPN refresh within the weekly cooldown still enrolls auto-refresh
+    # The onboarder never runs for a blocked refresh, so the API validates the cookies
+    # against ESPN, stores them encrypted, and enrolls the league before returning 429.
+    Given a LEAGUE_LOOKUP exists for league "500" platform "ESPN" canonical "canon-e"
+    And league "canon-e" was last refreshed 2 days ago
+    And ESPN responds to the cookie check with status 200
+    When I POST an auto-refresh opted-in REFRESH of league "500" on "ESPN"
+    Then the API responds with status 429
+    And the API response detail contains "once per week"
+    And the METADATA auto_refresh_enabled for league "canon-e" is "true"
+    And the default user's stored ESPN cookies decrypt to the submitted cookies
+    And the onboarder Lambda was not invoked
+
+  Scenario: An opted-in blocked ESPN refresh with rejected cookies does not enroll
+    Given a LEAGUE_LOOKUP exists for league "500" platform "ESPN" canonical "canon-e"
+    And league "canon-e" was last refreshed 2 days ago
+    And ESPN responds to the cookie check with status 401
+    When I POST an auto-refresh opted-in REFRESH of league "500" on "ESPN"
+    Then the API responds with status 400
+    And the API response detail contains "couldn't be verified"
+    And the METADATA auto_refresh_enabled for league "canon-e" is "false"
+    And no ESPN_CREDENTIALS item exists for the default user
+
   Scenario: An ESPN refresh is allowed when only unplayed later weeks are stored
     # ESPN pre-stores the full-season schedule, so weeks 11 and 18 exist as 0-0
     # rows while the latest played week (09) is behind current NFL state. The

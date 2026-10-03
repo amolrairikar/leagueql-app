@@ -2891,6 +2891,262 @@ class TestOnboardForwardsAutoRefresh:
         assert payload["body"]["autoRefresh"] is True
 
 
+def _block_in_progress(mock_table, metadata, default_nfl_state, monkeypatch):
+    metadata["active_job_id"] = _JOB_ID
+    return [{"Item": {"status": "IN_PROGRESS"}}]
+
+
+def _block_cooldown(mock_table, metadata, default_nfl_state, monkeypatch):
+    monkeypatch.setenv("ENVIRONMENT", "prod")
+    metadata["last_refresh_at"] = (
+        datetime.now(timezone.utc) - timedelta(minutes=5)
+    ).isoformat()
+    return []
+
+
+def _block_offseason(mock_table, metadata, default_nfl_state, monkeypatch):
+    default_nfl_state.return_value.json.return_value = {"season_type": "off"}
+    return []
+
+
+def _block_up_to_date(mock_table, metadata, default_nfl_state, monkeypatch):
+    mock_table.query.return_value = {
+        "Items": [
+            {
+                "SK": "MATCHUPS#2025#WEEK#11",
+                "data": [{"team_a_score": 118.0, "team_b_score": 102.0}],
+            }
+        ]
+    }
+    return []
+
+
+class TestBlockedRefreshEnrollsAutoRefresh:
+    """An opted-in ESPN refresh that is blocked (429/409) still enrolls the league
+    (backend/league-refresh, backend/espn-credential-storage)."""
+
+    _BODY: ClassVar = {
+        "leagueId": "123",
+        "platform": "ESPN",
+        "season": "2025",
+        "s2": "s2-token",
+        "swid": "{abc}",
+        "autoRefresh": True,
+    }
+
+    @pytest.fixture
+    def blocked(
+        self,
+        mock_table,
+        default_nfl_state,
+        league_lookup_item,
+        league_metadata_item,
+        monkeypatch,
+    ):
+        """Block the refresh via the weekly cooldown (the case users hit most)."""
+        extra = _block_cooldown(
+            mock_table, league_metadata_item, default_nfl_state, monkeypatch
+        )
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+            *extra,
+        ]
+
+    @pytest.fixture
+    def mock_store(self):
+        with patch("espn_credentials.store_credentials") as mock:
+            yield mock
+
+    @pytest.fixture
+    def mock_espn_fetch(self):
+        with patch("routes._fetch_espn_league_teams") as mock:
+            yield mock
+
+    @staticmethod
+    def _flag_updates(mock_table):
+        return [
+            c
+            for c in mock_table.update_item.call_args_list
+            if "auto_refresh_enabled" in c.kwargs.get("UpdateExpression", "")
+        ]
+
+    @pytest.mark.parametrize(
+        ("setup", "expected_status", "expected_detail"),
+        [
+            (_block_in_progress, 409, "in progress"),
+            (_block_cooldown, 429, "once per week"),
+            (_block_offseason, 409, "offseason"),
+            (_block_up_to_date, 409, "up to date"),
+        ],
+    )
+    def test_opt_in_enrolls_and_returns_original_block(
+        self,
+        client,
+        mock_table,
+        mock_lambda_client,
+        mock_store,
+        mock_espn_fetch,
+        default_nfl_state,
+        league_lookup_item,
+        league_metadata_item,
+        monkeypatch,
+        setup,
+        expected_status,
+        expected_detail,
+    ):
+        extra = setup(mock_table, league_metadata_item, default_nfl_state, monkeypatch)
+        mock_table.get_item.side_effect = [
+            {"Item": league_lookup_item},
+            {"Item": league_metadata_item},
+            *extra,
+        ]
+
+        response = client.post("/leagues?requestType=REFRESH", json=self._BODY)
+
+        assert response.status_code == expected_status
+        assert expected_detail in response.json()["detail"].lower()
+        mock_espn_fetch.assert_called_once_with("123", "2025", "{abc}", "s2-token")
+        mock_store.assert_called_once_with("user_1", "{abc}", "s2-token")
+        [flag] = self._flag_updates(mock_table)
+        assert flag.kwargs["Key"] == {"PK": "LEAGUE#canonical-abc", "SK": "METADATA"}
+        assert flag.kwargs["ExpressionAttributeValues"] == {":ar": True}
+        mock_lambda_client.invoke.assert_not_called()
+
+    def test_no_opt_in_does_not_enroll(
+        self, client, mock_table, blocked, mock_store, mock_espn_fetch
+    ):
+        response = client.post(
+            "/leagues?requestType=REFRESH",
+            json={**self._BODY, "autoRefresh": False},
+        )
+
+        assert response.status_code == 429
+        mock_espn_fetch.assert_not_called()
+        mock_store.assert_not_called()
+        assert not self._flag_updates(mock_table)
+
+    @pytest.mark.parametrize("missing", ["s2", "swid"])
+    def test_opt_in_without_cookies_does_not_enroll(
+        self, client, mock_table, blocked, mock_store, mock_espn_fetch, missing
+    ):
+        body = {k: v for k, v in self._BODY.items() if k != missing}
+        response = client.post("/leagues?requestType=REFRESH", json=body)
+
+        assert response.status_code == 429
+        mock_store.assert_not_called()
+        assert not self._flag_updates(mock_table)
+
+    def test_opt_in_without_season_returns_400(
+        self, client, mock_table, blocked, mock_store, mock_espn_fetch
+    ):
+        body = {k: v for k, v in self._BODY.items() if k != "season"}
+        response = client.post("/leagues?requestType=REFRESH", json=body)
+
+        assert response.status_code == 400
+        assert "season" in response.json()["detail"].lower()
+        mock_espn_fetch.assert_not_called()
+        mock_store.assert_not_called()
+
+    @pytest.mark.parametrize("espn_status", [401, 403])
+    def test_rejected_cookies_return_400_and_store_nothing(
+        self, client, mock_table, blocked, mock_store, default_nfl_state, espn_status
+    ):
+        import requests
+
+        espn_resp = MagicMock(status_code=espn_status)
+        espn_resp.raise_for_status.side_effect = requests.exceptions.HTTPError(
+            response=espn_resp
+        )
+        with patch("routes.http_requests.get", return_value=espn_resp):
+            response = client.post("/leagues?requestType=REFRESH", json=self._BODY)
+
+        assert response.status_code == 400
+        assert "couldn't be verified" in response.json()["detail"]
+        mock_store.assert_not_called()
+        assert not self._flag_updates(mock_table)
+
+    def test_espn_server_error_returns_502(
+        self, client, mock_table, blocked, mock_store
+    ):
+        import requests
+
+        espn_resp = MagicMock(status_code=500)
+        espn_resp.raise_for_status.side_effect = requests.exceptions.HTTPError(
+            response=espn_resp
+        )
+        with patch("routes.http_requests.get", return_value=espn_resp):
+            response = client.post("/leagues?requestType=REFRESH", json=self._BODY)
+
+        assert response.status_code == 502
+        assert response.json()["detail"] == "Failed to verify ESPN cookies"
+        mock_store.assert_not_called()
+
+    def test_espn_network_error_returns_502(
+        self, client, mock_table, blocked, mock_store
+    ):
+        import requests
+
+        with patch(
+            "routes.http_requests.get",
+            side_effect=requests.exceptions.ConnectionError("boom"),
+        ):
+            response = client.post("/leagues?requestType=REFRESH", json=self._BODY)
+
+        assert response.status_code == 502
+        assert response.json()["detail"] == "Failed to reach ESPN API"
+        mock_store.assert_not_called()
+
+    def test_valid_cookies_fetch_espn_league(
+        self, client, mock_table, blocked, mock_store
+    ):
+        espn_resp = MagicMock(status_code=200)
+        with patch("routes.http_requests.get", return_value=espn_resp) as mock_get:
+            response = client.post("/leagues?requestType=REFRESH", json=self._BODY)
+
+        assert response.status_code == 429
+        url = mock_get.call_args.args[0]
+        assert "/seasons/2025/segments/0/leagues/123?view=mTeam" in url
+        assert mock_get.call_args.kwargs["cookies"] == {
+            "SWID": "{abc}",
+            "espn_s2": "s2-token",
+        }
+        mock_store.assert_called_once()
+
+    def test_credential_store_failure_returns_500(
+        self, client, mock_table, blocked, mock_store, mock_espn_fetch
+    ):
+        mock_store.side_effect = botocore.exceptions.ClientError(
+            {"Error": {"Code": "KMSInternalException"}}, "Encrypt"
+        )
+        response = client.post("/leagues?requestType=REFRESH", json=self._BODY)
+
+        assert response.status_code == 500
+        assert response.json()["detail"] == "Failed to enable automatic refresh"
+        assert not self._flag_updates(mock_table)
+
+    def test_flag_update_failure_returns_500(
+        self, client, mock_table, blocked, mock_store, mock_espn_fetch
+    ):
+        mock_table.update_item.side_effect = botocore.exceptions.ClientError(
+            {"Error": {"Code": "InternalServerError"}}, "UpdateItem"
+        )
+        response = client.post("/leagues?requestType=REFRESH", json=self._BODY)
+
+        assert response.status_code == 500
+        assert response.json()["detail"] == "Failed to enable automatic refresh"
+
+    def test_non_owner_rejected_before_enrollment(
+        self, client, mock_table, blocked, mock_store, mock_espn_fetch
+    ):
+        _as_user("intruder")
+        response = client.post("/leagues?requestType=REFRESH", json=self._BODY)
+
+        assert response.status_code == 403
+        mock_espn_fetch.assert_not_called()
+        mock_store.assert_not_called()
+
+
 class TestSetAutoRefreshEndpoint:
     def _espn_items(self, owner="user_1"):
         lookup = {
