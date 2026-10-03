@@ -320,6 +320,68 @@ class TestRegisterESPNRawDataMatchups:
         assert matchup["winner"] == 1  # home outscored away
         assert matchup["loser"] == 2
 
+    def test_parses_2018_seasons_endpoint_box_score(self, processor_handler):
+        # 2018 shape from the seasons endpoint: every rosterForMatchupPeriod entry reports
+        # lineupSlotId 0, so the real slot comes from rosterForCurrentScoringPeriod.
+        def entry(player_id, slot, name, position_id, points):
+            return {
+                "playerId": player_id,
+                "lineupSlotId": slot,
+                "playerPoolEntry": {
+                    "appliedStatTotal": points,
+                    "player": {"fullName": name, "defaultPositionId": position_id},
+                },
+            }
+
+        starters = [
+            (14881, 0, "Russell Wilson", 1, 28.54),
+            (14993, 17, "Greg Zuerlein", 5, 6.0),
+            (-16003, 16, "Bears D/ST", 16, 8.0),
+            (3120348, 23, "JuJu Smith-Schuster", 3, 9.5),
+        ]
+        bench = (100, 20, "Bench Back", 2, 4.0)
+        raw = [
+            {
+                "season": "2018",
+                "data_type": "matchups_week16",
+                "data": {
+                    "matchups": [
+                        {
+                            "matchupPeriodId": 16,
+                            "playoffTierType": "WINNERS_BRACKET",
+                            "home": {
+                                "teamId": 3,
+                                "totalPoints": 52.04,
+                                "rosterForMatchupPeriod": {
+                                    "entries": [
+                                        entry(pid, 0, name, pos, pts)
+                                        for pid, _slot, name, pos, pts in starters
+                                    ]
+                                },
+                                "rosterForCurrentScoringPeriod": {
+                                    "entries": [
+                                        entry(*player) for player in [*starters, bench]
+                                    ]
+                                },
+                            },
+                            "away": {"teamId": 7, "totalPoints": 40.0},
+                        }
+                    ]
+                },
+            }
+        ]
+        matchup = processor_handler._register_espn_raw_data(raw)["matchups"][0]
+        team_a_starters = matchup["team_a_starters"]
+        assert [s["fantasy_position"] for s in team_a_starters] == [
+            "QB",
+            "K",
+            "D/ST",
+            "FLEX",
+        ]
+        assert round(sum(s["points_scored"] for s in team_a_starters), 2) == 52.04
+        assert [b["full_name"] for b in matchup["team_a_bench"]] == ["Bench Back"]
+        assert matchup["team_b_starters"] == []
+
     def test_tie_matchup_marks_tie(self, processor_handler):
         raw = [
             {

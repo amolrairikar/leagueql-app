@@ -24,6 +24,11 @@ DATA_FETCH_TYPES = [
     "transactions",
 ]
 ESPN_PLAYER_FETCH_LIMIT = 1500
+# First season whose per-week matchups are fetched from the seasons endpoint even though it
+# is at or before V2_CUTOFF: leagueHistory ignores the mBoxscore view, so matchups fetched
+# there carry no rosters and the box score comes out empty. The seasons endpoint returns
+# full weekly rosters from 2018 on. Other data types keep using leagueHistory.
+ESPN_BOXSCORE_SEASONS_ENDPOINT_FROM = 2018
 
 
 def _filter_users(
@@ -308,7 +313,11 @@ class ESPNClient:
             for data_type in DATA_FETCH_TYPES:
                 if data_type == "transactions" and season_int != latest_season:
                     continue
-                if season_int <= V2_CUTOFF:
+                use_league_history = season_int <= V2_CUTOFF and not (
+                    data_type == "matchups"
+                    and season_int >= ESPN_BOXSCORE_SEASONS_ENDPOINT_FROM
+                )
+                if use_league_history:
                     api_base_url = f"https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/leagueHistory/{self.league_id}?seasonId={season}"
                 else:
                     api_base_url = f"https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/{season}/segments/0/leagues/{self.league_id}"

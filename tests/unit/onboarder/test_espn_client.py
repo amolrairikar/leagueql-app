@@ -414,6 +414,37 @@ class TestESPNClientBuildAllRequestUrls:
         urls = [u[2] for u in client.request_urls]
         assert any("leagueHistory" in url for url in urls)
 
+    def test_2018_matchups_use_seasons_endpoint(self, onboarder_espn_client):
+        # leagueHistory ignores mBoxscore, so 2018 matchups come from the seasons
+        # endpoint to carry weekly rosters; other 2018 data stays on leagueHistory.
+        client = onboarder_espn_client.ESPNClient(
+            league_id="123", latest_season="2018", is_refresh=True
+        )
+        matchup_urls = [
+            u[2] for u in client.request_urls if u[1].startswith("matchups")
+        ]
+        other_urls = [
+            u[2] for u in client.request_urls if not u[1].startswith("matchups")
+        ]
+        assert matchup_urls
+        for url in matchup_urls:
+            assert "seasons/2018/segments/0/leagues/123" in url
+            assert "leagueHistory" not in url
+            assert "mBoxscore" in url
+            assert "scoringPeriodId=" in url
+        assert other_urls
+        assert all("leagueHistory/123?seasonId=2018" in url for url in other_urls)
+
+    def test_pre_2018_matchups_use_leagueHistory(self, onboarder_espn_client):
+        client = onboarder_espn_client.ESPNClient(
+            league_id="123", latest_season="2017", is_refresh=True
+        )
+        matchup_urls = [
+            u[2] for u in client.request_urls if u[1].startswith("matchups")
+        ]
+        assert matchup_urls
+        assert all("leagueHistory/123?seasonId=2017" in url for url in matchup_urls)
+
     def test_transactions_fetched_for_latest_season_only(self, onboarder_espn_client):
         # A multi-season onboard: transactions are requested for the latest season
         # only (past seasons return no transaction data on this endpoint), expanded
