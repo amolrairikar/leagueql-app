@@ -120,7 +120,7 @@ with `joined_at = onboarded_at`. Prints counts of created and skipped rows. It's
 
 1. Terraform: add the `member_user_id`/`joined_at` attribute definitions and GSI4 to
    `infrastructure/modules/dynamodb/main.tf`. Add the `index/GSI4` ARNs (primary + replica) to the
-   API Lambda's DynamoDB policy in `infrastructure/global/prod/main.tf`. Apply, and wait for GSI4
+   API Lambda's DynamoDB policy in `infrastructure/global/{dev,prod}/main.tf`. Apply, and wait for GSI4
    to be `ACTIVE`. The regional apply also picks up the `/me/leagues` OpenAPI route.
 2. Deploy the backend (API + onboarder).
 3. Run the backfill script against prod.

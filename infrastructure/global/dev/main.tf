@@ -719,7 +719,11 @@ module "api-lambda-role" {
           # whether an owner's last Yahoo league is gone before removing their
           # per-user YAHOO_OAUTH token item (backend/delete-league).
           "${module.dynamodb.primary_table_arn}/index/GSI3",
-          "${module.dynamodb.replica_table_arn}/index/GSI3"
+          "${module.dynamodb.replica_table_arn}/index/GSI3",
+          # GSI4 (sparse per-user membership index): GET /me/leagues queries it to
+          # list the caller's leagues (backend/user-leagues).
+          "${module.dynamodb.primary_table_arn}/index/GSI4",
+          "${module.dynamodb.replica_table_arn}/index/GSI4"
         ]
       },
       {

@@ -3,7 +3,7 @@
 ## 1. Infrastructure and data model docs
 
 - [x] 1.1 Add `member_user_id` and `joined_at` attribute definitions and a `GSI4` (HASH `member_user_id`, RANGE `joined_at`, `KEYS_ONLY`) to `infrastructure/modules/dynamodb/main.tf`; verify with `terraform validate` / `terraform fmt -check`
-- [x] 1.2 Add `index/GSI4` (primary + replica) to the API Lambda DynamoDB policy in `infrastructure/global/prod/main.tf`; verify with `terraform validate`
+- [x] 1.2 Add `index/GSI4` (primary + replica) to the API Lambda DynamoDB policy in both `infrastructure/global/dev/main.tf` and `infrastructure/global/prod/main.tf`; verify with `terraform validate`
 - [x] 1.3 Document the MEMBER item and GSI4 in `docs/db/dynamodb_spec.md` (table overview GSIs row, key schema section, items section); verify by reviewing the rendered markdown
 - [x] 1.4 Add GSI4 to the moto table definitions used by tests (`tests/component/environment.py` and unit fixtures that build the table with GSI3); verify the existing suites still pass with `pipenv run pytest tests/unit -q` and `pipenv run behave tests/component`
 
