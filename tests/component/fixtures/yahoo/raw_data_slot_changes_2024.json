@@ -1,0 +1,194 @@
+[
+  {
+    "season": "2024",
+    "data_type": "settings",
+    "data": {
+      "name": "Yahoo Identity League",
+      "num_playoff_teams": "2",
+      "playoff_start_week": "15"
+    }
+  },
+  {
+    "season": "2024",
+    "data_type": "standings",
+    "data": {
+      "standings": [
+        {
+          "team_key": "449.l.436.t.2",
+          "rank": "1"
+        },
+        {
+          "team_key": "449.l.436.t.1",
+          "rank": "2"
+        },
+        {
+          "team_key": "449.l.436.t.3",
+          "rank": "3"
+        },
+        {
+          "team_key": "449.l.436.t.4",
+          "rank": "4"
+        }
+      ]
+    }
+  },
+  {
+    "season": "2024",
+    "data_type": "teams",
+    "data": {
+      "members": [
+        {
+          "manager_id": "1",
+          "nickname": "Manager D",
+          "guid": null,
+          "slot_manager_id": "1"
+        },
+        {
+          "manager_id": "2",
+          "nickname": "Manager C",
+          "guid": null,
+          "slot_manager_id": "2"
+        },
+        {
+          "manager_id": "3",
+          "nickname": "Manager A",
+          "guid": null,
+          "slot_manager_id": "3"
+        },
+        {
+          "manager_id": "4",
+          "nickname": "Manager E",
+          "guid": null,
+          "slot_manager_id": "4"
+        }
+      ],
+      "teams": [
+        {
+          "team_key": "449.l.436.t.1",
+          "team_id": "1",
+          "name": "Team Delta",
+          "logo": "https://s.yimg.com/cv/apiv2/default/nfl/nfl_1.png",
+          "manager_id": "1",
+          "guid": null,
+          "slot_manager_id": "1"
+        },
+        {
+          "team_key": "449.l.436.t.2",
+          "team_id": "2",
+          "name": "Team Charlie",
+          "logo": "https://s.yimg.com/cv/apiv2/default/nfl/nfl_2.png",
+          "manager_id": "2",
+          "guid": null,
+          "slot_manager_id": "2"
+        },
+        {
+          "team_key": "449.l.436.t.3",
+          "team_id": "3",
+          "name": "Team Alpha",
+          "logo": "https://s.yimg.com/cv/apiv2/default/nfl/nfl_3.png",
+          "manager_id": "3",
+          "guid": null,
+          "slot_manager_id": "3"
+        },
+        {
+          "team_key": "449.l.436.t.4",
+          "team_id": "4",
+          "name": "Team Echo",
+          "logo": "https://s.yimg.com/cv/apiv2/default/nfl/nfl_4.png",
+          "manager_id": "4",
+          "guid": null,
+          "slot_manager_id": "4"
+        }
+      ]
+    }
+  },
+  {
+    "season": "2024",
+    "data_type": "matchups_week1",
+    "data": {
+      "matchups": [
+        {
+          "week": "1",
+          "is_playoffs": "0",
+          "is_consolation": "0",
+          "winner_team_key": "449.l.436.t.1",
+          "status": "postevent",
+          "teams": [
+            {
+              "team_key": "449.l.436.t.1",
+              "points": "110.00"
+            },
+            {
+              "team_key": "449.l.436.t.2",
+              "points": "95.00"
+            }
+          ]
+        },
+        {
+          "week": "1",
+          "is_playoffs": "0",
+          "is_consolation": "0",
+          "winner_team_key": "449.l.436.t.3",
+          "status": "postevent",
+          "teams": [
+            {
+              "team_key": "449.l.436.t.3",
+              "points": "110.00"
+            },
+            {
+              "team_key": "449.l.436.t.4",
+              "points": "95.00"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "season": "2024",
+    "data_type": "matchups_week15",
+    "data": {
+      "matchups": [
+        {
+          "week": "15",
+          "is_playoffs": "1",
+          "is_consolation": "0",
+          "winner_team_key": "449.l.436.t.2",
+          "status": "postevent",
+          "teams": [
+            {
+              "team_key": "449.l.436.t.2",
+              "points": "130.00"
+            },
+            {
+              "team_key": "449.l.436.t.1",
+              "points": "120.00"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "season": "2024",
+    "data_type": "draft_picks",
+    "data": {
+      "draft_picks": [
+        {
+          "pick": "1",
+          "round": "1",
+          "team_key": "449.l.436.t.1",
+          "player_key": "423.p.1",
+          "cost": null
+        },
+        {
+          "pick": "2",
+          "round": "1",
+          "team_key": "449.l.436.t.2",
+          "player_key": "423.p.2",
+          "cost": null
+        }
+      ]
+    }
+  }
+]

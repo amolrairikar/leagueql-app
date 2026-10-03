@@ -12,6 +12,7 @@ Yahoo's ``?format=json`` uses deeply nested, numeric-keyed containers, so these 
 into plain dicts/lists.
 """
 
+from collections import Counter
 from typing import Any
 
 YAHOO_BASE_URL = "https://fantasysports.yahooapis.com/fantasy/v2"
@@ -126,21 +127,38 @@ def _primary_manager(team_flat: dict[str, Any]) -> dict[str, Any]:
     return _flatten(managers[0]) if managers else {}
 
 
+# Placeholder values Yahoo returns in place of a manager's guid when it is hidden from the
+# caller (observed for every manager, including the logged-in user, in some leagues).
+_MASKED_GUIDS = frozenset({"--hidden--", "--"})
+
+
+def real_guid(guid: Any) -> str | None:
+    """Return ``guid`` if it is a real Yahoo guid, else ``None`` (masked, empty, or absent)."""
+    if not isinstance(guid, str):
+        return None
+    guid = guid.strip()
+    if not guid or guid in _MASKED_GUIDS:
+        return None
+    return guid
+
+
 def resolve_team_owner_ids(team_flats: list[dict[str, Any]]) -> list[Any]:
     """Assign each team a primary-owner id, unique within the league.
 
-    Prefers the manager's stable cross-season Yahoo ``guid``. But Yahoo masks the guid in
-    some leagues (e.g. public ones), returning the SAME value for every manager — keying
-    owners on it then collapses every team onto one manager. So the guid is used only when
-    it is present for every team AND distinct across the league; otherwise this falls back
-    to the per-league ``manager_id`` (unique within a season) so each team keeps a distinct
-    owner. Returns owner ids positionally aligned with ``team_flats``.
+    Prefers the manager's stable cross-season Yahoo ``guid``, decided **per team**: a team
+    uses its guid when that guid is real (not masked as ``--hidden--``/``--``, not empty)
+    and no other team in the league reports the same one. Otherwise that team falls back to
+    its per-league ``manager_id`` (unique within a season, but only a slot number — it is
+    not a stable cross-season identity; the processor resolves that). Returns owner ids
+    positionally aligned with ``team_flats``.
     """
     primaries = [_primary_manager(flat) for flat in team_flats]
-    guids = [p.get("guid") for p in primaries]
-    non_null_guids = [g for g in guids if g]
-    guids_usable = len(non_null_guids) == len(team_flats) == len(set(non_null_guids))
-    return [(p.get("guid") if guids_usable else p.get("manager_id")) for p in primaries]
+    guids = [real_guid(p.get("guid")) for p in primaries]
+    guid_counts = Counter(g for g in guids if g)
+    return [
+        guid if guid and guid_counts[guid] == 1 else primary.get("manager_id")
+        for guid, primary in zip(guids, primaries)
+    ]
 
 
 def parse_managers(teams_payload: dict[str, Any]) -> list[dict[str, str]]:

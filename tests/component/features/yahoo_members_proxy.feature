@@ -17,3 +17,11 @@ Feature: Yahoo members proxy API (backend/yahoo-members-proxy)
   Scenario: A Yahoo league not in the caller's account is 404
     When I POST to yahoo_members for league "100" targeting Yahoo league "456" not in the account
     Then the API responds with status 404
+
+  Scenario: Masked manager guids fall back to each team's manager_id
+    When I POST to yahoo_members for league "100" targeting Yahoo league "456" whose manager guids are all masked
+    Then the API responds with status 200
+    And the query response has 2 row(s)
+    And a query response row has "owner_id" equal to "1"
+    And a query response row has "owner_id" equal to "2"
+    And no query response row has "owner_id" equal to "--hidden--"

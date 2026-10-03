@@ -1481,6 +1481,10 @@ components:
                       properties:
                         owner_id:
                           type: string
+                          description: >
+                            The manager's real Yahoo guid when Yahoo exposes it and it is unique
+                            in the league; otherwise the per-league manager_id (a team slot
+                            number), e.g. when Yahoo masks guids as "--hidden--".
                         display_name:
                           type: string
           example:

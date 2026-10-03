@@ -175,38 +175,33 @@ def _yahoo_leagues_payload(league_id, league_key):
     }
 
 
-def _yahoo_teams_payload():
-    return {
-        "fantasy_content": {
-            "league": [
-                {},
-                {
-                    "teams": {
-                        "0": {
-                            "team": [
-                                [
-                                    {"team_key": "461.l.456.t.1"},
-                                    # Yahoo returns a team's nested managers as a plain list.
-                                    {
-                                        "managers": [
-                                            {
-                                                "manager": {
-                                                    "manager_id": "1",
-                                                    "guid": "G1",
-                                                    "nickname": "Alice",
-                                                }
-                                            }
-                                        ]
-                                    },
-                                ]
-                            ]
-                        },
-                        "count": 1,
-                    }
-                },
+def _yahoo_teams_payload(managers=None):
+    """A Yahoo ``/teams`` payload; ``managers`` is a list of ``(manager_id, guid, nickname)``."""
+    managers = managers or [("1", "G1", "Alice")]
+    teams = {
+        str(i): {
+            "team": [
+                [
+                    {"team_key": f"461.l.456.t.{manager_id}"},
+                    # Yahoo returns a team's nested managers as a plain list.
+                    {
+                        "managers": [
+                            {
+                                "manager": {
+                                    "manager_id": manager_id,
+                                    "guid": guid,
+                                    "nickname": nickname,
+                                }
+                            }
+                        ]
+                    },
+                ]
             ]
         }
+        for i, (manager_id, guid, nickname) in enumerate(managers)
     }
+    teams["count"] = len(managers)
+    return {"fantasy_content": {"league": [{}, {"teams": teams}]}}
 
 
 def _patch_yahoo_token(context, *, linked):
@@ -225,7 +220,7 @@ def _patch_yahoo_token(context, *, linked):
     context._patches.append(patcher)
 
 
-def _patch_yahoo_http(context, *, seeded_league_id):
+def _patch_yahoo_http(context, *, seeded_league_id, managers=None):
     """Patch the upstream Yahoo GETs: leagues enumeration then that league's teams."""
     import routes
 
@@ -236,7 +231,7 @@ def _patch_yahoo_http(context, *, seeded_league_id):
     )
     teams_resp = MagicMock()
     teams_resp.raise_for_status.return_value = None
-    teams_resp.json.return_value = _yahoo_teams_payload()
+    teams_resp.json.return_value = _yahoo_teams_payload(managers)
     patcher = patch.object(
         routes.http_requests, "get", MagicMock(side_effect=[leagues_resp, teams_resp])
     )
@@ -251,6 +246,25 @@ def _patch_yahoo_http(context, *, seeded_league_id):
 def step_post_yahoo_members_linked(context, league_id, yahoo_league_id):
     _patch_yahoo_token(context, linked=True)
     _patch_yahoo_http(context, seeded_league_id=yahoo_league_id)
+    context.response = context.api.post(
+        f"/leagues/{league_id}/yahoo_members"
+        f"?platform=SLEEPER&yahooLeagueId={yahoo_league_id}"
+    )
+
+
+@when(
+    'I POST to yahoo_members for league "{league_id}" targeting Yahoo league '
+    '"{yahoo_league_id}" whose manager guids are all masked'
+)
+def step_post_yahoo_members_masked(context, league_id, yahoo_league_id):
+    # Yahoo hides every manager's guid as "--hidden--" in some leagues, so owner ids must
+    # fall back to each team's distinct per-league manager_id (backend/yahoo-members-proxy).
+    _patch_yahoo_token(context, linked=True)
+    _patch_yahoo_http(
+        context,
+        seeded_league_id=yahoo_league_id,
+        managers=[("1", "--hidden--", "Manager A"), ("2", "--hidden--", "Manager B")],
+    )
     context.response = context.api.post(
         f"/leagues/{league_id}/yahoo_members"
         f"?platform=SLEEPER&yahooLeagueId={yahoo_league_id}"

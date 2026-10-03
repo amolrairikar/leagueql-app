@@ -177,7 +177,7 @@ Represents all teams across all seasons in the fantasy league.
 | `team_name` | String | Team name set by the owner |
 | `team_logo` | String \| null | URL to the team logo |
 | `season` | String | Season year (e.g. `"2025"`) |
-| `primary_owner_id` | String | Platform user ID of the primary owner |
+| `primary_owner_id` | String | Platform user ID of the primary owner. For Yahoo this is the stable cross-season owner id (backend/data-processing-pipeline): the manager's real Yahoo guid when Yahoo exposes it, otherwise the team key of the first season that manager appears in (e.g. `390.l.1.t.10`), linked across seasons by nickname / team name / custom logo. It is never Yahoo's per-league `manager_id`, which is a reassignable slot number. All other owner-id fields in Yahoo views (`team_*_primary_owner_id`, `owner_id`) carry the same value. |
 | `secondary_owner_id` | String \| null | Platform user ID of a co-owner, if present |
 
 **Example:**
@@ -645,6 +645,7 @@ Stores the manager identity mapping created when a league migrates from one plat
 | `PK` | String | Yes | `LEAGUE#{canonical_league_id}` |
 | `SK` | String | Yes | `PLATFORM_MIGRATION#{fromPlatform}#{toPlatform}` (e.g. `PLATFORM_MIGRATION#ESPN#SLEEPER`) |
 | `data` | List\<Object\> | Yes | One entry per manager mapping |
+| `yahoo_owner_ids_resolved` | Boolean | No | Yahoo destinations only (`...#YAHOO`). Set by the processor once it has rewritten every `newPlatformOwnerId` from the Yahoo members-proxy id (the destination season's raw per-season owner id) to that manager's stable cross-season owner id; a flagged item is never translated again (backend/data-processing-pipeline). |
 
 **`data[n]` object:**
 
@@ -888,6 +889,6 @@ The DynamoDB items refer to these keys indirectly, through `canonical_league_id`
 
 | Key | Written by | Contents |
 |---|---|---|
-| `raw-api-data/{canonical_league_id}/{season}.json` | Onboarder | A list of `{season, data_type, data}` records for one season. Yahoo matchup rows carry `status` (`preevent`/`midevent`/`postevent`). |
+| `raw-api-data/{canonical_league_id}/{season}.json` | Onboarder | A list of `{season, data_type, data}` records for one season. Yahoo matchup rows carry `status` (`preevent`/`midevent`/`postevent`). Yahoo `teams` records hold `members: [{manager_id, nickname, guid, slot_manager_id}]` and `teams: [{team_key, team_id, name, logo, manager_id, guid, slot_manager_id}]`, where `manager_id` is the resolved per-season owner id (the team's real guid when unmasked and unique, else its slot), `guid` is the real Yahoo guid or `null` when masked (`--hidden--`), and `slot_manager_id` is Yahoo's per-league `manager_id` (a slot number, not a stable person id). Files written before backend/yahoo-stable-owner-identity lack `guid`/`slot_manager_id`. |
 | `raw-api-data/{canonical_league_id}/manifest.json` | Onboarder; lineup backfill (self-copy) | `{"<PLATFORM>": [seasons…]}`. Writing it (`ObjectCreated:*`) triggers the processor. Object metadata: `correlation_id`, W3C trace context, `reprocess_all=true` (rebuild every season), or `reprocess_seasons=<comma list>` (rebuild exactly those seasons, without bumping `last_refresh_at` or `league_name`; backend/yahoo-lineup-backfill). |
 | `raw-api-data/{canonical_league_id}/yahoo_rosters/{season}.json` | Lineup backfill | Yahoo lineup store (backend/yahoo-lineup-backfill): `{"weeks": {"<week>": [{team_key, week, player_key, player_name, position, selected_position, points}]}}`. It is written after every fetched week so a run can resume. The processor merges it into that season's matchups, and its weeks take precedence over any `rosters_week{W}` records in the season file. |

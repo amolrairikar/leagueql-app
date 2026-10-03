@@ -39,6 +39,7 @@ from common.yahoo_members import (
     _flatten,
     _league_subresource,
     _primary_manager,
+    real_guid,
     resolve_team_owner_ids,
 )
 
@@ -108,10 +109,19 @@ def _filter_teams(data: dict[str, Any], _season: str, _dt: str) -> dict[str, Any
         primary = _primary_manager(flat)
         logos = _collection_items(flat.get("team_logos", {}), "team_logo")
         logo_url = _flatten(logos[0]).get("url") if logos else None
+        # `manager_id` stays the resolved owner id (backward compatible). The real guid
+        # (null when Yahoo masks it) and Yahoo's per-league slot id are kept separately so
+        # the processor can tell a person id from a slot number when it links managers
+        # across seasons (backend/league-onboarding).
+        identity = {
+            "guid": real_guid(primary.get("guid")),
+            "slot_manager_id": primary.get("manager_id"),
+        }
         members.append(
             {
                 "manager_id": owner_id,
                 "nickname": primary.get("nickname"),
+                **identity,
             }
         )
         out_teams.append(
@@ -121,6 +131,7 @@ def _filter_teams(data: dict[str, Any], _season: str, _dt: str) -> dict[str, Any
                 "name": flat.get("name"),
                 "logo": logo_url,
                 "manager_id": owner_id,
+                **identity,
             }
         )
     return {"members": members, "teams": out_teams}

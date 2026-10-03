@@ -1,5 +1,7 @@
 """Tests for Yahoo processing: _register_yahoo_raw_data + YAHOO query transforms."""
 
+from unittest.mock import MagicMock, patch
+
 import duckdb
 import pandas as pd
 import pytest
@@ -687,3 +689,550 @@ class TestMergeYahooLineupStores:
         m = self._matchup(processor_handler, raw)
         assert m["team_a_starters"] == m["team_a_bench"] == []
         assert m["team_a_score"] == 100.5
+
+
+# ── Cross-season owner identities (backend/data-processing-pipeline) ─────────────────────
+
+_DEFAULT_LOGO = "https://s.yimg.com/cv/apiv2/default/nfl/nfl_5.png"
+
+
+def _season_teams(season, teams):
+    """A raw Yahoo ``teams`` record. ``teams`` is a list of dicts with ``slot`` and optional
+    ``nickname``/``name``/``logo``/``guid``; rows carry the post-change ``guid``/``slot`` fields."""
+    game = {"2019": "390", "2020": "399", "2021": "406", "2022": "414"}[season]
+    members, rows = [], []
+    for t in teams:
+        slot = str(t["slot"])
+        guid = t.get("guid")
+        owner = guid or slot
+        members.append(
+            {
+                "manager_id": owner,
+                "nickname": t.get("nickname"),
+                "guid": guid,
+                "slot_manager_id": slot,
+            }
+        )
+        rows.append(
+            {
+                "team_key": f"{game}.l.1.t.{slot}",
+                "team_id": slot,
+                "name": t.get("name", f"Team {season}-{slot}"),
+                "logo": t.get("logo", _DEFAULT_LOGO),
+                "manager_id": owner,
+                "guid": guid,
+                "slot_manager_id": slot,
+            }
+        )
+    return {"members": members, "teams": rows}
+
+
+def _ids(owner_by_team, season, slot):
+    game = {"2019": "390", "2020": "399", "2021": "406", "2022": "414"}[season]
+    return owner_by_team[(season, f"{game}.l.1.t.{slot}")]
+
+
+class TestResolveYahooOwnerIdentities:
+    def test_slot_change_keeps_person_and_new_slot_holder_differs(
+        self, processor_handler
+    ):
+        out = processor_handler.resolve_yahoo_owner_identities(
+            {
+                "2019": _season_teams("2019", [{"slot": 10, "nickname": "Manager A"}]),
+                "2020": _season_teams(
+                    "2020",
+                    [
+                        {"slot": 9, "nickname": "Manager A"},
+                        {"slot": 10, "nickname": "Manager D"},
+                    ],
+                ),
+            }
+        )
+        assert _ids(out, "2019", 10) == _ids(out, "2020", 9) == "390.l.1.t.10"
+        assert _ids(out, "2020", 10) == "399.l.1.t.10"
+
+    def test_returning_manager_after_gap(self, processor_handler):
+        out = processor_handler.resolve_yahoo_owner_identities(
+            {
+                "2019": _season_teams("2019", [{"slot": 3, "nickname": "Manager A"}]),
+                "2020": _season_teams("2020", [{"slot": 3, "nickname": "Manager B"}]),
+                "2021": _season_teams(
+                    "2021",
+                    [
+                        {"slot": 3, "nickname": "Manager B"},
+                        {"slot": 8, "nickname": "Manager A"},
+                    ],
+                ),
+            }
+        )
+        assert _ids(out, "2021", 8) == _ids(out, "2019", 3)
+        assert _ids(out, "2021", 3) == _ids(out, "2020", 3) != _ids(out, "2019", 3)
+
+    def test_guid_takes_precedence_and_is_the_id(self, processor_handler):
+        out = processor_handler.resolve_yahoo_owner_identities(
+            {
+                "2019": _season_teams(
+                    "2019", [{"slot": 1, "nickname": "Manager A", "guid": "GA"}]
+                ),
+                "2020": _season_teams(
+                    "2020",
+                    [
+                        {"slot": 2, "nickname": "Renamed", "guid": "GA"},
+                        # Same nickname, different guid: guid wins, so a new person.
+                        {"slot": 1, "nickname": "Manager A", "guid": "GZ"},
+                    ],
+                ),
+            }
+        )
+        assert _ids(out, "2019", 1) == _ids(out, "2020", 2) == "GA"
+        assert _ids(out, "2020", 1) == "GZ"
+
+    def test_hidden_nickname_never_merges(self, processor_handler):
+        out = processor_handler.resolve_yahoo_owner_identities(
+            {
+                "2019": _season_teams("2019", [{"slot": 12, "nickname": "--hidden--"}]),
+                "2020": _season_teams("2020", [{"slot": 12, "nickname": "--hidden--"}]),
+            }
+        )
+        assert _ids(out, "2019", 12) != _ids(out, "2020", 12)
+
+    def test_duplicate_nickname_in_season_never_merges(self, processor_handler):
+        out = processor_handler.resolve_yahoo_owner_identities(
+            {
+                "2019": _season_teams("2019", [{"slot": 1, "nickname": "Manager A"}]),
+                "2020": _season_teams(
+                    "2020",
+                    [
+                        {"slot": 1, "nickname": "Manager A"},
+                        {"slot": 2, "nickname": "manager a "},
+                    ],
+                ),
+            }
+        )
+        ids_2020 = {_ids(out, "2020", 1), _ids(out, "2020", 2)}
+        assert _ids(out, "2019", 1) not in ids_2020
+        assert len(ids_2020) == 2
+
+    def test_team_name_links_renamed_manager(self, processor_handler):
+        out = processor_handler.resolve_yahoo_owner_identities(
+            {
+                "2019": _season_teams(
+                    "2019", [{"slot": 4, "nickname": "Old Nick", "name": "Team X"}]
+                ),
+                "2020": _season_teams(
+                    "2020", [{"slot": 6, "nickname": "New Nick", "name": "team x"}]
+                ),
+            }
+        )
+        assert _ids(out, "2019", 4) == _ids(out, "2020", 6)
+
+    def test_custom_logo_links_renamed_manager(self, processor_handler):
+        logo = "https://example.test/fantasy-logos/custom_1.jpg"
+        out = processor_handler.resolve_yahoo_owner_identities(
+            {
+                "2019": _season_teams(
+                    "2019", [{"slot": 4, "nickname": "Old", "name": "N1", "logo": logo}]
+                ),
+                "2020": _season_teams(
+                    "2020", [{"slot": 6, "nickname": "New", "name": "N2", "logo": logo}]
+                ),
+            }
+        )
+        assert _ids(out, "2019", 4) == _ids(out, "2020", 6)
+
+    @pytest.mark.parametrize(
+        "logo",
+        [
+            "https://s.yimg.com/cv/apiv2/default/nfl/nfl_5.png",
+            "https://s.yimg.com/cv/apiv2/nfl/nfl_10_d.png",
+        ],
+    )
+    def test_default_logo_never_links(self, processor_handler, logo):
+        out = processor_handler.resolve_yahoo_owner_identities(
+            {
+                "2019": _season_teams(
+                    "2019", [{"slot": 4, "nickname": "P", "name": "N1", "logo": logo}]
+                ),
+                "2020": _season_teams(
+                    "2020", [{"slot": 4, "nickname": "Q", "name": "N2", "logo": logo}]
+                ),
+            }
+        )
+        assert _ids(out, "2019", 4) != _ids(out, "2020", 4)
+
+    def test_two_teams_claiming_one_identity_link_neither(self, processor_handler):
+        """Two teams that each match the same earlier person by different values are
+        ambiguous, so neither is linked by that signal."""
+        out = processor_handler.resolve_yahoo_owner_identities(
+            {
+                "2019": _season_teams(
+                    "2019", [{"slot": 1, "nickname": "Manager A", "name": "Team X"}]
+                ),
+                "2020": _season_teams(
+                    "2020", [{"slot": 1, "nickname": "Manager A", "name": "T1"}]
+                ),
+                "2021": _season_teams(
+                    "2021",
+                    [
+                        {"slot": 1, "nickname": "Other", "name": "Team X"},
+                        {"slot": 2, "nickname": "Manager A", "name": "T2"},
+                    ],
+                ),
+            }
+        )
+        person = _ids(out, "2019", 1)
+        assert _ids(out, "2020", 1) == person
+        # Nickname pass links slot 2 first (unambiguous); slot 1 then can't claim it.
+        assert _ids(out, "2021", 2) == person
+        assert _ids(out, "2021", 1) != person
+
+    def test_legacy_rows_without_guid_fields(self, processor_handler):
+        def legacy(season, owner, nickname, slot):
+            game = {"2019": "390", "2020": "399"}[season]
+            return {
+                "members": [{"manager_id": owner, "nickname": nickname}],
+                "teams": [
+                    {
+                        "team_key": f"{game}.l.1.t.{slot}",
+                        "name": f"N{season}",
+                        "manager_id": owner,
+                    }
+                ],
+            }
+
+        out = processor_handler.resolve_yahoo_owner_identities(
+            {
+                # Non-numeric legacy manager_id is a real guid; numeric is only a slot.
+                "2019": legacy("2019", "GUIDA", "Nick A", 1),
+                "2020": legacy("2020", "1", "Nick B", 1),
+            }
+        )
+        assert out[("2019", "390.l.1.t.1")] == "GUIDA"
+        assert out[("2020", "399.l.1.t.1")] == "399.l.1.t.1"
+
+    def test_team_without_manager_unmapped(self, processor_handler):
+        record = {
+            "members": [],
+            "teams": [
+                {"team_key": "390.l.1.t.1", "name": "Orphan", "manager_id": None}
+            ],
+        }
+        assert processor_handler.resolve_yahoo_owner_identities({"2019": record}) == {}
+
+
+def _identity_league_raw(seasons):
+    """Raw Yahoo records for a synthetic league: each season is ``(teams, champion_slot)``
+    with every team playing week 1 and a single title game (week 15) won by the champion."""
+    raw = []
+    for season, (teams, champ) in seasons.items():
+        record = _season_teams(season, teams)
+        keys = [t["team_key"] for t in record["teams"]]
+        champ_key = next(k for k in keys if k.endswith(f".t.{champ}"))
+        other = next(k for k in keys if k != champ_key)
+        regular = [
+            {
+                "week": "1",
+                "is_playoffs": "0",
+                "is_consolation": "0",
+                "winner_team_key": a,
+                "teams": [
+                    {"team_key": a, "points": "100"},
+                    {"team_key": b, "points": "90"},
+                ],
+            }
+            for a, b in zip(keys[::2], keys[1::2])
+        ]
+        final = {
+            "week": "15",
+            "is_playoffs": "1",
+            "is_consolation": "0",
+            "winner_team_key": champ_key,
+            "teams": [
+                {"team_key": champ_key, "points": "120"},
+                {"team_key": other, "points": "110"},
+            ],
+        }
+        raw += [
+            {"season": season, "data_type": "teams", "data": record},
+            {
+                "season": season,
+                "data_type": "matchups_week1",
+                "data": {"matchups": regular},
+            },
+            {
+                "season": season,
+                "data_type": "matchups_week15",
+                "data": {"matchups": [final]},
+            },
+        ]
+    return raw
+
+
+def _standings_from_grouped(processor_handler, grouped):
+    con = duckdb.connect()
+    for view in ("members", "teams", "matchups"):
+        con.register(view, pd.DataFrame(grouped[view]))
+    con.register(
+        "teams_output", con.sql(processor_handler.QUERIES["TEAMS"]["YAHOO"]).df()
+    )
+    con.register(
+        "matchups_output", con.sql(processor_handler.QUERIES["MATCHUPS"]["YAHOO"]).df()
+    )
+    df = con.sql(processor_handler.QUERIES["STANDINGS"]).df()
+    con.close()
+    return df
+
+
+# Slot 2 changes hands between seasons: Manager B wins 2019 in slot 2 then leaves; Manager C
+# takes slot 2 and wins 2020. Manager A moves from slot 1 to slot 3.
+_IDENTITY_SEASONS = {
+    "2019": (
+        [
+            {"slot": 1, "nickname": "Manager A"},
+            {"slot": 2, "nickname": "Manager B"},
+            {"slot": 3, "nickname": "Manager D"},
+            {"slot": 4, "nickname": "Manager E"},
+        ],
+        2,
+    ),
+    "2020": (
+        [
+            {"slot": 1, "nickname": "Manager D"},
+            {"slot": 2, "nickname": "Manager C"},
+            {"slot": 3, "nickname": "Manager A"},
+            {"slot": 4, "nickname": "Manager E"},
+        ],
+        2,
+    ),
+}
+
+
+class TestYahooStableOwnersInStandings:
+    def test_each_title_credited_to_its_real_winner(self, processor_handler):
+        grouped = processor_handler._register_yahoo_raw_data(
+            _identity_league_raw(_IDENTITY_SEASONS), {}, {}
+        )
+        df = _standings_from_grouped(processor_handler, grouped)
+        champs = df[df["champion"] == "Yes"].set_index("season")
+        assert champs.loc["2019", "owner_username"] == "Manager B"
+        assert champs.loc["2020", "owner_username"] == "Manager C"
+        assert champs.loc["2019", "owner_id"] != champs.loc["2020", "owner_id"]
+        # One owner id per person, one person per owner id.
+        assert (df.groupby("owner_id")["owner_username"].nunique() == 1).all()
+        assert (df.groupby("owner_username")["owner_id"].nunique() == 1).all()
+        assert df["owner_id"].nunique() == 5
+
+
+class TestYahooIdentitiesOnIncrementalRuns:
+    def test_latest_season_alone_keeps_full_run_ids(self, processor_handler):
+        raw = _identity_league_raw(_IDENTITY_SEASONS)
+        full = processor_handler._register_yahoo_raw_data(raw, {}, {})
+        identity_teams = {
+            r["season"]: r["data"]
+            for r in raw
+            if r["data_type"] == "teams" and r["season"] == "2019"
+        }
+        partial = processor_handler._register_yahoo_raw_data(
+            [r for r in raw if r["season"] == "2020"],
+            {},
+            {},
+            identity_teams=identity_teams,
+        )
+
+        def owners(grouped):
+            return {
+                t["id"]: t["primaryOwner"]
+                for t in grouped["teams"]
+                if t["season"] == "2020"
+            }
+
+        assert owners(partial) == owners(full)
+        # Without the other seasons, the moved manager would get a fresh id instead.
+        alone = processor_handler._register_yahoo_raw_data(
+            [r for r in raw if r["season"] == "2020"], {}, {}
+        )
+        assert owners(alone) != owners(full)
+
+    def test_new_season_keeps_returning_managers(self, processor_handler):
+        seasons = {
+            **_IDENTITY_SEASONS,
+            "2021": (
+                [
+                    {"slot": 1, "nickname": "Manager C"},
+                    {"slot": 2, "nickname": "Manager F"},
+                    {"slot": 3, "nickname": "Manager A"},
+                    {"slot": 4, "nickname": "Manager E"},
+                ],
+                1,
+            ),
+        }
+        raw = _identity_league_raw(seasons)
+        full = processor_handler._register_yahoo_raw_data(raw, {}, {})
+        by_name = {(m["season"], m["displayName"]): m["id"] for m in full["members"]}
+        assert by_name[("2021", "Manager C")] == by_name[("2020", "Manager C")]
+        assert by_name[("2021", "Manager A")] == by_name[("2019", "Manager A")]
+        assert by_name[("2021", "Manager F")] == "406.l.1.t.2"
+
+
+class TestReadYahooIdentityTeams:
+    def test_reads_only_teams_records(self, processor_handler):
+        def fake_read(bucket, key):
+            season = key.rsplit("/", 1)[-1].removesuffix(".json")
+            return [
+                {"data_type": "settings", "data": {}},
+                {"data_type": "teams", "data": {"teams": [{"team_key": season}]}},
+            ]
+
+        with patch.object(processor_handler, "read_s3_object", side_effect=fake_read):
+            out = processor_handler.read_yahoo_identity_teams(
+                "bucket", "raw/x", ["2019", "2020"]
+            )
+        assert out == {
+            "2019": {"teams": [{"team_key": "2019"}]},
+            "2020": {"teams": [{"team_key": "2020"}]},
+        }
+
+    def test_no_seasons_reads_nothing(self, processor_handler):
+        with patch.object(processor_handler, "read_s3_object") as read:
+            assert processor_handler.read_yahoo_identity_teams("b", "p", []) == {}
+        read.assert_not_called()
+
+    def test_failed_season_raises(self, processor_handler):
+        with (
+            patch.object(
+                processor_handler, "read_s3_object", side_effect=RuntimeError("S3 down")
+            ),
+            pytest.raises(RuntimeError, match="2019"),
+        ):
+            processor_handler.read_yahoo_identity_teams("b", "p", ["2019"])
+
+
+@pytest.fixture
+def migration_table(processor_handler, monkeypatch):
+    """A moto DynamoDB table swapped in for the processor's table (created inside mock_aws,
+    so no real AWS client is ever built)."""
+    import boto3
+    from moto import mock_aws
+
+    monkeypatch.setenv("AWS_DEFAULT_REGION", "us-east-1")
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "testing")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "testing")
+    with mock_aws():
+        ddb = boto3.resource("dynamodb", region_name="us-east-1")
+        table = ddb.create_table(
+            TableName="test-table",
+            KeySchema=[
+                {"AttributeName": "PK", "KeyType": "HASH"},
+                {"AttributeName": "SK", "KeyType": "RANGE"},
+            ],
+            AttributeDefinitions=[
+                {"AttributeName": "PK", "AttributeType": "S"},
+                {"AttributeName": "SK", "AttributeType": "S"},
+            ],
+            BillingMode="PAY_PER_REQUEST",
+        )
+        with patch.object(processor_handler, "table", table):
+            yield table
+
+
+def _put_mapping(table, sk, new_ids):
+    table.put_item(
+        Item={
+            "PK": "LEAGUE#canon",
+            "SK": sk,
+            "data": [
+                {
+                    "currentPlatformOwnerId": f"src-{i}",
+                    "newPlatformOwnerId": new_id,
+                    "displayName": f"Manager {i}",
+                }
+                for i, new_id in enumerate(new_ids)
+            ],
+        }
+    )
+
+
+class TestTranslateYahooMigrationMappings:
+    def test_translated_once_then_left_alone(self, processor_handler, migration_table):
+        _put_mapping(
+            migration_table,
+            "PLATFORM_MIGRATION#ESPN#YAHOO",
+            ["1", "2", "__not_returning__", "unknown"],
+        )
+        processor_handler.translate_yahoo_migration_mappings(
+            "canon", {"1": "390.l.1.t.4", "2": "GUID2"}
+        )
+        item = migration_table.get_item(
+            Key={"PK": "LEAGUE#canon", "SK": "PLATFORM_MIGRATION#ESPN#YAHOO"}
+        )["Item"]
+        assert [e["newPlatformOwnerId"] for e in item["data"]] == [
+            "390.l.1.t.4",
+            "GUID2",
+            "__not_returning__",
+            "unknown",
+        ]
+        assert item["yahoo_owner_ids_resolved"] is True
+
+        # A later run (whose latest season may have reassigned slots) changes nothing.
+        processor_handler.translate_yahoo_migration_mappings(
+            "canon", {"390.l.1.t.4": "WRONG", "1": "WRONG"}
+        )
+        again = migration_table.get_item(
+            Key={"PK": "LEAGUE#canon", "SK": "PLATFORM_MIGRATION#ESPN#YAHOO"}
+        )["Item"]
+        assert again["data"] == item["data"]
+
+    def test_non_yahoo_destination_untouched(self, processor_handler, migration_table):
+        _put_mapping(migration_table, "PLATFORM_MIGRATION#ESPN#SLEEPER", ["1"])
+        processor_handler.translate_yahoo_migration_mappings("canon", {"1": "X"})
+        item = migration_table.get_item(
+            Key={"PK": "LEAGUE#canon", "SK": "PLATFORM_MIGRATION#ESPN#SLEEPER"}
+        )["Item"]
+        assert item["data"][0]["newPlatformOwnerId"] == "1"
+        assert "yahoo_owner_ids_resolved" not in item
+
+    def test_empty_mapping_skips_query(self, processor_handler):
+        with patch.object(processor_handler, "table") as table:
+            processor_handler.translate_yahoo_migration_mappings("canon", {})
+        table.query.assert_not_called()
+
+    def test_concurrent_translation_is_tolerated(self, processor_handler):
+        import botocore.exceptions
+
+        table = MagicMock()
+        table.query.return_value = {
+            "Items": [{"SK": "PLATFORM_MIGRATION#ESPN#YAHOO", "data": []}]
+        }
+        table.update_item.side_effect = botocore.exceptions.ClientError(
+            {"Error": {"Code": "ConditionalCheckFailedException"}}, "UpdateItem"
+        )
+        with patch.object(processor_handler, "table", table):
+            processor_handler.translate_yahoo_migration_mappings("canon", {"1": "X"})
+
+    def test_other_errors_raise(self, processor_handler):
+        import botocore.exceptions
+
+        table = MagicMock()
+        table.query.return_value = {
+            "Items": [{"SK": "PLATFORM_MIGRATION#ESPN#YAHOO", "data": []}]
+        }
+        table.update_item.side_effect = botocore.exceptions.ClientError(
+            {"Error": {"Code": "ProvisionedThroughputExceededException"}}, "UpdateItem"
+        )
+        with (
+            patch.object(processor_handler, "table", table),
+            pytest.raises(botocore.exceptions.ClientError),
+        ):
+            processor_handler.translate_yahoo_migration_mappings("canon", {"1": "X"})
+
+
+class TestYahooOwnerIdsBySeason:
+    def test_raw_to_stable_per_season(self, processor_handler):
+        grouped = processor_handler._register_yahoo_raw_data(
+            _identity_league_raw(_IDENTITY_SEASONS), {}, {}
+        )
+        by_season = grouped["yahoo_owner_ids_by_season"]
+        # Slot 3 in 2020 is Manager A, who started in slot 1 in 2019.
+        assert by_season["2020"]["3"] == by_season["2019"]["1"] == "390.l.1.t.1"
+        # Slot 2 in 2020 is a new manager (Manager C).
+        assert by_season["2020"]["2"] == "399.l.1.t.2"

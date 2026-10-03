@@ -315,3 +315,29 @@ Feature: Onboard-to-processed pipeline (backend/league-onboarding, backend/data-
     Then the lineup backfill outcome is "throttled"
     And the onboarded league has lineup-pending seasons "2024"
     And a throttled lineup backfill retry is queued for the onboarded league
+
+  Scenario: A Yahoo league whose manager slots change across seasons keeps one owner per person (backend/data-processing-pipeline, backend/league-onboarding)
+    # Yahoo masks every guid, so per-league manager_ids are slots. Slot 2 changes hands between
+    # seasons (Manager B wins 2023, leaves; Manager C takes slot 2 and wins 2024) and Managers A
+    # and D swap slots. Each title must land on its real winner, not the slot.
+    Given Yahoo player metadata and stats are cached in S3
+    When the onboarder runs an ONBOARD for "YAHOO" league "436" with fixture "yahoo/raw_data_slot_changes.json"
+    Then the onboarder returns status 200
+    When the processor processes the onboarded league
+    Then a JOB_STATUS "COMPLETED" exists for the job
+    And the "STANDINGS#2023" champion is "Manager B"
+    And the "STANDINGS#2024" champion is "Manager C"
+    And the "STANDINGS#2023" and "STANDINGS#2024" champions have different owner ids
+    And "Manager A" has the same owner id in "STANDINGS#2023" and "STANDINGS#2024"
+    And "Manager D" has the same owner id in "STANDINGS#2023" and "STANDINGS#2024"
+
+  Scenario: A latest-season Yahoo refresh keeps each manager's owner id (backend/data-processing-pipeline)
+    Given Yahoo player metadata and stats are cached in S3
+    When the onboarder runs an ONBOARD for "YAHOO" league "437" with fixture "yahoo/raw_data_slot_changes.json"
+    And the processor processes the onboarded league
+    And I remember the owner ids in "STANDINGS#2024"
+    When the onboarder runs a REFRESH for "YAHOO" league "437" with fixture "yahoo/raw_data_slot_changes_2024.json"
+    And the processor processes the onboarded league
+    Then a JOB_STATUS "COMPLETED" exists for the job
+    And the owner ids in "STANDINGS#2024" are unchanged
+    And "Manager A" has the same owner id in "STANDINGS#2023" and "STANDINGS#2024"
