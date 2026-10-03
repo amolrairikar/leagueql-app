@@ -117,6 +117,30 @@ class TestParseCorsOrigins:
         ) == ["http://localhost:5173", "https://leagueql.com"]
 
 
+class TestCorsPreflight:
+    """Every HTTP method a route uses must pass the CORS preflight from the SPA origin."""
+
+    @pytest.mark.parametrize(
+        ("method", "path"),
+        [
+            ("PUT", "/leagues/123/auto-refresh"),
+            ("DELETE", "/leagues/123"),
+            ("POST", "/leagues/123"),
+        ],
+    )
+    def test_preflight_allows_route_methods(self, client, method, path):
+        resp = client.options(
+            path,
+            headers={
+                "Origin": "https://leagueql.com",
+                "Access-Control-Request-Method": method,
+            },
+        )
+
+        assert resp.status_code == 200
+        assert method in resp.headers["access-control-allow-methods"]
+
+
 class TestGetLeagueEndpoint:
     def test_returns_league_data(
         self, client, mock_table, league_lookup_item, league_metadata_item

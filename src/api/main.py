@@ -186,7 +186,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=ORIGINS,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "DELETE"],
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
     # ``traceparent``/``tracestate`` allow the browser OTel SDK (frontend/observability) to send W3C
     # trace context cross-origin so the API span continues the browser's trace
     # (backend/otel-tracing); kept in lockstep with the API Gateway CORS config.
