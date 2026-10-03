@@ -52,7 +52,12 @@ def _patch_build_client(context, raw_data, pending_season=None, validate=False):
 
 
 def _run_onboarder(
-    context, platform, league_id, request_type="ONBOARD", body_extra=None
+    context,
+    platform,
+    league_id,
+    request_type="ONBOARD",
+    body_extra=None,
+    event_extra=None,
 ):
     context.correlation_id = str(uuid.uuid4())
     body = {"leagueId": league_id, "platform": platform}
@@ -62,6 +67,7 @@ def _run_onboarder(
         "requestType": request_type,
         "correlation_id": context.correlation_id,
         "body": body,
+        **(event_extra or {}),
     }
     if getattr(context, "canonical", None):
         event["canonicalLeagueId"] = context.canonical
@@ -178,6 +184,20 @@ def step_refresh(context, platform, league_id, fixture):
     raw_data = load_fixture(*fixture.split("/"))
     _patch_build_client(context, raw_data)
     _run_onboarder(context, platform, league_id, "REFRESH")
+
+
+@when(
+    'the onboarder runs a backfill REFRESH for "{platform}" league "{league_id}" '
+    'with fixture "{fixture}"'
+)
+def step_backfill_refresh(context, platform, league_id, fixture):
+    # scripts/utility_scripts/backfill_leagues.py: a REFRESH with reprocessAll, so the processor
+    # rebuilds every season from the raw files already in S3.
+    raw_data = load_fixture(*fixture.split("/"))
+    _patch_build_client(context, raw_data)
+    _run_onboarder(
+        context, platform, league_id, "REFRESH", event_extra={"reprocessAll": True}
+    )
 
 
 @when("the onboarder fails to reach the platform")
@@ -334,21 +354,52 @@ def step_has_multiple(context, sk_prefix):
     )
 
 
-@when("the processor processes the onboarded league")
-def step_process(context):
+def _invoke_processor(context, version_id=None):
     manifest_key = f"raw-api-data/{context.canonical}/manifest.json"
+    s3_object = {"key": manifest_key}
+    if version_id:
+        s3_object["versionId"] = version_id
     s3_event = {
         "Records": [
             {
                 "userIdentity": {"principalId": "AROAEXAMPLE:tester"},
-                "s3": {
-                    "bucket": {"name": context.bucket_name},
-                    "object": {"key": manifest_key},
-                },
+                "s3": {"bucket": {"name": context.bucket_name}, "object": s3_object},
             }
         ]
     }
     context.processor_handler.lambda_handler(s3_event, None)
+
+
+@when("the processor processes the onboarded league")
+def step_process(context):
+    _invoke_processor(context)
+
+
+@when("I remember the current manifest version")
+def step_remember_manifest_version(context):
+    context.remembered_manifest_version = context.s3.head_object(
+        Bucket=context.bucket_name,
+        Key=f"raw-api-data/{context.canonical}/manifest.json",
+    )["VersionId"]
+
+
+@when('the lineup backfill republishes season "{season}" before the processor runs')
+def step_lineup_backfill_republishes(context, season):
+    # The real self-copy: replaces the manifest's metadata with reprocess_seasons=<season>.
+    context.lineup_backfill._publish_season(context.canonical, season)
+
+
+@when("the processor processes the remembered manifest version")
+def step_process_remembered_version(context):
+    # The S3 event of the remembered write, delivered after the manifest was overwritten.
+    _invoke_processor(context, version_id=context.remembered_manifest_version)
+
+
+@when('the "{sk}" item is deleted')
+def step_delete_league_item(context, sk):
+    context.ddb_resource.Table(context.table_name).delete_item(
+        Key={"PK": f"LEAGUE#{context.canonical}", "SK": sk}
+    )
 
 
 @then("the onboarder returns status {code:d}")
