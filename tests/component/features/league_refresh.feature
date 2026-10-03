@@ -12,6 +12,26 @@ Feature: League refresh reprocesses in place (backend/league-refresh)
     Then a JOB_STATUS "COMPLETED" exists for the job
     And the league has exactly 3 "MATCHUPS#2024" item(s)
 
+  Scenario: A refetch-all backfill refresh re-fetches every season and keeps METADATA
+    # backfill_leagues.py --refetch-all: the league was onboarded with only 2024, and the
+    # refresh re-fetches its full history (2023 + 2024) under the same canonical, rebuilding
+    # every season without overwriting METADATA.
+    When the onboarder runs an ONBOARD for "ESPN" league "840" with fixture "espn/raw_data_2024.json"
+    And the default caller is a member of the onboarded league
+    And the processor processes the onboarded league
+    Then the league has exactly 0 "STANDINGS#2023" item(s)
+    And the league has at least one "MATCHUPS#2024" item
+    When the onboarder runs a refetch-all backfill REFRESH for "ESPN" league "840" with fixture "espn/raw_data_multiseason.json"
+    Then the onboarder returns status 200
+    And the platform client was built to fetch the full season history
+    And raw season files exist in S3 for seasons "2023,2024"
+    And the manifest asks the processor to rebuild every season
+    When the processor processes the onboarded league
+    Then a JOB_STATUS "COMPLETED" exists for the job
+    And the league has at least one "STANDINGS#2023" item
+    And the league has at least one "STANDINGS#2024" item
+    And the default caller is still a member of the onboarded league
+
   Scenario: A refresh within the weekly cooldown is rejected
     Given a LEAGUE_LOOKUP exists for league "200" platform "SLEEPER" canonical "canon-2"
     And league "canon-2" was last refreshed 2 days ago

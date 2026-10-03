@@ -247,6 +247,10 @@ class TestParseArgs:
         )
         assert args.platforms == ("SLEEPER", "ESPN")
 
+    def test_refetch_all_defaults_off(self, backfill):
+        assert backfill.parse_args([]).refetch_all is False
+        assert backfill.parse_args(["--refetch-all"]).refetch_all is True
+
     def test_rejects_unknown_platform(self, backfill):
         with pytest.raises(SystemExit):
             backfill.parse_args(["--platform", "nfl"])
@@ -287,6 +291,17 @@ class TestMain:
         for payload in payloads:
             assert payload["requestType"] == "REFRESH"
             assert payload["reprocessAll"] is True
+            # Default mode reprocesses S3 raw data; it does not re-fetch history.
+            assert payload["refetchAll"] is False
+
+    def test_refetch_all_flag_sends_refetch_all(self, backfill, clients):
+        # backend/sleeper-transactions: --refetch-all re-fetches every season from the platform.
+        _, lam = clients
+        backfill.main(["--platform", "ESPN", "--refetch-all", "--execute", "--yes"])
+        payload = json.loads(lam.invoke.call_args_list[0].kwargs["Payload"])
+        assert payload["requestType"] == "REFRESH"
+        assert payload["reprocessAll"] is True
+        assert payload["refetchAll"] is True
 
     def test_sleeper_payload_has_no_owner_or_season(self, backfill, clients):
         _, lam = clients
@@ -310,3 +325,11 @@ class TestMain:
         monkeypatch.setattr("builtins.input", lambda _: "n")
         backfill.main(["--platform", "SLEEPER", "--execute"])
         lam.invoke.assert_not_called()
+
+    def test_confirmation_prompt_names_refetch_mode(
+        self, backfill, clients, monkeypatch
+    ):
+        prompts = []
+        monkeypatch.setattr("builtins.input", lambda msg: prompts.append(msg) or "n")
+        backfill.main(["--platform", "SLEEPER", "--refetch-all", "--execute"])
+        assert "re-fetch ALL seasons" in prompts[0]

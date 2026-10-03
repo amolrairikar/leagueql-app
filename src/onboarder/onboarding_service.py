@@ -33,6 +33,9 @@ class OnboardingService:
             S3 location as the original data and update the same DynamoDB metadata item as the original.
         reprocess_all: When True, tags the manifest so the processor rebuilds every
             season's views (used by the backend/sleeper-transactions backfill); default False.
+        refetch_all: When True on a REFRESH, the platform client resolves the league's full
+            season history instead of only the latest season, so every season's raw data is
+            re-fetched (backend/league-refresh backfill); default False.
 
     Methods:
         __init__(league_id, platform, request_type, latest_season, espn_s2_cookie, swid_cookie, canonical_league_id): Constructor.
@@ -54,6 +57,7 @@ class OnboardingService:
         owner_user_id: str | None = None,
         reprocess_all: bool = False,
         auto_refresh: bool | None = None,
+        refetch_all: bool = False,
     ):
         """Constructor."""
         self.league_id = league_id
@@ -62,6 +66,7 @@ class OnboardingService:
         self.is_new_season_refresh = is_new_season_refresh
         self.owner_user_id = owner_user_id
         self.reprocess_all = reprocess_all
+        self.refetch_all = refetch_all
         # Per-league scheduled auto-refresh opt-in (backend/scheduled-league-auto-refresh).
         # None means "not specified" (e.g. a scheduled refresh) — the flag is left untouched;
         # a bool is an explicit user choice written onto METADATA.
@@ -74,7 +79,8 @@ class OnboardingService:
             espn_s2_cookie=espn_s2_cookie,
             swid_cookie=swid_cookie,
             owner_user_id=owner_user_id,
-            is_refresh=(request_type in ("REFRESH", "MIGRATE")),
+            # A refetch-all REFRESH keeps the REFRESH write path but fetches every season.
+            is_refresh=(request_type in ("REFRESH", "MIGRATE")) and not refetch_all,
         )
         self.canonical_league_id = canonical_league_id or str(uuid.uuid4())
 

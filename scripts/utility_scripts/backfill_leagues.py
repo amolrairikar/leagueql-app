@@ -31,9 +31,18 @@ canonical league id), the script asynchronously invokes the onboarder Lambda wit
     views from the raw season files already in S3, not just the latest season the normal
     refresh diff would pick.
 
-The historical raw data is already in S3 from the original onboards, so this is a reprocess
-of existing raw data (the most recent season is also re-fetched as part of the refresh).
+The historical raw data is already in S3 from the original onboards, so by default this is a
+reprocess of existing raw data (the most recent season is also re-fetched as part of the refresh).
 Idempotent — re-running simply rewrites the same items.
+
+Refetch-all mode
+----------------
+Pass ``--refetch-all`` to also send ``refetchAll=True``. The onboarder then re-fetches **every**
+season of each league's history from the platform API, overwrites each season's raw S3 file, and
+rebuilds every season's views. METADATA is still preserved because the request is still a
+REFRESH. Use this when historical raw data itself is wrong (e.g. after an onboarder fetch fix such
+as ESPN 2018 box scores). It makes far more platform API calls (ESPN fetches every week of every
+season), so prefer targeting one platform or league and pass ``--throttle-seconds``.
 
 Environment & names
 -------------------
@@ -62,6 +71,10 @@ Usage
     # Target a single league by canonical ID (searches the selected platforms)
     pipenv run python scripts/utility_scripts/backfill_leagues.py \
         --environment prod --canonical-league-id <uuid> --execute
+
+    # Re-fetch every season of one ESPN league from the platform (not just reprocess S3)
+    pipenv run python scripts/utility_scripts/backfill_leagues.py \
+        --platform ESPN --league-id 123456 --refetch-all --throttle-seconds 5 --execute
 """
 
 import argparse
@@ -378,6 +391,14 @@ def parse_args(argv=None):
             "lookup (searches the selected platforms). Takes precedence over --league-id."
         ),
     )
+    p.add_argument(
+        "--refetch-all",
+        action="store_true",
+        help=(
+            "Re-fetch every season of each league's history from the platform API "
+            "(refetchAll) instead of only reprocessing the raw data already in S3."
+        ),
+    )
     p.add_argument("--region", default=None, help="AWS region (optional).")
     p.add_argument(
         "--throttle-seconds",
@@ -417,6 +438,12 @@ def main(argv=None):
     ddb_client = session.client("dynamodb")
     lambda_client = session.client("lambda")
     platforms_label = "/".join(args.platforms)
+    mode_label = (
+        "re-fetch ALL seasons from platform APIs"
+        if args.refetch_all
+        else "reprocess existing raw data"
+    )
+    logger.info("Mode: %s", mode_label)
 
     single_league = bool(args.league_id or args.canonical_league_id)
     if single_league:
@@ -476,7 +503,7 @@ def main(argv=None):
     if not args.yes:
         confirm = input(
             f"Re-onboard {len(leagues)} {platforms_label} league(s) in "
-            f"'{args.environment}'? [y/N] "
+            f"'{args.environment}' ({mode_label})? [y/N] "
         )
         if confirm.strip().lower() not in ("y", "yes"):
             logger.info("Aborted.")
@@ -495,6 +522,7 @@ def main(argv=None):
                 correlation_id=correlation_id,
                 owner_user_id=league["owner_user_id"],
                 reprocess_all=True,
+                refetch_all=args.refetch_all,
             )
             status_code = response.get("StatusCode")
             if status_code != 202:

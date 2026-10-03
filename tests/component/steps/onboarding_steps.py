@@ -40,12 +40,13 @@ class _FakeClient:
 
 
 def _patch_build_client(context, raw_data, pending_season=None, validate=False):
+    def _build(self, **kwargs):
+        # Record how the client was built (e.g. is_refresh) for scenarios that assert on it.
+        context.build_client_kwargs = kwargs
+        return _FakeClient(raw_data, pending_season=pending_season, validate=validate)
+
     patcher = patch.object(
-        context.onboarding_service_mod.OnboardingService,
-        "_build_client",
-        lambda self, **kwargs: _FakeClient(
-            raw_data, pending_season=pending_season, validate=validate
-        ),
+        context.onboarding_service_mod.OnboardingService, "_build_client", _build
     )
     patcher.start()
     context._patches.append(patcher)
@@ -198,6 +199,58 @@ def step_backfill_refresh(context, platform, league_id, fixture):
     _run_onboarder(
         context, platform, league_id, "REFRESH", event_extra={"reprocessAll": True}
     )
+
+
+@when(
+    'the onboarder runs a refetch-all backfill REFRESH for "{platform}" league '
+    '"{league_id}" with fixture "{fixture}"'
+)
+def step_refetch_all_refresh(context, platform, league_id, fixture):
+    # backfill_leagues.py --refetch-all: a REFRESH with refetchAll, so the platform client
+    # resolves the league's full season history (backend/league-refresh).
+    raw_data = load_fixture(*fixture.split("/"))
+    _patch_build_client(context, raw_data)
+    _run_onboarder(
+        context, platform, league_id, "REFRESH", event_extra={"refetchAll": True}
+    )
+
+
+@then("the platform client was built to fetch the full season history")
+def step_client_full_history(context):
+    assert context.build_client_kwargs["is_refresh"] is False, (
+        context.build_client_kwargs
+    )
+
+
+@then('raw season files exist in S3 for seasons "{seasons}"')
+def step_raw_season_files(context, seasons):
+    prefix = f"raw-api-data/{context.canonical}"
+    expected = seasons.split(",")
+    for season in expected:
+        context.s3.head_object(
+            Bucket=context.bucket_name, Key=f"{prefix}/{season}.json"
+        )
+    obj = context.s3.get_object(
+        Bucket=context.bucket_name, Key=f"{prefix}/manifest.json"
+    )
+    manifest = json.loads(obj["Body"].read())
+    assert all(season in next(iter(manifest.values())) for season in expected), manifest
+
+
+@then("the manifest asks the processor to rebuild every season")
+def step_manifest_reprocess_all(context):
+    head = context.s3.head_object(
+        Bucket=context.bucket_name,
+        Key=f"raw-api-data/{context.canonical}/manifest.json",
+    )
+    assert head["Metadata"].get("reprocess_all") == "true", head["Metadata"]
+
+
+@then("the default caller is still a member of the onboarded league")
+def step_default_caller_still_member(context):
+    item = get_item(context, f"LEAGUE#{context.canonical}", "METADATA")
+    assert item, "METADATA missing"
+    assert getattr(context, "default_user", "owner_user") in item.get("members", set())
 
 
 @when("the onboarder fails to reach the platform")

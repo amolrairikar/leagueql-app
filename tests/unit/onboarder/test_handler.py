@@ -3,6 +3,7 @@
 import json
 from unittest.mock import ANY, MagicMock, patch
 
+import pytest
 import requests
 
 
@@ -395,6 +396,58 @@ class TestLambdaHandlerRunErrors:
         ) as mock_cls:
             onboarder_handler.lambda_handler(event, MagicMock())
         assert mock_cls.call_args.kwargs["reprocess_all"] is True
+
+    def test_refetch_all_forwarded_on_refresh_and_forces_reprocess(
+        self, onboarder_handler
+    ):
+        # backend/league-refresh: a refetch-all REFRESH re-fetches every season and must
+        # rebuild every season's views even without reprocessAll on the payload.
+        event = {
+            "requestType": "REFRESH",
+            "canonicalLeagueId": "canonical-abc",
+            "refetchAll": True,
+            "body": {"leagueId": "123", "platform": "SLEEPER"},
+        }
+        svc = MagicMock()
+        svc.canonical_league_id = "canonical-abc"
+        with patch.object(
+            onboarder_handler, "OnboardingService", return_value=svc
+        ) as mock_cls:
+            onboarder_handler.lambda_handler(event, MagicMock())
+        assert mock_cls.call_args.kwargs["refetch_all"] is True
+        assert mock_cls.call_args.kwargs["reprocess_all"] is True
+
+    def test_refetch_all_defaults_false(self, onboarder_handler):
+        event = {
+            "requestType": "REFRESH",
+            "canonicalLeagueId": "canonical-abc",
+            "body": {"leagueId": "123", "platform": "SLEEPER"},
+        }
+        svc = MagicMock()
+        svc.canonical_league_id = "canonical-abc"
+        with patch.object(
+            onboarder_handler, "OnboardingService", return_value=svc
+        ) as mock_cls:
+            onboarder_handler.lambda_handler(event, MagicMock())
+        assert mock_cls.call_args.kwargs["refetch_all"] is False
+        assert mock_cls.call_args.kwargs["reprocess_all"] is False
+
+    @pytest.mark.parametrize("request_type", ["ONBOARD", "MIGRATE"])
+    def test_refetch_all_ignored_outside_refresh(self, onboarder_handler, request_type):
+        event = {
+            "requestType": request_type,
+            "canonicalLeagueId": "canonical-abc",
+            "refetchAll": True,
+            "body": {"leagueId": "123", "platform": "ESPN", "season": "2024"},
+        }
+        svc = MagicMock()
+        svc.canonical_league_id = "canonical-abc"
+        with patch.object(
+            onboarder_handler, "OnboardingService", return_value=svc
+        ) as mock_cls:
+            onboarder_handler.lambda_handler(event, MagicMock())
+        assert mock_cls.call_args.kwargs["refetch_all"] is False
+        assert mock_cls.call_args.kwargs["reprocess_all"] is False
 
 
 class TestLambdaHandlerNoStartedSeasons:
