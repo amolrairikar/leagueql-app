@@ -1,4 +1,5 @@
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { defineFeature, loadFeature } from 'jest-cucumber';
 import { expect } from 'vitest';
 
@@ -147,5 +148,54 @@ defineFeature(feature, (test) => {
     and(/^I do not see the "(.*)" action$/, (label) => {
       expect(screen.queryByText(label)).not.toBeInTheDocument();
     });
+    and(/^I do not see the "(.*)" action$/, (label) => {
+      expect(screen.queryByText(label)).not.toBeInTheDocument();
+    });
+  });
+
+  test('An auto-refreshed ESPN owner whose saved cookies were rejected sees Update ESPN Cookies', ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    given(
+      'I am the owner of the current auto-refreshed ESPN league whose saved cookies ESPN rejected',
+      () => {
+        server.use(
+          leagueMetadata({
+            is_owner: true,
+            auto_refresh_enabled: true,
+            espn_reauth_required: true,
+            espn_credentials_failed_at: '2026-10-01T09:00:00+00:00',
+          }),
+        );
+      },
+    );
+    when('I render the sidebar', () => renderSidebar(espnLeague));
+    then(/^I see the "(.*)" action$/, async (label) => {
+      expect(await screen.findByText(label)).toBeInTheDocument();
+    });
+    and(/^I see the "(.*)" action$/, async (label) => {
+      expect(await screen.findByText(label)).toBeInTheDocument();
+    });
+    and(/^I do not see the "(.*)" action$/, (label) => {
+      expect(screen.queryByText(label)).not.toBeInTheDocument();
+    });
+    when(/^I open the "(.*)" action$/, async (label) => {
+      await userEvent.click(screen.getByText(label));
+    });
+    then(
+      'the cookie dialog opens with automatic refresh already checked',
+      async () => {
+        const dialog = await screen.findByRole('dialog');
+        expect(
+          within(dialog).getByRole('heading', { name: 'Update ESPN Cookies' }),
+        ).toBeInTheDocument();
+        expect(
+          within(dialog).getByLabelText('Enable automatic weekly refresh'),
+        ).toBeChecked();
+      },
+    );
   });
 });

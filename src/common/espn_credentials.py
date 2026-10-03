@@ -13,6 +13,7 @@ Cookie values are KMS-encrypted at rest and never returned to the browser, logge
 """
 
 import base64
+import datetime
 import logging
 import time
 from typing import Any
@@ -83,10 +84,62 @@ class EspnCredentialClient:
         Raises:
             ESPNReauthRequired: when the user has no stored ``ESPN_CREDENTIALS`` item.
         """
+        swid, espn_s2, _ = self.get_stored_credentials(clerk_user_id)
+        return swid, espn_s2
+
+    def get_stored_credentials(self, clerk_user_id: str) -> tuple[str, str, int | None]:
+        """Return a user's decrypted ``(swid, espn_s2, updated_at)`` from a single read.
+
+        ``updated_at`` identifies the stored version, so a caller whose cookies are later rejected
+        can flag exactly that version with :meth:`mark_auth_failed`.
+
+        Raises:
+            ESPNReauthRequired: when the user has no stored ``ESPN_CREDENTIALS`` item.
+        """
         item = self.get_credential_item(clerk_user_id)
         if item is None:
             raise ESPNReauthRequired("No stored ESPN cookies for user")
-        return self.decrypt(item["swid"]), self.decrypt(item["espn_s2"])
+        updated_at = item.get("updated_at")
+        return (
+            self.decrypt(item["swid"]),
+            self.decrypt(item["espn_s2"]),
+            int(updated_at) if updated_at is not None else None,
+        )
+
+    def mark_auth_failed(
+        self, clerk_user_id: str, expected_updated_at: int | None
+    ) -> bool:
+        """Flag a user's stored cookies as rejected by ESPN (``auth_failed_at``).
+
+        Conditional on the item still holding the version the caller used (``updated_at``), so
+        cookies the user re-stored mid-run are never flagged. Re-storing via
+        :meth:`store_credentials` replaces the item and so clears the flag
+        (backend/espn-credential-storage).
+
+        Returns:
+            True when the flag was written, False when the item was missing or had been replaced.
+        """
+        if expected_updated_at is None:
+            return False
+        try:
+            self._table.update_item(
+                Key={"PK": f"USER#{clerk_user_id}", "SK": "ESPN_CREDENTIALS"},
+                UpdateExpression="SET auth_failed_at = :f",
+                ConditionExpression="attribute_exists(PK) AND updated_at = :u",
+                ExpressionAttributeValues={
+                    ":f": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                    ":u": expected_updated_at,
+                },
+            )
+        except botocore.exceptions.ClientError as e:
+            if (
+                e.response.get("Error", {}).get("Code")
+                == "ConditionalCheckFailedException"
+            ):
+                logger.info("ESPN credentials changed since use; not flagging them")
+                return False
+            raise
+        return True
 
     def delete_credentials(self, clerk_user_id: str) -> None:
         """Delete a user's stored ``ESPN_CREDENTIALS`` item.

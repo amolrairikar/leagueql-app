@@ -147,6 +147,14 @@ export interface GetLeagueResponse {
      */
     auto_refresh_enabled?: boolean;
     /**
+     * True only for the owner of an auto-refresh-enabled ESPN league whose stored ESPN
+     * cookies were rejected by ESPN during a scheduled refresh, or are missing
+     * (backend/league-metadata). Scheduled refresh is paused until they re-enter them.
+     */
+    espn_reauth_required?: boolean;
+    /** ISO 8601 timestamp of when ESPN rejected the stored cookies, or null. */
+    espn_credentials_failed_at?: string | null;
+    /**
      * Yahoo seasons whose weekly lineups/player points are still being backfilled
      * (backend/yahoo-lineup-backfill). Empty/absent for every other league.
      */

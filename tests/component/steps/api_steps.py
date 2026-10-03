@@ -734,3 +734,29 @@ def step_assert_metadata_auto_refresh(context, canonical, value):
     assert item is not None, "expected a METADATA item"
     expected = value == "true"
     assert bool(item.get("auto_refresh_enabled")) == expected, item
+
+
+@given('league "{canonical}" is opted into auto-refresh')
+def step_league_opted_in(context, canonical):
+    context.main.table.update_item(
+        Key={"PK": f"LEAGUE#{canonical}", "SK": "METADATA"},
+        UpdateExpression="SET auto_refresh_enabled = :ar",
+        ExpressionAttributeValues={":ar": True},
+    )
+
+
+@given("the default user's stored ESPN cookies were rejected by ESPN")
+def step_seed_rejected_espn_credentials(context):
+    # A prior scheduled refresh flagged these cookies (backend/espn-credential-storage); the
+    # read-side checks only need the flag, not real KMS ciphertext.
+    put_item(
+        context,
+        {
+            "PK": f"USER#{context.default_user}",
+            "SK": "ESPN_CREDENTIALS",
+            "swid": "ciphertext-swid",
+            "espn_s2": "ciphertext-s2",
+            "updated_at": 1,
+            "auth_failed_at": "2026-10-01T09:00:00+00:00",
+        },
+    )

@@ -15,10 +15,18 @@ export interface OwnershipState {
    * False for the bypass cases and on a failed fetch.
    */
   autoRefreshEnabled: boolean;
+  /**
+   * Whether the owner's stored ESPN cookies were rejected (or are missing) for this
+   * auto-refreshed ESPN league (`espn_reauth_required`), so scheduled refresh is
+   * paused until they re-enter them. Drives the re-auth banner and the sidebar's
+   * Update ESPN Cookies action. False for the bypass cases and on a failed fetch.
+   */
+  espnReauthRequired: boolean;
 }
 
 /**
- * Reads the current league's `is_owner` and `auto_refresh_enabled` flags (from
+ * Reads the current league's `is_owner`, `auto_refresh_enabled`, and
+ * `espn_reauth_required` flags (from
  * `GET /leagues/{id}`) so the sidebar can show owner-only affordances only to the
  * owner and hide the manual refresh action for auto-refreshed leagues. Demo mode
  * and the "no league connected" case bypass the fetch (the demo sidebar uses a
@@ -32,8 +40,18 @@ export function useIsOwner(): OwnershipState {
 
   const [state, setState] = useState<OwnershipState>(
     bypass
-      ? { loading: false, isOwner: true, autoRefreshEnabled: false }
-      : { loading: true, isOwner: false, autoRefreshEnabled: false },
+      ? {
+          loading: false,
+          isOwner: true,
+          autoRefreshEnabled: false,
+          espnReauthRequired: false,
+        }
+      : {
+          loading: true,
+          isOwner: false,
+          autoRefreshEnabled: false,
+          espnReauthRequired: false,
+        },
   );
 
   useEffect(() => {
@@ -46,6 +64,7 @@ export function useIsOwner(): OwnershipState {
             loading: false,
             isOwner: res.data.is_owner === true,
             autoRefreshEnabled: res.data.auto_refresh_enabled === true,
+            espnReauthRequired: res.data.espn_reauth_required === true,
           });
       })
       .catch(() => {
@@ -54,6 +73,7 @@ export function useIsOwner(): OwnershipState {
             loading: false,
             isOwner: false,
             autoRefreshEnabled: false,
+            espnReauthRequired: false,
           });
       });
     return () => {

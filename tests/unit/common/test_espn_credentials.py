@@ -78,6 +78,72 @@ class TestGetCredentials:
             _client(table=table).get_credentials("user_1")
 
 
+class TestGetStoredCredentials:
+    def test_returns_cookies_and_version(self):
+        table = MagicMock()
+        table.get_item.return_value = {
+            "Item": {"swid": "c3dpZA==", "espn_s2": "czI=", "updated_at": 1700}
+        }
+        kms = MagicMock()
+        kms.decrypt.side_effect = [
+            {"Plaintext": b"{SWID}"},
+            {"Plaintext": b"s2-cookie"},
+        ]
+        client = _client(table=table, kms_client=kms)
+
+        assert client.get_stored_credentials("user_1") == ("{SWID}", "s2-cookie", 1700)
+
+    def test_missing_updated_at_returns_none_version(self):
+        table = MagicMock()
+        table.get_item.return_value = {"Item": {"swid": "c3dpZA==", "espn_s2": "czI="}}
+        kms = MagicMock()
+        kms.decrypt.return_value = {"Plaintext": b"x"}
+        assert _client(table=table, kms_client=kms).get_stored_credentials(
+            "user_1"
+        ) == ("x", "x", None)
+
+    def test_missing_item_raises_reauth(self):
+        table = MagicMock()
+        table.get_item.return_value = {}
+        with pytest.raises(ESPNReauthRequired):
+            _client(table=table).get_stored_credentials("user_1")
+
+
+class TestMarkAuthFailed:
+    def test_flags_matching_version(self):
+        table = MagicMock()
+        assert _client(table=table).mark_auth_failed("user_1", 1700) is True
+
+        kwargs = table.update_item.call_args.kwargs
+        assert kwargs["Key"] == {"PK": "USER#user_1", "SK": "ESPN_CREDENTIALS"}
+        assert kwargs["UpdateExpression"] == "SET auth_failed_at = :f"
+        assert kwargs["ConditionExpression"] == (
+            "attribute_exists(PK) AND updated_at = :u"
+        )
+        assert kwargs["ExpressionAttributeValues"][":u"] == 1700
+        assert kwargs["ExpressionAttributeValues"][":f"]
+
+    def test_replaced_or_missing_item_not_flagged(self):
+        table = MagicMock()
+        table.update_item.side_effect = botocore.exceptions.ClientError(
+            {"Error": {"Code": "ConditionalCheckFailedException"}}, "UpdateItem"
+        )
+        assert _client(table=table).mark_auth_failed("user_1", 1700) is False
+
+    def test_other_client_error_raises(self):
+        table = MagicMock()
+        table.update_item.side_effect = botocore.exceptions.ClientError(
+            {"Error": {"Code": "ProvisionedThroughputExceededException"}}, "UpdateItem"
+        )
+        with pytest.raises(botocore.exceptions.ClientError):
+            _client(table=table).mark_auth_failed("user_1", 1700)
+
+    def test_unknown_version_is_noop(self):
+        table = MagicMock()
+        assert _client(table=table).mark_auth_failed("user_1", None) is False
+        table.update_item.assert_not_called()
+
+
 class TestDeleteCredentials:
     def test_deletes_item_by_key(self):
         table = MagicMock()

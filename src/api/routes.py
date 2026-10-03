@@ -333,13 +333,27 @@ def get_league(
     )
     record_league_access(canonical_league_id, metadata)
     seasons = get_league_seasons(canonical_league_id=canonical_league_id)
+    is_owner = metadata.get("owner_user_id") == clerk_user_id
+    # Tell the owner of an auto-refreshed ESPN league when its stored cookies were rejected (or
+    # are missing), since the scheduled refresh can't proceed until they re-enter them
+    # (backend/league-metadata). Never computed for other callers, so nothing leaks to members.
+    espn_reauth_required, espn_credentials_failed_at = False, None
+    effective_platform = metadata.get("active_platform") or metadata.get("platform")
+    if (
+        is_owner
+        and effective_platform == Platform.ESPN.value
+        and metadata.get("auto_refresh_enabled")
+    ):
+        espn_reauth_required, espn_credentials_failed_at = (
+            espn_credentials.get_reauth_status(clerk_user_id)
+        )
     response.headers["Cache-Control"] = "no-store"
     return APIResponse(
         detail="Found league",
         data={
             "seasons": seasons,
             "league_name": metadata.get("league_name"),
-            "is_owner": metadata.get("owner_user_id") == clerk_user_id,
+            "is_owner": is_owner,
             # Frontend derives data freshness as last_refresh_at ?? onboarded_at:
             # last_refresh_at is absent until the league's first successful refresh.
             "last_refresh_at": metadata.get("last_refresh_at"),
@@ -347,6 +361,8 @@ def get_league(
             # Drives the auto-refresh checkbox prefill / sidebar toggle
             # (backend/scheduled-league-auto-refresh). Absent on older leagues → not enrolled.
             "auto_refresh_enabled": bool(metadata.get("auto_refresh_enabled")),
+            "espn_reauth_required": espn_reauth_required,
+            "espn_credentials_failed_at": espn_credentials_failed_at,
             # Yahoo seasons whose weekly lineups are still being backfilled, or whose backfill
             # couldn't finish yet (backend/yahoo-lineup-backfill); drives the lineup bell.
             "pending_lineup_seasons": sorted(

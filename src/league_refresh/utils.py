@@ -167,6 +167,24 @@ def _get_refresh_metadata(canonical_league_id: str) -> tuple[str | None, bool]:
     return owner_user_id, auto_refresh_enabled
 
 
+def _espn_credentials_rejected(owner_user_id: str) -> bool:
+    """Whether the owner's stored ESPN cookies were flagged as rejected by ESPN.
+
+    Reads only ``auth_failed_at`` from ``USER#{id} / ESPN_CREDENTIALS`` (no decrypt). The flag is
+    set when a scheduled refresh's stored cookies are rejected and cleared when the owner re-stores
+    them (backend/espn-credential-storage), so skipping while it is set never strands a league.
+    """
+    response = _dynamodb_client.get_item(
+        TableName=DYNAMODB_TABLE_NAME,
+        Key={
+            "PK": {"S": f"USER#{owner_user_id}"},
+            "SK": {"S": "ESPN_CREDENTIALS"},
+        },
+        ProjectionExpression="auth_failed_at",
+    )
+    return "auth_failed_at" in response.get("Item", {})
+
+
 def get_leagues_to_refresh(current_season: int) -> list[dict]:
     """
     Enumerates the Sleeper, Yahoo, and ESPN leagues to refresh for the current NFL season.
@@ -176,7 +194,8 @@ def get_leagues_to_refresh(current_season: int) -> list[dict]:
     Sleeper additionally polls pending renewals. Yahoo and ESPN are credentialed: each resolves its
     ``owner_user_id`` and ``auto_refresh_enabled`` from METADATA and is skipped when the owner is
     absent. Yahoo is always refreshed otherwise; ESPN is opt-in and additionally skipped when the
-    league has not opted into automatic refresh. ESPN dispatches carry
+    league has not opted into automatic refresh or the owner's stored cookies were flagged as
+    rejected by ESPN (re-entering them clears the flag). ESPN dispatches carry
     ``season = current_season`` (its client requires a latest season) and no cookies — the
     onboarder fetches the owner's stored cookies.
 
@@ -226,6 +245,13 @@ def get_leagues_to_refresh(current_season: int) -> list[dict]:
                 if not owner_user_id:
                     logger.info(
                         "Skipping %s league %s: no owner_user_id on METADATA",
+                        platform,
+                        league["league_id"],
+                    )
+                    continue
+                if platform == ESPN and _espn_credentials_rejected(owner_user_id):
+                    logger.info(
+                        "Skipping %s league %s: owner's stored ESPN cookies were rejected",
                         platform,
                         league["league_id"],
                     )

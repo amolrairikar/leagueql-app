@@ -21,6 +21,8 @@ export function leagueMetadata(data: {
   onboarded_at?: string;
   last_refresh_at?: string | null;
   auto_refresh_enabled?: boolean;
+  espn_reauth_required?: boolean;
+  espn_credentials_failed_at?: string | null;
   pending_lineup_seasons?: string[];
   failed_lineup_seasons?: string[];
 }) {
@@ -34,6 +36,8 @@ export function leagueMetadata(data: {
         onboarded_at: data.onboarded_at ?? null,
         last_refresh_at: data.last_refresh_at ?? null,
         auto_refresh_enabled: data.auto_refresh_enabled ?? false,
+        espn_reauth_required: data.espn_reauth_required ?? false,
+        espn_credentials_failed_at: data.espn_credentials_failed_at ?? null,
         pending_lineup_seasons: data.pending_lineup_seasons ?? [],
         failed_lineup_seasons: data.failed_lineup_seasons ?? [],
       },

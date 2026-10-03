@@ -104,7 +104,7 @@ export function AppSidebar() {
   const [refreshLeagueOpen, setRefreshLeagueOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
 
-  const { isOwner, autoRefreshEnabled } = useIsOwner();
+  const { isOwner, autoRefreshEnabled, espnReauthRequired } = useIsOwner();
 
   const demoMode = isDemoMode();
 
@@ -287,6 +287,27 @@ export function AppSidebar() {
                             </SidebarMenuButton>
                           </SidebarMenuItem>
                         )}
+                        {/* An auto-refreshed ESPN league whose stored cookies ESPN
+                            rejected (espn_reauth_required) can't refresh until the
+                            owner re-enters them; this opens the refresh dialog in
+                            reauth mode with auto-refresh kept on. */}
+                        {currentPlatform === 'ESPN' &&
+                          autoRefreshEnabled &&
+                          espnReauthRequired && (
+                            <SidebarMenuItem>
+                              <SidebarMenuButton
+                                tooltip="Update ESPN Cookies"
+                                className="cursor-pointer"
+                                onClick={() => {
+                                  closeMobileSidebar();
+                                  setRefreshLeagueOpen(true);
+                                }}
+                              >
+                                <KeyRound />
+                                <span>Update ESPN Cookies</span>
+                              </SidebarMenuButton>
+                            </SidebarMenuItem>
+                          )}
                         {/* The complement of Refresh League: an ESPN league opted
                             into auto-refresh refreshes on a schedule, so the owner
                             gets a way to opt back out (backend/scheduled-league-auto-refresh).
@@ -450,8 +471,11 @@ export function AppSidebar() {
         onOpenChange={setDisableAutoRefreshOpen}
       />
       <RefreshLeagueDialog
+        // Remount when reauth resolves so the opt-in's initial state follows it.
+        key={espnReauthRequired ? 'reauth' : 'refresh'}
         open={refreshLeagueOpen}
         onOpenChange={setRefreshLeagueOpen}
+        reauth={espnReauthRequired}
       />
       <ExportLeagueDialog
         open={exportDialogOpen}

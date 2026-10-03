@@ -8,9 +8,11 @@ stores them after a successful opted-in fetch. This thin wrapper builds the engi
 at call time so test patches on ``main.table`` / ``main.kms_client`` stay effective.
 """
 
+import botocore.exceptions
 import main
 
 from common.espn_credentials import EspnCredentialClient
+from common.logging_utils import logger
 
 
 def _credential_client() -> EspnCredentialClient:
@@ -30,3 +32,26 @@ def delete_credentials(clerk_user_id: str) -> None:
 def store_credentials(clerk_user_id: str, swid: str, espn_s2: str) -> None:
     """Persist a user's ESPN cookies encrypted at rest, replacing any prior values."""
     _credential_client().store_credentials(clerk_user_id, swid, espn_s2)
+
+
+def get_reauth_status(clerk_user_id: str) -> tuple[bool, str | None]:
+    """Return ``(reauth_required, auth_failed_at)`` for a user's stored ESPN cookies.
+
+    Re-authentication is required when the user has no ``ESPN_CREDENTIALS`` item or ESPN rejected
+    the stored cookies during a scheduled refresh (``auth_failed_at``), per
+    backend/league-metadata. Reads only ``auth_failed_at`` (no decrypt). A read failure reports
+    no re-auth so a transient DynamoDB error never shows the owner a false alarm.
+    """
+    try:
+        response = main.table.get_item(
+            Key={"PK": f"USER#{clerk_user_id}", "SK": "ESPN_CREDENTIALS"},
+            ProjectionExpression="PK, auth_failed_at",
+        )
+    except botocore.exceptions.ClientError as e:
+        logger.error("Failed to read ESPN credential status: %s", e)
+        return False, None
+    item = response.get("Item")
+    if item is None:
+        return True, None
+    failed_at = item.get("auth_failed_at")
+    return failed_at is not None, failed_at

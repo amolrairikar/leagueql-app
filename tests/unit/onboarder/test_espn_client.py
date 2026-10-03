@@ -660,7 +660,12 @@ class TestESPNClientFetch:
                 semaphore=asyncio.Semaphore(1),
                 url_data=("2024", "users", "http://x"),
             )
-        assert result == {"season": "2024", "data_type": "users", "data": None}
+        assert result == {
+            "season": "2024",
+            "data_type": "users",
+            "data": None,
+            "error_status": None,
+        }
 
 
 class TestESPNClientFetchAll:

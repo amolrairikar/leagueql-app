@@ -1070,6 +1070,23 @@ components:
             are always auto-refreshed). Drives the connect-form checkbox prefill and the sidebar
             auto-refresh toggle. False (default) on leagues onboarded before opt-in.
           example: false
+        espn_reauth_required:
+          type: boolean
+          description: >
+            True only for the owner of an auto-refresh-enabled ESPN league whose stored ESPN
+            cookies were rejected by ESPN during a scheduled refresh, or are missing
+            (backend/league-metadata). Scheduled refresh is paused until the owner re-enters their
+            cookies. Always false for non-owners and for other leagues.
+          example: false
+        espn_credentials_failed_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: >
+            When ESPN rejected the owner's stored cookies. Set only alongside
+            espn_reauth_required for a rejection; null otherwise, including when the cookies are
+            missing.
+          example: null
         pending_lineup_seasons:
           type: array
           items:

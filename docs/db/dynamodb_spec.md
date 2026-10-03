@@ -773,6 +773,7 @@ persists until the user re-links or revokes access.
 | `token_type` | String | Yes | Yahoo token type, e.g. `bearer` |
 | `expires_at` | Number | Yes | Unix epoch seconds when the access token expires; the code refreshes within a skew before this |
 | `updated_at` | Number | Yes | Unix epoch seconds of the most recent write |
+| `auth_failed_at` | String | No | ISO 8601 timestamp of when ESPN rejected these stored cookies during a scheduled refresh; absent while they work |
 
 **Example:**
 ```json
@@ -799,7 +800,11 @@ values are **KMS-encrypted** (base64 ciphertext) with the same shared credential
 `YAHOO_OAUTH`; the plaintext never appears in logs, traces, API responses, or Terraform state. No
 TTL — deleted when the user has no ESPN league opted into auto-refresh (on opt-out or league
 delete). ESPN cookies cannot be refreshed programmatically, so an expired cookie surfaces as the
-non-paging `ESPN_AUTH` failure prompting re-entry.
+non-paging `ESPN_AUTH` failure prompting re-entry. When a scheduled refresh's stored cookies are
+rejected, the onboarder sets `auth_failed_at` (conditional on `updated_at`, so cookies re-entered
+mid-run are never flagged). The scheduled refresh skips the owner's ESPN leagues while it is set,
+and `GET /leagues/{id}` reports `espn_reauth_required` to the owner. Re-storing the cookies replaces
+the item, which clears the flag.
 
 | Attribute | Type | Required | Description |
 |---|---|---|---|
