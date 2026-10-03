@@ -30,6 +30,6 @@
 
 - [x] 6.1 Run `pipenv run ruff check --fix . && pipenv run ruff format .`, `pipenv run pytest tests/unit` (coverage near 100% on the changed modules), `pipenv run behave tests/component`, and `npx @fission-ai/openspec@latest validate --all`, and verify all of them pass.
 - [x] 6.2 Grep the change directory, new tests, fixtures, and docs to confirm no real league, team, or manager names from `sample_data/` appear in any of them.
-- [ ] 6.3 Locally re-run the processor on `sample_data/` and confirm each season's champion maps to a distinct correct person and every person has one `owner_id` across their seasons. This check stays out of the repo.
-- [ ] 6.4 After deploy, run `scripts/utility_scripts/backfill_leagues.py --platform YAHOO` on dev, check Manager History for a Yahoo league, then run it on prod with `--execute`.
+- [x] 6.3 Locally re-run the processor on `sample_data/` and confirm each season's champion maps to a distinct correct person and every person has one `owner_id` across their seasons. This check stays out of the repo.
+- [x] 6.4 After deploy, run `scripts/utility_scripts/backfill_leagues.py --platform YAHOO` on dev, check Manager History for a Yahoo league, then run it on prod with `--execute`.
 - [x] 6.5 Remove the temporary `fetch_yahoo_league_teams.py` and `yahoo_raw/` from the repo root.
