@@ -33,6 +33,7 @@ def test_invoke_onboarder_builds_payload_and_invokes():
         "correlation_id": "corr-1",
         "ownerUserId": "user_1",
         "reprocessAll": False,
+        "refetchAll": False,
         # Tracing is disabled in unit tests, so the W3C carrier is empty (backend/otel-tracing):
         # the contract is otherwise unchanged.
         "trace_context": {},
@@ -51,6 +52,24 @@ def test_invoke_onboarder_passes_reprocess_all():
         reprocess_all=True,
     )
     payload = json.loads(client.invoke.call_args.kwargs["Payload"])
+    assert payload["reprocessAll"] is True
+
+
+def test_invoke_onboarder_passes_refetch_all():
+    # backend/league-refresh: the backfill's --refetch-all rides the payload as refetchAll.
+    client = MagicMock()
+    invoke_onboarder(
+        lambda_client=client,
+        function_name="onboarder-fn",
+        body={"leagueId": "123", "platform": "ESPN", "season": "2024"},
+        request_type="REFRESH",
+        canonical_league_id="canonical-abc",
+        correlation_id="corr-1",
+        reprocess_all=True,
+        refetch_all=True,
+    )
+    payload = json.loads(client.invoke.call_args.kwargs["Payload"])
+    assert payload["refetchAll"] is True
     assert payload["reprocessAll"] is True
 
 

@@ -176,6 +176,56 @@ class TestOnboardingServiceInit:
             )
         assert svc.client.seasons == ["2024"]
 
+    def test_refetch_all_refresh_resolves_full_espn_history(
+        self, onboarder_onboarding_service
+    ):
+        # backend/league-refresh: a refetch-all REFRESH builds the client like an onboard, so
+        # ESPN's previousSeasons are fetched alongside the latest season.
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = {
+            "status": {"previousSeasons": [2022, 2023]},
+            "draftDetail": {"drafted": True},
+        }
+        with patch("requests.get", return_value=mock_resp):
+            svc = onboarder_onboarding_service.OnboardingService(
+                league_id="123",
+                platform="ESPN",
+                request_type="REFRESH",
+                latest_season="2024",
+                canonical_league_id="existing-id",
+                refetch_all=True,
+            )
+        assert svc.client.seasons == ["2022", "2023", "2024"]
+        assert svc.refetch_all is True
+
+    @pytest.mark.parametrize(
+        ("request_type", "refetch_all", "expected_is_refresh"),
+        [
+            ("REFRESH", False, True),
+            ("REFRESH", True, False),
+            ("MIGRATE", False, True),
+            ("ONBOARD", False, False),
+        ],
+    )
+    def test_build_client_is_refresh_flag(
+        self,
+        onboarder_onboarding_service,
+        request_type,
+        refetch_all,
+        expected_is_refresh,
+    ):
+        with patch.object(
+            onboarder_onboarding_service.OnboardingService, "_build_client"
+        ) as mock_build:
+            onboarder_onboarding_service.OnboardingService(
+                league_id="123",
+                platform="SLEEPER",
+                request_type=request_type,
+                refetch_all=refetch_all,
+            )
+        assert mock_build.call_args.kwargs["is_refresh"] is expected_is_refresh
+
     def test_http_error_in_espn_client_init_propagates(
         self, onboarder_onboarding_service, onboarder_espn_client
     ):

@@ -235,6 +235,12 @@ def _handle(event, context) -> dict[str, str | int]:
                 ),
             }
 
+    # Backfill refetch-all (backend/league-refresh): honored only on a REFRESH (after Sleeper
+    # renewal resolution). It re-fetches every season, so it always reprocesses every season.
+    refetch_all = bool(event.get("refetchAll")) and request_type == "REFRESH"
+    if refetch_all:
+        logger.info("refetchAll set: re-fetching every season of the league's history")
+
     try:
         onboarding_service = OnboardingService(
             league_id=str(body["leagueId"]),
@@ -246,8 +252,9 @@ def _handle(event, context) -> dict[str, str | int]:
             canonical_league_id=canonical_league_id,
             is_new_season_refresh=is_new_season_refresh,
             owner_user_id=owner_user_id,
-            reprocess_all=bool(event.get("reprocessAll")),
+            reprocess_all=bool(event.get("reprocessAll")) or refetch_all,
             auto_refresh=auto_refresh,
+            refetch_all=refetch_all,
         )
     except KeyError as e:
         logger.error("Missing required field in request body: %s", e)

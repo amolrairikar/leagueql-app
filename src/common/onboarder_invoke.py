@@ -22,6 +22,7 @@ def invoke_onboarder(
     correlation_id: str,
     owner_user_id: str | None = None,
     reprocess_all: bool = False,
+    refetch_all: bool = False,
 ) -> dict:
     """
     Asynchronously invoke the onboarder Lambda with the standard payload contract.
@@ -41,6 +42,9 @@ def invoke_onboarder(
         reprocess_all: When True, flag the run as a backfill so the processor rebuilds
             every season's views (not just the latest). Used by the league backfill
             script (backend/sleeper-transactions); default False leaves normal onboards/refreshes unchanged.
+        refetch_all: When True on a REFRESH, the onboarder re-fetches every season of the
+            league's history from the platform instead of only the latest
+            (backend/league-refresh). Used by the backfill script's ``--refetch-all``; default False.
 
     Returns:
         The boto3 ``invoke`` response.
@@ -52,6 +56,7 @@ def invoke_onboarder(
         "correlation_id": correlation_id,
         "ownerUserId": owner_user_id,
         "reprocessAll": reprocess_all,
+        "refetchAll": refetch_all,
         # W3C trace context so the onboarder continues the caller's trace (backend/otel-tracing).
         # Empty ``{}`` when tracing is disabled (tests / unconfigured), so the
         # contract is unchanged in those contexts.
