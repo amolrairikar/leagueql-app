@@ -10,7 +10,7 @@
 - [x] 1.6 Group trade records in `compile_espn_transactions` by `relatedTransactionId` (falling back to `id`, and to the content key for unlinked records), take traded players and accept-time drops from the group, pick the uphold as the row record with `processDate`/`acceptedDate`/`proposedDate`, and skip groups with no traded players; verify with unit tests for the 2026 shape (empty uphold + card accept), the 2018 shape, an accept-only trade, and an unrecoverable trade
 - [x] 1.7 Add a 2026-style hidden trade (an uphold with no items plus a `transactions_trade_cards` accept) to the ESPN component fixture and assert it returns as one `trade` row with both teams
 - [x] 1.8 Update `docs/db/dynamodb_spec.md` for card-recovered trades; confirm no architecture diagram change is needed (no new deployed component)
-- [ ] 1.9 Confirm the `kona_playercard` response shape against a live league with a hidden trade before release
+- [x] 1.9 Confirm the `kona_playercard` response shape against a live league with a hidden trade before release
 
 ## 2. Frontend
 
@@ -19,4 +19,4 @@
 
 ## 3. Specs
 
-- [ ] 3.1 Update the `frontend/transactions` Purpose wording at archive time (ESPN now has trades)
+- [x] 3.1 Update the `frontend/transactions` Purpose wording at archive time (ESPN now has trades)

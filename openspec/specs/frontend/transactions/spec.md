@@ -1,7 +1,7 @@
 # transactions Specification
 
 ## Purpose
-The `/transactions` page lists a season's completed transactions — waivers, trades, and free-agent moves — for the connected league, newest first, with per-team adds (green) and drops (red). Below the season selector, a per-owner summary table breaks down activity for the selected season. Available for both Sleeper (waivers/trades/free agents, all seasons) and ESPN (waivers/free agents, 2026 season onward only — the ESPN API returns no historical transactions, so the page carries a disclaimer to that effect) leagues; the type filter is platform-aware (ESPN offers no Trades).
+The `/transactions` page lists a season's completed transactions — waivers, trades, and free-agent moves — for the connected league, newest first, with per-team adds (green) and drops (red). Below the season selector, a per-owner summary table breaks down activity for the selected season. Available for Sleeper (waivers/trades/free agents, all seasons), Yahoo (waivers/trades/free agents), and ESPN (waivers/trades/free agents, 2026 season onward only — the ESPN API returns no historical transactions, so the page carries a disclaimer to that effect) leagues; the type filter offers Trades / Waivers / Free Agents on every platform.
 
 ## Requirements
 
@@ -27,30 +27,28 @@ The Transactions nav item SHALL appear for both Sleeper and ESPN leagues.
 - **WHEN** the connected league's platform is `ESPN`
 - **THEN** the Transactions sidebar item appears
 
-### Requirement: Season selector and type filter
+### Requirement: Season selector and platform-wide type filter
 The season selector SHALL list all onboarded seasons and default to the latest. The type filter
-SHALL be platform-aware: for Sleeper it offers Trades / Waivers / Free Agents and defaults to
-Trades; for ESPN it offers only Waivers / Free Agents (no Trades, which ESPN does not produce) and
-defaults to Free Agents. There is no "All" option on either platform.
+SHALL offer Trades / Waivers / Free Agents and default to Trades on every platform (Sleeper, ESPN,
+and Yahoo). There is no "All" option.
 
 #### Scenario: Select and filter
 - **WHEN** the page loads
 - **THEN** the season selector lists all onboarded seasons defaulting to the latest, and the type
-  filter defaults to the platform's default type and narrows the transaction wire to the selected
-  type
+  filter defaults to Trades and narrows the transaction wire to the selected type
 
 #### Scenario: Default shows trades
-- **WHEN** a Sleeper page first renders a season with transactions
+- **WHEN** a page first renders a season with transactions
 - **THEN** only trade transactions are listed and the Trades filter is the selected option, with no
   "All" option offered
 
-#### Scenario: ESPN defaults to free agents
+#### Scenario: ESPN offers trades
 - **WHEN** an ESPN page first renders a season with transactions
-- **THEN** the type filter offers only Waivers / Free Agents, defaults to Free Agents, only
-  free-agent transactions are listed, and no Trades or "All" option is offered
+- **THEN** the type filter offers Trades / Waivers / Free Agents, defaults to Trades, and lists the
+  season's ESPN trades
 
 #### Scenario: Narrow to another type
-- **WHEN** a different available filter (Waivers, Free Agents, or — for Sleeper — Trades) is selected
+- **WHEN** a different filter (Trades, Waivers, or Free Agents) is selected
 - **THEN** the wire narrows to only that type's transactions
 
 ### Requirement: ESPN historical-transactions disclaimer
