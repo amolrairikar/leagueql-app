@@ -723,6 +723,100 @@ class TestCompileEspnTransactions:
             == []
         )
 
+    def _trade(self, txn_id, txn_type, team_id, process_date=900):
+        # Team 9 sends 111 to team 3; team 3 sends 222 to team 9.
+        return {
+            "id": txn_id,
+            "type": txn_type,
+            "scoringPeriodId": 5,
+            "proposedDate": 800,
+            "processDate": process_date,
+            "bidAmount": 0,
+            "teamId": team_id,
+            "items": [
+                {"type": "TRADE", "playerId": 111, "fromTeamId": 9, "toTeamId": 3},
+                {"type": "TRADE", "playerId": 222, "fromTeamId": 3, "toTeamId": 9},
+            ],
+        }
+
+    def test_upheld_trade_lists_both_teams_from_items(self, processor_handler):
+        # The uphold's teamId (1) is not a trading team; parties come from the items.
+        txn = self._trade("up1", "TRADE_UPHOLD", team_id=1)
+        rows = processor_handler.compile_espn_transactions(
+            [(txn, "2026")], self._team_map(), self._player_by_id()
+        )
+        assert len(rows) == 1
+        row = rows[0]
+        assert row["type"] == "trade"
+        assert row["transaction_id"] == "up1"
+        assert row["week"] == 5
+        assert row["created"] == 900  # processDate, the execution time
+        assert row["roster_ids"] == ["3", "9"]
+        assert row["teams"] == [
+            {"roster_id": "3", "team_name": "Team Three", "display_name": "user3"},
+            {"roster_id": "9", "team_name": "Team Nine", "display_name": "user9"},
+        ]
+        # Each traded player is a drop from its source and an add to its destination.
+        assert [(a["player_id"], a["roster_id"]) for a in row["adds"]] == [
+            ("111", "3"),
+            ("222", "9"),
+        ]
+        assert [(d["player_id"], d["roster_id"]) for d in row["drops"]] == [
+            ("111", "9"),
+            ("222", "3"),
+        ]
+        assert row["adds"][0]["player_name"] == "Joe Burrow"
+        assert row["draft_picks"] == []
+
+    def test_accept_and_uphold_of_same_trade_stored_once(self, processor_handler):
+        # The accept arrives first but the uphold's id is the one kept.
+        accept = self._trade("ac1", "TRADE_ACCEPT", team_id=3)
+        uphold = self._trade("up1", "TRADE_UPHOLD", team_id=1)
+        rows = processor_handler.compile_espn_transactions(
+            [(accept, "2026"), (uphold, "2026")],
+            self._team_map(),
+            self._player_by_id(),
+        )
+        assert [r["transaction_id"] for r in rows] == ["up1"]
+
+    def test_accepted_trade_without_review_stored(self, processor_handler):
+        txn = self._trade("ac1", "TRADE_ACCEPT", team_id=3)
+        rows = processor_handler.compile_espn_transactions(
+            [(txn, "2026")], self._team_map(), self._player_by_id()
+        )
+        assert [(r["transaction_id"], r["type"]) for r in rows] == [("ac1", "trade")]
+
+    def test_distinct_trades_with_same_items_both_stored(self, processor_handler):
+        # The same swap executed at different times is two trades.
+        first = self._trade("up1", "TRADE_UPHOLD", team_id=1, process_date=900)
+        second = self._trade("up2", "TRADE_UPHOLD", team_id=1, process_date=950)
+        rows = processor_handler.compile_espn_transactions(
+            [(first, "2026"), (second, "2026")],
+            self._team_map(),
+            self._player_by_id(),
+        )
+        assert sorted(r["transaction_id"] for r in rows) == ["up1", "up2"]
+
+    def test_trade_with_unresolved_team(self, processor_handler):
+        txn = {
+            "id": "up3",
+            "type": "TRADE_UPHOLD",
+            "scoringPeriodId": 5,
+            "processDate": 900,
+            "teamId": 1,
+            "items": [
+                {"type": "TRADE", "playerId": 111, "fromTeamId": 9, "toTeamId": 12},
+            ],
+        }
+        rows = processor_handler.compile_espn_transactions(
+            [(txn, "2026")], self._team_map(), self._player_by_id()
+        )
+        assert rows[0]["teams"][0] == {
+            "roster_id": "12",
+            "team_name": None,
+            "display_name": None,
+        }
+
 
 class TestDataframeToDynamoItems:
     def test_groups_rows_by_sk(self, processor_handler):

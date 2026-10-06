@@ -149,7 +149,7 @@ export const EXPORT_VIEW_DOCS: Record<string, ViewDoc> = {
       waiver_bid: 'FAAB bid amount, or null.',
     },
     platformNotes: {
-      ESPN: 'ESPN transactions cover only the current season, include waiver and free-agent moves only (no trades), and never include draft picks.',
+      ESPN: 'ESPN transactions cover only the current season, include waiver, free-agent, and trade moves, and never include draft picks.',
     },
   },
   playoff_bracket: {

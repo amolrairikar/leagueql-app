@@ -120,12 +120,75 @@ class TestFilterFunctions:
                     "status": "PENDING",
                     "items": [],
                 },
+                # An accept still in the league's review period.
+                {
+                    "id": "ta_pending",
+                    "type": "TRADE_ACCEPT",
+                    "status": "PENDING",
+                    "items": [{"type": "TRADE", "playerId": 1}],
+                },
+                # A withdrawn proposal stays PENDING with executionType CANCEL.
+                {
+                    "id": "tp_cancelled",
+                    "type": "TRADE_PROPOSAL",
+                    "status": "PENDING",
+                    "executionType": "CANCEL",
+                    "items": [{"type": "TRADE", "playerId": 1}],
+                },
             ]
         }
         result = onboarder_espn_client._filter_transactions(
             data, "2026", "transactions"
         )
         assert result == {"transactions": []}
+
+    def test_filter_transactions_keeps_executed_trade_uphold_and_accept(
+        self, onboarder_espn_client
+    ):
+        trade_items = [
+            {
+                "type": "TRADE",
+                "playerId": 15705,
+                "fromTeamId": 10,
+                "toTeamId": 2,
+                "fromLineupSlotId": 20,
+            },
+            {"type": "TRADE", "playerId": 16016, "fromTeamId": 2, "toTeamId": 10},
+        ]
+        data = {
+            "transactions": [
+                {
+                    "id": "up1",
+                    "type": "TRADE_UPHOLD",
+                    "status": "EXECUTED",
+                    "scoringPeriodId": 5,
+                    "processDate": 500,
+                    "teamId": 1,
+                    "items": trade_items,
+                },
+                {
+                    "id": "ac1",
+                    "type": "TRADE_ACCEPT",
+                    "status": "EXECUTED",
+                    "scoringPeriodId": 5,
+                    "processDate": 600,
+                    "teamId": 10,
+                    "items": trade_items,
+                },
+            ]
+        }
+        result = onboarder_espn_client._filter_transactions(
+            data, "2026", "transactions"
+        )
+        kept = result["transactions"]
+        assert [t["id"] for t in kept] == ["up1", "ac1"]
+        assert kept[0]["type"] == "TRADE_UPHOLD"
+        assert kept[0]["processDate"] == 500
+        # TRADE items are retained, trimmed to the needed keys.
+        assert kept[0]["items"] == [
+            {"type": "TRADE", "playerId": 15705, "fromTeamId": 10, "toTeamId": 2},
+            {"type": "TRADE", "playerId": 16016, "fromTeamId": 2, "toTeamId": 10},
+        ]
 
     def test_filter_matchups(self, onboarder_espn_client):
         data = {

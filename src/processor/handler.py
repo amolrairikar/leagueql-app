@@ -1005,8 +1005,14 @@ def build_espn_team_map(
 
 # ESPN transaction ``type`` → the transaction ``type`` the shared view stores (matching
 # compile_sleeper_transactions and the frontend TransactionItem union). Only EXECUTED
-# FREEAGENT/WAIVER records reach here; other ESPN types are dropped upstream.
-_ESPN_TRANSACTION_TYPE_MAP = {"FREEAGENT": "free_agent", "WAIVER": "waiver"}
+# FREEAGENT/WAIVER/TRADE_UPHOLD/TRADE_ACCEPT records reach here; other ESPN types are
+# dropped upstream.
+_ESPN_TRANSACTION_TYPE_MAP = {
+    "FREEAGENT": "free_agent",
+    "WAIVER": "waiver",
+    "TRADE_UPHOLD": "trade",
+    "TRADE_ACCEPT": "trade",
+}
 
 
 def _resolve_espn_transaction_player(
@@ -1033,6 +1039,22 @@ def _resolve_espn_transaction_player(
     }
 
 
+def _espn_trade_key(txn: dict, season: str) -> tuple:
+    """
+    Identify an ESPN trade independently of its record ``id``.
+
+    A trade cleared through review is recorded by both an EXECUTED ``TRADE_ACCEPT``
+    and an EXECUTED ``TRADE_UPHOLD`` under different ids; both carry the same
+    ``processDate`` and the same set of traded items.
+    """
+    items = frozenset(
+        (item.get("playerId"), item.get("fromTeamId"), item.get("toTeamId"))
+        for item in txn.get("items") or []
+        if item.get("type") == "TRADE"
+    )
+    return (season, txn.get("processDate"), items)
+
+
 def compile_espn_transactions(
     raw_transactions: list[tuple[dict, str]],
     team_map: dict[str, dict[str, dict]],
@@ -1041,10 +1063,12 @@ def compile_espn_transactions(
     """
     Build resolved transaction rows from raw ESPN transaction payloads.
 
-    Only EXECUTED FREEAGENT/WAIVER transactions are passed in (others are filtered
-    upstream in the ESPN client). Player IDs are resolved to names/positions and team
-    IDs to team labels. Produces the same row shape as compile_sleeper_transactions,
-    with ``draft_picks`` always empty (trades are not stored for ESPN).
+    Only EXECUTED FREEAGENT/WAIVER transactions and completed trades (TRADE_UPHOLD /
+    TRADE_ACCEPT) are passed in (others are filtered upstream in the ESPN client).
+    Player IDs are resolved to names/positions and team IDs to team labels. Produces
+    the same row shape as compile_sleeper_transactions, with ``draft_picks`` always
+    empty. A trade item moves a player from its source team (a drop) to its
+    destination team (an add), matching the Sleeper/Yahoo trade shape.
 
     Args:
         raw_transactions: List of (transaction payload, season) tuples.
@@ -1060,44 +1084,65 @@ def compile_espn_transactions(
     # for any scoringPeriodId at or beyond it), so dedupe by (season, id) defensively
     # to guarantee each transaction is stored once regardless of fetch overlap.
     seen: set[tuple[str, str | None]] = set()
-    for txn, season in raw_transactions:
+    # A reviewed trade has both an EXECUTED accept and an EXECUTED uphold (different
+    # ids), so trades are also deduped by content. Upholds are visited first (a stable
+    # sort) so the uphold's id is the one kept.
+    seen_trades: set[tuple] = set()
+    ordered = sorted(
+        raw_transactions, key=lambda pair: pair[0].get("type") == "TRADE_ACCEPT"
+    )
+    for txn, season in ordered:
         txn_key = (season, txn.get("id"))
         if txn_key in seen:
             continue
         seen.add(txn_key)
+        txn_type = _ESPN_TRANSACTION_TYPE_MAP.get(txn.get("type"))
+        if txn_type == "trade":
+            trade_key = _espn_trade_key(txn, season)
+            if trade_key in seen_trades:
+                continue
+            seen_trades.add(trade_key)
         season_teams = team_map.get(season, {})
-        team_id = str(txn.get("teamId"))
-        team_info = season_teams.get(team_id, {})
-        adds, drops = [], []
+        adds, drops, item_team_ids = [], [], []
         for item in txn.get("items") or []:
-            if item.get("type") == "ADD":
+            item_type = item.get("type")
+            if item_type in ("ADD", "TRADE"):
                 adds.append(
                     _resolve_espn_transaction_player(
                         item.get("playerId"), item.get("toTeamId"), player_by_id
                     )
                 )
-            elif item.get("type") == "DROP":
+                item_team_ids.append(str(item.get("toTeamId")))
+            if item_type in ("DROP", "TRADE"):
                 drops.append(
                     _resolve_espn_transaction_player(
                         item.get("playerId"), item.get("fromTeamId"), player_by_id
                     )
                 )
+                item_team_ids.append(str(item.get("fromTeamId")))
+        # A trade's parties come from its items: an uphold's teamId is the team that
+        # upheld it, not a trading team. Other types belong to the acting team.
+        if txn_type == "trade":
+            roster_ids = list(dict.fromkeys(item_team_ids))
+        else:
+            roster_ids = [str(txn.get("teamId"))]
         rows.append(
             {
                 "season": season,
                 "transaction_id": txn.get("id"),
-                "type": _ESPN_TRANSACTION_TYPE_MAP.get(txn.get("type")),
+                "type": txn_type,
                 "week": txn.get("scoringPeriodId"),
-                # Waivers process asynchronously (processDate); free agents execute
-                # immediately (proposedDate). Prefer the actual execution time.
+                # Waivers and trades process asynchronously (processDate); free agents
+                # execute immediately (proposedDate). Prefer the actual execution time.
                 "created": txn.get("processDate") or txn.get("proposedDate"),
-                "roster_ids": [team_id],
+                "roster_ids": roster_ids,
                 "teams": [
                     {
-                        "roster_id": team_id,
-                        "team_name": team_info.get("team_name"),
-                        "display_name": team_info.get("display_name"),
+                        "roster_id": rid,
+                        "team_name": season_teams.get(rid, {}).get("team_name"),
+                        "display_name": season_teams.get(rid, {}).get("display_name"),
                     }
+                    for rid in roster_ids
                 ],
                 "adds": adds,
                 "drops": drops,

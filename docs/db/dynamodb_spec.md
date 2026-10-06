@@ -591,7 +591,7 @@ Represents all draft picks across all seasons in the fantasy league. One item pe
 <details>
 <summary><b>TRANSACTIONS</b></summary>
 
-Represents completed league transactions for a season. Written for **Sleeper** ([backend/sleeper-transactions](../requirements/backend/backend/sleeper-transactions-sleeper-transactions.md)) — waivers, trades, free-agent moves, and commissioner moves across all seasons — and for **ESPN** ([backend/espn-transactions](../requirements/backend/backend/espn-transactions-espn-transactions.md)) — current-season EXECUTED waivers and free-agent adds/drops only, with `draft_picks` always empty and `type` limited to `"waiver"`/`"free_agent"` (ESPN trades and lineup moves are not stored). No `TRANSACTIONS` item is written for a season with no stored transactions.
+Represents completed league transactions for a season. Written for **Sleeper** ([backend/sleeper-transactions](../requirements/backend/backend/sleeper-transactions-sleeper-transactions.md)) — waivers, trades, free-agent moves, and commissioner moves across all seasons — and for **ESPN** ([backend/espn-transactions](../requirements/backend/backend/espn-transactions-espn-transactions.md)) — current-season EXECUTED waivers, free-agent adds/drops, and trades only, with `draft_picks` always empty and `type` limited to `"waiver"`/`"free_agent"`/`"trade"` (lineup moves and trade proposals are not stored). An ESPN trade is an EXECUTED `TRADE_UPHOLD` or `TRADE_ACCEPT`; when both exist for the same trade only one row is stored. No `TRANSACTIONS` item is written for a season with no stored transactions.
 
 A season's transactions are unbounded and can exceed DynamoDB's 400 KB per-item limit, so they are **chunked**: a season is split across one or more items with a zero-padded chunk index appended to the sort key (`TRANSACTIONS#{season}#{chunk}`, e.g. `TRANSACTIONS#2025#0000`, `TRANSACTIONS#2025#0001`). Each item holds a slice of the season's transactions in its `data` list, kept under a conservative per-item cap. The query API reads a season with a `begins_with(TRANSACTIONS#{season})` prefix query and concatenates the chunks' `data` in sort-key order. The prefix has no trailing `#`, so it also matches a legacy single-key `TRANSACTIONS#{season}` item written before chunking; the processor deletes any such bare item when it rewrites a season's chunks.
 
@@ -607,7 +607,7 @@ A season's transactions are unbounded and can exceed DynamoDB's 400 KB per-item 
 |---|---|---|
 | `season` | String | Season year (e.g. `"2025"`) |
 | `transaction_id` | String | Platform transaction ID (Sleeper transaction ID / ESPN transaction `id`) |
-| `type` | String | `"waiver"`, `"trade"`, `"free_agent"`, or `"commissioner"` (ESPN writes only `"waiver"`/`"free_agent"`) |
+| `type` | String | `"waiver"`, `"trade"`, `"free_agent"`, or `"commissioner"` (ESPN writes only `"waiver"`/`"free_agent"`/`"trade"`) |
 | `week` | Integer | Week of the transaction (Sleeper `leg` / ESPN `scoringPeriodId`) |
 | `created` | Integer | Creation time (Unix epoch milliseconds); used to order newest-first |
 | `roster_ids` | List\<String\> | Roster IDs involved in the transaction |

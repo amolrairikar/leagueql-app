@@ -604,8 +604,8 @@ QUERIES = {
         FROM transactions
         ORDER BY season DESC, created DESC
         """,
-        # ESPN stores current-season EXECUTED waivers/free agents only, with draft_picks
-        # always empty (backend/espn-transactions).
+        # ESPN stores current-season EXECUTED waivers/free agents/trades only, with
+        # draft_picks always empty (backend/espn-transactions).
         "ESPN": """
         SELECT *
         FROM transactions

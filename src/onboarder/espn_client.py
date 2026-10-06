@@ -66,22 +66,30 @@ def _filter_matchups(
     }
 
 
+# ESPN transaction types kept in the transactions view (when EXECUTED).
+_STORED_TRANSACTION_TYPES = ("FREEAGENT", "WAIVER", "TRADE_UPHOLD", "TRADE_ACCEPT")
+
+
 def _filter_transactions(
     data: dict[str, Any], _season: str, _data_type: str
 ) -> dict[str, Any]:
     """
-    Trim ESPN ``mTransactions2`` payload to the completed adds/drops we store.
+    Trim ESPN ``mTransactions2`` payload to the completed transactions we store.
 
-    Keeps only ``EXECUTED`` waiver claims and free-agent moves (DRAFT, ROSTER
-    lineup swaps, and trade types are dropped) and reduces each record — and each
-    of its ``items`` — to the fields the processor needs, keeping the S3 payload
-    lean the way the other ESPN filters do.
+    Keeps only ``EXECUTED`` waiver claims, free-agent moves, and completed trades
+    (DRAFT, ROSTER lineup swaps, and trade proposals are dropped) and reduces each
+    record — and each of its ``items`` — to the fields the processor needs, keeping
+    the S3 payload lean the way the other ESPN filters do.
+
+    A completed trade is an ``EXECUTED`` ``TRADE_UPHOLD`` (it cleared the league's
+    review period) or an ``EXECUTED`` ``TRADE_ACCEPT`` (a league with no review
+    period). Proposals and pending accepts never reach ``EXECUTED``.
     """
     kept = []
     for txn in data.get("transactions", []):
         if txn.get("status") != "EXECUTED":
             continue
-        if txn.get("type") not in ("FREEAGENT", "WAIVER"):
+        if txn.get("type") not in _STORED_TRANSACTION_TYPES:
             continue
         kept.append(
             {
@@ -100,7 +108,7 @@ def _filter_transactions(
                         "toTeamId": item.get("toTeamId"),
                     }
                     for item in (txn.get("items") or [])
-                    if item.get("type") in ("ADD", "DROP")
+                    if item.get("type") in ("ADD", "DROP", "TRADE")
                 ],
             }
         )

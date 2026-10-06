@@ -178,11 +178,12 @@ Feature: Transactions (frontend/transactions)
     Then there is no top transactions highlight
     And I see the received player "Star Player"
 
-  Scenario: ESPN defaults to Free Agents and offers no Trades filter
+  Scenario: ESPN defaults to Trades and shows the league's trades
     Given ESPN transactions data is available
     When I open the transactions page for an ESPN league
-    Then I see the received player "FA Add"
-    And there is no "Trades" filter option
+    Then I see the received player "Traded Star"
+    And I see the received player "Traded Back"
+    And there is a "Free Agents" filter option
     And there is no "All" filter option
 
   Scenario: An ESPN waiver shows the claimed player when the Waivers filter is selected
@@ -191,10 +192,10 @@ Feature: Transactions (frontend/transactions)
     And I select the "Waivers" filter
     Then I see the received player "Waiver Claim"
 
-  Scenario: The ESPN summary table omits the Trades column
+  Scenario: The ESPN summary table shows the Trades column
     Given ESPN transactions data is available
     When I open the transactions page for an ESPN league
-    Then the summary table has no "Trades" column
+    Then the summary table has a "Trades" column
     And the summary table has a "Free Agents" column
 
   Scenario: ESPN shows the historical-transactions disclaimer

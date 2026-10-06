@@ -161,6 +161,32 @@
             { "type": "ADD", "playerId": 111, "fromTeamId": 0, "toTeamId": 1 },
             { "type": "DROP", "playerId": 222, "fromTeamId": 1, "toTeamId": 0 }
           ]
+        },
+        {
+          "id": "ta1",
+          "type": "TRADE_ACCEPT",
+          "scoringPeriodId": 3,
+          "proposedDate": 1789100000000,
+          "processDate": 1789272800000,
+          "bidAmount": 0,
+          "teamId": 2,
+          "items": [
+            { "type": "TRADE", "playerId": 111, "fromTeamId": 1, "toTeamId": 2 },
+            { "type": "TRADE", "playerId": 333, "fromTeamId": 2, "toTeamId": 1 }
+          ]
+        },
+        {
+          "id": "tu1",
+          "type": "TRADE_UPHOLD",
+          "scoringPeriodId": 3,
+          "proposedDate": 1789100000000,
+          "processDate": 1789272800000,
+          "bidAmount": 0,
+          "teamId": 0,
+          "items": [
+            { "type": "TRADE", "playerId": 111, "fromTeamId": 1, "toTeamId": 2 },
+            { "type": "TRADE", "playerId": 333, "fromTeamId": 2, "toTeamId": 1 }
+          ]
         }
       ]
     }
