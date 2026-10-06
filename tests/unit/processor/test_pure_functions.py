@@ -797,6 +797,95 @@ class TestCompileEspnTransactions:
         )
         assert sorted(r["transaction_id"] for r in rows) == ["up1", "up2"]
 
+    def test_hidden_trade_filled_from_player_card_accept(self, processor_handler):
+        # 2026 shape: the uphold has no items/processDate, the mTransactions2 accept has
+        # no status and only an accept-time DROP, and the player-card accept (recovered
+        # by the onboarder) carries the TRADE items. All share relatedTransactionId.
+        uphold = {
+            "id": "up1",
+            "type": "TRADE_UPHOLD",
+            "relatedTransactionId": "T1",
+            "scoringPeriodId": 4,
+            "proposedDate": 1790961659874,
+            "processDate": None,
+            "teamId": 1,
+            "items": [],
+        }
+        card_accept = {
+            "id": "ac1",
+            "type": "TRADE_ACCEPT",
+            "relatedTransactionId": "T1",
+            "scoringPeriodId": 4,
+            "proposedDate": 1790961231549,
+            "acceptedDate": 1790961231549,
+            "teamId": 3,
+            "items": [
+                {"type": "TRADE", "playerId": 111, "fromTeamId": 9, "toTeamId": 3},
+                {"type": "TRADE", "playerId": 222, "fromTeamId": 3, "toTeamId": 9},
+                {"type": "DROP", "playerId": 333, "fromTeamId": 3, "toTeamId": 0},
+            ],
+        }
+        rows = processor_handler.compile_espn_transactions(
+            [(uphold, "2026"), (card_accept, "2026")],
+            self._team_map(),
+            self._player_by_id(),
+        )
+        assert len(rows) == 1
+        row = rows[0]
+        assert row["type"] == "trade"
+        assert row["transaction_id"] == "up1"
+        assert row["week"] == 4
+        assert row["created"] == 1790961659874  # the uphold's proposedDate
+        assert row["roster_ids"] == ["3", "9"]
+        assert [(a["player_id"], a["roster_id"]) for a in row["adds"]] == [
+            ("111", "3"),
+            ("222", "9"),
+        ]
+        # The accept-time release is a drop for the releasing team.
+        assert [(d["player_id"], d["roster_id"]) for d in row["drops"]] == [
+            ("111", "9"),
+            ("222", "3"),
+            ("333", "3"),
+        ]
+
+    def test_accept_without_uphold_uses_accepted_date(self, processor_handler):
+        accept = self._trade("ac1", "TRADE_ACCEPT", team_id=3, process_date=None)
+        accept["acceptedDate"] = 850
+        rows = processor_handler.compile_espn_transactions(
+            [(accept, "2026")], self._team_map(), self._player_by_id()
+        )
+        assert rows[0]["transaction_id"] == "ac1"
+        assert rows[0]["created"] == 850
+
+    def test_trade_without_recoverable_players_not_stored(self, processor_handler):
+        uphold = {
+            "id": "up1",
+            "type": "TRADE_UPHOLD",
+            "relatedTransactionId": "T1",
+            "scoringPeriodId": 4,
+            "proposedDate": 900,
+            "teamId": 1,
+            "items": [],
+        }
+        # An unlinked uphold with no items is its own (empty) group.
+        unlinked = {**uphold, "id": "up2", "relatedTransactionId": None}
+        waiver = {
+            "id": "w1",
+            "type": "WAIVER",
+            "scoringPeriodId": 4,
+            "processDate": 950,
+            "teamId": 3,
+            "items": [{"type": "ADD", "playerId": 111, "toTeamId": 3}],
+        }
+        with patch.object(processor_handler.logger, "warning") as warn:
+            rows = processor_handler.compile_espn_transactions(
+                [(uphold, "2026"), (unlinked, "2026"), (waiver, "2026")],
+                self._team_map(),
+                self._player_by_id(),
+            )
+        assert [r["transaction_id"] for r in rows] == ["w1"]
+        assert warn.call_count == 2
+
     def test_trade_with_unresolved_team(self, processor_handler):
         txn = {
             "id": "up3",

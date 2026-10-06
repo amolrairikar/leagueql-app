@@ -68,6 +68,36 @@ def _filter_matchups(
 
 # ESPN transaction types kept in the transactions view (when EXECUTED).
 _STORED_TRANSACTION_TYPES = ("FREEAGENT", "WAIVER", "TRADE_UPHOLD", "TRADE_ACCEPT")
+_TRADE_TRANSACTION_TYPES = ("TRADE_UPHOLD", "TRADE_ACCEPT")
+# kona_playercard requests carry at most this many player IDs (matching espn-api).
+ESPN_PLAYER_CARD_BATCH = 40
+# data_type of the extra transactions result holding trades recovered from player cards.
+TRADE_CARDS_DATA_TYPE = "transactions_trade_cards"
+
+
+def _trim_transaction(txn: dict[str, Any]) -> dict[str, Any]:
+    """Reduce an ESPN transaction — and its ``items`` — to the fields the processor needs."""
+    return {
+        "id": txn.get("id"),
+        "type": txn.get("type"),
+        "relatedTransactionId": txn.get("relatedTransactionId"),
+        "scoringPeriodId": txn.get("scoringPeriodId"),
+        "proposedDate": txn.get("proposedDate"),
+        "acceptedDate": txn.get("acceptedDate"),
+        "processDate": txn.get("processDate"),
+        "bidAmount": txn.get("bidAmount"),
+        "teamId": txn.get("teamId"),
+        "items": [
+            {
+                "type": item.get("type"),
+                "playerId": item.get("playerId"),
+                "fromTeamId": item.get("fromTeamId"),
+                "toTeamId": item.get("toTeamId"),
+            }
+            for item in (txn.get("items") or [])
+            if item.get("type") in ("ADD", "DROP", "TRADE")
+        ],
+    }
 
 
 def _filter_transactions(
@@ -85,34 +115,115 @@ def _filter_transactions(
     review period) or an ``EXECUTED`` ``TRADE_ACCEPT`` (a league with no review
     period). Proposals and pending accepts never reach ``EXECUTED``.
     """
-    kept = []
-    for txn in data.get("transactions", []):
-        if txn.get("status") != "EXECUTED":
+    return {
+        "transactions": [
+            _trim_transaction(txn)
+            for txn in data.get("transactions", [])
+            if txn.get("status") == "EXECUTED"
+            and txn.get("type") in _STORED_TRANSACTION_TYPES
+        ]
+    }
+
+
+def _trade_key(txn: dict[str, Any]) -> Any:
+    """The id that links one trade's records: ``relatedTransactionId``, else ``id``."""
+    return txn.get("relatedTransactionId") or txn.get("id")
+
+
+def _has_trade_items(txn: dict[str, Any]) -> bool:
+    return any(item.get("type") == "TRADE" for item in txn.get("items") or [])
+
+
+def _find_hidden_trades(
+    processed_results: list[dict[str, Any]],
+) -> dict[str, dict[Any, int | None]]:
+    """
+    Find executed trades whose traded players ``mTransactions2`` withheld.
+
+    ESPN returns a trade's ``TRADE`` items only when the requesting team is a party;
+    for any other trade the executed uphold/accept comes back without them.
+
+    Returns:
+        season → trade key → the trade's scoring period.
+    """
+    hidden: dict[str, dict[Any, int | None]] = {}
+    for result in processed_results:
+        if not result["data_type"].startswith("transactions"):
             continue
-        if txn.get("type") not in _STORED_TRANSACTION_TYPES:
+        for txn in result["data"].get("transactions", []):
+            if txn.get("type") in _TRADE_TRANSACTION_TYPES and not _has_trade_items(
+                txn
+            ):
+                hidden.setdefault(result["season"], {})[_trade_key(txn)] = txn.get(
+                    "scoringPeriodId"
+                )
+    return hidden
+
+
+def _rostered_player_ids(
+    processed_results: list[dict[str, Any]], season: str, weeks: set[int]
+) -> set[int]:
+    """Player IDs on any team's box-score roster in the given weeks of a season."""
+    wanted = {f"matchups_week{week}" for week in weeks}
+    player_ids: set[int] = set()
+    for result in processed_results:
+        if result["season"] != season or result["data_type"] not in wanted:
             continue
-        kept.append(
-            {
-                "id": txn.get("id"),
-                "type": txn.get("type"),
-                "scoringPeriodId": txn.get("scoringPeriodId"),
-                "proposedDate": txn.get("proposedDate"),
-                "processDate": txn.get("processDate"),
-                "bidAmount": txn.get("bidAmount"),
-                "teamId": txn.get("teamId"),
-                "items": [
-                    {
-                        "type": item.get("type"),
-                        "playerId": item.get("playerId"),
-                        "fromTeamId": item.get("fromTeamId"),
-                        "toTeamId": item.get("toTeamId"),
-                    }
-                    for item in (txn.get("items") or [])
-                    if item.get("type") in ("ADD", "DROP", "TRADE")
-                ],
-            }
-        )
-    return {"transactions": kept}
+        for matchup in result["data"].get("matchups", []):
+            for side in ("home", "away"):
+                team = matchup.get(side) or {}
+                for roster_key in (
+                    "rosterForCurrentScoringPeriod",
+                    "rosterForMatchupPeriod",
+                ):
+                    for entry in (team.get(roster_key) or {}).get("entries", []):
+                        player_id = entry.get("playerId")
+                        if isinstance(player_id, int):
+                            player_ids.add(player_id)
+    return player_ids
+
+
+def _player_card_transactions(wrap: Any) -> list[dict[str, Any]]:
+    """Transactions listed on one ``kona_playercard`` player (top level or nested ``player``)."""
+    if not isinstance(wrap, dict):
+        return []
+    inner = wrap.get("player")
+    for candidate in (
+        wrap.get("transactions"),
+        inner.get("transactions") if isinstance(inner, dict) else None,
+    ):
+        if isinstance(candidate, list):
+            return [txn for txn in candidate if isinstance(txn, dict)]
+    return []
+
+
+def _best_card_trades(players: list[Any], keys: set[Any]) -> dict[Any, dict[str, Any]]:
+    """Per hidden trade key, the card's EXECUTED ``TRADE_ACCEPT`` with the most trade items."""
+    best: dict[Any, dict[str, Any]] = {}
+    for wrap in players:
+        for txn in _player_card_transactions(wrap):
+            if txn.get("type") != "TRADE_ACCEPT" or txn.get("status") != "EXECUTED":
+                continue
+            key = _trade_key(txn)
+            if key not in keys:
+                continue
+            legs = sum(1 for i in txn.get("items") or [] if i.get("type") == "TRADE")
+            if legs == 0:
+                continue
+            current = best.get(key)
+            current_legs = (
+                sum(1 for i in current["items"] if i.get("type") == "TRADE")
+                if current
+                else 0
+            )
+            if legs > current_legs:
+                best[key] = txn
+    return best
+
+
+def _unwrap_list(data: Any, _data_type: str) -> Any:
+    """ESPN wraps some season endpoints in a single-element list; unwrap to the object."""
+    return data[0] if isinstance(data, list) else data
 
 
 def _filter_player_scoring_totals(
@@ -372,7 +483,117 @@ class ESPNClient:
             cookies=cookies, timeout=aiohttp.ClientTimeout(total=30)
         ) as session:
             results = await run_fetches(session, self.request_urls, self._fetch)
-            return self._process_api_results(results=results)
+            processed = self._process_api_results(results=results)
+            processed.extend(await self._recover_hidden_trades(session, processed))
+            return processed
+
+    async def _recover_hidden_trades(
+        self,
+        session: aiohttp.ClientSession,
+        processed_results: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """
+        Fill in trades whose players ``mTransactions2`` withheld, from player cards.
+
+        For each season with a hidden trade (an executed uphold/accept without
+        ``TRADE`` items), fetches the ``kona_playercard`` view for every player
+        rostered in the trade's week and the next one, and keeps each hidden trade's
+        executed ``TRADE_ACCEPT`` from those cards (the one with the most traded
+        players). The approach follows the espn-api library's ``fill_trade_items``.
+        Card requests are only made when a trade is hidden, and a failed card request
+        is logged and skipped: the trade it would have filled is then left out by the
+        processor rather than failing the run (backend/espn-transactions).
+
+        Returns:
+            One ``transactions_trade_cards`` result per season that recovered a trade.
+        """
+        recovered_results = []
+        for season, hidden in _find_hidden_trades(processed_results).items():
+            weeks = {
+                week + offset
+                for week in hidden.values()
+                if isinstance(week, int)
+                for offset in (0, 1)
+            }
+            player_ids = sorted(_rostered_player_ids(processed_results, season, weeks))
+            batches = {
+                f"player_cards_batch{index}": player_ids[
+                    start : start + ESPN_PLAYER_CARD_BATCH
+                ]
+                for index, start in enumerate(
+                    range(0, len(player_ids), ESPN_PLAYER_CARD_BATCH)
+                )
+            }
+            url = (
+                f"https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/"
+                f"{season}/segments/0/leagues/{self.league_id}?view=kona_playercard"
+            )
+
+            async def _fetch_cards(
+                session: aiohttp.ClientSession,
+                semaphore: asyncio.Semaphore,
+                url_data: tuple[str, str, str],
+                _season: str = season,
+                _batches: dict[str, list[int]] = batches,
+            ) -> dict[str, Any]:
+                card_filter = {
+                    "players": {
+                        "filterIds": {"value": _batches[url_data[1]]},
+                        "filterStatsForTopScoringPeriodIds": {
+                            "value": self.latest_scoring_period or 1,
+                            "additionalValue": [f"00{_season}", f"10{_season}"],
+                        },
+                    }
+                }
+                return await fetch_one(
+                    session,
+                    semaphore,
+                    url_data,
+                    headers={"X-Fantasy-Filter": json.dumps(card_filter)},
+                    transform=_unwrap_list,
+                )
+
+            results = await run_fetches(
+                session,
+                [(season, data_type, url) for data_type in batches],
+                _fetch_cards,
+            )
+            players: list[Any] = []
+            for result in results:
+                if isinstance(result, BaseException) or result.get("data") is None:
+                    logger.warning(
+                        "Player card request failed; hidden trades may be skipped: "
+                        "league_id=%s season=%s",
+                        self.league_id,
+                        season,
+                    )
+                    continue
+                players.extend(result["data"].get("players") or [])
+            recovered = _best_card_trades(players, set(hidden))
+            missing = sorted(str(key) for key in set(hidden) - set(recovered))
+            logger.info(
+                "Recovered hidden ESPN trades from player cards: league_id=%s season=%s "
+                "hidden=%d recovered=%d card_requests=%d unrecovered=%s",
+                self.league_id,
+                season,
+                len(hidden),
+                len(recovered),
+                len(batches),
+                missing,
+            )
+            if recovered:
+                recovered_results.append(
+                    {
+                        "season": season,
+                        "data_type": TRADE_CARDS_DATA_TYPE,
+                        "data": {
+                            "transactions": [
+                                _trim_transaction(txn) for txn in recovered.values()
+                            ]
+                        },
+                    }
+                )
+        return recovered_results
 
     async def _fetch(
         self,
@@ -408,12 +629,8 @@ class ESPNClient:
             }
             headers["X-Fantasy-Filter"] = json.dumps(filter_val)
 
-        # ESPN wraps some season endpoints in a single-element list; unwrap to the object.
-        def _unwrap(data: Any, _data_type: str) -> Any:
-            return data[0] if isinstance(data, list) else data
-
         return await fetch_one(
-            session, semaphore, url_data, headers=headers, transform=_unwrap
+            session, semaphore, url_data, headers=headers, transform=_unwrap_list
         )
 
     def _process_api_results(

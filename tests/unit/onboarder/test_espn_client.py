@@ -184,6 +184,9 @@ class TestFilterFunctions:
         assert [t["id"] for t in kept] == ["up1", "ac1"]
         assert kept[0]["type"] == "TRADE_UPHOLD"
         assert kept[0]["processDate"] == 500
+        # Linking/date fields are kept for grouping a trade's records.
+        assert "relatedTransactionId" in kept[0]
+        assert "acceptedDate" in kept[0]
         # TRADE items are retained, trimmed to the needed keys.
         assert kept[0]["items"] == [
             {"type": "TRADE", "playerId": 15705, "fromTeamId": 10, "toTeamId": 2},
@@ -782,3 +785,252 @@ class TestESPNClientFetchAll:
             await client.fetch_all()
         # No cookies -> ClientSession is created with cookies=None.
         assert mock_session.call_args[1]["cookies"] is None
+
+
+def _card_trade(related_id, legs, status="EXECUTED", txn_type="TRADE_ACCEPT"):
+    """A kona_playercard transaction with ``legs`` TRADE items between teams 6 and 3."""
+    return {
+        "id": f"card-{related_id}-{legs}",
+        "type": txn_type,
+        "status": status,
+        "relatedTransactionId": related_id,
+        "scoringPeriodId": 4,
+        "proposedDate": 100,
+        "acceptedDate": 200,
+        "teamId": 6,
+        "items": [
+            {"type": "TRADE", "playerId": 1000 + n, "fromTeamId": 3, "toTeamId": 6}
+            for n in range(legs)
+        ],
+    }
+
+
+def _week_matchups(week, player_ids):
+    """A filtered matchups_week{N} result whose home roster holds ``player_ids``."""
+    return {
+        "season": "2026",
+        "data_type": f"matchups_week{week}",
+        "data": {
+            "matchups": [
+                {
+                    "home": {
+                        "rosterForCurrentScoringPeriod": {
+                            "entries": [{"playerId": pid} for pid in player_ids]
+                        }
+                    },
+                    # A bye/missing side is tolerated.
+                    "away": None,
+                }
+            ]
+        },
+    }
+
+
+def _hidden_uphold_result(week=4):
+    return {
+        "season": "2026",
+        "data_type": f"transactions_week{week}",
+        "data": {
+            "transactions": [
+                {
+                    "id": "up1",
+                    "type": "TRADE_UPHOLD",
+                    "relatedTransactionId": "T1",
+                    "scoringPeriodId": week,
+                    "items": [],
+                },
+                # A waiver is never a hidden trade.
+                {"id": "w1", "type": "WAIVER", "scoringPeriodId": week, "items": []},
+            ]
+        },
+    }
+
+
+class TestHiddenTradeHelpers:
+    def test_find_hidden_trades_keys_by_related_id_else_id(self, onboarder_espn_client):
+        processed = [
+            _hidden_uphold_result(),
+            {
+                "season": "2026",
+                "data_type": "transactions_week5",
+                "data": {
+                    "transactions": [
+                        # Unlinked accept with no items → keyed by its own id.
+                        {"id": "ac9", "type": "TRADE_ACCEPT", "scoringPeriodId": 5},
+                        # A trade with its players is not hidden.
+                        {
+                            "id": "up2",
+                            "type": "TRADE_UPHOLD",
+                            "scoringPeriodId": 5,
+                            "items": [{"type": "TRADE", "playerId": 1}],
+                        },
+                    ]
+                },
+            },
+            _week_matchups(4, [1]),
+        ]
+        assert onboarder_espn_client._find_hidden_trades(processed) == {
+            "2026": {"T1": 4, "ac9": 5}
+        }
+
+    def test_rostered_player_ids_reads_both_rosters_for_requested_weeks(
+        self, onboarder_espn_client
+    ):
+        week4 = _week_matchups(4, [1, 2])
+        week4["data"]["matchups"][0]["away"] = {
+            "rosterForMatchupPeriod": {"entries": [{"playerId": 3}, {"playerId": None}]}
+        }
+        processed = [
+            week4,
+            _week_matchups(5, [4]),
+            _week_matchups(6, [99]),  # outside the requested weeks
+            {**_week_matchups(4, [77]), "season": "2025"},  # other season
+        ]
+        assert onboarder_espn_client._rostered_player_ids(
+            processed, "2026", {4, 5}
+        ) == {1, 2, 3, 4}
+
+    def test_player_card_transactions_locations(self, onboarder_espn_client):
+        fn = onboarder_espn_client._player_card_transactions
+        txn = {"id": "a"}
+        assert fn({"transactions": [txn, "junk"]}) == [txn]
+        assert fn({"player": {"transactions": [txn]}}) == [txn]
+        assert fn({"player": "not-a-dict"}) == []
+        assert fn("not-a-dict") == []
+
+    def test_best_card_trades_prefers_most_legs_and_filters(
+        self, onboarder_espn_client
+    ):
+        players = [
+            {"transactions": [_card_trade("T1", 1)]},
+            {"player": {"transactions": [_card_trade("T1", 2)]}},
+            {
+                "transactions": [
+                    _card_trade("T1", 1),  # fewer legs than the kept record
+                    _card_trade("T1", 3, status="PENDING"),
+                    _card_trade("T1", 3, txn_type="TRADE_PROPOSAL"),
+                    _card_trade("T1", 0),  # no traded players
+                    _card_trade("OTHER", 4),  # not a hidden trade
+                ]
+            },
+        ]
+        best = onboarder_espn_client._best_card_trades(players, {"T1"})
+        assert list(best) == ["T1"]
+        assert best["T1"]["id"] == "card-T1-2"
+
+
+class TestRecoverHiddenTrades:
+    def _client(self, onboarder_espn_client):
+        client = onboarder_espn_client.ESPNClient(
+            league_id="123", latest_season="2026", is_refresh=True
+        )
+        client.latest_scoring_period = 5
+        return client
+
+    async def test_no_card_requests_without_hidden_trade(self, onboarder_espn_client):
+        from unittest.mock import AsyncMock
+
+        client = self._client(onboarder_espn_client)
+        processed = [_week_matchups(4, [1, 2])]
+        with patch.object(onboarder_espn_client, "fetch_one", AsyncMock()) as fetch:
+            assert await client._recover_hidden_trades(MagicMock(), processed) == []
+        fetch.assert_not_called()
+
+    async def test_recovers_hidden_trade_in_batches_of_40(self, onboarder_espn_client):
+        import json
+        from unittest.mock import AsyncMock
+
+        client = self._client(onboarder_espn_client)
+        # 30 players in week 4 and 15 in week 5 → 45 candidates → 2 card requests.
+        processed = [
+            _hidden_uphold_result(),
+            _week_matchups(4, list(range(1, 31))),
+            _week_matchups(5, list(range(31, 46))),
+        ]
+
+        async def fake_fetch_one(session, semaphore, url_data, *, headers, transform):
+            season, data_type, _url = url_data
+            players = (
+                [{"transactions": [_card_trade("T1", 2)]}]
+                if data_type == "player_cards_batch0"
+                else []
+            )
+            return {
+                "season": season,
+                "data_type": data_type,
+                "data": transform([{"players": players}], data_type),
+            }
+
+        mock_fetch = AsyncMock(side_effect=fake_fetch_one)
+        with patch.object(onboarder_espn_client, "fetch_one", mock_fetch):
+            recovered = await client._recover_hidden_trades(MagicMock(), processed)
+
+        assert mock_fetch.call_count == 2
+        requested = []
+        for call in mock_fetch.call_args_list:
+            url_data = call.args[2]
+            assert url_data[2].endswith(
+                "/seasons/2026/segments/0/leagues/123?view=kona_playercard"
+            )
+            card_filter = json.loads(call.kwargs["headers"]["X-Fantasy-Filter"])
+            ids = card_filter["players"]["filterIds"]["value"]
+            assert len(ids) <= 40
+            requested.extend(ids)
+        assert sorted(requested) == list(range(1, 46))
+
+        assert len(recovered) == 1
+        result = recovered[0]
+        assert result["season"] == "2026"
+        assert result["data_type"] == "transactions_trade_cards"
+        [txn] = result["data"]["transactions"]
+        assert txn["type"] == "TRADE_ACCEPT"
+        assert txn["relatedTransactionId"] == "T1"
+        assert txn["acceptedDate"] == 200
+        assert [i["type"] for i in txn["items"]] == ["TRADE", "TRADE"]
+
+    async def test_card_request_failure_is_tolerated(self, onboarder_espn_client):
+        from unittest.mock import AsyncMock
+
+        client = self._client(onboarder_espn_client)
+        processed = [_hidden_uphold_result(), _week_matchups(4, [1])]
+        failed = AsyncMock(
+            return_value={
+                "season": "2026",
+                "data_type": "player_cards_batch0",
+                "data": None,
+                "error_status": 500,
+            }
+        )
+        with (
+            patch.object(onboarder_espn_client, "fetch_one", failed),
+            patch.object(onboarder_espn_client.logger, "warning") as warn,
+        ):
+            recovered = await client._recover_hidden_trades(MagicMock(), processed)
+        assert recovered == []
+        warn.assert_called_once()
+
+    async def test_fetch_all_appends_recovered_trades(self, onboarder_espn_client):
+        from unittest.mock import AsyncMock
+
+        client = self._client(onboarder_espn_client)
+        session_cm = MagicMock()
+        session_cm.__aenter__ = AsyncMock(return_value=MagicMock())
+        session_cm.__aexit__ = AsyncMock(return_value=False)
+        recovered = {
+            "season": "2026",
+            "data_type": "transactions_trade_cards",
+            "data": {"transactions": []},
+        }
+        with (
+            patch("aiohttp.ClientSession", return_value=session_cm),
+            patch.object(
+                onboarder_espn_client, "run_fetches", AsyncMock(return_value=[])
+            ),
+            patch.object(
+                client,
+                "_recover_hidden_trades",
+                AsyncMock(return_value=[recovered]),
+            ),
+        ):
+            processed = await client.fetch_all()
+        assert processed == [recovered]
