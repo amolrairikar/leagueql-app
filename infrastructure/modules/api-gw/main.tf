@@ -61,14 +61,6 @@ resource "aws_apigatewayv2_stage" "default" {
     throttling_rate_limit  = 1
   }
 
-  # Each accepted submission opens a GitHub issue (backend/integrations); keep bursts from
-  # racing the per-user daily limit.
-  route_settings {
-    route_key              = "POST /integrations"
-    throttling_burst_limit = 1
-    throttling_rate_limit  = 1
-  }
-
   lifecycle {
     create_before_destroy = true
   }

@@ -796,19 +796,6 @@ module "api-lambda-role" {
         ]
       },
       {
-        # backend/integrations: read the repo-scoped GitHub PAT used to open review issues and
-        # list approved integrations.
-        Sid    = "ReadGithubTokenSsmParameter"
-        Effect = "Allow"
-        Action = [
-          "ssm:GetParameter"
-        ]
-        Resource = [
-          "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/github/token",
-          "arn:aws:ssm:us-west-2:${var.account_id}:parameter/leagueql/${var.environment}/github/token"
-        ]
-      },
-      {
         # backend/yahoo-oauth: encrypt/decrypt the per-user Yahoo token items with the single
         # us-east-1 KMS key both regional Lambdas target (via YAHOO_KMS_REGION).
         Sid    = "EncryptDecryptYahooTokens"

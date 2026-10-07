@@ -1,7 +1,6 @@
 import { UserButton } from '@clerk/react';
 import {
   ArrowLeftRight,
-  Blocks,
   Download,
   GraduationCap,
   History,
@@ -172,27 +171,6 @@ export function AppSidebar() {
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-
-          <SidebarSeparator />
-          <SidebarGroup>
-            <SidebarGroupLabel>Community</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={location.pathname === '/integrations'}
-                    tooltip="Integrations"
-                  >
-                    <Link to="/integrations" onClick={closeMobileSidebar}>
-                      <Blocks />
-                      <span>Integrations</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
