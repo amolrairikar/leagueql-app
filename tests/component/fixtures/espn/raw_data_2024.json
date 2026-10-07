@@ -161,6 +161,66 @@
             { "type": "ADD", "playerId": 111, "fromTeamId": 0, "toTeamId": 1 },
             { "type": "DROP", "playerId": 222, "fromTeamId": 1, "toTeamId": 0 }
           ]
+        },
+        {
+          "id": "ta1",
+          "type": "TRADE_ACCEPT",
+          "scoringPeriodId": 3,
+          "proposedDate": 1789100000000,
+          "processDate": 1789272800000,
+          "bidAmount": 0,
+          "teamId": 2,
+          "items": [
+            { "type": "TRADE", "playerId": 111, "fromTeamId": 1, "toTeamId": 2 },
+            { "type": "TRADE", "playerId": 333, "fromTeamId": 2, "toTeamId": 1 }
+          ]
+        },
+        {
+          "id": "tu1",
+          "type": "TRADE_UPHOLD",
+          "scoringPeriodId": 3,
+          "proposedDate": 1789100000000,
+          "processDate": 1789272800000,
+          "bidAmount": 0,
+          "teamId": 0,
+          "items": [
+            { "type": "TRADE", "playerId": 111, "fromTeamId": 1, "toTeamId": 2 },
+            { "type": "TRADE", "playerId": 333, "fromTeamId": 2, "toTeamId": 1 }
+          ]
+        },
+        {
+          "id": "tu2",
+          "type": "TRADE_UPHOLD",
+          "relatedTransactionId": "T2",
+          "scoringPeriodId": 3,
+          "proposedDate": 1789400000000,
+          "processDate": null,
+          "bidAmount": 0,
+          "teamId": 0,
+          "items": []
+        }
+      ]
+    }
+  },
+  {
+    "season": "2024",
+    "data_type": "transactions_trade_cards",
+    "data": {
+      "transactions": [
+        {
+          "id": "ca2",
+          "type": "TRADE_ACCEPT",
+          "relatedTransactionId": "T2",
+          "scoringPeriodId": 3,
+          "proposedDate": 1789390000000,
+          "acceptedDate": 1789390000000,
+          "processDate": null,
+          "bidAmount": 0,
+          "teamId": 2,
+          "items": [
+            { "type": "TRADE", "playerId": 444, "fromTeamId": 1, "toTeamId": 2 },
+            { "type": "TRADE", "playerId": 555, "fromTeamId": 2, "toTeamId": 1 }
+          ]
         }
       ]
     }

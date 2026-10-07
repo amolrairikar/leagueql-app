@@ -368,7 +368,8 @@ paths:
             The precomputed view to retrieve. Season-scoped views require
             a season suffix (e.g. SEASON_STANDINGS#2024). Cross-season views
             such as ALL_TIME_STANDINGS do not require a suffix. TRANSACTIONS#{season}
-            is Sleeper-only (ESPN leagues have no transaction data and return 404).
+            returns waivers, free agents, and trades on every platform (ESPN stores
+            the current season only; a season with no stored transactions returns 404).
             LEAGUE_SETTINGS#{season} returns the season's playoff configuration
             (num_playoff_teams, playoff_week_start, regular_season_weeks).
           schema:

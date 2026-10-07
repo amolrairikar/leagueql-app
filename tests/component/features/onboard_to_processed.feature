@@ -136,8 +136,14 @@ Feature: Onboard-to-processed pipeline (backend/league-onboarding, backend/data-
     # and round-trip through the query API, with players/teams resolved. The fixture
     # carries a week-1 waiver and a week-2 free agent to prove multi-week collection,
     # plus a duplicate of the free agent in a later week (ESPN echoes the current
-    # period's transactions for requests at or beyond it) to prove dedup — the query
-    # returns 2 distinct rows, not 3.
+    # period's transactions for requests at or beyond it) to prove dedup. Week 3 also
+    # carries one trade recorded twice (an EXECUTED TRADE_ACCEPT and an EXECUTED
+    # TRADE_UPHOLD with different ids), which must be stored once as a "trade" row
+    # carrying the uphold's id. Week 3 also carries a 2026-style hidden trade: an
+    # EXECUTED TRADE_UPHOLD with no items whose players arrive in a separate
+    # transactions_trade_cards record (the player-card TRADE_ACCEPT the onboarder
+    # recovers), linked by relatedTransactionId — stored as one more "trade" row with
+    # both teams. The query returns 4 distinct rows.
     When the onboarder runs an ONBOARD for "ESPN" league "800" with fixture "espn/raw_data_2024.json"
     Then the onboarder returns status 200
     And the default caller is a member of the onboarded league
@@ -146,9 +152,15 @@ Feature: Onboard-to-processed pipeline (backend/league-onboarding, backend/data-
     And the league has at least one "TRANSACTIONS#2024" item
     When I GET "/leagues/800/query?platform=ESPN&queryType=TRANSACTIONS#2024"
     Then the API responds with status 200
-    And the query response has 2 row(s)
+    And the query response has 4 row(s)
     And a query response row has "type" equal to "free_agent"
     And a query response row has "type" equal to "waiver"
+    And a query response row has "type" equal to "trade"
+    And a query response row has "transaction_id" equal to "tu1"
+    And no query response row has "transaction_id" equal to "ta1"
+    And a query response row has "transaction_id" equal to "tu2"
+    And no query response row has "transaction_id" equal to "ca2"
+    And a query response row has "roster_ids" equal to "['2', '1']"
     And a query response row has "week" equal to "1"
     And a query response row has "week" equal to "2"
 

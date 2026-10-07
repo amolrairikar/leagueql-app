@@ -26,8 +26,50 @@ const espnLeague = {
   seasons: ['2024'],
 };
 
-// ESPN produces only waiver/free_agent rows (no trades), draft_picks always empty.
+// ESPN produces waiver/free_agent/trade rows, draft_picks always empty.
 const ESPN_TRANSACTIONS: TransactionItem[] = [
+  {
+    season: '2024',
+    transaction_id: 'e-t',
+    type: 'trade',
+    week: 3,
+    created: 1700000200000,
+    roster_ids: ['2', '1'],
+    teams: [
+      { roster_id: '2', team_name: 'Team Bob', display_name: 'Bob' },
+      { roster_id: '1', team_name: 'Team Alice', display_name: 'Alice' },
+    ],
+    adds: [
+      {
+        player_id: '444',
+        player_name: 'Traded Star',
+        position: 'RB',
+        roster_id: '2',
+      },
+      {
+        player_id: '555',
+        player_name: 'Traded Back',
+        position: 'TE',
+        roster_id: '1',
+      },
+    ],
+    drops: [
+      {
+        player_id: '444',
+        player_name: 'Traded Star',
+        position: 'RB',
+        roster_id: '1',
+      },
+      {
+        player_id: '555',
+        player_name: 'Traded Back',
+        position: 'TE',
+        roster_id: '2',
+      },
+    ],
+    draft_picks: [],
+    waiver_bid: 0,
+  },
   {
     season: '2024',
     transaction_id: 'e-fa',
@@ -1449,7 +1491,7 @@ defineFeature(feature, (test) => {
     });
   });
 
-  test('ESPN defaults to Free Agents and offers no Trades filter', ({
+  test("ESPN defaults to Trades and shows the league's trades", ({
     given,
     when,
     then,
@@ -1465,13 +1507,18 @@ defineFeature(feature, (test) => {
       });
     });
     then(/^I see the received player "(.*)"$/, async (name) => {
-      // The Free-Agent default is active, so the free-agent add is shown.
+      // The Trades default is active, so both sides of the trade are shown.
       expect(
         (await screen.findAllByText(name, { exact: false })).length,
       ).toBeGreaterThan(0);
     });
-    and(/^there is no "(.*)" filter option$/, (label) => {
-      expect(screen.queryByRole('button', { name: label })).toBeNull();
+    and(/^I see the received player "(.*)"$/, async (name) => {
+      expect(
+        (await screen.findAllByText(name, { exact: false })).length,
+      ).toBeGreaterThan(0);
+    });
+    and(/^there is a "(.*)" filter option$/, (label) => {
+      expect(screen.getByRole('button', { name: label })).toBeInTheDocument();
     });
     and('there is no "All" filter option', () => {
       expect(screen.queryByRole('button', { name: 'All' })).toBeNull();
@@ -1503,7 +1550,7 @@ defineFeature(feature, (test) => {
     });
   });
 
-  test('The ESPN summary table omits the Trades column', ({
+  test('The ESPN summary table shows the Trades column', ({
     given,
     when,
     then,
@@ -1518,10 +1565,10 @@ defineFeature(feature, (test) => {
         league: espnLeague,
       });
     });
-    then(/^the summary table has no "(.*)" column$/, async (label) => {
-      // Wait for the summary table to render before asserting the column is absent.
-      await screen.findByRole('columnheader', { name: 'Free Agents' });
-      expect(screen.queryByRole('columnheader', { name: label })).toBeNull();
+    then(/^the summary table has a "(.*)" column$/, async (label) => {
+      expect(
+        await screen.findByRole('columnheader', { name: label }),
+      ).toBeInTheDocument();
     });
     and(/^the summary table has a "(.*)" column$/, (label) => {
       expect(

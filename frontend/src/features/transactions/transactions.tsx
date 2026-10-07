@@ -518,11 +518,9 @@ function buildTransactionVisuals(
 function SummaryTable({
   promise,
   standingsPromise,
-  showTrades,
 }: {
   promise: Promise<TransactionsResult>;
   standingsPromise: Promise<StandingsResult>;
-  showTrades: boolean;
 }) {
   const result = use(promise);
   const standingsResult = use(standingsPromise);
@@ -560,9 +558,7 @@ function SummaryTable({
               </th>
               <th className={`${headCell} text-right`}>Waivers</th>
               <th className={`${headCell} text-right`}>Free Agents</th>
-              {showTrades && (
-                <th className={`${headCell} text-right`}>Trades</th>
-              )}
+              <th className={`${headCell} text-right`}>Trades</th>
               <th className={`${headCell} text-right`}>Total</th>
             </tr>
           </thead>
@@ -598,11 +594,9 @@ function SummaryTable({
                   <td className="px-3.5 py-2.5 text-right text-muted-foreground tabular-nums">
                     {row.free_agent}
                   </td>
-                  {showTrades && (
-                    <td className="px-3.5 py-2.5 text-right text-muted-foreground tabular-nums">
-                      {row.trade}
-                    </td>
-                  )}
+                  <td className="px-3.5 py-2.5 text-right text-muted-foreground tabular-nums">
+                    {row.trade}
+                  </td>
                   <td className="px-3.5 py-2.5 text-right">
                     <span className="inline-flex items-center justify-end gap-2">
                       <span className="hidden sm:block h-1.5 w-12 rounded-full bg-muted overflow-hidden">
@@ -751,16 +745,11 @@ export default function Transactions() {
 
   const [selectedSeason, setSelectedSeason] = useState(latestSeason(seasons));
 
-  // ESPN produces no trades, so its filter offers only Waivers / Free Agents and
-  // defaults to Free Agents (a Trades default would render an always-empty wire).
-  // Sleeper keeps Trades / Waivers / Free Agents, defaulting to Trades.
+  // Every platform (Sleeper, ESPN, Yahoo) produces trades, so the filter offers
+  // Trades / Waivers / Free Agents and defaults to Trades.
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>('trade');
+  // Only ESPN shows the historical-transactions disclaimer.
   const isEspn = platform === 'ESPN';
-  const typeFilters = isEspn
-    ? TYPE_FILTERS.filter((f) => f.value !== 'trade')
-    : TYPE_FILTERS;
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>(
-    isEspn ? 'free_agent' : 'trade',
-  );
 
   const transactionsPromise = useMemo(
     (): Promise<TransactionsResult> =>
@@ -834,13 +823,12 @@ export default function Transactions() {
             <SummaryTable
               promise={transactionsPromise}
               standingsPromise={standingsPromise}
-              showTrades={!isEspn}
             />
           </Suspense>
         </div>
 
         <div className="inline-flex items-center gap-0.5 p-0.5 mb-4 rounded-lg bg-muted border border-border/60">
-          {typeFilters.map((f) => {
+          {TYPE_FILTERS.map((f) => {
             const active = typeFilter === f.value;
             const { Icon } = typeMeta(f.value);
             return (
