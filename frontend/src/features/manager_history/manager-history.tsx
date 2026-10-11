@@ -1,9 +1,10 @@
-import { Info } from 'lucide-react';
+import { ChevronDown, Info } from 'lucide-react';
 import {
   Fragment,
   Suspense,
   use,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -20,13 +21,6 @@ import {
   ChartTooltip,
   type ChartConfig,
 } from '@/components/ui/chart';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Tooltip,
@@ -572,28 +566,17 @@ function SkeletonManagerHistory() {
   );
 }
 
-// ── Season schedule dialog ──────────────────────────────────────────────────
+// ── Season schedule panel ───────────────────────────────────────────────────
 
-function SeasonScheduleDialog({
+function SeasonSchedulePanel({
   season,
-  username,
   platform,
-  onClose,
 }: {
-  season: SeasonEntry | null;
-  username: string;
+  season: SeasonEntry;
   platform: Platform;
-  onClose: () => void;
 }) {
   const [selectedGame, setSelectedGame] = useState<ScheduleGame | null>(null);
   const boxScoreRef = useRef<HTMLDivElement>(null);
-
-  // Reset the open box score whenever a different season is opened
-  const [prevYear, setPrevYear] = useState(season?.year);
-  if (season?.year !== prevYear) {
-    setPrevYear(season?.year);
-    setSelectedGame(null);
-  }
 
   // Scroll the box score into view when a game is selected (matters on mobile,
   // where the box score stacks below the schedule)
@@ -601,7 +584,7 @@ function SeasonScheduleDialog({
     if (selectedGame) {
       boxScoreRef.current?.scrollIntoView({
         behavior: 'smooth',
-        block: 'start',
+        block: 'nearest',
       });
     }
   }, [selectedGame]);
@@ -621,116 +604,190 @@ function SeasonScheduleDialog({
   });
 
   return (
-    <Dialog open={season !== null} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent
-        className={`max-h-[85vh] overflow-y-auto ${
-          selectedGame ? 'sm:max-w-4xl' : 'sm:max-w-lg'
-        }`}
-        showCloseButton={!selectedGame}
-      >
-        {season && (
-          <div className="flex flex-col md:flex-row gap-6">
-            <div className={selectedGame ? 'md:w-80 md:shrink-0' : 'w-full'}>
-              <DialogHeader>
-                <DialogTitle>{season.year} Season Schedule</DialogTitle>
-                <DialogDescription>
-                  {(season.team || `Team ${username}`) + ` · ${season.record}`}
-                  {season.finish != null
-                    ? ` · ${ordinal(season.finish)} place`
-                    : ''}
-                </DialogDescription>
-              </DialogHeader>
-              <div className="max-h-[55vh] overflow-y-auto md:max-h-[60vh] -mx-1 px-1 mt-4">
-                <table className="w-full text-[13px] border-separate border-spacing-0">
-                  <thead>
-                    <tr className="text-[10px] uppercase tracking-[0.06em] text-muted-foreground">
-                      <th className="sticky top-0 z-10 bg-popover text-left font-medium py-2 pr-2">
-                        Wk
-                      </th>
-                      <th className="sticky top-0 z-10 bg-popover text-left font-medium py-2 px-2">
-                        Opponent
-                      </th>
-                      <th className="sticky top-0 z-10 bg-popover text-center font-medium py-2 px-2">
-                        Result
-                      </th>
-                      <th className="sticky top-0 z-10 bg-popover text-right font-medium py-2 pl-2">
-                        Score
-                      </th>
+    <div className="flex flex-col md:flex-row gap-6">
+      <div className={selectedGame ? 'md:w-80 md:shrink-0' : 'w-full'}>
+        <table className="w-full text-[13px] border-separate border-spacing-0">
+          <thead>
+            <tr className="text-[10px] uppercase tracking-[0.06em] text-muted-foreground">
+              <th className="text-left font-medium py-2 pr-2">Wk</th>
+              <th className="text-left font-medium py-2 px-2">Opponent</th>
+              <th className="text-center font-medium py-2 px-2">Result</th>
+              <th className="text-right font-medium py-2 pl-2">Score</th>
+            </tr>
+          </thead>
+          <tbody>
+            {season.schedule.map((g, i) => {
+              const isFirstPostseason =
+                g.isPostseason && !season.schedule[i - 1]?.isPostseason;
+              const isSelected =
+                selectedGame?.week === g.week &&
+                selectedGame?.opp.ownerId === g.opp.ownerId;
+              return (
+                <Fragment key={`${g.week}-${g.opp.ownerId}-${g.opp.score}`}>
+                  {isFirstPostseason && (
+                    <tr>
+                      <td
+                        colSpan={4}
+                        className="pt-3 pb-1.5 text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground"
+                      >
+                        Postseason
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {season.schedule.map((g, i) => {
-                      const isFirstPostseason =
-                        g.isPostseason && !season.schedule[i - 1]?.isPostseason;
-                      const isSelected =
-                        selectedGame?.week === g.week &&
-                        selectedGame?.opp.ownerId === g.opp.ownerId;
-                      return (
-                        <Fragment
-                          key={`${g.week}-${g.opp.ownerId}-${g.opp.score}`}
-                        >
-                          {isFirstPostseason && (
-                            <tr>
-                              <td
-                                colSpan={4}
-                                className="pt-3 pb-1.5 text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground"
-                              >
-                                Postseason
-                              </td>
-                            </tr>
-                          )}
-                          <tr
-                            onClick={() => setSelectedGame(g)}
-                            className={`cursor-pointer transition-colors ${
-                              isSelected ? 'bg-accent/60' : 'hover:bg-accent/40'
-                            }`}
-                          >
-                            <td className="py-2 pr-2 text-muted-foreground tabular-nums border-b border-border/40 align-top">
-                              {g.week}
-                            </td>
-                            <td className="py-2 px-2 border-b border-border/40">
-                              <div className="font-medium text-foreground">
-                                {g.opp.teamName || g.opp.ownerUsername || 'Bye'}
-                              </div>
-                            </td>
-                            <td className="py-2 px-2 text-center border-b border-border/40">
-                              <span
-                                className="font-medium"
-                                style={{ color: resultColor(g.result) }}
-                              >
-                                {g.result}
-                              </span>
-                            </td>
-                            <td className="py-2 pl-2 text-right tabular-nums font-medium text-foreground border-b border-border/40">
-                              {g.own.score.toFixed(1)}–{g.opp.score.toFixed(1)}
-                            </td>
-                          </tr>
-                        </Fragment>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+                  )}
+                  <tr
+                    onClick={() => setSelectedGame(g)}
+                    className={`cursor-pointer transition-colors ${
+                      isSelected ? 'bg-accent/60' : 'hover:bg-accent/40'
+                    }`}
+                  >
+                    <td className="py-2 pr-2 text-muted-foreground tabular-nums border-b border-border/40 align-top">
+                      {g.week}
+                    </td>
+                    <td className="py-2 px-2 border-b border-border/40">
+                      <div className="font-medium text-foreground">
+                        {g.opp.teamName || g.opp.ownerUsername || 'Bye'}
+                      </div>
+                    </td>
+                    <td className="py-2 px-2 text-center border-b border-border/40">
+                      <span
+                        className="font-medium"
+                        style={{ color: resultColor(g.result) }}
+                      >
+                        {g.result}
+                      </span>
+                    </td>
+                    <td className="py-2 pl-2 text-right tabular-nums font-medium text-foreground border-b border-border/40">
+                      {g.own.score.toFixed(1)}–{g.opp.score.toFixed(1)}
+                    </td>
+                  </tr>
+                </Fragment>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
 
-            {selectedGame && (
-              <div
-                ref={boxScoreRef}
-                className="flex-1 min-w-0 md:max-h-[70vh] md:overflow-y-auto pt-3 pr-3 scroll-mt-4"
-              >
-                <BoxScoreCard
-                  left={toSide(selectedGame.own)}
-                  right={toSide(selectedGame.opp)}
-                  platform={platform}
-                  season={season.year}
-                  onClose={() => setSelectedGame(null)}
-                />
-              </div>
-            )}
+      {selectedGame && (
+        <div ref={boxScoreRef} className="flex-1 min-w-0 scroll-mt-4">
+          <BoxScoreCard
+            left={toSide(selectedGame.own)}
+            right={toSide(selectedGame.opp)}
+            platform={platform}
+            season={season.year}
+            onClose={() => setSelectedGame(null)}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Season card ───────────────────────────────────────────────────────────────
+
+function SeasonCard({
+  season: s,
+  managerColor,
+  username,
+  platform,
+}: {
+  season: SeasonEntry;
+  managerColor: string;
+  username: string;
+  platform: Platform;
+}) {
+  const [open, setOpen] = useState(false);
+  const headerId = useId();
+  const panelId = useId();
+  const expandable = s.schedule.length > 0;
+
+  return (
+    <div
+      className={`bg-card rounded-lg overflow-hidden ${
+        s.result === 'champion' ? 'border-2' : 'border border-border/50'
+      }`}
+      style={s.result === 'champion' ? { borderColor: managerColor } : {}}
+    >
+      <button
+        id={headerId}
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        disabled={!expandable}
+        aria-expanded={expandable ? open : undefined}
+        aria-controls={expandable ? panelId : undefined}
+        className="w-full text-left p-3.5 grid grid-cols-1 sm:grid-cols-[80px_1fr_auto] gap-3 items-start sm:items-center transition-colors enabled:cursor-pointer enabled:hover:bg-accent/40 disabled:cursor-default"
+      >
+        <div>
+          <div className="text-[13px] font-medium text-foreground">
+            {s.year}
           </div>
-        )}
-      </DialogContent>
-    </Dialog>
+          <div className="text-[11px] text-muted-foreground mt-0.5">
+            {s.team || `Team ${username}`}
+          </div>
+          {s.result && <div className="mt-2">{resultBadge(s.result)}</div>}
+        </div>
+        <div className="flex gap-5 flex-wrap">
+          <div>
+            <div className="text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground">
+              Record
+            </div>
+            <div className="text-[14px] font-medium text-foreground">
+              {s.record}
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground">
+              Total pts
+            </div>
+            <div className="text-[14px] font-medium text-foreground">
+              {s.pts.toLocaleString(undefined, {
+                maximumFractionDigits: 2,
+              })}
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground">
+              Avg / wk
+            </div>
+            <div className="text-[14px] font-medium text-foreground">
+              {s.avg.toFixed(1)}
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground">
+              High score
+            </div>
+            <div className="text-[14px] font-medium text-foreground">
+              {s.high.toFixed(2)}
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="flex sm:flex-col items-center sm:items-end gap-1.5 sm:gap-1.5">
+            <div className="text-[20px] font-medium text-foreground">
+              {s.finish != null ? ordinal(s.finish) : '—'}
+            </div>
+            <div className="text-[11px] text-muted-foreground">place</div>
+          </div>
+          {expandable && (
+            <ChevronDown
+              aria-hidden
+              className="w-4 h-4 text-muted-foreground transition-transform ml-auto sm:ml-0"
+              style={{ transform: open ? 'rotate(180deg)' : 'none' }}
+            />
+          )}
+        </div>
+      </button>
+      {open && (
+        <div
+          id={panelId}
+          role="region"
+          aria-labelledby={headerId}
+          className="border-t border-border/50 p-3.5"
+        >
+          <SeasonSchedulePanel season={s} platform={platform} />
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -745,9 +802,6 @@ function ManagerHistoryContent({
 }) {
   const result = use(promise);
   const [selectedManagerIndex, setSelectedManagerIndex] = useState(0);
-  const [selectedSeason, setSelectedSeason] = useState<SeasonEntry | null>(
-    null,
-  );
 
   if (!result.ok) {
     return (
@@ -973,68 +1027,13 @@ function ManagerHistoryContent({
       </p>
       <div className="flex flex-col gap-2.5 mb-6">
         {[...m.seasons].reverse().map((s) => (
-          <button
-            key={s.year}
-            type="button"
-            onClick={() => setSelectedSeason(s)}
-            disabled={s.schedule.length === 0}
-            className={`w-full text-left bg-card rounded-lg p-3.5 grid grid-cols-1 sm:grid-cols-[80px_1fr_auto] gap-3 items-start sm:items-center transition-colors enabled:cursor-pointer enabled:hover:bg-accent/40 disabled:cursor-default ${
-              s.result === 'champion' ? 'border-2' : 'border border-border/50'
-            }`}
-            style={s.result === 'champion' ? { borderColor: m.color } : {}}
-          >
-            <div>
-              <div className="text-[13px] font-medium text-foreground">
-                {s.year}
-              </div>
-              <div className="text-[11px] text-muted-foreground mt-0.5">
-                {s.team || `Team ${m.owner_username}`}
-              </div>
-              {s.result && <div className="mt-2">{resultBadge(s.result)}</div>}
-            </div>
-            <div className="flex gap-5 flex-wrap">
-              <div>
-                <div className="text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground">
-                  Record
-                </div>
-                <div className="text-[14px] font-medium text-foreground">
-                  {s.record}
-                </div>
-              </div>
-              <div>
-                <div className="text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground">
-                  Total pts
-                </div>
-                <div className="text-[14px] font-medium text-foreground">
-                  {s.pts.toLocaleString(undefined, {
-                    maximumFractionDigits: 2,
-                  })}
-                </div>
-              </div>
-              <div>
-                <div className="text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground">
-                  Avg / wk
-                </div>
-                <div className="text-[14px] font-medium text-foreground">
-                  {s.avg.toFixed(1)}
-                </div>
-              </div>
-              <div>
-                <div className="text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground">
-                  High score
-                </div>
-                <div className="text-[14px] font-medium text-foreground">
-                  {s.high.toFixed(2)}
-                </div>
-              </div>
-            </div>
-            <div className="flex sm:flex-col items-center sm:items-end gap-1.5 sm:gap-1.5">
-              <div className="text-[20px] font-medium text-foreground">
-                {s.finish != null ? ordinal(s.finish) : '—'}
-              </div>
-              <div className="text-[11px] text-muted-foreground">place</div>
-            </div>
-          </button>
+          <SeasonCard
+            key={`${m.owner_id}-${s.year}`}
+            season={s}
+            managerColor={m.color}
+            username={m.owner_username}
+            platform={platform}
+          />
         ))}
       </div>
 
@@ -1232,13 +1231,6 @@ function ManagerHistoryContent({
           </div>
         </>
       )}
-
-      <SeasonScheduleDialog
-        season={selectedSeason}
-        username={m.owner_username}
-        platform={platform}
-        onClose={() => setSelectedSeason(null)}
-      />
     </div>
   );
 }
