@@ -55,6 +55,20 @@ const EARLY_FINAL_MATCHUPS: MatchupItem[] = [
   },
 ];
 
+// The same Alice-vs-Bob season repeated for 2023, so Alice has two expandable
+// season cards.
+const TWO_SEASON_STANDINGS = [
+  ...STANDINGS.map((s) => ({ ...s, season: '2023' })),
+  ...STANDINGS,
+];
+const TWO_SEASON_MATCHUPS: MatchupItem[] = [
+  ...(MATCHUPS as MatchupItem[]).map((m) => ({ ...m, season: '2023' })),
+  ...(MATCHUPS as MatchupItem[]),
+];
+
+const seasonButton = (year: string) =>
+  screen.findByRole('button', { name: new RegExp(year) });
+
 const feature = loadFeature(
   'src/features/manager_history/__tests__/manager-history.feature',
 );
@@ -103,13 +117,154 @@ defineFeature(feature, (test) => {
     then(
       'the schedule shows the played game but not the unplayed 0-0 game',
       async () => {
-        const dialog = await screen.findByRole('dialog');
+        const panel = await screen.findByRole('region', { name: /2024/ });
         // Played week-1 score cell (130.0–120.0) renders.
-        expect(within(dialog).getByText(/130\.0.120\.0/)).toBeInTheDocument();
+        expect(within(panel).getByText(/130\.0.120\.0/)).toBeInTheDocument();
         // The unplayed 0-0 week has no score cell (0.0–0.0) in the schedule.
-        expect(within(dialog).queryByText(/0\.0.0\.0/)).toBeNull();
+        expect(within(panel).queryByText(/0\.0.0\.0/)).toBeNull();
       },
     );
+  });
+
+  test('Expanding a season shows its schedule inline', ({
+    given,
+    when,
+    and,
+    then,
+  }) => {
+    const user = userEvent.setup();
+    given('manager history data is available', () => {
+      server.use(leagueQuery({ SEASON_STANDINGS: STANDINGS, MATCHUPS }));
+    });
+    when('I open the manager history page', async () => {
+      await renderRoute(<ManagerHistory />, {
+        route: '/manager_history',
+        league: LEAGUE,
+      });
+    });
+    and('I open the 2024 season schedule', async () => {
+      await user.click(await seasonButton('2024'));
+    });
+    then(
+      'the 2024 season is expanded with its schedule shown inline',
+      async () => {
+        expect(await seasonButton('2024')).toHaveAttribute(
+          'aria-expanded',
+          'true',
+        );
+        const panel = await screen.findByRole('region', { name: /2024/ });
+        expect(within(panel).getByText('Team Bob')).toBeInTheDocument();
+        expect(within(panel).getByText(/130\.0.120\.0/)).toBeInTheDocument();
+      },
+    );
+    and('no dialog is open', () => {
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+  });
+
+  test('Clicking an expanded season again collapses it', ({
+    given,
+    when,
+    and,
+    then,
+  }) => {
+    const user = userEvent.setup();
+    given('manager history data is available', () => {
+      server.use(leagueQuery({ SEASON_STANDINGS: STANDINGS, MATCHUPS }));
+    });
+    when('I open the manager history page', async () => {
+      await renderRoute(<ManagerHistory />, {
+        route: '/manager_history',
+        league: LEAGUE,
+      });
+    });
+    and('I open the 2024 season schedule', async () => {
+      await user.click(await seasonButton('2024'));
+      await screen.findByRole('region', { name: /2024/ });
+    });
+    and('I click the 2024 season again', async () => {
+      await user.click(await seasonButton('2024'));
+    });
+    then(
+      'the 2024 season is collapsed and its schedule is hidden',
+      async () => {
+        expect(await seasonButton('2024')).toHaveAttribute(
+          'aria-expanded',
+          'false',
+        );
+        expect(screen.queryByRole('region', { name: /2024/ })).toBeNull();
+        expect(screen.queryByText(/130\.0.120\.0/)).toBeNull();
+      },
+    );
+  });
+
+  test('Several seasons stay expanded', ({ given, when, and, then }) => {
+    const user = userEvent.setup();
+    given('manager history data for the 2023 and 2024 seasons', () => {
+      server.use(
+        leagueQuery({
+          SEASON_STANDINGS: TWO_SEASON_STANDINGS,
+          MATCHUPS: TWO_SEASON_MATCHUPS,
+        }),
+      );
+    });
+    when('I open the manager history page for both seasons', async () => {
+      await renderRoute(<ManagerHistory />, {
+        route: '/manager_history',
+        league: { ...LEAGUE, seasons: ['2023', '2024'] },
+      });
+    });
+    and('I open the 2024 season schedule', async () => {
+      await user.click(await seasonButton('2024'));
+    });
+    and('I open the 2023 season schedule', async () => {
+      await user.click(await seasonButton('2023'));
+    });
+    then('both the 2023 and 2024 seasons are expanded', async () => {
+      for (const year of ['2023', '2024']) {
+        expect(await seasonButton(year)).toHaveAttribute(
+          'aria-expanded',
+          'true',
+        );
+        expect(
+          await screen.findByRole('region', { name: new RegExp(year) }),
+        ).toBeInTheDocument();
+      }
+    });
+  });
+
+  test('Selecting a game shows its box score inside the season', ({
+    given,
+    when,
+    and,
+    then,
+  }) => {
+    const user = userEvent.setup();
+    given('manager history data is available', () => {
+      server.use(leagueQuery({ SEASON_STANDINGS: STANDINGS, MATCHUPS }));
+    });
+    when('I open the manager history page', async () => {
+      await renderRoute(<ManagerHistory />, {
+        route: '/manager_history',
+        league: LEAGUE,
+      });
+    });
+    and('I open the 2024 season schedule', async () => {
+      await user.click(await seasonButton('2024'));
+    });
+    and('I select the week 1 game', async () => {
+      const panel = await screen.findByRole('region', { name: /2024/ });
+      await user.click(within(panel).getByText(/130\.0.120\.0/));
+    });
+    then('the week 1 box score is shown inside the 2024 season', async () => {
+      const panel = await screen.findByRole('region', { name: /2024/ });
+      // Starters from both sides of the week-1 box score render in the card.
+      expect(
+        await within(panel).findByText('Pat Quarterback'),
+      ).toBeInTheDocument();
+      expect(within(panel).getByText('Quincy Back')).toBeInTheDocument();
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
   });
 
   test('An in-progress season shows the current standings position, not rank 0', ({
