@@ -24,6 +24,8 @@ __pycache__
 
 # wrangler files
 .wrangler
+# Worker bundles built for Terraform (infrastructure/cloudflare)
+workers/*/dist/
 .dev.vars*
 !.dev.vars.example
 !.env.example

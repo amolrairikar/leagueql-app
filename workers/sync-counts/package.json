@@ -4,8 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "deploy": "wrangler deploy --config wrangler.toml",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "wrangler deploy --dry-run --config wrangler.toml --outdir dist",
+    "dev": "wrangler dev --config wrangler.toml"
   },
   "keywords": [],
   "author": "",
@@ -13,5 +13,8 @@
   "type": "commonjs",
   "dependencies": {
     "@aws-sdk/client-dynamodb": "3.1049.0"
+  },
+  "devDependencies": {
+    "wrangler": "4.131.2"
   }
 }
