@@ -1,11 +1,14 @@
-# Cloudflare edge workers backing the landing-page league count (backend/app-stats-league-count):
-#   - get-counts:  serves GET /counts on api.leagueql.com from the COUNTS_KV namespace
-#   - sync-counts: hourly cron that counts league METADATA items in DynamoDB (GSI3) and
-#                  writes the result to COUNTS_KV
-# Prod-only: the route and table are prod resources, so there is no dev counterpart.
+# Cloudflare edge workers (prod-only — there is no dev counterpart):
+#   - leagueql-app: serves the React SPA (frontend/dist static assets) plus the same-origin
+#                   /ingest/traces → Better Stack proxy (frontend/observability)
+#   - get-counts:   serves GET /counts on api.leagueql.com from the COUNTS_KV namespace
+#                   (backend/app-stats-league-count)
+#   - sync-counts:  hourly cron that counts league METADATA items in DynamoDB (GSI3) and
+#                   writes the result to COUNTS_KV
 #
-# Worker code is bundled by wrangler (`npm run build` in workers/<name>, a --dry-run deploy
-# that writes dist/index.js) and uploaded here; wrangler itself never deploys these workers.
+# The counts workers are bundled by wrangler (`npm run build` in workers/<name>, a --dry-run
+# deploy that writes dist/index.js); leagueql-app has no imports so its index.js is uploaded
+# as-is, with the SPA built by `npm run build:ci` in frontend/. Wrangler never deploys these.
 
 terraform {
   required_providers {
@@ -32,6 +35,11 @@ locals {
 
   get_counts_bundle  = "${local.workers_dir}/get-counts/dist/index.js"
   sync_counts_bundle = "${local.workers_dir}/sync-counts/dist/index.js"
+  app_bundle         = "${local.workers_dir}/leagueql-app/index.js"
+  frontend_dist      = "${path.module}/../../frontend/dist"
+  # Moved out of dist/ by the CI build step: the provider uploads every file in the assets
+  # directory (no ignore list, unlike wrangler), so _headers would otherwise be served at /_headers.
+  frontend_headers = "${path.module}/../../frontend/dist-config/_headers"
 
   observability = {
     enabled = true
@@ -57,6 +65,59 @@ resource "cloudflare_workers_kv_namespace" "counts" {
   lifecycle {
     prevent_destroy = true
   }
+}
+
+# ── leagueql-app ─────────────────────────────────────────────────────────────
+
+resource "cloudflare_workers_script" "leagueql_app" {
+  account_id          = var.cloudflare_account_id
+  script_name         = "leagueql-app"
+  main_module         = "index.js"
+  content_file        = local.app_bundle
+  content_sha256      = filesha256(local.app_bundle)
+  compatibility_date  = "2025-09-27"
+  compatibility_flags = ["nodejs_compat"]
+
+  # Static assets are served directly; only non-asset routes (e.g. /ingest/traces) invoke
+  # the Worker. The _headers file (frontend/security-headers) is passed as config rather than
+  # uploaded as an asset, the same way wrangler does it.
+  assets = {
+    directory = local.frontend_dist
+    config = {
+      not_found_handling = "single-page-application"
+      headers            = file(local.frontend_headers)
+    }
+  }
+
+  bindings = [
+    {
+      name = "ASSETS"
+      type = "assets"
+    },
+    {
+      name = "OTEL_TRACES_URL"
+      type = "plain_text"
+      text = "https://s2655032.eu-central-1a.betterstackdata.com/v1/traces"
+    },
+    {
+      name = "OTEL_EXPORTER_TOKEN"
+      type = "secret_text"
+      text = var.otel_exporter_token
+    },
+  ]
+
+  observability = local.observability
+}
+
+# leagueql.com and www.leagueql.com are attached as Workers Custom Domains (Cloudflare
+# manages their DNS records and certificates).
+resource "cloudflare_workers_custom_domain" "leagueql_app" {
+  for_each = toset([var.zone_name, "www.${var.zone_name}"])
+
+  account_id = var.cloudflare_account_id
+  zone_id    = data.cloudflare_zone.leagueql.zone_id
+  hostname   = each.value
+  service    = cloudflare_workers_script.leagueql_app.script_name
 }
 
 # ── get-counts ───────────────────────────────────────────────────────────────

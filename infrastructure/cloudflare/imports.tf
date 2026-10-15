@@ -1,42 +1,25 @@
-# One-time adoption of the resources that were created by hand (wrangler / AWS console).
-# Delete this file after the first successful apply; the imports are then recorded in state.
-#
-# aws_iam_access_key.sync_counts is intentionally NOT imported (a secret can't be read back):
-# Terraform mints a new key on leagueql-user (owned by account-setup) and wires it into the
-# worker, after which the old hand-made key is deactivated and deleted manually.
+# One-time adoption of the leagueql-app worker, which was deployed by Workers Builds (wrangler)
+# with its custom domains attached in the dashboard. Delete this file after the first
+# successful apply; the imports are then recorded in state.
 
-data "cloudflare_workers_routes" "leagueql" {
-  zone_id = data.cloudflare_zone.leagueql.zone_id
+data "cloudflare_workers_custom_domains" "leagueql_app" {
+  account_id = var.cloudflare_account_id
+  service    = "leagueql-app"
 }
 
 locals {
-  counts_route_id = one([
-    for r in data.cloudflare_workers_routes.leagueql.result : r.id
-    if r.pattern == "api.${var.zone_name}/counts"
-  ])
+  leagueql_app_domain_ids = {
+    for d in data.cloudflare_workers_custom_domains.leagueql_app.result : d.hostname => d.id
+  }
 }
 
 import {
-  to = cloudflare_workers_kv_namespace.counts
-  id = "${var.cloudflare_account_id}/15d97bbfce4842aea2e15817010aeb58"
+  to = cloudflare_workers_script.leagueql_app
+  id = "${var.cloudflare_account_id}/leagueql-app"
 }
 
 import {
-  to = cloudflare_workers_script.get_counts
-  id = "${var.cloudflare_account_id}/get-counts"
-}
-
-import {
-  to = cloudflare_workers_script.sync_counts
-  id = "${var.cloudflare_account_id}/sync-counts"
-}
-
-import {
-  to = cloudflare_workers_route.counts
-  id = "${data.cloudflare_zone.leagueql.zone_id}/${local.counts_route_id}"
-}
-
-import {
-  to = cloudflare_workers_cron_trigger.sync_counts
-  id = "${var.cloudflare_account_id}/sync-counts"
+  for_each = toset([var.zone_name, "www.${var.zone_name}"])
+  to       = cloudflare_workers_custom_domain.leagueql_app[each.value]
+  id       = "${var.cloudflare_account_id}/${local.leagueql_app_domain_ids[each.value]}"
 }

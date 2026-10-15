@@ -1,3 +1,6 @@
+// Deployed by Terraform (infrastructure/cloudflare) — do NOT `wrangler deploy`.
+// This file is only used for local `wrangler dev` against a built frontend (frontend/dist).
+// Bindings, the domain and the OTEL_EXPORTER_TOKEN secret are owned by Terraform.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "leagueql-app",
@@ -10,7 +13,7 @@
     "enabled": true
   },
   "assets": {
-    "directory": "frontend",
+    "directory": "frontend/dist",
     "not_found_handling": "single-page-application",
     "binding": "ASSETS"
   },
@@ -19,8 +22,8 @@
   ],
   // Runtime vars for the /ingest/traces → Better Stack proxy (frontend/observability). The OTLP
   // traces URL is not sensitive, so it lives here; the source token is a Worker
-  // *secret* (OTEL_EXPORTER_TOKEN), set out-of-band via `wrangler secret put` / the
-  // dashboard and never committed. Both must be set for the proxy to forward (else 204).
+  // *secret* (OTEL_EXPORTER_TOKEN) set by Terraform and never committed. Both must be set
+  // for the proxy to forward (else 204).
   "vars": {
     "OTEL_TRACES_URL": "https://s2655032.eu-central-1a.betterstackdata.com/v1/traces"
   }
