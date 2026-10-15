@@ -160,6 +160,61 @@ jobs:
             -var="environment=${{ env.ENVIRONMENT }}" \
             -var="account_id=${{ secrets.AWS_ACCOUNT_ID }}"
 
+  # The get-counts / sync-counts Cloudflare Workers (infrastructure/cloudflare) are prod-only:
+  # they serve api.leagueql.com/counts from the prod table, so there is no dev deploy.
+  deploy-cloudflare-workers:
+    name: Deploy Cloudflare Workers - ${{ needs.set-env.outputs.environment }}
+    runs-on: ubuntu-latest
+    if: needs.set-env.outputs.environment == 'prod'
+    needs:
+      - set-env
+      - run-unit-tests
+      - run-component-tests
+      - run-frontend-tests
+    env:
+      ENVIRONMENT: ${{ needs.set-env.outputs.environment }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Set up Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: "24"
+
+      - name: Bundle workers
+        run: |
+          for worker in get-counts sync-counts; do
+            (cd "workers/$worker" && npm ci && npm run build)
+          done
+
+      - name: Make AWS credentials script executable
+        run: chmod +x scripts/deployment_scripts/configure_aws_credentials.sh
+
+      - name: Configure AWS credentials via OIDC
+        run: bash scripts/deployment_scripts/configure_aws_credentials.sh "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-${{ env.ENVIRONMENT }}-role" "us-east-1" "GitHubActions-${{ github.run_id }}"
+
+      - name: Make Terraform setup script executable
+        run: chmod +x scripts/deployment_scripts/setup_terraform.sh
+
+      - name: Setup Terraform
+        run: bash scripts/deployment_scripts/setup_terraform.sh "1.14.7"
+
+      - name: Initialize & Apply Terraform
+        working-directory: infrastructure/cloudflare
+        env:
+          TF_STATE_BUCKET: terraform-state-bucket-east-${{ secrets.AWS_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          terraform init \
+            -backend-config="bucket=$TF_STATE_BUCKET" \
+            -backend-config="key=leagueql/${{ env.ENVIRONMENT }}/cloudflare_tf.state" \
+            -backend-config="region=us-east-1"
+          terraform apply \
+            -auto-approve \
+            -var="cloudflare_account_id=${{ secrets.CLOUDFLARE_ACCOUNT_ID }}"
+
   deploy-fargate-image:
     name: Build & Push Fargate Image - ${{ needs.set-env.outputs.environment }}
     runs-on: ubuntu-latest

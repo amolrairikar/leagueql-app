@@ -17,7 +17,8 @@ pipenv run python docs/architecture/architecture_diagram.py
 ## What it shows
 
 - **Cloudflare edge** — the React SPA (`leagueql-app` worker) plus the `get-counts` /
-  `sync-counts` workers that read the league count straight from DynamoDB.
+  `sync-counts` workers that read the league count straight from DynamoDB (the latter two,
+  their KV namespace, route and cron are managed by Terraform in `infrastructure/cloudflare/`).
 - **AWS backend** — API Gateway → FastAPI Lambda, which fire-and-forget invokes the
   **onboarder → (S3 manifest event) → processor** async chain that writes precomputed views
   to DynamoDB. A prod-only SQS DLQ catches poison onboarder events.

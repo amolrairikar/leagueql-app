@@ -1,3 +1,6 @@
+# Deployed by Terraform (infrastructure/cloudflare) — do NOT `wrangler deploy`.
+# This file is only used for `npm run dev` (wrangler dev) and `npm run build`, which bundles
+# the worker into dist/ for Terraform to upload. The /counts route is owned by Terraform.
 name = "get-counts"
 main = "index.js"
 compatibility_date = "2024-01-01"
@@ -5,10 +8,6 @@ compatibility_date = "2024-01-01"
 [[kv_namespaces]]
 binding = "COUNTS_KV"
 id = "15d97bbfce4842aea2e15817010aeb58"
-
-[[routes]]
-pattern = "api.leagueql.com/counts"
-zone_name = "leagueql.com"
 
 [observability.logs]
 enabled = true
