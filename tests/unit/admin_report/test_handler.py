@@ -20,7 +20,7 @@ class TestDigest:
     def test_posts_expected_metrics(self, handler, mock_table, mock_post):
         from datetime import timedelta
 
-        now = handler.datetime.now(handler.timezone.utc)
+        now = handler.datetime.now(handler.UTC)
         recent = now.isoformat()
         old = (now - timedelta(days=10)).isoformat()  # counted in total, not in 24h
         mock_table.query.return_value = {
@@ -55,7 +55,7 @@ class TestDigest:
     def test_reports_stale_count(self, handler, mock_table, mock_post):
         from datetime import timedelta
 
-        now = handler.datetime.now(handler.timezone.utc)
+        now = handler.datetime.now(handler.UTC)
         recent = now.isoformat()
         long_ago = (now - timedelta(days=400)).isoformat()  # >1 year -> stale
         mock_table.query.return_value = {
@@ -92,7 +92,7 @@ class TestDigest:
         assert fields["ESPN / SLEEPER / YAHOO"] == "0 / 0 / 0"
 
     def test_paginates_all_pages(self, handler, mock_table, mock_post):
-        now = handler.datetime.now(handler.timezone.utc).isoformat()
+        now = handler.datetime.now(handler.UTC).isoformat()
         mock_table.query.side_effect = [
             {
                 "Items": [{"platform": "ESPN", "onboarded_at": now}],
