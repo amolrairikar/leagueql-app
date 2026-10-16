@@ -29,7 +29,7 @@ _NOT_INDEXED = "attribute_not_exists(PK)"
 
 
 def _now_iso() -> str:
-    return datetime.datetime.now(datetime.timezone.utc).isoformat()
+    return datetime.datetime.now(datetime.UTC).isoformat()
 
 
 def member_item(

@@ -1,6 +1,6 @@
 import json
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 from behave import given, then, when
@@ -23,7 +23,7 @@ def _test_league_current_season(context) -> str:
     seasons = resp.get("Item", {}).get("seasons", {}).get("SS")
     if seasons:
         return max(seasons, key=int)
-    return str(datetime.now(timezone.utc).year)
+    return str(datetime.now(UTC).year)
 
 
 @given("the NFL state API returns week {week:d} of the regular season")
@@ -70,7 +70,7 @@ def step_invoke_handler(context):
     mock_ctx.aws_request_id = "integration-test-request-id"
     mock_ctx.function_name = "league-refresh-integration-test"
     context.response = context.handler_mod.lambda_handler({}, mock_ctx)
-    context.invoke_time = datetime.now(timezone.utc)
+    context.invoke_time = datetime.now(UTC)
     if hasattr(context, "nfl_patcher"):
         context.nfl_patcher.stop()
 
@@ -87,8 +87,8 @@ def step_poll_last_refresh_at(context):
     # Job status now lives in the JOB_STATUS item keyed by the correlation_id the
     # refresh handler generates internally (not observable here), so the
     # processor-written last_refresh_at on METADATA is the completion signal.
-    deadline = datetime.now(timezone.utc) + timedelta(minutes=5)
-    while datetime.now(timezone.utc) < deadline:
+    deadline = datetime.now(UTC) + timedelta(minutes=5)
+    while datetime.now(UTC) < deadline:
         resp = context.dynamodb_client.get_item(
             TableName=context.table_name,
             Key={

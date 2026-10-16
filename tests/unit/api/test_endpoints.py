@@ -1,7 +1,7 @@
 """Tests for FastAPI endpoint handlers in main.py."""
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import ClassVar
 from unittest.mock import MagicMock, patch
 
@@ -259,7 +259,7 @@ class TestLeagueAccessTracking:
         self, client, mock_table, league_lookup_item, league_metadata_item
     ):
         league_metadata_item["last_accessed_at"] = (
-            datetime.now(timezone.utc) - timedelta(hours=2)
+            datetime.now(UTC) - timedelta(hours=2)
         ).isoformat()
         self._seed_reads(mock_table, league_lookup_item, league_metadata_item)
         response = client.get("/leagues/123?platform=SLEEPER")
@@ -270,7 +270,7 @@ class TestLeagueAccessTracking:
         self, client, mock_table, league_lookup_item, league_metadata_item
     ):
         league_metadata_item["last_accessed_at"] = (
-            datetime.now(timezone.utc) - timedelta(minutes=1)
+            datetime.now(UTC) - timedelta(minutes=1)
         ).isoformat()
         self._seed_reads(mock_table, league_lookup_item, league_metadata_item)
         response = client.get("/leagues/123?platform=SLEEPER")
@@ -500,10 +500,10 @@ class TestOnboardLeagueEndpoint:
     def test_refresh_returns_429_when_within_cooldown(
         self, client, mock_table, league_lookup_item, league_metadata_item, monkeypatch
     ):
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timedelta
 
         monkeypatch.setenv("ENVIRONMENT", "prod")
-        recent_time = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()
+        recent_time = (datetime.now(UTC) - timedelta(minutes=5)).isoformat()
         league_metadata_item["last_refresh_at"] = recent_time
         mock_table.get_item.side_effect = [
             {"Item": league_lookup_item},
@@ -525,10 +525,10 @@ class TestOnboardLeagueEndpoint:
         league_metadata_item,
         monkeypatch,
     ):
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timedelta
 
         monkeypatch.setenv("ENVIRONMENT", "dev")
-        recent_time = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()
+        recent_time = (datetime.now(UTC) - timedelta(minutes=5)).isoformat()
         league_metadata_item["last_refresh_at"] = recent_time
         mock_table.get_item.side_effect = [
             {"Item": league_lookup_item},
@@ -550,9 +550,9 @@ class TestOnboardLeagueEndpoint:
         league_lookup_item,
         league_metadata_item,
     ):
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timedelta
 
-        old_time = (datetime.now(timezone.utc) - timedelta(days=8)).isoformat()
+        old_time = (datetime.now(UTC) - timedelta(days=8)).isoformat()
         league_metadata_item["last_refresh_at"] = old_time
         mock_table.get_item.side_effect = [
             {"Item": league_lookup_item},
@@ -578,14 +578,14 @@ class TestOnboardLeagueEndpoint:
         # calendar day (only 6d 22h elapsed). The whole-day cooldown must allow it;
         # an exact 7x24h check would wrongly 429. Freeze `now` so the calendar-day
         # diff is deterministic regardless of when the suite runs.
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         import routes
 
         class _FrozenDatetime(datetime):
             @classmethod
             def now(cls, tz=None):
-                return datetime(2026, 9, 22, 8, 0, tzinfo=timezone.utc)
+                return datetime(2026, 9, 22, 8, 0, tzinfo=UTC)
 
         monkeypatch.setenv("ENVIRONMENT", "prod")
         monkeypatch.setattr(routes, "datetime", _FrozenDatetime)
@@ -2645,14 +2645,14 @@ class TestClaimOwnershipEndpoint:
         }
 
     def _future(self):
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timedelta
 
-        return (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
+        return (datetime.now(UTC) + timedelta(hours=1)).isoformat()
 
     def _past(self):
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timedelta
 
-        return (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+        return (datetime.now(UTC) - timedelta(hours=1)).isoformat()
 
     def test_happy_path_claims_ownership(self, client, mock_table, league_lookup_item):
         mock_table.get_item.side_effect = [
@@ -3099,9 +3099,7 @@ def _block_in_progress(mock_table, metadata, default_nfl_state, monkeypatch):
 
 def _block_cooldown(mock_table, metadata, default_nfl_state, monkeypatch):
     monkeypatch.setenv("ENVIRONMENT", "prod")
-    metadata["last_refresh_at"] = (
-        datetime.now(timezone.utc) - timedelta(minutes=5)
-    ).isoformat()
+    metadata["last_refresh_at"] = (datetime.now(UTC) - timedelta(minutes=5)).isoformat()
     return []
 
 

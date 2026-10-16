@@ -1,7 +1,7 @@
 import json
 import time
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 
 from behave import then, when
@@ -45,8 +45,8 @@ def step_assert_response(context, code, expected_status):
 # Shared by the onboarding and refresh features.
 @then('DynamoDB shows job status "{expected}" for the test league')
 def step_poll_job_status(context, expected):
-    deadline = datetime.now(timezone.utc) + timedelta(minutes=5)
-    while datetime.now(timezone.utc) < deadline:
+    deadline = datetime.now(UTC) + timedelta(minutes=5)
+    while datetime.now(UTC) < deadline:
         resp = context.dynamodb_client.get_item(
             TableName=context.table_name,
             Key={

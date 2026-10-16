@@ -1,6 +1,6 @@
 import time
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 
 from behave import given, then, when
@@ -43,13 +43,13 @@ def step_invoke_refresh(context):
         },
     }
     context.response = context.onboarder_handler_mod.lambda_handler(event, mock_ctx)
-    context.invoke_time = datetime.now(timezone.utc)
+    context.invoke_time = datetime.now(UTC)
 
 
 @then("the last_refresh_at on the test league is updated within 5 minutes")
 def step_poll_last_refresh_at(context):
-    deadline = datetime.now(timezone.utc) + timedelta(minutes=5)
-    while datetime.now(timezone.utc) < deadline:
+    deadline = datetime.now(UTC) + timedelta(minutes=5)
+    while datetime.now(UTC) < deadline:
         resp = context.dynamodb_client.get_item(
             TableName=context.table_name,
             Key={

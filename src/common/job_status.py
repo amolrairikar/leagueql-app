@@ -162,7 +162,7 @@ def write_job_status(
         logger.error("Environment variable 'DYNAMODB_TABLE_NAME' not set!")
         return
 
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.UTC)
     # "status" and "ttl" are both DynamoDB reserved words, so alias them.
     expr_names = {"#status": "status", "#ttl": "ttl"}
     expr_values = {

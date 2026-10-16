@@ -127,7 +127,7 @@ class EspnCredentialClient:
                 UpdateExpression="SET auth_failed_at = :f",
                 ConditionExpression="attribute_exists(PK) AND updated_at = :u",
                 ExpressionAttributeValues={
-                    ":f": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                    ":f": datetime.datetime.now(datetime.UTC).isoformat(),
                     ":u": expected_updated_at,
                 },
             )

@@ -5,7 +5,7 @@ DynamoDB/S3; ESPN HTTP is patched where a route reaches out.
 """
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
@@ -30,7 +30,7 @@ def _seed_matchup_week(context, canonical, season, week, *, played):
 
 
 def _iso(days):
-    return (datetime.now(timezone.utc) + timedelta(days=days)).isoformat()
+    return (datetime.now(UTC) + timedelta(days=days)).isoformat()
 
 
 @given('league "{canonical}" has a "{sk}" view with {count:d} row(s)')
@@ -613,7 +613,7 @@ def step_seed_last_refresh(context, canonical, days):
     # Seed last_refresh_at so the weekly refresh cooldown can be exercised
     # (backend/league-refresh). Written by the processor on a successful refresh;
     # here we set it directly to drive the API cooldown check.
-    seeded = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    seeded = (datetime.now(UTC) - timedelta(days=days)).isoformat()
     context.ddb_resource.Table(context.table_name).update_item(
         Key={"PK": f"LEAGUE#{canonical}", "SK": "METADATA"},
         UpdateExpression="SET last_refresh_at = :t",
@@ -652,7 +652,7 @@ def step_data_field_empty_list(context, field):
 def step_seed_last_accessed(context, canonical, minutes):
     # Seed a recent last_accessed_at and stash it so a later assertion can confirm
     # the throttle held (no overwrite within the window). backend/league-access-tracking.
-    seeded = (datetime.now(timezone.utc) - timedelta(minutes=minutes)).isoformat()
+    seeded = (datetime.now(UTC) - timedelta(minutes=minutes)).isoformat()
     context.ddb_resource.Table(context.table_name).update_item(
         Key={"PK": f"LEAGUE#{canonical}", "SK": "METADATA"},
         UpdateExpression="SET last_accessed_at = :t",

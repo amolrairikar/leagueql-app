@@ -1,7 +1,7 @@
 import json
 import time
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 
 from behave import then, when
@@ -38,8 +38,8 @@ def step_assert_response(context, code, expected_status):
 
 @then('DynamoDB shows job status "{expected}" for the test league')
 def step_poll_job_status(context, expected):
-    deadline = datetime.now(timezone.utc) + timedelta(minutes=5)
-    while datetime.now(timezone.utc) < deadline:
+    deadline = datetime.now(UTC) + timedelta(minutes=5)
+    while datetime.now(UTC) < deadline:
         resp = context.dynamodb_client.get_item(
             TableName=context.table_name,
             Key={
@@ -92,8 +92,8 @@ def _metadata(context) -> dict:
 @then("the lineup backfill completes the newest season within {minutes:d} minutes")
 def step_poll_backfill_complete(context, minutes):
     season = context.newest_season
-    deadline = datetime.now(timezone.utc) + timedelta(minutes=minutes)
-    while datetime.now(timezone.utc) < deadline:
+    deadline = datetime.now(UTC) + timedelta(minutes=minutes)
+    while datetime.now(UTC) < deadline:
         item = _metadata(context)
         failed = item.get("failed_lineup_seasons", {}).get("SS", [])
         assert season not in failed, (
@@ -123,8 +123,8 @@ def step_poll_matchup_lineups(context, minutes):
     assert store["weeks"], f"lineup store {store_key} has no weeks"
     week = min(store["weeks"], key=int)
     # Completion re-triggers the processor via the manifest; its rebuild is asynchronous.
-    deadline = datetime.now(timezone.utc) + timedelta(minutes=minutes)
-    while datetime.now(timezone.utc) < deadline:
+    deadline = datetime.now(UTC) + timedelta(minutes=minutes)
+    while datetime.now(UTC) < deadline:
         resp = context.dynamodb_client.get_item(
             TableName=context.table_name,
             Key={

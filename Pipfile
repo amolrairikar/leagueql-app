@@ -27,7 +27,7 @@ boto3 = "*"
 coverage = "*"
 diagrams = "*"
 httpx = "*"
-moto = {extras = ["s3", "dynamodb"], version = "*"}
+moto = {extras = ["s3", "dynamodb"], version = "!=5.2.4"}  # 5.2.4 rewrites S3 metadata key underscores to hyphens
 pre-commit = "*"
 pytest = "*"
 pytest-asyncio = "*"

@@ -88,7 +88,7 @@ def _run_backfill(context, get_side_effect):
         context, patch.dict("os.environ", {"LINEUP_BACKFILL_REQUEST_INTERVAL": "0"})
     )
     # Drain the onboarder's queued message; the step invokes the handler directly.
-    context.sqs.purge_queue(QueueUrl=context.backfill_queue_url)
+    context.reset_backfill_queue()
     lambda_context = MagicMock()
     lambda_context.get_remaining_time_in_millis.return_value = 600_000
     event = {

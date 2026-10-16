@@ -18,7 +18,7 @@ See ``docs/db/dynamodb_spec.md`` (METADATA item + GSI3). This is a pandas-free p
 former ``scripts/admin_dashboard/aggregations.py`` so it stays light in a Lambda.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 _DEFAULT_ACTIVE_DAYS = 14
 # A league is stale when it has not been refreshed in over this many days.
@@ -50,8 +50,8 @@ def parse_timestamp(value: object) -> datetime | None:
     except ValueError:
         return None
     if parsed.tzinfo is None:
-        return parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
+        return parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
 
 
 def count_total(items: list[dict]) -> int:

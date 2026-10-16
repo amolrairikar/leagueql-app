@@ -107,7 +107,7 @@ async def fetch_player_stats(
                     data = await resp.json()
                     result = data.get("stats") if data else None
                     break
-            except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
+            except (TimeoutError, aiohttp.ClientError) as exc:
                 if attempt == MAX_RETRIES:
                     logger.warning(
                         "Giving up on player %s season %d after %d attempts: %s",

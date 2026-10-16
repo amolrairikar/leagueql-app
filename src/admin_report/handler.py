@@ -19,7 +19,7 @@ logs and re-raises so the error surfaces in its own CloudWatch error metrics.
 """
 
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import boto3
 from aggregations import (
@@ -134,7 +134,7 @@ def lambda_handler(event, context) -> None:
 
     try:
         items = _fetch_metadata_items()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         embed = _build_embed(items, now)
         _post_to_discord(embed)
     except Exception:

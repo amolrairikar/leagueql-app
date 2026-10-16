@@ -1706,7 +1706,7 @@ def _yahoo_week_for_timestamp(
         return None
     local_date = (
         (
-            datetime.datetime.fromtimestamp(timestamp_s, tz=datetime.timezone.utc)
+            datetime.datetime.fromtimestamp(timestamp_s, tz=datetime.UTC)
             - datetime.timedelta(hours=5)
         )
         .date()
@@ -2746,7 +2746,7 @@ def write_metadata_items(
     update_parts = []
     expression_values: dict[str, Any] = {}
     if refresh:
-        now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        now_iso = datetime.datetime.now(datetime.UTC).isoformat()
         update_parts.append("last_refresh_at = :lra")
         expression_values[":lra"] = {"S": now_iso}
     if league_name:

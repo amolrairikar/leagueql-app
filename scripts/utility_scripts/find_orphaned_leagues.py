@@ -131,7 +131,7 @@ def parse_timestamp(value: str) -> datetime.datetime:
         value = value[:-1] + "+00:00"
     parsed = datetime.datetime.fromisoformat(value)
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=datetime.timezone.utc)
+        parsed = parsed.replace(tzinfo=datetime.UTC)
     return parsed
 
 

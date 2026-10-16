@@ -137,7 +137,7 @@ async def fetch_with_retry(
                         e.upstream_body = body[:_MAX_LOGGED_BODY_CHARS]
                         raise
                 return await response.json()
-        except (aiohttp.ClientConnectionError, asyncio.TimeoutError) as e:
+        except (TimeoutError, aiohttp.ClientConnectionError) as e:
             if attempt == max_retries:
                 raise
             logger.warning(
