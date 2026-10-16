@@ -7,8 +7,8 @@
  * out of the browser bundle entirely; the browser exporter only ever talks to its
  * own origin (so the CSP `connect-src 'self'` already covers it — frontend/security-headers).
  *
- * Per-deploy Cloudflare config (set separately on the dev and prod deploys):
- *   - OTEL_EXPORTER_TOKEN (secret) — Better Stack source token (`wrangler secret put ...`)
+ * Bindings (managed by Terraform in infrastructure/cloudflare — do NOT `wrangler deploy`):
+ *   - OTEL_EXPORTER_TOKEN (secret) — Better Stack source token (GitHub secret → TF var)
  *   - OTEL_TRACES_URL     (var)    — the source's OTLP traces URL
  *                                    (https://<ingesting-host>/v1/traces)
  */

@@ -21,7 +21,7 @@ def _most_recent_completed_season() -> str:
     #   Mar–Dec: the most recent completed season is the previous calendar year.
     #   Jan–Feb: the previous year's season is still in progress / just ending,
     #            so the most recent completed season is two years back.
-    today = datetime.datetime.now(tz=datetime.timezone.utc).date()
+    today = datetime.datetime.now(tz=datetime.UTC).date()
     return str(today.year - 1 if today.month >= 3 else today.year - 2)
 
 

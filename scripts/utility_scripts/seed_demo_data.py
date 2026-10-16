@@ -1219,7 +1219,7 @@ def _txn_created_ms(season: str, week: int, rng: random.Random) -> int:
     Anchored to early September of the season, advancing one week per game week
     with a little intra-week jitter so cards sort believably newest-first.
     """
-    base = datetime.datetime(int(season), 9, 4, tzinfo=datetime.timezone.utc)
+    base = datetime.datetime(int(season), 9, 4, tzinfo=datetime.UTC)
     dt = base + datetime.timedelta(days=(week - 1) * 7, hours=rng.uniform(0, 72))
     return int(dt.timestamp() * 1000)
 

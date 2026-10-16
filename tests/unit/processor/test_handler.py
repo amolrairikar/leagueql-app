@@ -54,7 +54,7 @@ def _versions(*ids):
             {
                 "Key": "k",
                 "VersionId": vid,
-                "LastModified": dt.datetime(2024, 1, 1 + i, tzinfo=dt.timezone.utc),
+                "LastModified": dt.datetime(2024, 1, 1 + i, tzinfo=dt.UTC),
             }
             for i, vid in enumerate(ids)
         ]
@@ -141,12 +141,12 @@ class TestGetPreviousVersionId:
                 {
                     "Key": "k",
                     "VersionId": "v1",
-                    "LastModified": dt.datetime(2024, 1, 1, tzinfo=dt.timezone.utc),
+                    "LastModified": dt.datetime(2024, 1, 1, tzinfo=dt.UTC),
                 },
                 {
                     "Key": "k",
                     "VersionId": "v2",
-                    "LastModified": dt.datetime(2024, 1, 2, tzinfo=dt.timezone.utc),
+                    "LastModified": dt.datetime(2024, 1, 2, tzinfo=dt.UTC),
                 },
             ]
         }
@@ -161,7 +161,7 @@ class TestGetPreviousVersionId:
                 {
                     "Key": "k",
                     "VersionId": "v1",
-                    "LastModified": dt.datetime(2024, 1, 1, tzinfo=dt.timezone.utc),
+                    "LastModified": dt.datetime(2024, 1, 1, tzinfo=dt.UTC),
                 },
             ]
         }
@@ -175,12 +175,12 @@ class TestGetPreviousVersionId:
                 {
                     "Key": "k",
                     "VersionId": "v1",
-                    "LastModified": dt.datetime(2024, 1, 1, tzinfo=dt.timezone.utc),
+                    "LastModified": dt.datetime(2024, 1, 1, tzinfo=dt.UTC),
                 },
                 {
                     "Key": "other",
                     "VersionId": "v9",
-                    "LastModified": dt.datetime(2024, 1, 5, tzinfo=dt.timezone.utc),
+                    "LastModified": dt.datetime(2024, 1, 5, tzinfo=dt.UTC),
                 },
             ]
         }

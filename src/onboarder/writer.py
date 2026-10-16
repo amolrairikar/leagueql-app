@@ -263,7 +263,7 @@ def write_league_records(
     """
     try:
         table_name = os.environ["DYNAMODB_TABLE_NAME"]
-        now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        now_iso = datetime.datetime.now(datetime.UTC).isoformat()
 
         if request_type == "MIGRATE":
             # Job status now lives in the JOB_STATUS item (keyed by correlation_id),

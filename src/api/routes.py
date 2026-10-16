@@ -12,7 +12,7 @@ import json
 import os
 import secrets
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Literal
 from urllib.parse import urlencode, urlparse
 
@@ -122,7 +122,7 @@ def _refresh_block_reason(
     # iterated on without waiting a week between test refreshes.
     if last_refresh_at and os.environ.get("ENVIRONMENT") != "dev":
         last_refresh_dt = datetime.fromisoformat(last_refresh_at)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         # Measure the cooldown in whole UTC calendar days, not an exact 7x24h
         # duration: the intent is "once per week", so a refresh 7 calendar days
         # later is allowed at any time of day. An exact-duration check would
@@ -137,7 +137,7 @@ def _refresh_block_reason(
                 allowed_date.year,
                 allowed_date.month,
                 allowed_date.day,
-                tzinfo=timezone.utc,
+                tzinfo=UTC,
             )
             wait = _format_cooldown_wait(allowed_at - now)
             return HTTPException(
@@ -740,7 +740,7 @@ def migrate_league(
         canonical_league_id=canonical_league_id,
     )
 
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = datetime.now(UTC).isoformat()
 
     try:
         # The destination LEAGUE_LOOKUP is intentionally NOT written here. It is
@@ -1147,7 +1147,7 @@ def create_transfer_token(
     token = secrets.token_urlsafe(32)
     token_hash = hashlib.sha256(token.encode()).hexdigest()
     expires_at = (
-        datetime.now(timezone.utc) + timedelta(hours=TRANSFER_TOKEN_TTL_HOURS)
+        datetime.now(UTC) + timedelta(hours=TRANSFER_TOKEN_TTL_HOURS)
     ).isoformat()
     try:
         main.table.update_item(
@@ -1208,7 +1208,7 @@ def claim_ownership(
     expired = True
     if expires_at:
         try:
-            expired = datetime.fromisoformat(expires_at) <= datetime.now(timezone.utc)
+            expired = datetime.fromisoformat(expires_at) <= datetime.now(UTC)
         except ValueError:
             logger.warning(
                 "Unparseable transfer_token_expires_at %r for league %s; treating as expired",

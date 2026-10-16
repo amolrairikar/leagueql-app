@@ -116,6 +116,12 @@ jobs:
       - name: Run frontend tests
         run: npm run test:run
 
+      - name: Run leagueql-app worker tests
+        working-directory: workers/leagueql-app
+        run: |
+          npm ci
+          npm test
+
   deploy-global:
     name: Deploy Global Infrastructure - ${{ needs.set-env.outputs.environment }}
     runs-on: ubuntu-latest
@@ -160,8 +166,9 @@ jobs:
             -var="environment=${{ env.ENVIRONMENT }}" \
             -var="account_id=${{ secrets.AWS_ACCOUNT_ID }}"
 
-  # The get-counts / sync-counts Cloudflare Workers (infrastructure/cloudflare) are prod-only:
-  # they serve api.leagueql.com/counts from the prod table, so there is no dev deploy.
+  # The Cloudflare Workers (infrastructure/cloudflare) are prod-only: leagueql-app serves the
+  # live SPA and get-counts / sync-counts serve api.leagueql.com/counts from the prod table,
+  # so there is no dev deploy.
   deploy-cloudflare-workers:
     name: Deploy Cloudflare Workers - ${{ needs.set-env.outputs.environment }}
     runs-on: ubuntu-latest
@@ -189,6 +196,18 @@ jobs:
             (cd "workers/$worker" && npm ci && npm run build)
           done
 
+      # Static assets for the leagueql-app worker (frontend/dist). Prod builds need no VITE_*
+      # env vars: the API and trace-proxy URLs default to their prod values. _headers is moved
+      # out of dist/ because Terraform uploads every file there as an asset; it is sent as the
+      # worker's assets config instead (as wrangler does).
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build:ci
+          mkdir -p dist-config
+          mv dist/_headers dist-config/_headers
+
       - name: Make AWS credentials script executable
         run: chmod +x scripts/deployment_scripts/configure_aws_credentials.sh
 
@@ -213,7 +232,8 @@ jobs:
             -backend-config="region=us-east-1"
           terraform apply \
             -auto-approve \
-            -var="cloudflare_account_id=${{ secrets.CLOUDFLARE_ACCOUNT_ID }}"
+            -var="cloudflare_account_id=${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" \
+            -var="otel_exporter_token=${{ secrets.OTEL_EXPORTER_TOKEN }}"
 
   deploy-fargate-image:
     name: Build & Push Fargate Image - ${{ needs.set-env.outputs.environment }}

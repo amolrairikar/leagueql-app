@@ -8,7 +8,7 @@ SNS failure alerting lives in the shared ``common.sns`` module.
 
 import time
 from collections.abc import Callable, Iterator
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from functools import partial
 from typing import Any
@@ -712,7 +712,7 @@ def create_job_status(
         platform: The platform, e.g. "ESPN" / "SLEEPER" (observability).
         canonical_league_id: The canonical league ID, when known (observability).
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     item: dict[str, Any] = {
         "PK": f"JOB#{correlation_id}",
         "SK": "JOB_STATUS",
@@ -881,7 +881,7 @@ def record_league_access(canonical_league_id: str, metadata: dict) -> None:
         canonical_league_id: The canonical league ID.
         metadata: The already-fetched METADATA item, used for the throttle check.
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     last_accessed = metadata.get("last_accessed_at")
     if last_accessed:
         try:

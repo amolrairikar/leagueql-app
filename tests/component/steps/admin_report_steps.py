@@ -1,6 +1,6 @@
 """Steps for the nightly admin onboarding report Lambda (backend/admin-onboarding-report)."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 from behave import given, then, when
@@ -9,7 +9,7 @@ from common_steps import put_item
 
 def _seed_metadata(context, cid, platform, onboarded_days, accessed_days, active=None):
     """Seed a METADATA item indexed by GSI3 (carries ``onboarded_at``)."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     item = {
         "PK": f"LEAGUE#{cid}",
         "SK": "METADATA",

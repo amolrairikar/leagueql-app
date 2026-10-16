@@ -2,7 +2,7 @@
 
 import importlib.util
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -26,7 +26,7 @@ def agg():
 
 
 def _dt(value: str) -> datetime:
-    return datetime.fromisoformat(value).astimezone(timezone.utc)
+    return datetime.fromisoformat(value).astimezone(UTC)
 
 
 # ---- effective_platform -------------------------------------------------------
@@ -92,7 +92,7 @@ class TestCountTotal:
 
 class TestCountActive:
     def test_empty(self, agg):
-        assert agg.count_active([], datetime.now(timezone.utc)) == 0
+        assert agg.count_active([], datetime.now(UTC)) == 0
 
     def test_inside_outside_and_missing_window(self, agg):
         now = _dt("2024-02-01T00:00:00Z")
@@ -122,7 +122,7 @@ class TestCountActive:
 
 class TestCountStale:
     def test_empty(self, agg):
-        assert agg.count_stale([], datetime.now(timezone.utc)) == 0
+        assert agg.count_stale([], datetime.now(UTC)) == 0
 
     def test_stale_via_old_last_refresh(self, agg):
         now = _dt("2024-02-01T00:00:00Z")
@@ -203,7 +203,7 @@ class TestPlatformCounts:
 
 class TestNewOnboards:
     def test_empty(self, agg):
-        assert agg.new_onboards([], datetime.now(timezone.utc)) == {
+        assert agg.new_onboards([], datetime.now(UTC)) == {
             "24h": 0,
             "7d": 0,
             "30d": 0,

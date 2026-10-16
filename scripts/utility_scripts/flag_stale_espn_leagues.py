@@ -119,7 +119,7 @@ def parse_timestamp(value: str) -> datetime.datetime:
         value = value[:-1] + "+00:00"
     parsed = datetime.datetime.fromisoformat(value)
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=datetime.timezone.utc)
+        parsed = parsed.replace(tzinfo=datetime.UTC)
     return parsed
 
 
@@ -160,7 +160,7 @@ def main(argv=None):
         logger.error("AWS_ACCOUNT_ID environment variable is required")
         sys.exit(1)
 
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.UTC)
     threshold = datetime.timedelta(days=args.max_age_days)
 
     leagues = get_espn_leagues(region=args.region)

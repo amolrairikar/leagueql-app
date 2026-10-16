@@ -4,7 +4,13 @@ variable "cloudflare_account_id" {
 }
 
 variable "zone_name" {
-  description = "The Cloudflare zone serving the /counts route"
+  description = "The Cloudflare zone serving the SPA custom domains and the /counts route"
   type        = string
   default     = "leagueql.com"
+}
+
+variable "otel_exporter_token" {
+  description = "Better Stack OTLP source token injected by the leagueql-app /ingest/traces proxy"
+  type        = string
+  sensitive   = true
 }

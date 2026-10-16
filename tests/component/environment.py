@@ -36,6 +36,7 @@ _API_SRC = _SRC / "api"
 
 TABLE_NAME = "leagueql-table-test"
 BUCKET_NAME = "leagueql-test-bucket"
+BACKFILL_QUEUE_NAME = "lineup-backfill-test"
 REGION = "us-east-1"
 # Default authenticated caller for API scenarios; the shared seeding step records
 # this user as the league owner so owner-gated endpoints pass (backend/league-authorization).
@@ -313,10 +314,9 @@ def before_all(context):
     os.environ["ESPN_KMS_KEY_ID"] = kms_key["KeyMetadata"]["KeyId"]
     # backend/yahoo-lineup-backfill: Yahoo onboards/refreshes queue a lineup backfill here.
     context.sqs = boto3.client("sqs", region_name=REGION)
-    context.backfill_queue_url = context.sqs.create_queue(
-        QueueName="lineup-backfill-test"
-    )["QueueUrl"]
+    context.backfill_queue_url = _create_backfill_queue(context)
     os.environ["LINEUP_BACKFILL_QUEUE_URL"] = context.backfill_queue_url
+    context.reset_backfill_queue = lambda: _reset_backfill_queue(context)
 
     context.region = REGION
     context.table_name = TABLE_NAME
@@ -326,6 +326,18 @@ def before_all(context):
     context.s3 = boto3.client("s3", region_name=REGION)
 
     _load_handlers(context)
+
+
+def _create_backfill_queue(context) -> str:
+    return context.sqs.create_queue(QueueName=BACKFILL_QUEUE_NAME)["QueueUrl"]
+
+
+def _reset_backfill_queue(context) -> None:
+    # Drop every message (including delayed ones) by recreating the queue. ``purge_queue``
+    # can't be used: moto enforces SQS's one-purge-per-60s limit, and scenarios reset the
+    # queue more often than that. Same name -> same URL, so the env var stays valid.
+    context.sqs.delete_queue(QueueUrl=context.backfill_queue_url)
+    assert _create_backfill_queue(context) == context.backfill_queue_url
 
 
 def _clear_table(context) -> None:
@@ -378,7 +390,7 @@ def after_scenario(context, scenario):
     context.main.app.dependency_overrides.pop(routes.get_authenticated_user, None)
     _clear_table(context)
     _clear_bucket(context)
-    context.sqs.purge_queue(QueueUrl=context.backfill_queue_url)
+    _reset_backfill_queue(context)
 
 
 def after_all(context):
