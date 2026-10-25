@@ -18,7 +18,7 @@ interface FaqItem {
 const FAQ_ITEMS: FaqItem[] = [
   {
     q: 'Why do I need to provide my ESPN cookies?',
-    a: 'ESPN leagues are private and require logging in to ESPN to view. The SWID and ESPN S2 cookies provide the authentication required to fetch data. These cookies are not stored unless you opt into automatic weekly refresh, in which case they are stored encrypted so LeagueQL can refresh your league for you (and removed when you turn auto-refresh off). To find your ESPN cookies:',
+    a: 'Private ESPN leagues require logging in to ESPN to view. The SWID and ESPN S2 cookies provide the authentication required to fetch data. These cookies are not stored unless you opt into automatic weekly refresh, in which case they are stored encrypted so LeagueQL can refresh your league for you. One set of stored cookies is shared by all of your ESPN leagues and is removed once none of them has automatic refresh on. To find your ESPN cookies:',
     steps: [
       'Open your browser and go to fantasy.espn.com',
       'Log in to your account',
@@ -26,7 +26,7 @@ const FAQ_ITEMS: FaqItem[] = [
       'Go to Application → Cookies → fantasy.espn.com',
       'Find SWID and espn_s2 and copy their values',
     ],
-    note: 'With the LeagueQL ESPN Cookie Helper Chrome extension installed, you can skip these steps: just log into ESPN, then click "Autofill from ESPN" on the onboarding form.',
+    note: 'With the LeagueQL ESPN Cookie Helper Chrome extension installed, you can skip these steps: just log into ESPN, then click "Autofill cookies from ESPN" on the onboarding form.',
   },
   {
     q: 'An error occurred while connecting my league. What do I do?',
@@ -54,8 +54,9 @@ const FAQ_ITEMS: FaqItem[] = [
         season. ESPN auto-refresh is opt-in: enable{' '}
         <Kbd>Enable automatic weekly refresh</Kbd> when you connect the league
         (enabling it for ESPN stores your cookies encrypted so LeagueQL can
-        refresh for you). You can also refresh an ESPN league manually anytime
-        with <Kbd>Refresh League</Kbd> in the sidebar.
+        refresh for you). You can also refresh an ESPN league manually with{' '}
+        <Kbd>Refresh League</Kbd> in the sidebar, once per week per league
+        during the season.
       </>
     ),
   },
