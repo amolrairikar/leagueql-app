@@ -15,7 +15,7 @@ export default function ExtensionPrivacyPage() {
   return (
     <TocPageLayout
       title="ESPN Cookie Helper Extension Privacy Policy"
-      subtitle="Last updated: May 29, 2026"
+      subtitle="Last updated: October 25, 2026"
       tocLabel="Table of Contents"
       tocItems={sections}
     >
@@ -77,8 +77,8 @@ export default function ExtensionPrivacyPage() {
         <h2 className="text-2xl font-semibold">4. How It Works</h2>
         <ul className="list-disc pl-6 space-y-2 text-muted-foreground leading-relaxed">
           <li>
-            When you click &quot;Autofill from ESPN&quot; on a LeagueQL page,
-            the extension reads your SWID and espn_s2 cookies from ESPN.
+            When you click &quot;Autofill cookies from ESPN&quot; on a LeagueQL
+            page, the extension reads your SWID and espn_s2 cookies from ESPN.
           </li>
           <li>
             It passes those values directly to the LeagueQL page open in your

@@ -13,7 +13,7 @@ export default function PrivacyPage() {
   return (
     <TocPageLayout
       title="Privacy Policy"
-      subtitle="Last updated: September 20, 2026"
+      subtitle="Last updated: October 25, 2026"
       tocLabel="Table of Contents"
       tocItems={sections}
     >
@@ -48,9 +48,26 @@ export default function PrivacyPage() {
             </h3>
             <ul className="list-disc pl-6 space-y-1">
               <li>
-                Email address and authentication credentials (managed by Clerk)
+                Email address and authentication credentials (managed by Clerk).
+                You can sign in with an email and password or with Google.
               </li>
               <li>User profile information you choose to provide</li>
+            </ul>
+          </div>
+          <div>
+            <h3 className="font-semibold text-foreground mb-2">
+              Account-Linked League Data:
+            </h3>
+            <ul className="list-disc pl-6 space-y-1">
+              <li>
+                Which leagues you own or are a member of, and any invite links
+                you create for your leaguemates
+              </li>
+              <li>
+                Ownership-transfer tokens, while a transfer is pending (they
+                expire after 24 hours)
+              </li>
+              <li>The team you claim as yours on the My Team page</li>
             </ul>
           </div>
           <div>
@@ -76,9 +93,11 @@ export default function PrivacyPage() {
                 behalf, and are never sold or shared with anyone.
               </li>
               <li>
-                They are removed when you turn off automatic refresh for your
-                last ESPN league or delete your league data. ESPN cookies also
-                expire on their own, after which we ask you to re-enter them.
+                One set of stored cookies is shared by all of your ESPN leagues.
+                They are removed once none of your ESPN leagues has automatic
+                refresh on, whether you turn it off or delete the league. ESPN
+                cookies also expire on their own, after which we ask you to
+                re-enter them.
               </li>
             </ul>
           </div>
@@ -107,12 +126,24 @@ export default function PrivacyPage() {
                 your behalf. They are never sold or shared with anyone.
               </li>
               <li>
-                You can disconnect at any time: your stored Yahoo tokens are
-                removed when you request deletion of your league data, and you
-                can also revoke LeagueQL&apos;s access from your Yahoo account
-                settings.
+                One Yahoo connection is shared by all of your Yahoo leagues.
+                Your stored Yahoo tokens are removed when you delete your last
+                Yahoo league, and you can revoke LeagueQL&apos;s access at any
+                time from your Yahoo account settings.
               </li>
             </ul>
+          </div>
+          <div>
+            <h3 className="font-semibold text-foreground mb-2">
+              Usage &amp; Diagnostics:
+            </h3>
+            <p>
+              To find and fix problems, we collect performance and error
+              diagnostics: the pages you visit within the app, request timings,
+              page-load performance metrics, and error details. When you are
+              signed in, these diagnostics are tagged with your account ID. We
+              do not use them for advertising.
+            </p>
           </div>
           <div>
             <h3 className="font-semibold text-foreground mb-2">
@@ -181,6 +212,9 @@ export default function PrivacyPage() {
           <li>
             <strong>Cloudflare:</strong> Website hosting (Cloudflare Pages)
           </li>
+          <li>
+            <strong>Better Stack:</strong> Performance and error diagnostics
+          </li>
         </ul>
       </section>
 
@@ -193,8 +227,10 @@ export default function PrivacyPage() {
             We do not sell your data. League data is only used to provide the
             app&apos;s features.
           </li>
-          <li>League data is retained until you request deletion</li>
-          <li>You can request removal of your league data at any time</li>
+          <li>
+            League data is retained until the league&apos;s owner deletes it or
+            you ask us to remove it
+          </li>
           <li>
             We have implemented security measures to protect your data,
             including encryption in transit and at rest for stored data
@@ -206,7 +242,22 @@ export default function PrivacyPage() {
         <h2 className="text-2xl font-semibold">5. Your Rights</h2>
         <ul className="list-disc pl-6 space-y-2 text-muted-foreground leading-relaxed">
           <li>View the data we have about your leagues</li>
-          <li>Request deletion of your league data</li>
+          <li>
+            Delete a league&apos;s data: if you own the league, use{' '}
+            <strong>Delete League</strong> in the sidebar to permanently remove
+            it yourself
+          </li>
+          <li>
+            Request any other removal (for example, your membership in a league
+            you do not own, your account data, or a league whose owner cannot be
+            reached) by emailing{' '}
+            <a
+              href="mailto:support@leagueql.com"
+              className="font-medium underline underline-offset-4"
+            >
+              support@leagueql.com
+            </a>
+          </li>
         </ul>
       </section>
 

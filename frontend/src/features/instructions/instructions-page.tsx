@@ -327,7 +327,7 @@ export default function InstructionsPage() {
                   ). If not, SWID and ESPN S2 fields appear on the landing page
                   for you to enter and connect your league.
                 </p>
-                <SubSubHeading id="espn-form-fields">Fields</SubSubHeading>
+                <SubSubHeading id="espn-form-fields">Form Fields</SubSubHeading>
                 <div className="mb-4">
                   <DocTable
                     headers={['Field', 'Description']}
@@ -359,9 +359,10 @@ export default function InstructionsPage() {
                   Your SWID and ESPN S2 cookies are transmitted once over HTTPS
                   to fetch your data. They are not stored by LeagueQL unless you
                   enable automatic weekly refresh for the league, in which case
-                  they are stored encrypted so LeagueQL can refresh it for you
-                  (and removed when you turn auto-refresh off or delete the
-                  league).
+                  they are stored encrypted so LeagueQL can refresh it for you.
+                  One set of stored cookies is shared by all of your ESPN
+                  leagues, and it is removed once none of them has automatic
+                  refresh on.
                 </Callout>
 
                 <div className="mt-6">
@@ -655,6 +656,13 @@ export default function InstructionsPage() {
                   latest data for your league in place. The season is detected
                   automatically, so you never enter it.
                 </p>
+                <div className="mb-4">
+                  <Callout>
+                    Each league can be refreshed manually at most once per week.
+                    Refreshing is also unavailable during the offseason or when
+                    your league is already up to date.
+                  </Callout>
+                </div>
                 <MinorHeading>Automatic Weekly Refresh (opt-in)</MinorHeading>
                 <p className="text-muted-foreground leading-relaxed mb-4">
                   When you first connect an ESPN league on the landing page, or
@@ -665,8 +673,9 @@ export default function InstructionsPage() {
                   season, so you do not have to re-enter them. ESPN cookies
                   expire periodically; when they do, we ask you to re-enter them
                   to keep automatic refresh working. You can turn it off anytime
-                  with <Kbd>Turn Off Auto-Refresh</Kbd> in the sidebar, which
-                  removes your stored cookies.
+                  with <Kbd>Turn Off Auto-Refresh</Kbd> in the sidebar. Your
+                  stored cookies are shared by all of your ESPN leagues, so they
+                  are removed once none of them has automatic refresh on.
                 </p>
                 <SubSubHeading id="refresh-sleeper">Sleeper</SubSubHeading>
                 <MinorHeading>Midseason Refreshes</MinorHeading>

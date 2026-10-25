@@ -6,6 +6,7 @@ import { http, HttpResponse } from 'msw';
 import ChangelogPage from '@/features/changelog/changelog-page';
 import InstructionsPage from '@/features/instructions/instructions-page';
 import LeagueQLLanding from '@/features/landing_page/landing-page';
+import ExtensionPrivacyPage from '@/features/privacy/extension-privacy-page';
 import PrivacyPage from '@/features/privacy/privacy-page';
 import { server } from '@/test/msw/server';
 import { renderRoute } from '@/test/render';
@@ -115,6 +116,37 @@ defineFeature(feature, (test) => {
     });
     and(/^I see "(.*)"$/, async (text) => {
       expect((await screen.findAllByText(text)).length).toBeGreaterThan(0);
+    });
+    and(/^I see text containing "(.*)"$/, async (text) => {
+      expect(
+        (await screen.findAllByText(text, { exact: false })).length,
+      ).toBeGreaterThan(0);
+    });
+  });
+
+  test('The landing page FAQ states the manual refresh limit', ({
+    when,
+    and,
+    then,
+  }) => {
+    when('I open the landing page', async () => {
+      server.use(
+        http.get('https://api.leagueql.com/counts', () =>
+          HttpResponse.json({ leagueCount: 3 }),
+        ),
+      );
+      await renderRoute(<LeagueQLLanding />, { route: '/' });
+    });
+    and(/^I expand the FAQ question "(.*)"$/, async (question) => {
+      await userEvent.click(screen.getByRole('button', { name: question }));
+    });
+    then(/^I see text containing "(.*)"$/, async (text) => {
+      expect(
+        (await screen.findAllByText(text, { exact: false })).length,
+      ).toBeGreaterThan(0);
+    });
+    and(/^I do not see text containing "(.*)"$/, (text) => {
+      expect(screen.queryAllByText(text, { exact: false })).toHaveLength(0);
     });
   });
 
@@ -237,6 +269,75 @@ defineFeature(feature, (test) => {
     });
     then(/^I see "(.*)"$/, async (text) => {
       expect((await screen.findAllByText(text)).length).toBeGreaterThan(0);
+    });
+  });
+
+  test('The privacy policy discloses diagnostics, account data, and how deletion works', ({
+    when,
+    then,
+    and,
+  }) => {
+    when('I open the privacy page', async () => {
+      await renderRoute(<PrivacyPage />, { route: '/privacy' });
+    });
+    then(/^I see "(.*)"$/, async (text) => {
+      expect((await screen.findAllByText(text)).length).toBeGreaterThan(0);
+    });
+    and(/^I see "(.*)"$/, async (text) => {
+      expect((await screen.findAllByText(text)).length).toBeGreaterThan(0);
+    });
+    and(/^I see "(.*)"$/, async (text) => {
+      expect((await screen.findAllByText(text)).length).toBeGreaterThan(0);
+    });
+    and(/^I see text containing "(.*)"$/, async (text) => {
+      expect(
+        (await screen.findAllByText(text, { exact: false })).length,
+      ).toBeGreaterThan(0);
+    });
+    and(/^I see text containing "(.*)"$/, async (text) => {
+      expect(
+        (await screen.findAllByText(text, { exact: false })).length,
+      ).toBeGreaterThan(0);
+    });
+  });
+
+  test('The extension privacy policy names the real autofill button', ({
+    when,
+    then,
+    and,
+  }) => {
+    when('I open the extension privacy page', async () => {
+      await renderRoute(<ExtensionPrivacyPage />, {
+        route: '/extension-privacy',
+      });
+    });
+    then(/^I see text containing "(.*)"$/, async (text) => {
+      expect(
+        (await screen.findAllByText(text, { exact: false })).length,
+      ).toBeGreaterThan(0);
+    });
+    and(/^I do not see text containing "(.*)"$/, (text) => {
+      expect(screen.queryAllByText(text, { exact: false })).toHaveLength(0);
+    });
+  });
+
+  test('The docs page documents ESPN refresh limits and shared cookie removal', ({
+    when,
+    then,
+    and,
+  }) => {
+    when('I open the docs page', async () => {
+      await renderRoute(<InstructionsPage />, { route: '/docs' });
+    });
+    then(/^I see text containing "(.*)"$/, async (text) => {
+      expect(
+        (await screen.findAllByText(text, { exact: false })).length,
+      ).toBeGreaterThan(0);
+    });
+    and(/^I see text containing "(.*)"$/, async (text) => {
+      expect(
+        (await screen.findAllByText(text, { exact: false })).length,
+      ).toBeGreaterThan(0);
     });
   });
 
