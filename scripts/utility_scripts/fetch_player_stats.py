@@ -20,14 +20,11 @@ slot is held for at least MIN_SLOT_TIME seconds, giving:
     max_throughput = CONCURRENCY / MIN_SLOT_TIME req/s
 
 Usage:
-    # Activate the pipenv shell first (run once per session)
-    pipenv shell
-
     # Fetch all player stats (2017 - current season) and write to S3
-    pipenv run python scripts/utility_scripts/fetch_player_stats.py --bucket my-bucket
+    uv run python scripts/utility_scripts/fetch_player_stats.py --bucket my-bucket
 
     # Resume from a previous run's local checkpoint
-    pipenv run python scripts/utility_scripts/fetch_player_stats.py --bucket my-bucket --checkpoint player_stats_checkpoint.json
+    uv run python scripts/utility_scripts/fetch_player_stats.py --bucket my-bucket --checkpoint player_stats_checkpoint.json
 """
 
 import argparse

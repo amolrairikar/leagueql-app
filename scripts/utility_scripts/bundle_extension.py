@@ -9,17 +9,14 @@ The Chrome Web Store expects a zip of the *contents* of the extension's built
 produces.
 
 Usage:
-    # Activate the pipenv shell first (run once per session)
-    pipenv shell
-
     # Build then zip (default output: <repo>/extension/<name>-<version>.zip)
-    pipenv run python scripts/utility_scripts/bundle_extension.py
+    uv run python scripts/utility_scripts/bundle_extension.py
 
     # Skip `npm run build` and zip the existing dist/ as-is
-    pipenv run python scripts/utility_scripts/bundle_extension.py --skip-build
+    uv run python scripts/utility_scripts/bundle_extension.py --skip-build
 
     # Write the zip to a custom path
-    pipenv run python scripts/utility_scripts/bundle_extension.py --output /tmp/extension.zip
+    uv run python scripts/utility_scripts/bundle_extension.py --output /tmp/extension.zip
 """
 
 import argparse

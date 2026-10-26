@@ -28,10 +28,10 @@ convention (``leagueql-table-{env}``); ``--table`` overrides it.
 Usage
 -----
     # Dry-run against dev (default): reports what would be written
-    pipenv run python scripts/utility_scripts/backfill_league_members.py
+    uv run python scripts/utility_scripts/backfill_league_members.py
 
     # Write the index in prod
-    pipenv run python scripts/utility_scripts/backfill_league_members.py \
+    uv run python scripts/utility_scripts/backfill_league_members.py \
         --environment prod --execute
 """
 

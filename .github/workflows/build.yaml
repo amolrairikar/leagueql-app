@@ -41,21 +41,23 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v7.0.1
 
       - name: Set up Python
-        uses: actions/setup-python@v6.2.0
+        uses: actions/setup-python@v7.1.0
         with:
           python-version: "3.13"
 
-      - name: Install pipenv
-        run: python3.13 -m pip install pipenv
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.3.2
+        with:
+          enable-cache: true
 
       - name: Install dependencies
-        run: pipenv install --dev
+        run: uv sync --locked
 
       - name: Run unit tests
-        run: pipenv run pytest tests/unit --cov=src --cov-report=term-missing
+        run: uv run pytest tests/unit --cov=src --cov-report=term-missing
 
       - name: Coverage summary
         if: ${{ !cancelled() }}
@@ -63,7 +65,7 @@ jobs:
           {
             echo "## Unit Test Coverage"
             echo ""
-            pipenv run coverage report --format=markdown
+            uv run coverage report --format=markdown
           } >> "$GITHUB_STEP_SUMMARY"
 
   run-component-tests:
@@ -72,21 +74,23 @@ jobs:
     needs: set-env
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v7.0.1
 
       - name: Set up Python
-        uses: actions/setup-python@v6.2.0
+        uses: actions/setup-python@v7.1.0
         with:
           python-version: "3.13"
 
-      - name: Install pipenv
-        run: python3.13 -m pip install pipenv
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.3.2
+        with:
+          enable-cache: true
 
       - name: Install dependencies
-        run: pipenv install --dev
+        run: uv sync --locked
 
       - name: Run component tests
-        run: pipenv run behave tests/component -f json -o behave-report.json -f pretty
+        run: uv run behave tests/component -f json -o behave-report.json -f pretty
 
       - name: Component test summary
         if: ${{ !cancelled() }}
@@ -101,10 +105,10 @@ jobs:
         working-directory: frontend
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v7.0.1
 
       - name: Set up Node
-        uses: actions/setup-node@v6.4.0
+        uses: actions/setup-node@v7.1.0
         with:
           node-version: "24"
           cache: npm
@@ -135,7 +139,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v7.0.1
 
       - name: Make AWS credentials script executable
         run: chmod +x scripts/deployment_scripts/configure_aws_credentials.sh
@@ -183,10 +187,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v7.0.1
 
       - name: Set up Node
-        uses: actions/setup-node@v6.4.0
+        uses: actions/setup-node@v7.1.0
         with:
           node-version: "24"
 
@@ -248,7 +252,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v7.0.1
 
       - name: Make AWS credentials script executable
         run: chmod +x scripts/deployment_scripts/configure_aws_credentials.sh
@@ -317,7 +321,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
 
@@ -331,12 +335,9 @@ jobs:
         run: aws sts get-caller-identity
 
       - name: Set up Python
-        uses: actions/setup-python@v6.2.0
+        uses: actions/setup-python@v7.1.0
         with:
           python-version: "3.13"
-
-      - name: Install pipenv
-        run: python3.13 -m pip install pipenv
 
       - name: Make packaging script executable
         run: chmod +x scripts/deployment_scripts/build_lambda_zip.sh
@@ -368,7 +369,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v7.0.1
 
       - name: Make AWS credentials script executable
         run: chmod +x scripts/deployment_scripts/configure_aws_credentials.sh
@@ -440,18 +441,20 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v7.0.1
 
       - name: Set up Python
-        uses: actions/setup-python@v6.2.0
+        uses: actions/setup-python@v7.1.0
         with:
           python-version: "3.13"
 
-      - name: Install pipenv
-        run: python3.13 -m pip install pipenv
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.3.2
+        with:
+          enable-cache: true
 
       - name: Install dependencies
-        run: pipenv install --dev
+        run: uv sync --locked
 
       - name: Make AWS credentials script executable
         run: chmod +x scripts/deployment_scripts/configure_aws_credentials.sh
@@ -481,7 +484,7 @@ jobs:
           CLERK_SECRET_KEY_SSM_PARAM: /leagueql/${{ env.ENVIRONMENT }}/clerk/secret_key
           TEST_CLERK_USER_ID: ${{ secrets.TEST_CLERK_USER_ID_DEV }}
           CLERK_JWT_TEMPLATE: integration-tests
-        run: pipenv run behave tests/integration/sleeper
+        run: uv run behave tests/integration/sleeper
 
   run-espn-onboarding-integration-tests:
     name: Run ESPN Onboarding Integration Tests
@@ -495,18 +498,20 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v7.0.1
 
       - name: Set up Python
-        uses: actions/setup-python@v6.2.0
+        uses: actions/setup-python@v7.1.0
         with:
           python-version: "3.13"
 
-      - name: Install pipenv
-        run: python3.13 -m pip install pipenv
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.3.2
+        with:
+          enable-cache: true
 
       - name: Install dependencies
-        run: pipenv install --dev
+        run: uv sync --locked
 
       - name: Make AWS credentials script executable
         run: chmod +x scripts/deployment_scripts/configure_aws_credentials.sh
@@ -539,7 +544,7 @@ jobs:
           CLERK_SECRET_KEY_SSM_PARAM: /leagueql/${{ env.ENVIRONMENT }}/clerk/secret_key
           TEST_CLERK_USER_ID: ${{ secrets.TEST_CLERK_USER_ID_DEV }}
           CLERK_JWT_TEMPLATE: integration-tests
-        run: pipenv run behave tests/integration/espn
+        run: uv run behave tests/integration/espn
 
   run-yahoo-onboarding-integration-tests:
     name: Run Yahoo Onboarding Integration Tests
@@ -553,18 +558,20 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v7.0.1
 
       - name: Set up Python
-        uses: actions/setup-python@v6.2.0
+        uses: actions/setup-python@v7.1.0
         with:
           python-version: "3.13"
 
-      - name: Install pipenv
-        run: python3.13 -m pip install pipenv
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.3.2
+        with:
+          enable-cache: true
 
       - name: Install dependencies
-        run: pipenv install --dev
+        run: uv sync --locked
 
       - name: Make AWS credentials script executable
         run: chmod +x scripts/deployment_scripts/configure_aws_credentials.sh
@@ -596,4 +603,4 @@ jobs:
           CLERK_SECRET_KEY_SSM_PARAM: /leagueql/${{ env.ENVIRONMENT }}/clerk/secret_key
           TEST_CLERK_USER_ID: ${{ secrets.TEST_CLERK_USER_ID_DEV }}
           CLERK_JWT_TEMPLATE: integration-tests
-        run: pipenv run behave tests/integration/yahoo
+        run: uv run behave tests/integration/yahoo

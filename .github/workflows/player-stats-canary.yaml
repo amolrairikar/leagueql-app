@@ -36,18 +36,20 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v7.0.1
 
       - name: Set up Python
-        uses: actions/setup-python@v6.2.0
+        uses: actions/setup-python@v7.1.0
         with:
           python-version: "3.13"
 
-      - name: Install pipenv
-        run: python3.13 -m pip install pipenv
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.3.2
+        with:
+          enable-cache: true
 
       - name: Install dependencies
-        run: pipenv install --dev
+        run: uv sync --locked
 
       - name: Make AWS credentials script executable
         run: chmod +x scripts/deployment_scripts/configure_aws_credentials.sh
@@ -61,4 +63,4 @@ jobs:
       - name: Run player stats integration tests
         env:
           AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
-        run: pipenv run behave tests/integration/player_stats
+        run: uv run behave tests/integration/player_stats

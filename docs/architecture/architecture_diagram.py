@@ -7,9 +7,9 @@ scheduled jobs, and external SaaS integrations fit together.
 
 Usage (from repo root)::
 
-    pipenv install --dev diagrams      # one-time; also needs the graphviz binary
+    uv sync                            # one-time; also needs the graphviz binary
     brew install graphviz              # system dependency for rendering
-    pipenv run python docs/architecture/architecture_diagram.py
+    uv run python docs/architecture/architecture_diagram.py
 
 Keep this in sync with openspec/specs/ when the architecture changes.
 """

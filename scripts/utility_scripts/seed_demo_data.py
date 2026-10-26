@@ -8,9 +8,9 @@ The data is produced deterministically (seed=42), so re-running this
 script always yields the same output.
 
 Usage:
-    pipenv run python scripts/utility_scripts/seed_demo_data.py
-    pipenv run python scripts/utility_scripts/seed_demo_data.py --dry-run
-    pipenv run python scripts/utility_scripts/seed_demo_data.py --out path/to/output.json
+    uv run python scripts/utility_scripts/seed_demo_data.py
+    uv run python scripts/utility_scripts/seed_demo_data.py --dry-run
+    uv run python scripts/utility_scripts/seed_demo_data.py --out path/to/output.json
 """
 
 import argparse
