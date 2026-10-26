@@ -1,7 +1,7 @@
 # informational-banner Specification
 
 ## Purpose
-A thin, generic informational banner rendered below the in-app header, used to promote the current campaign (a Discord community invite today). It is gated behind the `banner` global feature flag so it can be toggled from the SSM console with no redeploy, and it is dismissible per-browser via `localStorage`. Its content is a single editable config block, so refreshing the campaign is a content change.
+A thin, generic informational banner rendered below the in-app header, used to promote the current campaign (a Buy Me A Coffee donation prompt today). It is gated behind the `banner` global feature flag so it can be toggled from the SSM console with no redeploy, and it is dismissible per-browser via `localStorage`. Its content is a single editable config block, so refreshing the campaign is a content change.
 
 ## Requirements
 

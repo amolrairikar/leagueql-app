@@ -39,9 +39,12 @@ describe('Banner', () => {
     setFlagsForTesting({ banner: true });
     render(<Banner />);
 
-    expect(screen.getByText(/Join the LeagueQL Discord/i)).toBeInTheDocument();
-    const link = screen.getByRole('link', { name: /community/i });
-    expect(link).toHaveAttribute('href', expect.stringContaining('discord'));
+    expect(screen.getByText(/Enjoying using LeagueQL/i)).toBeInTheDocument();
+    const link = screen.getByRole('link', { name: /donating/i });
+    expect(link).toHaveAttribute(
+      'href',
+      expect.stringContaining('buymeacoffee.com'),
+    );
     expect(link).toHaveAttribute('target', '_blank');
     expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'));
   });
@@ -61,14 +64,14 @@ describe('Banner', () => {
       screen.getByRole('button', { name: /dismiss banner/i }),
     );
     expect(
-      screen.queryByText(/Join the LeagueQL Discord/i),
+      screen.queryByText(/Enjoying using LeagueQL/i),
     ).not.toBeInTheDocument();
 
     // Remounting (e.g. a fresh page load) keeps it hidden via localStorage.
     unmount();
     render(<Banner />);
     expect(
-      screen.queryByText(/Join the LeagueQL Discord/i),
+      screen.queryByText(/Enjoying using LeagueQL/i),
     ).not.toBeInTheDocument();
   });
 });
