@@ -5,16 +5,16 @@ import { isDemoMode } from '@/lib/cookie-handler';
 import { isBannerEnabled } from '@/lib/feature-flags';
 
 // Current banner content. This is the one place to edit for any banner update —
-// swap the message/link to promote whatever the active campaign is (Discord
-// today). The banner only shows once the `banner` feature flag (frontend/informational-banner) is on.
+// swap the message/link to promote whatever the active campaign is (a donation
+// prompt today). The banner only shows once the `banner` feature flag (frontend/informational-banner) is on.
 // The message is rendered as PREFIX + LINK_LABEL + SUFFIX, with LINK_LABEL turned
 // into the link when LINK_URL is set — so the link lives inline within the
-// sentence (today: the word "community" links to the Discord invite). Leave
+// sentence (today: the word "donating" links to the Buy Me A Coffee page). Leave
 // LINK_URL empty for a link-less, message-only banner.
-const BANNER_MESSAGE_PREFIX = 'Join the LeagueQL Discord ';
-const BANNER_LINK_LABEL = 'community';
-const BANNER_MESSAGE_SUFFIX = '!';
-const BANNER_LINK_URL = 'https://discord.gg/jE2dm89GWh';
+const BANNER_MESSAGE_PREFIX = 'Enjoying using LeagueQL? Consider ';
+const BANNER_LINK_LABEL = 'donating';
+const BANNER_MESSAGE_SUFFIX = " to support the app's development.";
+const BANNER_LINK_URL = 'https://www.buymeacoffee.com/amol.rairikar';
 
 // localStorage key remembering a dismissal so the banner stays hidden for this
 // browser (frontend/informational-banner). Mirrors the direct localStorage pattern in theme-provider.tsx.
@@ -49,7 +49,7 @@ function persistDismissed(): void {
 export function Banner() {
   const [dismissed, setDismissed] = useState(readDismissed);
 
-  // Suppressed in demo mode so the promotional invite doesn't clutter the
+  // Suppressed in demo mode so the promotional message doesn't clutter the
   // sample-data experience (frontend/informational-banner).
   if (!isBannerEnabled() || isDemoMode() || dismissed) return null;
 
