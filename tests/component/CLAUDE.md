@@ -8,7 +8,7 @@ mocked. They sit between `tests/unit/` (fine-grained, near-100% coverage) and
 ## Running
 
 ```bash
-pipenv run behave tests/component
+uv run behave tests/component
 ```
 
 No AWS credentials are needed — AWS is backed by `moto` (`mock_aws`).
@@ -45,7 +45,7 @@ No AWS credentials are needed — AWS is backed by `moto` (`mock_aws`).
 
 - Feature files live in `features/`, step defs in `steps/` (shared seeding +
   assertions in `common_steps.py`). Fixtures in `fixtures/`.
-- All step code must pass `pipenv run ruff check` and `ruff format`.
+- All step code must pass `uv run ruff check` and `ruff format`.
 - Keep fixtures small (≈2 owners, 2 weeks) so DuckDB runs fast and assertions
   stay legible. Every DuckDB-referenced table needs ≥1 well-formed row — an empty
   pandas frame has no columns and breaks DuckDB binding.

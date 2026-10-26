@@ -57,23 +57,23 @@ Terraform convention in ``infrastructure/regional/main.tf``:
 Usage
 -----
     # Dry-run against dev (default) — lists every eligible league on every platform
-    pipenv run python scripts/utility_scripts/backfill_leagues.py
+    uv run python scripts/utility_scripts/backfill_leagues.py
 
     # Re-onboard only Yahoo and ESPN leagues in prod
-    pipenv run python scripts/utility_scripts/backfill_leagues.py \
+    uv run python scripts/utility_scripts/backfill_leagues.py \
         --environment prod --platform YAHOO --platform ESPN --execute
 
     # Target a single league (dry-run on dev). --league-id needs exactly one --platform and
     # may be any league ID in a renewed league's chain; it resolves to the canonical league.
-    pipenv run python scripts/utility_scripts/backfill_leagues.py \
+    uv run python scripts/utility_scripts/backfill_leagues.py \
         --platform SLEEPER --league-id 123456789
 
     # Target a single league by canonical ID (searches the selected platforms)
-    pipenv run python scripts/utility_scripts/backfill_leagues.py \
+    uv run python scripts/utility_scripts/backfill_leagues.py \
         --environment prod --canonical-league-id <uuid> --execute
 
     # Re-fetch every season of one ESPN league from the platform (not just reprocess S3)
-    pipenv run python scripts/utility_scripts/backfill_leagues.py \
+    uv run python scripts/utility_scripts/backfill_leagues.py \
         --platform ESPN --league-id 123456 --refetch-all --throttle-seconds 5 --execute
 """
 

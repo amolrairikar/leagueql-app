@@ -2,22 +2,22 @@
 
 ## Running tests
 
-Run the full test suite from the project root using pipenv:
+Run the full test suite from the project root using uv:
 
 ```bash
-pipenv run pytest tests/unit/
+uv run pytest tests/unit/
 ```
 
 Run a specific test file:
 
 ```bash
-pipenv run pytest tests/unit/api/test_some_module.py
+uv run pytest tests/unit/api/test_some_module.py
 ```
 
 Run with coverage:
 
 ```bash
-pipenv run pytest tests/unit/ --cov=src --cov-report=term-missing
+uv run pytest tests/unit/ --cov=src --cov-report=term-missing
 ```
 
 ## Framework

@@ -6,14 +6,14 @@ Deletes directly from DynamoDB and S3 by canonical league ID, bypassing the
 owner-gated delete API (this is an admin utility, not an authenticated caller).
 
 Usage:
-    pipenv run python scripts/utility_scripts/delete_league.py --league-id 1234567890 --platform sleeper
-    pipenv run python scripts/utility_scripts/delete_league.py --league-id 1234567890 --platform espn
+    uv run python scripts/utility_scripts/delete_league.py --league-id 1234567890 --platform sleeper
+    uv run python scripts/utility_scripts/delete_league.py --league-id 1234567890 --platform espn
 
     # Target prod instead of dev (defaults to dev):
-    pipenv run python scripts/utility_scripts/delete_league.py --league-id 1234567890 --platform sleeper --env prod
+    uv run python scripts/utility_scripts/delete_league.py --league-id 1234567890 --platform sleeper --env prod
 
     # --league-id falls back to the TEST_SLEEPER_LEAGUE_ID environment variable:
-    pipenv run python scripts/utility_scripts/delete_league.py --platform sleeper
+    uv run python scripts/utility_scripts/delete_league.py --platform sleeper
 """
 
 import argparse

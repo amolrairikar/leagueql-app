@@ -4,7 +4,7 @@ The disabled path is the default in tests and must be a true no-op (no provider,
 network, no instrumentation). The enabled wiring patches the lazily-imported OTel
 pieces so no real global provider/instrumentation is installed. The inject↔extract
 round-trip uses the real OpenTelemetry SDK with an in-memory exporter (the deps are
-in the Pipfile) — it never touches the global tracer provider, so it stays isolated.
+in the dev dependency group) — it never touches the global tracer provider, so it stays isolated.
 """
 
 from contextlib import contextmanager

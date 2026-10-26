@@ -66,14 +66,14 @@ override the derivation if you ever need a non-standard name.
 Usage
 -----
     # Dry-run against dev (default)
-    pipenv run python scripts/utility_scripts/find_orphaned_leagues.py
+    uv run python scripts/utility_scripts/find_orphaned_leagues.py
 
     # Byte-verify S3 data before classifying as a duplicate
-    pipenv run python scripts/utility_scripts/find_orphaned_leagues.py --verify-s3
+    uv run python scripts/utility_scripts/find_orphaned_leagues.py --verify-s3
 
     # Run against prod and actually delete (AWS_ACCOUNT_ID must be set)
     AWS_ACCOUNT_ID=<account-id> \
-        pipenv run python scripts/utility_scripts/find_orphaned_leagues.py \
+        uv run python scripts/utility_scripts/find_orphaned_leagues.py \
         --environment prod --verify-s3 --execute
 """
 

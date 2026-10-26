@@ -45,8 +45,8 @@ Run the same Ruff linter and formatter defined in
 [`.pre-commit-config.yaml`](.pre-commit-config.yaml):
 
 ```bash
-pipenv run ruff check --fix .   # lint (and auto-fix)
-pipenv run ruff format .        # format
+uv run ruff check --fix .   # lint (and auto-fix)
+uv run ruff format .        # format
 ```
 
 ### TypeScript / frontend
@@ -79,7 +79,7 @@ reflect the new behavior.
   dependency (the platform API, Lambda) mocked but real DynamoDB/S3 behavior via `moto`.
   When you add or change an endpoint/handler's behavior or how components interact across a
   DynamoDB/S3 boundary, add or update the matching scenario + steps. Run with
-  `pipenv run behave tests/component`.
+  `uv run behave tests/component`.
 - **Backend unit tests** live under `tests/unit/`, mirroring `src/` (see
   [`tests/CLAUDE.md`](tests/CLAUDE.md)). Keep coverage close to 100%, including error paths.
 - When a behavior spans tiers (e.g. a new backend error status the UI must surface, or a
@@ -95,7 +95,7 @@ reflect the new behavior.
   (`architecture_diagram.py`) rendered to `leagueql_architecture.png`. **When a new component
   is deployed (Lambda, Fargate task, queue, data store, scheduled job, external integration,
   worker, …) or an existing one is removed/rewired, update `architecture_diagram.py` and
-  regenerate the PNG in the same change** (`pipenv run python docs/architecture/architecture_diagram.py`).
+  regenerate the PNG in the same change** (`uv run python docs/architecture/architecture_diagram.py`).
 
 ## Tech stack (orientation)
 - **Backend:** FastAPI + Python on AWS API Gateway + Lambda; data in DynamoDB, raw payloads

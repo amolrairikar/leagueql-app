@@ -9,9 +9,9 @@ Diagram-as-code for the LeagueQL system architecture.
 ## Regenerate
 
 ```bash
-pipenv install --dev diagrams   # one-time (already in the Pipfile dev deps)
+uv sync                       # one-time (diagrams is in the dev group)
 brew install graphviz           # system binary the renderer shells out to
-pipenv run python docs/architecture/architecture_diagram.py
+uv run python docs/architecture/architecture_diagram.py
 ```
 
 ## What it shows

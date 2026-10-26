@@ -1,3 +1,42 @@
+[project]
+name = "leagueql"
+version = "0.0.0"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "aiohttp",
+    "duckdb",
+    "fastapi",
+    "mangum",
+    "openfeature-sdk",
+    "opentelemetry-api",
+    "opentelemetry-exporter-otlp-proto-http",
+    "opentelemetry-instrumentation-botocore",
+    "opentelemetry-instrumentation-fastapi",
+    "opentelemetry-instrumentation-requests",
+    "opentelemetry-sdk",
+    "pandas",
+    "requests",
+]
+
+[dependency-groups]
+dev = [
+    "behave",
+    "boto3",
+    "coverage",
+    "diagrams",
+    "httpx",
+    "moto[s3,dynamodb]!=5.2.4",  # 5.2.4 rewrites S3 metadata key underscores to hyphens
+    "pre-commit",
+    "pytest",
+    "pytest-asyncio",
+    "pytest-cov",
+    "ruff",
+    "tqdm",
+]
+
+[tool.uv]
+package = false
+
 [tool.pytest.ini_options]
 pythonpath = [".", "src", "src/api", "src/processor", "src/onboarder"]
 asyncio_mode = "auto"

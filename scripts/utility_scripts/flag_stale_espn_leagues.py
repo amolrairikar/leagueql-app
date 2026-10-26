@@ -15,13 +15,13 @@ The script is dry-run by default — it only reports what would be deleted. Pass
 
 Usage:
     # Dry-run: report ESPN leagues that haven't refreshed in over a year
-    pipenv run python scripts/utility_scripts/flag_stale_espn_leagues.py
+    uv run python scripts/utility_scripts/flag_stale_espn_leagues.py
 
     # Use a custom staleness window
-    pipenv run python scripts/utility_scripts/flag_stale_espn_leagues.py --max-age-days 540
+    uv run python scripts/utility_scripts/flag_stale_espn_leagues.py --max-age-days 540
 
     # Actually delete the flagged leagues
-    pipenv run python scripts/utility_scripts/flag_stale_espn_leagues.py --execute
+    uv run python scripts/utility_scripts/flag_stale_espn_leagues.py --execute
 """
 
 import argparse

@@ -30,13 +30,13 @@ repos:
       - id: ruff-check
         name: Ruff linter
         description: "Uses Ruff to lint and fix Python code."
-        entry: pipenv run ruff check --fix .
+        entry: uv run ruff check --fix .
         language: system
         types: [python]
       - id: ruff-format
         name: Ruff formatter
         description: "Uses Ruff to format Python code using standard conventions."
-        entry: pipenv run ruff format .
+        entry: uv run ruff format .
         language: system
         types: [python]
       - id: terraform-format
