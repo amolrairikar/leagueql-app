@@ -2,6 +2,7 @@ import { ArrowDown, ArrowUp } from 'lucide-react';
 
 import { TeamAvatar } from '@/components/team-avatar';
 import {
+  type RosterWeeklyPoints,
   type TransactionItem,
   type TransactionPlayer,
   type WeeklyPlayerPoints,
@@ -148,13 +149,15 @@ function TopTile({
 export function TopTransactions({
   transactions,
   weekly,
+  rosterWeekly,
   visuals,
 }: {
   transactions: TransactionItem[];
   weekly: WeeklyPlayerPoints;
+  rosterWeekly: RosterWeeklyPoints;
   visuals: Visuals;
 }) {
-  const top = topTransactions(transactions, weekly);
+  const top = topTransactions(transactions, weekly, rosterWeekly);
   if (top.length === 0) return null;
 
   return (

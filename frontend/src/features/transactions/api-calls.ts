@@ -76,6 +76,63 @@ export function rosPointsFor(
   return Math.round(total * 100) / 100;
 }
 
+/** `${roster_id}:${player_id}` → week → points scored while in that roster's starters or bench. */
+export type RosterWeeklyPoints = Map<string, Map<number, number>>;
+
+/**
+ * Index a season's matchup box scores as roster+player → week → points, so a player's points can be
+ * limited to weeks they were actually in a given roster's lineup. Unlike `buildWeeklyPlayerPoints`
+ * it keeps the team: each matchup's `team_a_*` lists are filed under `team_a_id` and `team_b_*`
+ * under `team_b_id` (the same ids a transaction's `roster_id` uses on every platform), stringified
+ * for the join.
+ */
+export function buildRosterWeeklyPoints(
+  matchups: MatchupItem[],
+): RosterWeeklyPoints {
+  const byRosterPlayer: RosterWeeklyPoints = new Map();
+  for (const m of matchups) {
+    const week = Number(m.week);
+    const lineups: [string, MatchupItem['team_a_starters'][]][] = [
+      [String(m.team_a_id), [m.team_a_starters, m.team_a_bench]],
+      [String(m.team_b_id), [m.team_b_starters, m.team_b_bench]],
+    ];
+    for (const [rosterId, lists] of lineups) {
+      for (const list of lists) {
+        for (const p of list) {
+          const key = `${rosterId}:${p.player_id}`;
+          let weeks = byRosterPlayer.get(key);
+          if (!weeks) {
+            weeks = new Map();
+            byRosterPlayer.set(key, weeks);
+          }
+          weeks.set(week, p.points_scored);
+        }
+      }
+    }
+  }
+  return byRosterPlayer;
+}
+
+/**
+ * Total points a player scored for `rosterId` from `fromWeek` (inclusive) up to `untilWeek`
+ * (exclusive), counting only weeks they appear in that roster's starters or bench. Rounded to 2 dp.
+ */
+export function rosterPointsFor(
+  rosterId: string,
+  playerId: string,
+  fromWeek: number,
+  rosterWeekly: RosterWeeklyPoints,
+  untilWeek = Infinity,
+): number {
+  const weeks = rosterWeekly.get(`${rosterId}:${playerId}`);
+  if (!weeks) return 0;
+  let total = 0;
+  for (const [week, points] of weeks) {
+    if (week >= fromWeek && week < untilWeek) total += points;
+  }
+  return Math.round(total * 100) / 100;
+}
+
 export interface GetTransactionsResponse {
   data: TransactionItem[];
 }

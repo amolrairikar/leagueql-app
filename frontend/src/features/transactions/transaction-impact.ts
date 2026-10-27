@@ -1,8 +1,10 @@
 import {
   type TransactionItem,
   type TransactionPlayer,
+  type RosterWeeklyPoints,
   type WeeklyPlayerPoints,
   rosPointsFor,
+  rosterPointsFor,
 } from '@/features/transactions/api-calls';
 
 /** Rounds a points total to 2 decimal places, matching how the cards display ROS points. */
@@ -107,20 +109,44 @@ export function pointsWhileRostered(
 }
 
 /**
+ * Points a player added by a waiver / free-agent move scored for the acquiring roster: the same
+ * window as `pointsWhileRostered`, but counting only weeks the player is in that roster's starters
+ * or bench. Trades keep using `pointsWhileRostered`.
+ */
+export function pointsInRosterLineup(
+  txn: TransactionItem,
+  player: TransactionPlayer,
+  rosterWeekly: RosterWeeklyPoints,
+  exits: RosterExits,
+): number {
+  return rosterPointsFor(
+    player.roster_id,
+    player.player_id,
+    txn.week ?? 0,
+    rosterWeekly,
+    exitWeek(exits, player.roster_id, player.player_id, txn.created),
+  );
+}
+
+/**
  * The net pickup value of a waiver / free-agent move for one roster: the points its acquired
- * player(s) scored while on the roster minus the rest-of-season points its released player(s)
+ * player(s) scored in the roster's lineup minus the rest-of-season points its released player(s)
  * scored. A pure add resolves to the added total, a pure drop to the negative of the dropped total.
  */
 export function netPickupValue(
   txn: TransactionItem,
   rosterId: string,
   weekly: WeeklyPlayerPoints,
+  rosterWeekly: RosterWeeklyPoints,
   exits: RosterExits,
 ): number {
   const week = txn.week ?? 0;
   const added = txn.adds
     .filter((p) => p.roster_id === rosterId)
-    .reduce((sum, p) => sum + pointsWhileRostered(txn, p, weekly, exits), 0);
+    .reduce(
+      (sum, p) => sum + pointsInRosterLineup(txn, p, rosterWeekly, exits),
+      0,
+    );
   const dropped = txn.drops
     .filter((p) => p.roster_id === rosterId)
     .reduce((sum, p) => sum + rosPointsFor(p.player_id, week, weekly), 0);
@@ -145,6 +171,7 @@ export interface TransactionImpact {
 export function transactionImpact(
   txn: TransactionItem,
   weekly: WeeklyPlayerPoints,
+  rosterWeekly: RosterWeeklyPoints,
   exits: RosterExits,
 ): TransactionImpact | null {
   const rosterIds = involvedRosterIds(txn);
@@ -154,7 +181,7 @@ export function transactionImpact(
       txn,
       rosterId: rosterIds[0],
       opponentRosterId: null,
-      value: netPickupValue(txn, rosterIds[0], weekly, exits),
+      value: netPickupValue(txn, rosterIds[0], weekly, rosterWeekly, exits),
     };
   }
   if (txn.type === 'trade' && rosterIds.length === 2) {
@@ -178,11 +205,12 @@ export function transactionImpact(
 export function topTransactions(
   transactions: TransactionItem[],
   weekly: WeeklyPlayerPoints,
+  rosterWeekly: RosterWeeklyPoints,
   n = 5,
 ): TransactionImpact[] {
   const exits = buildRosterExits(transactions);
   return transactions
-    .map((txn) => transactionImpact(txn, weekly, exits))
+    .map((txn) => transactionImpact(txn, weekly, rosterWeekly, exits))
     .filter((impact): impact is TransactionImpact => impact != null)
     .filter((impact) => impact.value > 0)
     .sort((x, y) => y.value - x.value || x.txn.created - y.txn.created)

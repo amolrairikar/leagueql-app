@@ -134,6 +134,21 @@ Feature: Transactions (frontend/transactions)
     Then I see the points "0.00"
     And I see the net pickup value "Even"
 
+  Scenario: A pickup only counts the weeks he is in the roster's lineup
+    Given a free-agent pickup missing from the roster's lineup one week, with matchup box scores
+    When I open the transactions page
+    And I select the "Free Agents" filter
+    Then I see the points "13.00"
+    And I see the net pickup value "+13.00 pts"
+
+  Scenario: A pickup's points for another roster are not counted
+    Given a free-agent pickup who also scores for another roster, with matchup box scores
+    When I open the transactions page
+    And I select the "Free Agents" filter
+    Then I see the points "5.00"
+    And I do not see the points "45.00"
+    And I see the net pickup value "+5.00 pts"
+
   Scenario: A traded player later dropped only counts his points while rostered
     Given a trade whose acquired player is later dropped, with matchup box scores
     When I open the transactions page
