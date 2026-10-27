@@ -6,11 +6,11 @@ The collapsible app sidebar and surrounding layout shared by all in-app pages. I
 ## Requirements
 
 ### Requirement: Navigate to all analytics pages
-The sidebar SHALL link to all ten analytics pages and route to them correctly, with a header wordmark linking home and a theme toggle present.
+The sidebar SHALL link to all eleven analytics pages and route to them correctly, with a header wordmark linking home and a theme toggle present.
 
 #### Scenario: Navigation
 - **WHEN** the user opens the sidebar
-- **THEN** it links to Home, Standings, Matchups, Playoff Bracket, Manager Comparison, Manager History, Draft Recap, Draft Grades, Player Records, and Matchup Records, each routing correctly, with the header wordmark linking home and the theme toggle present
+- **THEN** it links to Home, Standings, Power Rankings, Matchups, Playoff Bracket, Manager Comparison, Manager History, Draft Recap, Draft Grades, Player Records, and Matchup Records, each routing correctly, with the header wordmark linking home and the theme toggle present
 
 ### Requirement: Refresh the current league
 The sidebar SHALL expose a refresh action, shown only for ESPN leagues that are not enrolled in

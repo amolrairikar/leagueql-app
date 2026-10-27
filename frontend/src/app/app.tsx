@@ -73,6 +73,9 @@ const PlayoffBracket = lazy(
 const ExtensionPrivacyPage = lazy(
   () => import('@/features/privacy/extension-privacy-page'),
 );
+const PowerRankings = lazy(
+  () => import('@/features/power_rankings/power-rankings'),
+);
 const PrivacyPage = lazy(() => import('@/features/privacy/privacy-page'));
 const SeasonStandings = lazy(
   () => import('@/features/season_standings/season-standings'),
@@ -162,6 +165,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 const APP_LAYOUT_ROUTES: { path: string; element: React.ReactNode }[] = [
   { path: '/home', element: <HomePage /> },
   { path: '/standings', element: <SeasonStandings /> },
+  { path: '/power_rankings', element: <PowerRankings /> },
   { path: '/matchups', element: <Matchups /> },
   { path: '/manager_comparison', element: <ManagerComparison /> },
   { path: '/playoff_bracket', element: <PlayoffBracket /> },
