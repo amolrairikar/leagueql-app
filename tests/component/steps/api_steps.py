@@ -65,6 +65,12 @@ def step_export_has_season(context, season):
     assert season in data, context.response.text
 
 
+@then('the export seasons are in order "{seasons}"')
+def step_export_season_order(context, seasons):
+    data = context.response.json()["data"]
+    assert list(data.keys()) == seasons.split(","), context.response.text
+
+
 @then('the export season "{season}" has view "{view}" with {count:d} row(s)')
 def step_export_view_rows(context, season, view, count):
     data = context.response.json()["data"]

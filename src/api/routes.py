@@ -6,12 +6,14 @@ module are reached through ``main`` at call time so test patches on
 ``main.table`` etc. take effect here.
 """
 
+import contextvars
 import hashlib
 import hmac
 import json
 import os
 import secrets
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Literal
 from urllib.parse import urlencode, urlparse
@@ -1037,6 +1039,42 @@ def query_league(
     return QueryResponse(data=convert_decimals(data))
 
 
+# Upper bound on concurrent DynamoDB reads while building an export. Kept under boto3's default
+# connection pool (10) so a worker never waits on a pooled connection.
+EXPORT_READ_WORKERS = 8
+
+
+def _read_export_views(
+    canonical_league_id: str, seasons: list[str]
+) -> dict[tuple[str, str], list | None]:
+    """Read every (season, view) pair of an export concurrently.
+
+    Reads are independent and I/O bound, so they run on a bounded thread pool instead of
+    serially. Results are keyed by ``(season, view_name)``, so the caller assembles the
+    bundle in request order regardless of which read finishes first. Each task runs in a
+    copy of the caller's context so OTel DynamoDB spans stay children of the request span.
+    The first failed read re-raises its ``HTTPException`` and cancels reads not yet started,
+    so no partial bundle is built.
+    """
+    pool = ThreadPoolExecutor(max_workers=EXPORT_READ_WORKERS)
+    try:
+        futures = {
+            (season, view_name): pool.submit(
+                contextvars.copy_context().run,
+                read_view,
+                canonical_league_id,
+                QUERY_TYPE_TO_SK_BASE[query_type],
+                season,
+                use_prefix=use_prefix,
+            )
+            for season in seasons
+            for view_name, (query_type, use_prefix) in EXPORT_SEASON_VIEWS.items()
+        }
+        return {key: future.result() for key, future in futures.items()}
+    finally:
+        pool.shutdown(wait=True, cancel_futures=True)
+
+
 @router.get("/leagues/{leagueId}/export", status_code=status.HTTP_200_OK)
 def export_league(
     leagueId: Annotated[
@@ -1096,14 +1134,13 @@ def export_league(
         )
     teams_rows = (teams_response.get("Item") or {}).get("data") or []
 
+    view_reads = _read_export_views(canonical_league_id, selected_seasons)
+
     bundle: dict[str, dict[str, list]] = {}
     for season in selected_seasons:
         season_views: dict[str, list] = {}
-        for view_name, (query_type, use_prefix) in EXPORT_SEASON_VIEWS.items():
-            sk_base = QUERY_TYPE_TO_SK_BASE[query_type]
-            view_data = read_view(
-                canonical_league_id, sk_base, season, use_prefix=use_prefix
-            )
+        for view_name in EXPORT_SEASON_VIEWS:
+            view_data = view_reads[(season, view_name)]
             if view_data:
                 season_views[view_name] = view_data
         season_teams = [r for r in teams_rows if str(r.get("season")) == season]
