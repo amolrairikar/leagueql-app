@@ -12,8 +12,10 @@ import {
   type MatchupItem,
   type TransactionItem,
   type TransactionPlayer,
+  type RosterWeeklyPoints,
   type TransactionTeam,
   type WeeklyPlayerPoints,
+  buildRosterWeeklyPoints,
   buildWeeklyPlayerPoints,
   getSeasonMatchups,
   getTransactions,
@@ -25,6 +27,7 @@ import {
   buildRosterExits,
   involvedRosterIds,
   netPickupValue,
+  pointsInRosterLineup,
   pointsWhileRostered,
   sideTotal,
   teamLabel,
@@ -185,6 +188,7 @@ function TeamPanel({
   isTrade,
   visual,
   weekly,
+  rosterWeekly,
   exits,
   sideTotal,
   isWinner,
@@ -194,11 +198,12 @@ function TeamPanel({
   isTrade: boolean;
   visual: OwnerVisual | undefined;
   weekly: WeeklyPlayerPoints | null;
+  rosterWeekly: RosterWeeklyPoints | null;
   exits: RosterExits;
   sideTotal: number | null;
   isWinner: boolean;
 }) {
-  const showRos = weekly != null;
+  const showRos = weekly != null && rosterWeekly != null;
   const tradeWeek = txn.week ?? 0;
   const adds = txn.adds.filter((a) => a.roster_id === rosterId);
   // In a trade, every drop is the other side's add, so showing both per team is
@@ -238,7 +243,7 @@ function TeamPanel({
   // of the dropped total (nothing added). Trades use per-side totals + a winner banner instead.
   const net =
     showRos && !isTrade && !empty
-      ? netPickupValue(txn, rosterId, weekly, exits)
+      ? netPickupValue(txn, rosterId, weekly, rosterWeekly, exits)
       : null;
 
   return (
@@ -282,7 +287,10 @@ function TeamPanel({
             direction="add"
             points={
               showRos
-                ? pointsWhileRostered(txn, p, weekly, exits).toFixed(2)
+                ? (isTrade
+                    ? pointsWhileRostered(txn, p, weekly, exits)
+                    : pointsInRosterLineup(txn, p, rosterWeekly, exits)
+                  ).toFixed(2)
                 : undefined
             }
           >
@@ -362,11 +370,13 @@ function TransactionCard({
   txn,
   visuals,
   weekly,
+  rosterWeekly,
   exits,
 }: {
   txn: TransactionItem;
   visuals: Map<string, OwnerVisual>;
   weekly: WeeklyPlayerPoints | null;
+  rosterWeekly: RosterWeeklyPoints | null;
   exits: RosterExits;
 }) {
   const date = new Date(txn.created).toLocaleDateString(undefined, {
@@ -401,6 +411,7 @@ function TransactionCard({
       isTrade={isTrade}
       visual={visuals.get(rosterId)}
       weekly={panelWeekly}
+      rosterWeekly={rosterWeekly}
       exits={exits}
       sideTotal={totals ? totals[index] : null}
       isWinner={winnerIndex === index}
@@ -660,6 +671,10 @@ function TransactionsBody({
   // Built from the whole season (not the filtered wire) so a waiver/FA add's later drop or trade
   // away ends its points window whatever that later transaction's type.
   const exits = buildRosterExits(result.data);
+  // Waiver / free-agent adds count only weeks in the acquiring roster's lineup.
+  const rosterWeekly = matchupsResult.ok
+    ? buildRosterWeeklyPoints(matchupsResult.data)
+    : null;
 
   const transactions = [...result.data]
     .filter((t) => t.type === typeFilter)
@@ -681,6 +696,7 @@ function TransactionsBody({
           txn={txn}
           visuals={visuals}
           weekly={weekly}
+          rosterWeekly={rosterWeekly}
           exits={exits}
         />
       ))}
@@ -712,6 +728,7 @@ function TopTransactionsSection({
     <TopTransactions
       transactions={result.data}
       weekly={buildWeeklyPlayerPoints(matchupsResult.data)}
+      rosterWeekly={buildRosterWeeklyPoints(matchupsResult.data)}
       visuals={buildTransactionVisuals(
         result.data,
         standingsResult.ok ? standingsResult.data : [],

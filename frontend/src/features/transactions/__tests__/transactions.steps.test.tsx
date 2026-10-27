@@ -306,23 +306,30 @@ const ROS_TRANSACTIONS: TransactionItem[] = [
   },
 ];
 
-/** A minimal matchup box score placing each `{id, pts}` player in week `week`. */
+/**
+ * A minimal matchup box score placing each `{id, pts}` player in week `week`. A player with a
+ * `roster` ('1' = team A, '2' = team B) is in only that team's starters; one without is in both
+ * teams' starters so it counts for whichever roster a scenario adds it to.
+ */
 function mkMatchup(
   week: number,
-  players: { id: number; pts: number }[],
+  players: { id: number; pts: number; roster?: '1' | '2' }[],
 ): MatchupItem {
+  const stat = (p: { id: number; pts: number }) => ({
+    player_id: p.id,
+    full_name: `Player ${p.id}`,
+    points_scored: p.pts,
+    position: 'RB',
+  });
+  const on = (roster: '1' | '2') =>
+    players.filter((p) => !p.roster || p.roster === roster).map(stat);
   return {
     team_a_id: '1',
     team_a_display_name: 'Alice',
     team_a_team_name: 'Team Alice',
     team_a_team_logo: null,
     team_a_score: 0,
-    team_a_starters: players.map((p) => ({
-      player_id: p.id,
-      full_name: `Player ${p.id}`,
-      points_scored: p.pts,
-      position: 'RB',
-    })),
+    team_a_starters: on('1'),
     team_a_bench: [],
     team_a_primary_owner_id: 'o1',
     team_a_secondary_owner_id: null,
@@ -331,7 +338,7 @@ function mkMatchup(
     team_b_team_name: 'Team Bob',
     team_b_team_logo: null,
     team_b_score: 0,
-    team_b_starters: [],
+    team_b_starters: on('2'),
     team_b_bench: [],
     team_b_primary_owner_id: 'o2',
     team_b_secondary_owner_id: null,
@@ -713,6 +720,38 @@ const SAME_WEEK_MATCHUPS: MatchupItem[] = [
   mkMatchup(4, [{ id: 70, pts: 12 }]),
 ];
 
+// Alice picks up "Gap Guy" (id 80) in week 2. He scores 5 for her in week 2, is in no lineup in week
+// 3, then scores 8 for her in week 4 → 13.00.
+const LINEUP_GAP: TransactionItem[] = [
+  atWeek(
+    2,
+    mkMove('fa-gap', 'free_agent', 100, [
+      { id: '80', name: 'Gap Guy', roster: A },
+    ]),
+  ),
+];
+
+const LINEUP_GAP_MATCHUPS: MatchupItem[] = [
+  mkMatchup(2, [{ id: 80, pts: 5, roster: '1' }]),
+  mkMatchup(3, [{ id: 81, pts: 9, roster: '1' }]),
+  mkMatchup(4, [{ id: 80, pts: 8, roster: '1' }]),
+];
+
+// Alice picks up "Split Guy" (id 82) in week 2. He scores 5 in her lineup; in week 3 he is in Bob's
+// lineup scoring 40, which must not count for Alice → 5.00 (not 45.00).
+const OTHER_ROSTER_MATCHUPS: MatchupItem[] = [
+  mkMatchup(2, [{ id: 82, pts: 5, roster: '1' }]),
+  mkMatchup(3, [{ id: 82, pts: 40, roster: '2' }]),
+];
+const OTHER_ROSTER: TransactionItem[] = [
+  atWeek(
+    2,
+    mkMove('fa-split', 'free_agent', 100, [
+      { id: '82', name: 'Split Guy', roster: A },
+    ]),
+  ),
+];
+
 // The week-3 Star/Role trade, after which Bob cuts Star Player in week 4. With ROS_MATCHUPS, Star
 // Player counts only week 3 for Bob (30.00, not 70.00); Role Player keeps 25.00 → Bob by +5.00.
 const TRADE_THEN_DROP: TransactionItem[] = [
@@ -799,6 +838,57 @@ defineFeature(feature, (test) => {
         expect((await tileFor(player)).textContent).toContain(value);
       },
     );
+  });
+
+  test("A pickup only counts the weeks he is in the roster's lineup", ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    given(
+      "a free-agent pickup missing from the roster's lineup one week, with matchup box scores",
+      () => {
+        server.use(
+          leagueQuery({
+            TRANSACTIONS: LINEUP_GAP,
+            MATCHUPS: LINEUP_GAP_MATCHUPS,
+          }),
+        );
+      },
+    );
+    when('I open the transactions page', async () => {
+      await renderRoute(<Transactions />, { route: '/transactions', league });
+    });
+    and(/^I select the "(.*)" filter$/, selectFilter);
+    then(/^I see the points "(.*)"$/, seePoints);
+    and(/^I see the net pickup value "(.*)"$/, seeNet);
+  });
+
+  test("A pickup's points for another roster are not counted", ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    given(
+      'a free-agent pickup who also scores for another roster, with matchup box scores',
+      () => {
+        server.use(
+          leagueQuery({
+            TRANSACTIONS: OTHER_ROSTER,
+            MATCHUPS: OTHER_ROSTER_MATCHUPS,
+          }),
+        );
+      },
+    );
+    when('I open the transactions page', async () => {
+      await renderRoute(<Transactions />, { route: '/transactions', league });
+    });
+    and(/^I select the "(.*)" filter$/, selectFilter);
+    then(/^I see the points "(.*)"$/, seePoints);
+    and(/^I do not see the points "(.*)"$/, notSeePoints);
+    and(/^I see the net pickup value "(.*)"$/, seeNet);
   });
 
   test('A traded player later dropped only counts his points while rostered', ({
