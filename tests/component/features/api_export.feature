@@ -24,6 +24,25 @@ Feature: Export league data API (backend/league-export)
     And the export season "2023" has view "standings" with 2 row(s)
     And the export season "2023" has no view "matchups"
 
+  Scenario: Export of several seasons concatenates chunked views and keeps request order
+    Given league "canon-1" has a "STANDINGS#2024" view with 2 row(s)
+    And league "canon-1" has a "STANDINGS#2023" view with 4 row(s)
+    And league "canon-1" has a "MATCHUPS#2024#WEEK#01" view with 3 row(s)
+    And league "canon-1" has a "MATCHUPS#2024#WEEK#02" view with 3 row(s)
+    And league "canon-1" has a "TRANSACTIONS#2024#0000" view with 1 row(s)
+    And league "canon-1" has a "TRANSACTIONS#2024#0001" view with 2 row(s)
+    And league "canon-1" has a "TRANSACTIONS#2023#0000" view with 5 row(s)
+    And league "canon-1" has team rows for seasons "2023,2024"
+    When I GET "/leagues/100/export?platform=SLEEPER&seasons=2024,2023"
+    Then the API responds with status 200
+    And the export seasons are in order "2024,2023"
+    And the export season "2024" has view "standings" with 2 row(s)
+    And the export season "2024" has view "matchups" with 6 row(s)
+    And the export season "2024" has view "transactions" with 3 row(s)
+    And the export season "2023" has view "standings" with 4 row(s)
+    And the export season "2023" has view "transactions" with 5 row(s)
+    And the export season "2023" has no view "matchups"
+
   Scenario: Export with no valid seasons is rejected
     When I GET "/leagues/100/export?platform=SLEEPER&seasons=1999"
     Then the API responds with status 400

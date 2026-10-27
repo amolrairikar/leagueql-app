@@ -42,6 +42,45 @@ function headersDevApiOrigin(): Plugin {
 
 export default defineConfig({
   plugins: [react(), tailwindcss(), svgr(), headersDevApiOrigin()],
+  build: {
+    rolldownOptions: {
+      output: {
+        // Keep rarely-changing vendor code in stable, separately cached chunks
+        // (frontend/route-code-splitting). Everything else follows Rolldown's default split.
+        codeSplitting: {
+          groups: [
+            // Tiny utilities shared by app code and recharts; keep them out of the recharts chunk
+            // so the landing page never has to fetch it.
+            {
+              name: 'vendor-common',
+              test: /node_modules\/clsx\//,
+              priority: 50,
+            },
+            {
+              name: 'vendor-react',
+              test: /node_modules\/(react|react-dom|scheduler)\//,
+              priority: 40,
+            },
+            {
+              name: 'vendor-recharts',
+              test: /node_modules\/(recharts|d3-|victory-vendor)/,
+              priority: 30,
+            },
+            {
+              name: 'vendor-clerk',
+              test: /node_modules\/@clerk\//,
+              priority: 20,
+            },
+            {
+              name: 'vendor-otel',
+              test: /node_modules\/@opentelemetry\//,
+              priority: 10,
+            },
+          ],
+        },
+      },
+    },
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

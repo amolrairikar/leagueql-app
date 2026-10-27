@@ -1,5 +1,5 @@
 import { useUser } from '@clerk/react';
-import { useEffect } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import {
   BrowserRouter,
   Routes,
@@ -22,37 +22,71 @@ import {
   SidebarTrigger,
 } from '@/components/ui/sidebar';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import ChangelogPage from '@/features/changelog/changelog-page';
-import JoinInvitePage from '@/features/connect_league/join-invite-page';
-import LeagueConnect from '@/features/connect_league/league-connect';
-import DraftGrades from '@/features/draft_grades/draft-grades';
-import DraftRecap from '@/features/draft_recap/draft-recap';
-import HomePage from '@/features/home_page/home-page';
-import InstructionsPage from '@/features/instructions/instructions-page';
 import { NAV_LINKS } from '@/features/landing_page/constants';
-import LeagueQLLanding from '@/features/landing_page/landing-page';
 import type { NavLinkItem } from '@/features/landing_page/types';
 import { LineupBackfillBell } from '@/features/lineup_backfill/lineup-backfill-bell';
-import ManagerComparison from '@/features/manager_comparison/manager-comparison';
-import ManagerHistory from '@/features/manager_history/manager-history';
-import MatchupRecords from '@/features/matchup_records/matchup-records';
-import Matchups from '@/features/matchups/matchups';
-import MigrateLeague from '@/features/migrate_league/migrate-league';
 import { MembershipGuard } from '@/features/ownership/membership-guard';
-import PlayerRecords from '@/features/player_records/player-records';
-import PlayoffBracket from '@/features/playoff_bracket/playoff-bracket';
-import ExtensionPrivacyPage from '@/features/privacy/extension-privacy-page';
-import PrivacyPage from '@/features/privacy/privacy-page';
-import SeasonStandings from '@/features/season_standings/season-standings';
 import { AppSidebar } from '@/features/sidebar/app-sidebar';
 import { EspnReauthBanner } from '@/features/sidebar/espn-reauth-banner';
 import { HeaderAccount } from '@/features/sidebar/header-account';
 import { RefreshReminderBanner } from '@/features/sidebar/refresh-reminder-banner';
 import { SleeperStaleSeasonBanner } from '@/features/sidebar/sleeper-stale-season-banner';
 import { YahooAttributionFooter } from '@/features/sidebar/yahoo-attribution-footer';
-import Transactions from '@/features/transactions/transactions';
 import { isDemoMode } from '@/lib/cookie-handler';
 import { recordRouteChange } from '@/lib/telemetry';
+
+const ChangelogPage = lazy(() => import('@/features/changelog/changelog-page'));
+const JoinInvitePage = lazy(
+  () => import('@/features/connect_league/join-invite-page'),
+);
+const LeagueConnect = lazy(
+  () => import('@/features/connect_league/league-connect'),
+);
+const DraftGrades = lazy(() => import('@/features/draft_grades/draft-grades'));
+const DraftRecap = lazy(() => import('@/features/draft_recap/draft-recap'));
+const HomePage = lazy(() => import('@/features/home_page/home-page'));
+const InstructionsPage = lazy(
+  () => import('@/features/instructions/instructions-page'),
+);
+const LeagueQLLanding = lazy(
+  () => import('@/features/landing_page/landing-page'),
+);
+const ManagerComparison = lazy(
+  () => import('@/features/manager_comparison/manager-comparison'),
+);
+const ManagerHistory = lazy(
+  () => import('@/features/manager_history/manager-history'),
+);
+const MatchupRecords = lazy(
+  () => import('@/features/matchup_records/matchup-records'),
+);
+const Matchups = lazy(() => import('@/features/matchups/matchups'));
+const MigrateLeague = lazy(
+  () => import('@/features/migrate_league/migrate-league'),
+);
+const PlayerRecords = lazy(
+  () => import('@/features/player_records/player-records'),
+);
+const PlayoffBracket = lazy(
+  () => import('@/features/playoff_bracket/playoff-bracket'),
+);
+const ExtensionPrivacyPage = lazy(
+  () => import('@/features/privacy/extension-privacy-page'),
+);
+const PrivacyPage = lazy(() => import('@/features/privacy/privacy-page'));
+const SeasonStandings = lazy(
+  () => import('@/features/season_standings/season-standings'),
+);
+const Transactions = lazy(() => import('@/features/transactions/transactions'));
+
+/** Full-area spinner shown while a route's code loads (frontend/route-code-splitting). */
+function PageFallback() {
+  return (
+    <div className="flex min-h-[50vh] items-center justify-center">
+      <Spinner className="size-6 text-muted-foreground" />
+    </div>
+  );
+}
 
 /** Emits a lightweight route-change span on navigation (frontend/observability); renders nothing. */
 function RouteChangeTracker() {
@@ -101,7 +135,9 @@ function AppLayout({ children }: { children: React.ReactNode }) {
           <RefreshReminderBanner />
           <SleeperStaleSeasonBanner />
           <ErrorBoundary resetKeys={[location.pathname]}>
-            <MembershipGuard>{children}</MembershipGuard>
+            <MembershipGuard>
+              <Suspense fallback={<PageFallback />}>{children}</Suspense>
+            </MembershipGuard>
           </ErrorBoundary>
           <YahooAttributionFooter />
         </SidebarInset>
@@ -143,97 +179,99 @@ function App() {
       <BrowserRouter>
         <ScrollToTop />
         <RouteChangeTracker />
-        <Routes>
-          <Route
-            path="/"
-            element={
-              <>
-                <Header />
-                <LeagueQLLanding />
-              </>
-            }
-          />
-          <Route
-            path="/connect_league"
-            element={
-              <ProtectedRoute>
-                <Header />
-                <div className="pt-1">
-                  <LeagueConnect />
-                </div>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/join/:leagueId"
-            element={
-              <>
-                <Header />
-                <JoinInvitePage />
-              </>
-            }
-          />
-          <Route
-            path="/migrate_league"
-            element={
-              <ProtectedRoute>
-                <Header />
-                <div className="pt-1">
-                  <MigrateLeague />
-                </div>
-              </ProtectedRoute>
-            }
-          />
-          {APP_LAYOUT_ROUTES.map(({ path, element }) => (
+        <Suspense fallback={<PageFallback />}>
+          <Routes>
             <Route
-              key={path}
-              path={path}
+              path="/"
+              element={
+                <>
+                  <Header />
+                  <LeagueQLLanding />
+                </>
+              }
+            />
+            <Route
+              path="/connect_league"
               element={
                 <ProtectedRoute>
-                  <AppLayout>{element}</AppLayout>
+                  <Header />
+                  <div className="pt-1">
+                    <LeagueConnect />
+                  </div>
                 </ProtectedRoute>
               }
             />
-          ))}
-          <Route
-            path="/changelog"
-            element={
-              <>
-                <Header />
-                <ChangelogPage />
-              </>
-            }
-          />
-          <Route
-            path="/privacy"
-            element={
-              <>
-                <Header />
-                <PrivacyPage />
-              </>
-            }
-          />
-          <Route
-            path="/extension-privacy"
-            element={
-              <>
-                <Header />
-                <ExtensionPrivacyPage />
-              </>
-            }
-          />
-          <Route
-            path="/docs"
-            element={
-              <div className="flex h-svh flex-col">
-                <Header />
-                <main className="flex-1 overflow-auto">
-                  <InstructionsPage />
-                </main>
-              </div>
-            }
-          />
-        </Routes>
+            <Route
+              path="/join/:leagueId"
+              element={
+                <>
+                  <Header />
+                  <JoinInvitePage />
+                </>
+              }
+            />
+            <Route
+              path="/migrate_league"
+              element={
+                <ProtectedRoute>
+                  <Header />
+                  <div className="pt-1">
+                    <MigrateLeague />
+                  </div>
+                </ProtectedRoute>
+              }
+            />
+            {APP_LAYOUT_ROUTES.map(({ path, element }) => (
+              <Route
+                key={path}
+                path={path}
+                element={
+                  <ProtectedRoute>
+                    <AppLayout>{element}</AppLayout>
+                  </ProtectedRoute>
+                }
+              />
+            ))}
+            <Route
+              path="/changelog"
+              element={
+                <>
+                  <Header />
+                  <ChangelogPage />
+                </>
+              }
+            />
+            <Route
+              path="/privacy"
+              element={
+                <>
+                  <Header />
+                  <PrivacyPage />
+                </>
+              }
+            />
+            <Route
+              path="/extension-privacy"
+              element={
+                <>
+                  <Header />
+                  <ExtensionPrivacyPage />
+                </>
+              }
+            />
+            <Route
+              path="/docs"
+              element={
+                <div className="flex h-svh flex-col">
+                  <Header />
+                  <main className="flex-1 overflow-auto">
+                    <InstructionsPage />
+                  </main>
+                </div>
+              }
+            />
+          </Routes>
+        </Suspense>
       </BrowserRouter>
     </ErrorBoundary>
   );

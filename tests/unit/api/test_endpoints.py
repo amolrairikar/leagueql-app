@@ -2574,6 +2574,118 @@ class TestExportLeagueEndpoint:
         response = client.get("/leagues/123/export?platform=SLEEPER&seasons=2024")
         assert response.status_code == 500
 
+    def test_bundle_keeps_requested_season_order_when_reads_finish_out_of_order(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        import time
+
+        # The first requested season's reads are slow, so later seasons finish first.
+        base = _export_get_item(
+            league_lookup_item,
+            league_metadata_item,
+            {
+                "STANDINGS#2024": {"data": [{"team": "A"}]},
+                "STANDINGS#2023": {"data": [{"team": "B"}]},
+            },
+        )
+
+        def _slow_first_season(*args, **kwargs):
+            if kwargs["Key"]["SK"].endswith("#2024"):
+                time.sleep(0.1)
+            return base(*args, **kwargs)
+
+        mock_table.get_item.side_effect = _slow_first_season
+        mock_table.query.side_effect = _export_query([league_lookup_item], {})
+        response = client.get("/leagues/123/export?platform=SLEEPER&seasons=2024,2023")
+        assert response.status_code == 200
+        data = response.json()["data"]
+        assert list(data.keys()) == ["2024", "2023"]
+        assert data["2024"]["standings"] == [{"team": "A"}]
+        assert data["2023"]["standings"] == [{"team": "B"}]
+
+    def test_view_reads_run_concurrently(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        import threading
+
+        # Two reads must be in flight together to pass the barrier; a serial loop would
+        # time out waiting and surface as a 500.
+        barrier = threading.Barrier(2, timeout=5)
+        base = _export_get_item(
+            league_lookup_item,
+            league_metadata_item,
+            {
+                "STANDINGS#2024": {"data": [{"team": "A"}]},
+                "DRAFT#2024": {"data": [{"pick": 1}]},
+            },
+        )
+
+        def _rendezvous(*args, **kwargs):
+            if kwargs["Key"]["SK"] in ("STANDINGS#2024", "DRAFT#2024"):
+                barrier.wait()
+            return base(*args, **kwargs)
+
+        mock_table.get_item.side_effect = _rendezvous
+        mock_table.query.side_effect = _export_query([league_lookup_item], {})
+        response = client.get("/leagues/123/export?platform=SLEEPER&seasons=2024")
+        assert response.status_code == 200
+        data = response.json()["data"]["2024"]
+        assert data["standings"] == [{"team": "A"}]
+        assert data["draft"] == [{"pick": 1}]
+
+    def test_one_failed_view_read_fails_the_whole_export(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        base = _export_get_item(
+            league_lookup_item,
+            league_metadata_item,
+            {"STANDINGS#2024": {"data": [{"team": "A"}]}},
+        )
+
+        def _draft_fails(*args, **kwargs):
+            if kwargs["Key"]["SK"] == "DRAFT#2024":
+                raise botocore.exceptions.ClientError(
+                    {"Error": {"Code": "InternalError", "Message": "fail"}},
+                    "GetItem",
+                )
+            return base(*args, **kwargs)
+
+        mock_table.get_item.side_effect = _draft_fails
+        mock_table.query.side_effect = _export_query([league_lookup_item], {})
+        response = client.get("/leagues/123/export?platform=SLEEPER&seasons=2024")
+        assert response.status_code == 500
+        assert response.json()["detail"] == "Failed to retrieve league data"
+        assert "data" not in response.json()
+
+    def test_request_context_is_visible_in_read_workers(
+        self, client, mock_table, league_lookup_item, league_metadata_item
+    ):
+        import contextvars
+
+        marker = contextvars.ContextVar("export_marker", default=None)
+        seen = []
+        base = _export_get_item(
+            league_lookup_item,
+            league_metadata_item,
+            {"STANDINGS#2024": {"data": [{"team": "A"}]}},
+        )
+
+        def _record(*args, **kwargs):
+            if kwargs["Key"]["SK"] == "STANDINGS#2024":
+                seen.append(marker.get())
+            return base(*args, **kwargs)
+
+        def _lookup(*args, **kwargs):
+            marker.set("request-span")
+            return "canonical-abc"
+
+        mock_table.get_item.side_effect = _record
+        mock_table.query.side_effect = _export_query([league_lookup_item], {})
+        with patch("routes.lookup_league", side_effect=_lookup):
+            response = client.get("/leagues/123/export?platform=SLEEPER&seasons=2024")
+        assert response.status_code == 200
+        assert seen == ["request-span"]
+
 
 class TestOnboardThreadsOwner:
     def test_onboard_passes_owner_to_invoke(
