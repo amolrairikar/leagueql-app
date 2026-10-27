@@ -16,6 +16,7 @@ import {
   Star,
   Swords,
   TableProperties,
+  TrendingUp,
   Trophy,
   Trash2,
   UserRoundCog,
@@ -68,6 +69,7 @@ import {
 const navItems = [
   { title: 'Home', url: '/home', icon: Home },
   { title: 'Standings', url: '/standings', icon: TableProperties },
+  { title: 'Power Rankings', url: '/power_rankings', icon: TrendingUp },
   { title: 'Matchups', url: '/matchups', icon: Swords },
   { title: 'Playoff Bracket', url: '/playoff_bracket', icon: Trophy },
   { title: 'Manager Comparison', url: '/manager_comparison', icon: Users },

@@ -17,6 +17,18 @@ export interface ChangelogRelease {
 // Newest release first.
 export const CHANGELOG: ChangelogRelease[] = [
   {
+    version: '1.14.0',
+    date: 'October 26, 2026',
+    sections: [
+      {
+        title: 'Added',
+        items: [
+          'Power Rankings. A new page ranks every team each week by a blend of record, points scored, recent form, and lineup efficiency. See who moved up or down, a six-week rank trend, and which teams are underrated or overrated compared with their record. Expand a team to see what drives its score.',
+        ],
+      },
+    ],
+  },
+  {
     version: '1.13.0',
     date: 'October 3, 2026',
     sections: [
