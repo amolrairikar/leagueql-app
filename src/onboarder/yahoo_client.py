@@ -559,5 +559,5 @@ def _to_int(value: Any, default: Any) -> Any:
     """Best-effort int coercion with a fallback (Yahoo returns week numbers as strings)."""
     try:
         return int(value)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return default

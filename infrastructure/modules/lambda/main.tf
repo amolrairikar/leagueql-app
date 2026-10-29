@@ -31,7 +31,7 @@ resource "aws_lambda_function" "this" {
   s3_bucket         = var.s3_bucket
   s3_key            = var.s3_key
   s3_object_version = data.aws_s3_object.lambda_package.version_id
-  runtime           = "python3.13"
+  runtime           = "python3.14"
 
   reserved_concurrent_executions = var.reserved_concurrent_executions
 

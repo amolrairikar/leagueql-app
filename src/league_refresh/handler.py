@@ -74,7 +74,7 @@ def lambda_handler(event, context) -> dict[str, str | int]:
     # than refreshing without a current-season reference.
     try:
         current_season = int(nfl_state["season"])
-    except (KeyError, TypeError, ValueError):
+    except KeyError, TypeError, ValueError:
         logger.error("NFL state missing a parseable 'season': %s", nfl_state)
         raise
 

@@ -888,7 +888,7 @@ def record_league_access(canonical_league_id: str, metadata: dict) -> None:
             age_seconds = (now - datetime.fromisoformat(last_accessed)).total_seconds()
             if age_seconds < main.LEAGUE_ACCESS_THROTTLE_SECONDS:
                 return
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             # Unparseable/naive stored value — fall through and overwrite it.
             pass
 
