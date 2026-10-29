@@ -1427,7 +1427,7 @@ def _to_float(value: Any) -> float:
     """Best-effort float coercion (Yahoo returns points as strings), defaulting to 0.0."""
     try:
         return float(value)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return 0.0
 
 
@@ -2017,7 +2017,7 @@ def _int_or_none(value: Any) -> int | None:
     """Best-effort int coercion returning None on failure (Yahoo returns numbers as strings)."""
     try:
         return int(value)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
 
 

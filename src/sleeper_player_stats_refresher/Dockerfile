@@ -2,7 +2,7 @@
 # alongside the handler, exactly as build_lambda_zip.sh does for the Lambdas.
 #
 #   docker build -f src/sleeper_player_stats_refresher/Dockerfile ./src
-FROM python:3.13-slim
+FROM python:3.14-slim
 
 WORKDIR /app
 

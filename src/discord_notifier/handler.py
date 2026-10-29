@@ -94,7 +94,7 @@ def _embed_for_record(subject: str | None, body: str) -> dict:
     """
     try:
         parsed = json.loads(body)
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         return _plain_embed(subject, body)
 
     if not isinstance(parsed, dict):
