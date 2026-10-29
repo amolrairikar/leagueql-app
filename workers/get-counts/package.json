@@ -12,6 +12,6 @@
   "license": "ISC",
   "type": "commonjs",
   "devDependencies": {
-    "wrangler": "4.151.0"
+    "wrangler": "4.155.0"
   }
 }
