@@ -954,6 +954,8 @@ module "api-gateway-role" {
         Action = [
           "logs:CreateLogGroup",
           "logs:DescribeLogGroups",
+          "logs:FilterLogEvents",
+          "logs:DescribeLogStreams",
         ]
         Resource = [
           "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/apigateway/leagueql-api-${var.environment}-east",
