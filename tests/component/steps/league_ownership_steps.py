@@ -10,10 +10,10 @@ from common_steps import get_item
 
 
 def _authenticate(context, user_id):
-    import routes
+    import dependencies
 
-    context.main.app.dependency_overrides[routes.get_authenticated_user] = lambda: (
-        user_id
+    context.main.app.dependency_overrides[dependencies.get_authenticated_user] = (
+        lambda: user_id
     )
 
 

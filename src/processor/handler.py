@@ -12,13 +12,13 @@ from enum import Enum
 from typing import Any
 
 import boto3
-import botocore.config
 import botocore.exceptions
 import duckdb
 import pandas as pd
 from queries import QUERIES
 from utils import correlation_id_var, logger, publish_failure
 
+from common.aws import RETRY_CONFIG
 from common.job_status import write_job_status
 from common.tracing import init_tracing, traced_handler
 from common.yahoo_members import real_guid
@@ -28,11 +28,10 @@ from common.yahoo_members import real_guid
 # are unaffected.
 init_tracing("leagueql-processor")
 
-_retry_config = botocore.config.Config(retries={"mode": "standard"})
-s3_client = boto3.client("s3", config=_retry_config)
+s3_client = boto3.client("s3", config=RETRY_CONFIG)
 table_name = os.environ["DYNAMODB_TABLE_NAME"]
-table = boto3.resource("dynamodb", config=_retry_config).Table(table_name)
-ddb_client = boto3.client("dynamodb", config=_retry_config)
+table = boto3.resource("dynamodb", config=RETRY_CONFIG).Table(table_name)
+ddb_client = boto3.client("dynamodb", config=RETRY_CONFIG)
 
 
 ESPN_POSITION_ID_MAPPING = {

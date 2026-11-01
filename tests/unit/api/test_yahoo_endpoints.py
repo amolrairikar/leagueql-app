@@ -92,15 +92,15 @@ class TestYahooAuthorizeEndpoint:
         assert response.status_code == 422
 
     def test_unauthenticated_returns_401(self, client):
+        import dependencies
         import main
-        import routes
 
-        main.app.dependency_overrides.pop(routes.get_authenticated_user, None)
+        main.app.dependency_overrides.pop(dependencies.get_authenticated_user, None)
         try:
             response = client.get("/leagues/yahoo/oauth/authorize?leagueId=1")
         finally:
-            main.app.dependency_overrides[routes.get_authenticated_user] = lambda: (
-                "user_1"
+            main.app.dependency_overrides[dependencies.get_authenticated_user] = (
+                lambda: "user_1"
             )
         assert response.status_code == 401
 

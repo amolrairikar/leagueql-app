@@ -11,12 +11,13 @@ from enum import Enum
 from typing import Any
 
 import boto3
-import botocore.config
 import requests as http_requests  # noqa: F401  re-exported for test patch points
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from mangum import Mangum
 from pydantic import BaseModel, ConfigDict, Field
+
+from common.aws import RETRY_CONFIG
 
 # Re-exported so ``main.<name>`` stays the public surface for helpers, routes,
 # and tests (e.g. ``from main import correlation_id_var, JsonFormatter``).
@@ -240,13 +241,12 @@ SLEEPER_STATE_URL = "https://api.sleeper.app/v1/state/nfl"
 
 DYNAMODB_TABLE_NAME = os.environ["DYNAMODB_TABLE_NAME"]
 
-_retry_config = botocore.config.Config(retries={"mode": "standard"})
-dynamodb_resource = boto3.resource("dynamodb", config=_retry_config)
+dynamodb_resource = boto3.resource("dynamodb", config=RETRY_CONFIG)
 table = dynamodb_resource.Table(DYNAMODB_TABLE_NAME)
 
-lambda_client = boto3.client("lambda", config=_retry_config)
+lambda_client = boto3.client("lambda", config=RETRY_CONFIG)
 
-s3_client = boto3.client("s3", config=_retry_config)
+s3_client = boto3.client("s3", config=RETRY_CONFIG)
 S3_BUCKET = os.environ["S3_BUCKET_NAME"]
 
 # KMS client + key used to encrypt Yahoo OAuth tokens at rest (backend/yahoo-oauth).
@@ -260,7 +260,7 @@ YAHOO_KMS_KEY_ID = os.environ.get("YAHOO_KMS_KEY_ID", "")
 ESPN_KMS_KEY_ID = os.environ.get("ESPN_KMS_KEY_ID", "")
 kms_client = boto3.client(
     "kms",
-    config=_retry_config,
+    config=RETRY_CONFIG,
     region_name=os.environ.get("YAHOO_KMS_REGION") or None,
 )
 
@@ -318,7 +318,8 @@ from helpers import (  # noqa: F401
 
 # ``delete_league`` is re-exported because external scripts/integration tests
 # call it directly (scripts/utility_scripts/delete_test_league.py).
-from routes import delete_league, router  # noqa: F401
+from routes import router
+from routes_management import delete_league  # noqa: F401
 
 app.include_router(router)
 

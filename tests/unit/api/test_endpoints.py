@@ -364,9 +364,9 @@ class TestFormatCooldownWait:
         ],
     )
     def test_format_cooldown_wait(self, remaining, expected):
-        import routes
+        import routes_onboarding
 
-        assert routes._format_cooldown_wait(remaining) == expected
+        assert routes_onboarding._format_cooldown_wait(remaining) == expected
 
 
 class TestOnboardLeagueEndpoint:
@@ -580,7 +580,7 @@ class TestOnboardLeagueEndpoint:
         # diff is deterministic regardless of when the suite runs.
         from datetime import datetime
 
-        import routes
+        import routes_onboarding
 
         class _FrozenDatetime(datetime):
             @classmethod
@@ -588,7 +588,7 @@ class TestOnboardLeagueEndpoint:
                 return datetime(2026, 9, 22, 8, 0, tzinfo=UTC)
 
         monkeypatch.setenv("ENVIRONMENT", "prod")
-        monkeypatch.setattr(routes, "datetime", _FrozenDatetime)
+        monkeypatch.setattr(routes_onboarding, "datetime", _FrozenDatetime)
         league_metadata_item["last_refresh_at"] = "2026-09-15T10:00:00+00:00"
         mock_table.get_item.side_effect = [
             {"Item": league_lookup_item},
@@ -985,7 +985,9 @@ class TestDeleteLeagueEndpoint:
     ):
         self._setup_delete_mocks(mock_table, self._yahoo_lookup_item(), mock_s3_client)
         with (
-            patch("routes.owner_has_other_yahoo_leagues", return_value=False),
+            patch(
+                "routes_management.owner_has_other_yahoo_leagues", return_value=False
+            ),
             patch("yahoo_oauth.delete_tokens") as mock_delete_tokens,
         ):
             response = client.delete("/leagues/456?platform=YAHOO")
@@ -997,7 +999,7 @@ class TestDeleteLeagueEndpoint:
     ):
         self._setup_delete_mocks(mock_table, self._yahoo_lookup_item(), mock_s3_client)
         with (
-            patch("routes.owner_has_other_yahoo_leagues", return_value=True),
+            patch("routes_management.owner_has_other_yahoo_leagues", return_value=True),
             patch("yahoo_oauth.delete_tokens") as mock_delete_tokens,
         ):
             response = client.delete("/leagues/456?platform=YAHOO")
@@ -1009,7 +1011,9 @@ class TestDeleteLeagueEndpoint:
     ):
         self._setup_delete_mocks(mock_table, self._yahoo_lookup_item(), mock_s3_client)
         with (
-            patch("routes.owner_has_other_yahoo_leagues", return_value=False),
+            patch(
+                "routes_management.owner_has_other_yahoo_leagues", return_value=False
+            ),
             patch(
                 "yahoo_oauth.delete_tokens",
                 side_effect=botocore.exceptions.ClientError(
@@ -1017,7 +1021,7 @@ class TestDeleteLeagueEndpoint:
                     "DeleteItem",
                 ),
             ),
-            patch("routes.publish_failure") as mock_publish_failure,
+            patch("routes_management.publish_failure") as mock_publish_failure,
         ):
             response = client.delete("/leagues/456?platform=YAHOO")
         # The league data is already gone, so the delete still succeeds; the
@@ -1035,14 +1039,14 @@ class TestDeleteLeagueEndpoint:
         self._setup_delete_mocks(mock_table, self._yahoo_lookup_item(), mock_s3_client)
         with (
             patch(
-                "routes.owner_has_other_yahoo_leagues",
+                "routes_management.owner_has_other_yahoo_leagues",
                 side_effect=botocore.exceptions.ClientError(
                     {"Error": {"Code": "AccessDeniedException", "Message": "no"}},
                     "Query",
                 ),
             ),
             patch("yahoo_oauth.delete_tokens") as mock_delete_tokens,
-            patch("routes.publish_failure") as mock_publish_failure,
+            patch("routes_management.publish_failure") as mock_publish_failure,
         ):
             response = client.delete("/leagues/456?platform=YAHOO")
         assert response.status_code == 200
@@ -1368,7 +1372,7 @@ class TestMigrateLeagueEndpoint:
         ]
         with (
             patch("yahoo_oauth.has_valid_link", return_value=False),
-            patch("routes.invoke_onboarder") as mk_inv,
+            patch("routes_onboarding.invoke_onboarder") as mk_inv,
         ):
             response = client.post(
                 "/leagues/123/migrate?platform=SLEEPER",
@@ -1398,7 +1402,7 @@ class TestMigrateLeagueEndpoint:
         mock_table.update_item.return_value = {}
         with (
             patch("yahoo_oauth.has_valid_link", return_value=True),
-            patch("routes.invoke_onboarder") as mk_inv,
+            patch("routes_onboarding.invoke_onboarder") as mk_inv,
         ):
             response = client.post(
                 "/leagues/123/migrate?platform=SLEEPER",
@@ -2072,10 +2076,10 @@ class TestYahooMembersEndpoint:
 
 def _as_user(user_id):
     """Override the Clerk auth dependency to a specific (non-default) caller."""
+    import dependencies
     import main
-    import routes
 
-    main.app.dependency_overrides[routes.get_authenticated_user] = lambda: user_id
+    main.app.dependency_overrides[dependencies.get_authenticated_user] = lambda: user_id
 
 
 class TestOwnerGate:
@@ -2681,7 +2685,7 @@ class TestExportLeagueEndpoint:
 
         mock_table.get_item.side_effect = _record
         mock_table.query.side_effect = _export_query([league_lookup_item], {})
-        with patch("routes.lookup_league", side_effect=_lookup):
+        with patch("routes_leagues.lookup_league", side_effect=_lookup):
             response = client.get("/leagues/123/export?platform=SLEEPER&seasons=2024")
         assert response.status_code == 200
         assert seen == ["request-span"]
@@ -3271,7 +3275,7 @@ class TestBlockedRefreshEnrollsAutoRefresh:
 
     @pytest.fixture
     def mock_espn_fetch(self):
-        with patch("routes._fetch_espn_league_teams") as mock:
+        with patch("routes_onboarding._fetch_espn_league_teams") as mock:
             yield mock
 
     @staticmethod
@@ -3369,7 +3373,7 @@ class TestBlockedRefreshEnrollsAutoRefresh:
         espn_resp.raise_for_status.side_effect = requests.exceptions.HTTPError(
             response=espn_resp
         )
-        with patch("routes.http_requests.get", return_value=espn_resp):
+        with patch("main.http_requests.get", return_value=espn_resp):
             response = client.post("/leagues?requestType=REFRESH", json=self._BODY)
 
         assert response.status_code == 400
@@ -3386,7 +3390,7 @@ class TestBlockedRefreshEnrollsAutoRefresh:
         espn_resp.raise_for_status.side_effect = requests.exceptions.HTTPError(
             response=espn_resp
         )
-        with patch("routes.http_requests.get", return_value=espn_resp):
+        with patch("main.http_requests.get", return_value=espn_resp):
             response = client.post("/leagues?requestType=REFRESH", json=self._BODY)
 
         assert response.status_code == 502
@@ -3399,7 +3403,7 @@ class TestBlockedRefreshEnrollsAutoRefresh:
         import requests
 
         with patch(
-            "routes.http_requests.get",
+            "main.http_requests.get",
             side_effect=requests.exceptions.ConnectionError("boom"),
         ):
             response = client.post("/leagues?requestType=REFRESH", json=self._BODY)
@@ -3412,7 +3416,7 @@ class TestBlockedRefreshEnrollsAutoRefresh:
         self, client, mock_table, blocked, mock_store
     ):
         espn_resp = MagicMock(status_code=200)
-        with patch("routes.http_requests.get", return_value=espn_resp) as mock_get:
+        with patch("main.http_requests.get", return_value=espn_resp) as mock_get:
             response = client.post("/leagues?requestType=REFRESH", json=self._BODY)
 
         assert response.status_code == 429
@@ -3491,7 +3495,10 @@ class TestSetAutoRefreshEndpoint:
         lookup, metadata = self._espn_items()
         mock_table.get_item.side_effect = [{"Item": lookup}, {"Item": metadata}]
         with (
-            patch("routes.owner_has_other_optedin_espn_leagues", return_value=False),
+            patch(
+                "routes_management.owner_has_other_optedin_espn_leagues",
+                return_value=False,
+            ),
             patch("espn_credentials.delete_credentials") as mock_del,
         ):
             response = client.put(
@@ -3504,7 +3511,10 @@ class TestSetAutoRefreshEndpoint:
         lookup, metadata = self._espn_items()
         mock_table.get_item.side_effect = [{"Item": lookup}, {"Item": metadata}]
         with (
-            patch("routes.owner_has_other_optedin_espn_leagues", return_value=True),
+            patch(
+                "routes_management.owner_has_other_optedin_espn_leagues",
+                return_value=True,
+            ),
             patch("espn_credentials.delete_credentials") as mock_del,
         ):
             response = client.put(
@@ -3548,7 +3558,10 @@ class TestSetAutoRefreshEndpoint:
         lookup, metadata = self._espn_items()
         mock_table.get_item.side_effect = [{"Item": lookup}, {"Item": metadata}]
         with (
-            patch("routes.owner_has_other_optedin_espn_leagues", return_value=False),
+            patch(
+                "routes_management.owner_has_other_optedin_espn_leagues",
+                return_value=False,
+            ),
             patch(
                 "espn_credentials.delete_credentials",
                 side_effect=RuntimeError("kms down"),
@@ -3586,7 +3599,10 @@ class TestDeleteLeagueEspnCredentialCleanup:
     ):
         self._setup(mock_table, self._espn_lookup_item(), mock_s3_client)
         with (
-            patch("routes.owner_has_other_optedin_espn_leagues", return_value=False),
+            patch(
+                "routes_management.owner_has_other_optedin_espn_leagues",
+                return_value=False,
+            ),
             patch("espn_credentials.delete_credentials") as mock_del,
         ):
             response = client.delete("/leagues/456?platform=ESPN")
@@ -3598,7 +3614,10 @@ class TestDeleteLeagueEspnCredentialCleanup:
     ):
         self._setup(mock_table, self._espn_lookup_item(), mock_s3_client)
         with (
-            patch("routes.owner_has_other_optedin_espn_leagues", return_value=True),
+            patch(
+                "routes_management.owner_has_other_optedin_espn_leagues",
+                return_value=True,
+            ),
             patch("espn_credentials.delete_credentials") as mock_del,
         ):
             response = client.delete("/leagues/456?platform=ESPN")
@@ -3610,7 +3629,10 @@ class TestDeleteLeagueEspnCredentialCleanup:
     ):
         self._setup(mock_table, self._espn_lookup_item(), mock_s3_client)
         with (
-            patch("routes.owner_has_other_optedin_espn_leagues", return_value=False),
+            patch(
+                "routes_management.owner_has_other_optedin_espn_leagues",
+                return_value=False,
+            ),
             patch(
                 "espn_credentials.delete_credentials",
                 side_effect=RuntimeError("kms down"),

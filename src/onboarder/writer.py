@@ -4,17 +4,16 @@ import os
 from typing import Any
 
 import boto3
-import botocore.config
 import botocore.exceptions
 from utils import correlation_id_var, logger
 
+from common.aws import RETRY_CONFIG
 from common.league_members import member_transact_put
 from common.tracing import inject_context
 
-_retry_config = botocore.config.Config(retries={"mode": "standard"})
-_s3 = boto3.client("s3", config=_retry_config)
-_dynamodb = boto3.client("dynamodb", config=_retry_config)
-_sqs = boto3.client("sqs", config=_retry_config)
+_s3 = boto3.client("s3", config=RETRY_CONFIG)
+_dynamodb = boto3.client("dynamodb", config=RETRY_CONFIG)
+_sqs = boto3.client("sqs", config=RETRY_CONFIG)
 
 
 def upload_results_to_s3(

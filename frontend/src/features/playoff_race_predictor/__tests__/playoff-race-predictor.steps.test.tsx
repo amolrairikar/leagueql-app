@@ -4,7 +4,7 @@ import { defineFeature, loadFeature } from 'jest-cucumber';
 
 import type { MatchupItem } from '@/components/api/types';
 import PlayoffBracket from '@/features/playoff_bracket/playoff-bracket';
-import { PLAYOFF_ODDS_TOOLTIP } from '@/features/playoff_race_predictor/playoff-race-predictor';
+import { PLAYOFF_ODDS_TOOLTIP } from '@/features/playoff_race_predictor/constants';
 import { LEAGUE } from '@/test/fixtures';
 import { leagueQuery, server } from '@/test/msw/server';
 import { renderRoute } from '@/test/render';

@@ -28,22 +28,21 @@ import uuid
 from typing import Any
 
 import boto3
-import botocore.config
 import botocore.exceptions
 import requests
 from utils import correlation_id_var, logger
 from writer import send_lineup_backfill_message
 from yahoo_client import parse_team_roster, team_roster_url
 
+from common.aws import RETRY_CONFIG
 from common.tracing import init_tracing, inject_context, traced_handler
 from common.yahoo_tokens import YahooReauthRequired
 from common.yahoo_tokens import from_env as yahoo_tokens_from_env
 
 init_tracing("leagueql-lineup-backfill")
 
-_retry_config = botocore.config.Config(retries={"mode": "standard"})
-_s3 = boto3.client("s3", config=_retry_config)
-_dynamodb = boto3.client("dynamodb", config=_retry_config)
+_s3 = boto3.client("s3", config=RETRY_CONFIG)
+_dynamodb = boto3.client("dynamodb", config=RETRY_CONFIG)
 
 # A run holds the league lease this long; longer than the Lambda timeout (900s) so a live run
 # never loses it, short enough that a crashed run's lease frees itself.

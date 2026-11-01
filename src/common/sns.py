@@ -9,13 +9,12 @@ and :func:`publish_failure` becomes a no-op. Each service binds its own ``subjec
 import os
 
 import boto3
-import botocore.config
 
+from common.aws import RETRY_CONFIG
 from common.logging_utils import correlation_id_var, logger
 
-_retry_config = botocore.config.Config(retries={"mode": "standard"})
 _sns_topic_arn = os.environ.get("SNS_TOPIC_ARN")
-_sns_client = boto3.client("sns", config=_retry_config) if _sns_topic_arn else None
+_sns_client = boto3.client("sns", config=RETRY_CONFIG) if _sns_topic_arn else None
 
 
 def publish_failure(
