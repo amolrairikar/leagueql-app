@@ -118,14 +118,14 @@ def override_authenticated_user():
     override the TestClient (which carries no JWT) would get 401. Tests that
     exercise the unauthenticated path pop this override explicitly.
     """
+    import dependencies
     import main
-    import routes
 
-    main.app.dependency_overrides[routes.get_authenticated_user] = lambda: (
+    main.app.dependency_overrides[dependencies.get_authenticated_user] = lambda: (
         DEFAULT_TEST_USER
     )
     yield DEFAULT_TEST_USER
-    main.app.dependency_overrides.pop(routes.get_authenticated_user, None)
+    main.app.dependency_overrides.pop(dependencies.get_authenticated_user, None)
 
 
 @pytest.fixture

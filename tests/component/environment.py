@@ -373,11 +373,11 @@ def before_scenario(context, scenario):
     # backend/league-authorization). Authenticate as the default owner so owner-gated endpoints pass;
     # the shared seeding step records DEFAULT_USER as the league owner. Steps that
     # need a different caller layer their own ``patch.dict`` override on top.
-    import routes
+    import dependencies
 
     context.default_user = DEFAULT_USER
-    context.main.app.dependency_overrides[routes.get_authenticated_user] = lambda: (
-        DEFAULT_USER
+    context.main.app.dependency_overrides[dependencies.get_authenticated_user] = (
+        lambda: DEFAULT_USER
     )
 
 
@@ -385,9 +385,9 @@ def after_scenario(context, scenario):
     for patcher in getattr(context, "_patches", []):
         patcher.stop()
     context._patches = []
-    import routes
+    import dependencies
 
-    context.main.app.dependency_overrides.pop(routes.get_authenticated_user, None)
+    context.main.app.dependency_overrides.pop(dependencies.get_authenticated_user, None)
     _clear_table(context)
     _clear_bucket(context)
     _reset_backfill_queue(context)

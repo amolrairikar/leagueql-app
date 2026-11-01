@@ -10,10 +10,10 @@ state, or CI.
 import os
 
 import boto3
-import botocore.config
 
-_retry_config = botocore.config.Config(retries={"mode": "standard"})
-_ssm_client = boto3.client("ssm", config=_retry_config)
+from common.aws import RETRY_CONFIG
+
+_ssm_client = boto3.client("ssm", config=RETRY_CONFIG)
 
 
 def get_ssm_parameter(name: str) -> str:

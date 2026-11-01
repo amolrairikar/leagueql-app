@@ -71,9 +71,9 @@ def step_onboarded_indexes_no_one(context):
 
 @given("the request is unauthenticated")
 def step_unauthenticated(context):
-    import routes
+    import dependencies
 
-    context.main.app.dependency_overrides.pop(routes.get_authenticated_user, None)
+    context.main.app.dependency_overrides.pop(dependencies.get_authenticated_user, None)
 
 
 @then('my leagues list league "{league_id}" on "{platform}"')

@@ -21,13 +21,12 @@ import datetime
 import os
 
 import boto3
-import botocore.config
 import botocore.exceptions
 
+from common.aws import RETRY_CONFIG
 from common.logging_utils import logger
 
-_retry_config = botocore.config.Config(retries={"mode": "standard"})
-_dynamodb = boto3.client("dynamodb", config=_retry_config)
+_dynamodb = boto3.client("dynamodb", config=RETRY_CONFIG)
 
 # How long a JOB_STATUS item lives before DynamoDB TTL reaps it.
 JOB_TTL_SECONDS = 24 * 60 * 60

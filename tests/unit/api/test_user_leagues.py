@@ -279,10 +279,10 @@ class TestGetMyLeaguesEndpoint:
         assert response.json()["data"] == []
 
     def test_unauthenticated_returns_401(self, client):
+        import dependencies
         import main
-        import routes
 
-        main.app.dependency_overrides.pop(routes.get_authenticated_user, None)
+        main.app.dependency_overrides.pop(dependencies.get_authenticated_user, None)
         response = client.get("/me/leagues")
         assert response.status_code == 401
 
