@@ -116,7 +116,7 @@ def step_seed_s3_raw(context, canonical):
 
 @when('I POST to espn_members for league "{league_id}" with ESPN returning {code:d}')
 def step_post_espn_members(context, league_id, code):
-    import routes_onboarding
+    import routes.onboarding
 
     resp = MagicMock(status_code=code)
     if code == 200:
@@ -133,7 +133,7 @@ def step_post_espn_members(context, league_id, code):
         err = requests.exceptions.HTTPError("boom")
         resp.raise_for_status.side_effect = err
     patcher = patch.object(
-        routes_onboarding.http_requests, "get", MagicMock(return_value=resp)
+        routes.onboarding.http_requests, "get", MagicMock(return_value=resp)
     )
     patcher.start()
     context._patches.append(patcher)
@@ -230,7 +230,7 @@ def _patch_yahoo_token(context, *, linked):
 
 def _patch_yahoo_http(context, *, seeded_league_id, managers=None):
     """Patch the upstream Yahoo GETs: leagues enumeration then that league's teams."""
-    import routes_onboarding
+    import routes.onboarding
 
     leagues_resp = MagicMock()
     leagues_resp.raise_for_status.return_value = None
@@ -241,7 +241,7 @@ def _patch_yahoo_http(context, *, seeded_league_id, managers=None):
     teams_resp.raise_for_status.return_value = None
     teams_resp.json.return_value = _yahoo_teams_payload(managers)
     patcher = patch.object(
-        routes_onboarding.http_requests,
+        routes.onboarding.http_requests,
         "get",
         MagicMock(side_effect=[leagues_resp, teams_resp]),
     )
@@ -378,13 +378,13 @@ def step_patch_espn_cookie_check(context, code):
     # The blocked-refresh enrollment validates cookies with an ESPN mTeam read
     # (backend/league-refresh); mock that external call at the HTTP boundary.
     import requests
-    import routes_onboarding
+    import routes.onboarding
 
     resp = MagicMock(status_code=code)
     if code >= 400:
         resp.raise_for_status.side_effect = requests.exceptions.HTTPError(response=resp)
     patcher = patch.object(
-        routes_onboarding.http_requests, "get", MagicMock(return_value=resp)
+        routes.onboarding.http_requests, "get", MagicMock(return_value=resp)
     )
     patcher.start()
     context._patches.append(patcher)
@@ -432,11 +432,11 @@ def step_lambda_not_invoked(context):
 def step_patch_api_nfl_state(context, season, week):
     # Patch the API's NFL-state fetch (routes imports get_nfl_state by name) so the
     # refresh up-to-date guard runs against a known season/week without real HTTP.
-    import routes_onboarding
+    import routes.onboarding
 
     state = {"season_type": "regular", "season": season, "week": week}
     patcher = patch.object(
-        routes_onboarding, "get_nfl_state", MagicMock(return_value=state)
+        routes.onboarding, "get_nfl_state", MagicMock(return_value=state)
     )
     patcher.start()
     context._patches.append(patcher)
