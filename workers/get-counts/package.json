@@ -5,13 +5,15 @@
   "main": "index.js",
   "scripts": {
     "build": "wrangler deploy --dry-run --config wrangler.toml --outdir dist",
-    "dev": "wrangler dev --config wrangler.toml"
+    "dev": "wrangler dev --config wrangler.toml",
+    "test": "vitest run"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "devDependencies": {
+    "vitest": "5.0.5",
     "wrangler": "4.155.0"
   }
 }

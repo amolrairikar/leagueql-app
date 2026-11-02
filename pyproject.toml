@@ -30,6 +30,7 @@ dev = [
     "pytest",
     "pytest-asyncio",
     "pytest-cov",
+    "pyyaml",
     "ruff",
     "tqdm",
 ]
@@ -40,6 +41,16 @@ package = false
 [tool.pytest.ini_options]
 pythonpath = [".", "src", "src/api", "src/processor", "src/onboarder"]
 asyncio_mode = "auto"
+
+[tool.coverage.run]
+branch = true
+source = ["src"]
+
+[tool.coverage.report]
+# Backend unit coverage is ~99% line+branch; this floor fails CI on regressions
+# without being brittle. Raise it as coverage improves, never lower it.
+fail_under = 98
+show_missing = true
 
 [tool.ruff.lint]
 extend-select = ["S"]

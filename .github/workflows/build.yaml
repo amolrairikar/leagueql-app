@@ -117,11 +117,29 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run frontend tests
-        run: npm run test:run
+      - name: Run frontend tests (with coverage thresholds)
+        run: npm run test:coverage
+
+      - name: Run Chrome extension tests
+        working-directory: extension
+        run: |
+          npm ci
+          npm test
 
       - name: Run leagueql-app worker tests
         working-directory: workers/leagueql-app
+        run: |
+          npm ci
+          npm test
+
+      - name: Run get-counts worker tests
+        working-directory: workers/get-counts
+        run: |
+          npm ci
+          npm test
+
+      - name: Run sync-counts worker tests
+        working-directory: workers/sync-counts
         run: |
           npm ci
           npm test

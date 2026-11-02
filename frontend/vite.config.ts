@@ -95,6 +95,25 @@ export default defineConfig({
     // Shared component-test setup: jest-dom matchers, the MSW server lifecycle,
     // jsdom polyfills, and per-test cookie/cache resets.
     setupFiles: ['./src/test/setup.ts'],
+    coverage: {
+      provider: 'v8',
+      include: ['src/**/*.{ts,tsx}'],
+      exclude: [
+        'src/**/__tests__/**',
+        'src/**/*.test.{ts,tsx}',
+        'src/test/**',
+        'src/**/*.d.ts',
+      ],
+      reporter: ['text-summary', 'json-summary'],
+      // Ratchet: set just below current coverage (~85.5% stmts / ~70% branches) so
+      // regressions fail `npm run test:coverage`. Raise as coverage improves.
+      thresholds: {
+        statements: 85,
+        branches: 69,
+        functions: 83,
+        lines: 85,
+      },
+    },
     // Satisfies getBaseUrl() at module import time without hitting PROD or dev-URL paths.
     env: {
       VITE_API_URL: 'http://test.local',

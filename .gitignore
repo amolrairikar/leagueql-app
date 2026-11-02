@@ -19,6 +19,7 @@ __pycache__
 .env
 
 # Coverage files
+coverage/
 .coverage
 .coverage.*
 
