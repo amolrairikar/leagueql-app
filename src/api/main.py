@@ -2,7 +2,7 @@
 
 Holds shared infrastructure (logging, FastAPI app, AWS clients, config) plus the
 request/response models and enums. Helper functions live in ``helpers.py`` and
-route handlers in ``routes.py``; both are wired together here. Helper functions
+route handlers in the ``routes`` package; both are wired together here. Helper functions
 are re-exported from this module so ``main.<helper>`` remains the public surface.
 """
 
@@ -319,7 +319,7 @@ from helpers import (  # noqa: F401
 # ``delete_league`` is re-exported because external scripts/integration tests
 # call it directly (scripts/utility_scripts/delete_test_league.py).
 from routes import router
-from routes_management import delete_league  # noqa: F401
+from routes.management import delete_league  # noqa: F401
 
 app.include_router(router)
 

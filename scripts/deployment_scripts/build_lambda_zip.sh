@@ -5,7 +5,7 @@ set -euo pipefail
 #
 # For each directory:
 #   1. Installs dependencies from requirements.txt (if present)
-#   2. Packages all .py files into {directory_name}-lambda.zip
+#   2. Packages all .py files (and local subpackages) into {directory_name}-lambda.zip
 #   3. Uploads the zip to s3://$S3_BUCKET-east-<account> and s3://$S3_BUCKET-west-<account>
 #
 # Required environment variables:
@@ -118,6 +118,14 @@ process_lambda() {
     echo "    Copying Python source files..."
     find "$SOURCE_DIR" -maxdepth 1 -name "*.py" | while read -r pyfile; do
         cp "$pyfile" "$BUILD_DIR/"
+    done
+
+    # Copy any local subpackages (directories with an __init__.py, e.g. api/routes/).
+    # Without this only top-level modules ship and the handler fails on import.
+    find "$SOURCE_DIR" -mindepth 2 -maxdepth 2 -name "__init__.py" | while read -r initfile; do
+        PKG_DIR="$(dirname "$initfile")"
+        cp -R "$PKG_DIR" "$BUILD_DIR/"
+        find "$BUILD_DIR/$(basename "$PKG_DIR")" -name "__pycache__" -type d -prune -exec rm -r {} +
     done
 
     # Copy the shared common package (vendored into every function zip so
