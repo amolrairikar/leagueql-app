@@ -12,15 +12,59 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { getLeagueCookies } from '@/lib/cookie-handler';
+import { ApiError } from '@/lib/api-client';
+import { getLeagueCookies, type Platform } from '@/lib/cookie-handler';
 import { downloadLeagueZip } from '@/lib/download';
 import { ErrorAlert } from '@/lib/error-alert';
 
+// A multi-season export response can exceed Lambda's 6 MB response limit, so each
+// season is requested on its own and the results are merged into a single ZIP.
+const EXPORT_CONCURRENCY = 3;
+
+type ExportBundle = Record<string, Record<string, unknown[]>>;
+
+/**
+ * Fetch each season in its own request (at most `EXPORT_CONCURRENCY` in flight) and
+ * merge the results. A 404 means the season has no data and is omitted; any other
+ * failure aborts the export (no further seasons are started).
+ */
+async function fetchSeasonBundles(
+  leagueId: string,
+  platform: Platform,
+  seasons: string[],
+): Promise<ExportBundle> {
+  const bundle: ExportBundle = {};
+  const queue = [...seasons];
+  const state: { failure: Error | null } = { failure: null };
+
+  async function worker() {
+    while (state.failure === null) {
+      const season = queue.shift();
+      if (season === undefined) return;
+      try {
+        const res = await exportLeague(leagueId, platform, [season]);
+        Object.assign(bundle, res.data);
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 404) continue;
+        state.failure = err instanceof Error ? err : new Error(String(err));
+      }
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.min(EXPORT_CONCURRENCY, seasons.length) }, () =>
+      worker(),
+    ),
+  );
+  if (state.failure !== null) throw state.failure;
+  return bundle;
+}
+
 /**
  * Export a league's processed data (frontend/export-league-data). The member picks
- * which onboarded seasons to include; on confirm the selected seasons' processed
- * views are fetched (backend/league-export) and downloaded as a ZIP of one JSON
- * file per view per season.
+ * which onboarded seasons to include; on confirm each selected season's processed
+ * views are fetched in its own request (backend/league-export) and downloaded as a
+ * single ZIP of one JSON file per view per season.
  */
 export function ExportLeagueDialog({
   open,
@@ -61,11 +105,15 @@ export function ExportLeagueDialog({
     setLoading(true);
     setError(null);
     try {
-      const res = await exportLeague(leagueId, platform, selected);
-      await downloadLeagueZip(`leagueql_export_${leagueId}.zip`, res.data, {
+      const exportedAt = new Date().toISOString();
+      const bundle = await fetchSeasonBundles(leagueId, platform, selected);
+      if (Object.keys(bundle).length === 0) {
+        throw new Error('No data found for the selected seasons.');
+      }
+      await downloadLeagueZip(`leagueql_export_${leagueId}.zip`, bundle, {
         leagueId,
         platform,
-        exportedAt: new Date().toISOString(),
+        exportedAt,
       });
       onOpenChange(false);
       reset();
