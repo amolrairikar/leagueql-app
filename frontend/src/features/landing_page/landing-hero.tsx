@@ -20,10 +20,6 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { EspnCredentialFields } from '@/features/connect_league/espn-credential-fields';
-import {
-  SUPPORT_EMAIL,
-  YAHOO_BETA_SUPPORT_NOTE,
-} from '@/features/landing_page/constants';
 import { MyLeaguesPanel } from '@/features/landing_page/my-leagues';
 import { type LandingState } from '@/features/landing_page/use-landing-page';
 import { isPlatform } from '@/lib/cookie-handler';
@@ -202,21 +198,6 @@ export function LandingHero({ s }: { s: LandingState }) {
               )}
             </Button>
           </form>
-          {platform === 'YAHOO' && (
-            <p
-              data-testid="yahoo-beta-note"
-              className="mt-3 text-left text-xs text-muted-foreground"
-            >
-              {YAHOO_BETA_SUPPORT_NOTE.before}
-              <a
-                href={`mailto:${SUPPORT_EMAIL}`}
-                className="font-medium text-primary underline-offset-4 hover:underline"
-              >
-                {SUPPORT_EMAIL}
-              </a>
-              {YAHOO_BETA_SUPPORT_NOTE.after}
-            </p>
-          )}
           {platform === 'ESPN' && needsEspnCredentials && (
             <div className="mt-3 flex flex-col gap-4 text-left">
               <p className="text-sm text-muted-foreground">

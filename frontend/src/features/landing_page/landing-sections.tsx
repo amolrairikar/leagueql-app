@@ -1,18 +1,10 @@
-import { ArrowRight, ChevronRight, HelpCircle } from 'lucide-react';
+import { ArrowRight, ChevronRight } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
 import {
   FEATURES,
   HOW_STEPS,
   PLATFORMS,
-  SUPPORT_EMAIL,
-  YAHOO_BETA_SUPPORT_NOTE,
 } from '@/features/landing_page/constants';
 import { Faq } from '@/features/landing_page/faq';
 import { ProductShowcase } from '@/features/landing_page/product-showcase';
@@ -114,26 +106,6 @@ export function WorksWithSection() {
           >
             <img src={p.logo} alt="" className="h-5 w-auto" />
             {p.name}
-            {p.beta && (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      className="inline-flex cursor-help items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[0.625rem] font-semibold uppercase tracking-wide text-primary"
-                    >
-                      Beta
-                      <HelpCircle className="size-3" aria-hidden="true" />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent className="max-w-72">
-                    {YAHOO_BETA_SUPPORT_NOTE.before}
-                    {SUPPORT_EMAIL}
-                    {YAHOO_BETA_SUPPORT_NOTE.after}
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
           </span>
         ))}
         <p className="w-full text-center text-sm text-muted-foreground">

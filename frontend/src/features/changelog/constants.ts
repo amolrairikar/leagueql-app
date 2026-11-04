@@ -113,7 +113,7 @@ export const CHANGELOG: ChangelogRelease[] = [
       {
         title: 'Added',
         items: [
-          "Yahoo Fantasy support (Beta): connect a Yahoo league by selecting Yahoo on the landing page, entering your league ID, and authorizing LeagueQL through Yahoo's OAuth flow.",
+          "Yahoo Fantasy support: connect a Yahoo league by selecting Yahoo on the landing page, entering your league ID, and authorizing LeagueQL through Yahoo's OAuth flow.",
         ],
       },
     ],

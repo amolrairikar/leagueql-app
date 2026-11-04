@@ -30,6 +30,4 @@ export interface HowStep {
 export interface Platform {
   name: string;
   logo: string;
-  /** When true, the "Works with" strip marks this platform with a "Beta" badge. */
-  beta?: boolean;
 }

@@ -39,17 +39,8 @@ export const NAV_LINKS: NavLinkItem[] = [
 export const PLATFORMS: Platform[] = [
   { name: 'ESPN', logo: espnLogo },
   { name: 'Sleeper', logo: sleeperLogo },
-  { name: 'Yahoo', logo: yahooLogo, beta: true },
+  { name: 'Yahoo', logo: yahooLogo },
 ];
-
-export const SUPPORT_EMAIL = 'support@leagueql.com';
-
-/** Shown on the Yahoo Beta badge tooltip and under the connect form while Yahoo is selected. */
-export const YAHOO_BETA_SUPPORT_NOTE = {
-  before: 'Running into issues importing your Yahoo league? Email ',
-  after:
-    ' with your league ID and error message you are seeing and I will investigate further to make sure the import experience is up to par with Sleeper and ESPN.',
-};
 
 export const SLIDES: Slide[] = [
   {
