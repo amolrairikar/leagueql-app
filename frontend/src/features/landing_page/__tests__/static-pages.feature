@@ -32,20 +32,15 @@ Feature: Public pages render (frontend/landing-page, frontend/instructions-docs,
     Then I see text containing "once per week per league"
     And I do not see text containing "manually anytime"
 
-  Scenario: The Works with strip marks Yahoo as Beta
+  Scenario: The Works with strip shows Yahoo without a Beta badge
     When I open the landing page
     Then I see "Works with"
     And I see "Yahoo"
-    And I see "Beta"
+    And I do not see "Beta"
 
   Scenario: The Works with strip links to the feature request board
     When I open the landing page
     Then the "request" link points to "https://leagueql.supahub.com/en"
-
-  Scenario: The Yahoo Beta badge explains how to report import issues
-    When I open the landing page
-    And I hover the Yahoo "Beta" badge
-    Then a tooltip asks me to email support@leagueql.com with my league ID
 
   Scenario: The docs page renders
     When I open the docs page

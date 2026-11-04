@@ -5,17 +5,6 @@ The public marketing/home page at `/`. It introduces LeagueQL, showcases the pro
 
 ## Requirements
 
-### Requirement: Render the marketing sections
-`/` SHALL render the hero, product showcase, "Works with" strip, feature highlights, "How it works" steps, FAQ accordion, final CTA band, and footer with the marketing header, responsively on mobile and desktop. The FAQ accordion SHALL appear between the "How it works" steps and the final CTA band. The "Works with" strip SHALL list ESPN, Sleeper, and Yahoo, and SHALL mark Yahoo with a "Beta" badge indicating its support is newly released.
-
-#### Scenario: Full page render
-- **WHEN** a visitor loads `/`
-- **THEN** the hero, product showcase, "Works with" strip, feature highlights, "How it works" steps, FAQ accordion, final CTA band, and footer render with the marketing header, laid out responsively
-
-#### Scenario: Yahoo marked Beta in the Works with strip
-- **WHEN** a visitor loads `/` and the "Works with" strip renders
-- **THEN** the Yahoo platform chip carries a "Beta" badge, while ESPN and Sleeper do not
-
 ### Requirement: FAQ accordion
 The landing page SHALL present the frequently asked questions as a collapsible accordion in which every question renders collapsed by default (only the question and an expand indicator visible), a visitor can expand a question to reveal its answer, and the indicator reflects the open/closed state.
 
@@ -230,3 +219,14 @@ week per league during the season; and UI controls are named by their actual lab
 - **WHEN** a visitor expands "My data looks outdated. How do I refresh it?"
 - **THEN** the answer states that a manual ESPN refresh is available once per week per league
   during the season, rather than "anytime"
+
+### Requirement: Render the marketing sections and supported platforms
+`/` SHALL render the hero, product showcase, "Works with" strip, feature highlights, "How it works" steps, FAQ accordion, final CTA band, and footer with the marketing header, responsively on mobile and desktop. The FAQ accordion SHALL appear between the "How it works" steps and the final CTA band. The "Works with" strip SHALL list ESPN, Sleeper, and Yahoo, without marking any platform with a "Beta" badge or tooltip.
+
+#### Scenario: Full page render
+- **WHEN** a visitor loads `/`
+- **THEN** the hero, product showcase, "Works with" strip, feature highlights, "How it works" steps, FAQ accordion, final CTA band, and footer render with the marketing header, laid out responsively
+
+#### Scenario: No platform marked Beta
+- **WHEN** a visitor loads `/` and the "Works with" strip renders
+- **THEN** the ESPN, Sleeper, and Yahoo chips render with no "Beta" badge or tooltip
