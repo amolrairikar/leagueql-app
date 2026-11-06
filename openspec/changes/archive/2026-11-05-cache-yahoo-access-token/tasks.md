@@ -19,5 +19,5 @@
 
 ## 4. Specs, docs, quality
 
-- [ ] 4.1 `openspec validate --all`; archive with `/opsx:archive` once implemented so deltas merge into `yahoo-oauth`, `yahoo-lineup-backfill`, and `league-onboarding`
+- [x] 4.1 `openspec validate --all`; archive with `/opsx:archive` once implemented so deltas merge into `yahoo-oauth`, `yahoo-lineup-backfill`, and `league-onboarding`
 - [x] 4.2 `uv run ruff check --fix .` and `uv run ruff format .`; run `uv run pytest tests/unit` (keep coverage ~100%, with AWS env stripped per the no-real-boto3 rule) and `uv run behave tests/component`
