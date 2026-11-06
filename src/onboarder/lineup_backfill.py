@@ -36,7 +36,7 @@ from yahoo_client import parse_team_roster, team_roster_url
 
 from common.aws import RETRY_CONFIG
 from common.tracing import init_tracing, inject_context, traced_handler
-from common.yahoo_tokens import YahooReauthRequired
+from common.yahoo_tokens import CachedAccessToken, YahooReauthRequired
 from common.yahoo_tokens import from_env as yahoo_tokens_from_env
 
 init_tracing("leagueql-lineup-backfill")
@@ -264,13 +264,15 @@ class _YahooFetcher:
     """Sequential, paced Yahoo GETs with the owner's (auto-refreshed) token."""
 
     def __init__(self, owner_user_id: str):
-        self._token_client = yahoo_tokens_from_env()
-        self._owner = owner_user_id
+        # One cached token per fetcher (== per season run): the stored token is decrypted once and
+        # reused until near expiry, not once per roster request (backend/yahoo-lineup-backfill).
+        self._access_token = CachedAccessToken(yahoo_tokens_from_env(), owner_user_id)
         self._last_request = 0.0
+        self._last_token = ""
 
     def _token(self) -> str:
         try:
-            return self._token_client.get_valid_access_token(self._owner)
+            return self._access_token.get()
         except YahooReauthRequired as e:
             raise PermanentBackfillError("Yahoo link revoked") from e
 
@@ -280,17 +282,22 @@ class _YahooFetcher:
             time.sleep(wait)
         self._last_request = time.monotonic()
 
-    def _send(self, url: str) -> requests.Response:
+    def _send(self, url: str, *, rejected: str | None = None) -> requests.Response:
         self._pace()
+        if rejected is not None:
+            self._access_token.invalidate(rejected)
+        token = self._token()
+        self._last_token = token
         return requests.get(
-            url, headers={"Authorization": f"Bearer {self._token()}"}, timeout=30
+            url, headers={"Authorization": f"Bearer {token}"}, timeout=30
         )
 
     def get(self, url: str) -> dict:
         response = self._send(url)
-        # A 401 means the token expired mid-run; the engine hands out a fresh one on retry.
+        # A 401 means the token was rejected: drop the cached copy and retry once so the stored
+        # item is re-read (it may have been refreshed elsewhere).
         if response.status_code == 401:
-            response = self._send(url)
+            response = self._send(url, rejected=self._last_token)
         if response.status_code == YAHOO_THROTTLED_STATUS:
             raise YahooThrottled(url)
         if response.status_code in PERMANENT_STATUSES:

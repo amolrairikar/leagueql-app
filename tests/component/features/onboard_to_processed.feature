@@ -327,6 +327,8 @@ Feature: Onboard-to-processed pipeline (backend/league-onboarding, backend/data-
     When the processor processes the onboarded league
     And the lineup backfill runs with Yahoo rosters from fixture "yahoo/backfill_rosters_2024.json"
     Then the lineup backfill outcome is "completed"
+    # backend/yahoo-oauth, backend/yahoo-lineup-backfill: one token decrypt for the whole run.
+    And the lineup backfill resolved the owner's Yahoo token once for all its requests
     And the lineup store for season "2024" has weeks "1,15"
     And the manifest asks the processor to rebuild season "2024"
     And the onboarded league has no lineup-pending seasons

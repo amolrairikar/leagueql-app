@@ -2,6 +2,7 @@
 
 import io
 import json
+import time
 from unittest.mock import MagicMock, patch
 
 import botocore.exceptions
@@ -135,7 +136,10 @@ def env(lb):
     )
     get = MagicMock(side_effect=lambda url, **_: _Response(200, _roster_payload("x")))
     tokens = MagicMock()
-    tokens.return_value.get_valid_access_token.return_value = "tok"
+    tokens.return_value.get_valid_access_token_with_expiry.return_value = (
+        "tok",
+        int(time.time()) + 3600,
+    )
     send = MagicMock()
     patches = [
         patch.object(lb, "_dynamodb", ddb),
@@ -292,6 +296,41 @@ class TestSeasonSelection:
             lb.run_backfill(LEAGUE, 0, ctx)
 
 
+class TestTokenResolution:
+    def test_token_resolved_once_for_many_requests(self, lb, env, ctx):
+        assert lb.run_backfill(LEAGUE, 0, ctx) == "completed"
+        assert env.get.call_count > 1
+        resolve = env.tokens.return_value.get_valid_access_token_with_expiry
+        assert resolve.call_count == 1
+
+    def test_token_resolved_again_near_expiry(self, lb, env, ctx):
+        resolve = env.tokens.return_value.get_valid_access_token_with_expiry
+        resolve.side_effect = [
+            ("old", int(time.time()) + 10),  # inside the expiry skew -> not reusable
+            ("new", int(time.time()) + 3600),
+        ]
+        assert lb.run_backfill(LEAGUE, 0, ctx) == "completed"
+        sent = [c.kwargs["headers"]["Authorization"] for c in env.get.call_args_list]
+        assert sent[0] == "Bearer old"
+        assert set(sent[1:]) == {"Bearer new"}
+        assert resolve.call_count == 2
+
+    def test_two_owners_each_use_only_their_own_token(self, lb, env):
+        resolve = env.tokens.return_value.get_valid_access_token_with_expiry
+        far = int(time.time()) + 3600
+        resolve.side_effect = lambda user: (f"tok-{user}", far)
+        a, b = lb._YahooFetcher("user-a"), lb._YahooFetcher("user-b")
+        a.get("u1"), b.get("u2"), a.get("u3"), b.get("u4")
+        auth = [c.kwargs["headers"]["Authorization"] for c in env.get.call_args_list]
+        assert auth == [
+            "Bearer tok-user-a",
+            "Bearer tok-user-b",
+            "Bearer tok-user-a",
+            "Bearer tok-user-b",
+        ]
+        assert resolve.call_count == 2
+
+
 class TestPacing:
     def test_requests_are_paced(self, lb, env, ctx, monkeypatch):
         monkeypatch.setenv("LINEUP_BACKFILL_REQUEST_INTERVAL", "1.0")
@@ -412,12 +451,25 @@ class TestPermanentErrors:
         ] * 4
         assert lb.run_backfill(LEAGUE, 0, ctx) == "completed"
 
+    def test_401_drops_cached_token_and_resolves_again_once(self, lb, env, ctx):
+        resolve = env.tokens.return_value.get_valid_access_token_with_expiry
+        far = int(time.time()) + 3600
+        resolve.side_effect = [("tok-1", far), ("tok-2", far)]
+        env.get.side_effect = [_Response(401)] + [
+            _Response(200, _roster_payload("x"))
+        ] * 4
+        assert lb.run_backfill(LEAGUE, 0, ctx) == "completed"
+        sent = [c.kwargs["headers"]["Authorization"] for c in env.get.call_args_list]
+        assert sent[0] == "Bearer tok-1"
+        assert set(sent[1:]) == {"Bearer tok-2"}
+        assert resolve.call_count == 2
+
     def test_repeated_401_is_permanent(self, lb, env, ctx):
         env.get.side_effect = [_Response(401), _Response(401)]
         assert lb.run_backfill(LEAGUE, 0, ctx) == "failed"
 
     def test_revoked_link_marks_failed(self, lb, env, ctx):
-        env.tokens.return_value.get_valid_access_token.side_effect = (
+        env.tokens.return_value.get_valid_access_token_with_expiry.side_effect = (
             lb.YahooReauthRequired("revoked")
         )
         assert lb.run_backfill(LEAGUE, 0, ctx) == "failed"
