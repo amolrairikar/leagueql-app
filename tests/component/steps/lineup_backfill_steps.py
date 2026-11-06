@@ -7,6 +7,7 @@ MATCHUPS lineups) is exercised end to end.
 """
 
 import json
+import time
 from unittest.mock import MagicMock, patch
 
 from behave import then, when
@@ -80,8 +81,14 @@ def _run_backfill(context, get_side_effect):
         ExpressionAttributeValues={":o": context.default_user},
     )
     context.yahoo_get = MagicMock(side_effect=get_side_effect)
+    # Token engine: each owner resolves to their own token (``tok-<owner>``); every resolution is
+    # counted so scenarios can assert the backfill decrypts once per run, not once per request.
     tokens = MagicMock()
-    tokens.return_value.get_valid_access_token.return_value = "tok"
+    tokens.return_value.get_valid_access_token_with_expiry.side_effect = lambda user: (
+        f"tok-{user}",
+        int(time.time()) + 3600,
+    )
+    context.yahoo_tokens = tokens
     _start_patch(context, patch.object(lb.requests, "get", context.yahoo_get))
     _start_patch(context, patch.object(lb, "yahoo_tokens_from_env", tokens))
     _start_patch(
@@ -143,6 +150,19 @@ def step_no_lineup_store(context):
         Prefix=f"raw-api-data/{context.canonical}/yahoo_rosters/",
     )
     assert not listed.get("Contents"), listed
+
+
+@then("the lineup backfill resolved the owner's Yahoo token once for all its requests")
+def step_token_resolved_once(context):
+    resolve = context.yahoo_tokens.return_value.get_valid_access_token_with_expiry
+    sent = [
+        c.kwargs["headers"]["Authorization"] for c in context.yahoo_get.call_args_list
+    ]
+    assert len(sent) > 1, sent
+    # Every roster request carried only the owner's token, resolved a single time.
+    assert set(sent) == {f"Bearer tok-{context.default_user}"}, sent
+    assert resolve.call_count == 1, resolve.call_args_list
+    assert [c.args[0] for c in resolve.call_args_list] == [context.default_user]
 
 
 @then('the lineup backfill outcome is "{outcome}"')

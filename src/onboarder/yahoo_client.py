@@ -32,8 +32,6 @@ from utils import (
     validate_api_results,
 )
 
-# The pure Yahoo JSON-normalization helpers live in a shared module so the API Lambda's
-# Yahoo-members proxy can reuse them without importing this onboarding client.
 from common.yahoo_members import (
     _collection_items,
     _flatten,
@@ -42,6 +40,10 @@ from common.yahoo_members import (
     real_guid,
     resolve_team_owner_ids,
 )
+
+# The pure Yahoo JSON-normalization helpers live in a shared module so the API Lambda's
+# Yahoo-members proxy can reuse them without importing this onboarding client.
+from common.yahoo_tokens import CachedAccessToken
 
 YAHOO_BASE_URL = "https://fantasysports.yahooapis.com/fantasy/v2"
 
@@ -347,17 +349,29 @@ class YahooClient:
         self.league_id = str(league_id)
         self.owner_user_id = owner_user_id
         self.is_refresh = is_refresh
-        self._token_provider = token_provider or self._default_token_provider
+        # Default: one cached token per client (== per onboard run), so the stored token is
+        # decrypted once for the whole concurrent fan-out, not once per request. An injected
+        # ``token_provider`` (tests) is used as-is and has nothing to invalidate.
+        self._cached_token: CachedAccessToken | None = None
+        if token_provider is None:
+            self._cached_token = CachedAccessToken(
+                self._build_token_client(), owner_user_id
+            )
+            token_provider = self._cached_token.get
+        self._token_provider = token_provider
         # season -> {"league_key", "start_week", "end_week", "current_week"}
         self._season_meta: dict[str, dict[str, Any]] = {}
         self.seasons = self._resolve_seasons()
 
-    def _default_token_provider(self) -> str:
+    @staticmethod
+    def _build_token_client() -> Any:
         from common.yahoo_tokens import from_env
 
-        return from_env().get_valid_access_token(self.owner_user_id)
+        return from_env()
 
-    def _auth_headers(self) -> dict[str, str]:
+    def _auth_headers(self, *, rejected: str | None = None) -> dict[str, str]:
+        if rejected is not None and self._cached_token is not None:
+            self._cached_token.invalidate(rejected)
         return {"Authorization": f"Bearer {self._token_provider()}"}
 
     def get_seasons(self) -> list[str]:
@@ -516,13 +530,19 @@ class YahooClient:
         self, session: aiohttp.ClientSession, url: str
     ) -> Any:
         """fetch_with_retry, refreshing the Bearer token once on a 401 (expired mid-run)."""
+        headers = self._auth_headers()
         try:
-            return await fetch_with_retry(session, url, headers=self._auth_headers())
+            return await fetch_with_retry(session, url, headers=headers)
         except aiohttp.ClientResponseError as e:
             if e.status != 401:
                 raise
             logger.info("Yahoo 401 — refreshing token and retrying: %s", url)
-            return await fetch_with_retry(session, url, headers=self._auth_headers())
+            # Invalidate only the token this request used, so concurrent 401s on the same stale
+            # token trigger a single re-resolution.
+            rejected = headers["Authorization"].removeprefix("Bearer ")
+            return await fetch_with_retry(
+                session, url, headers=self._auth_headers(rejected=rejected)
+            )
 
     def _process_api_results(
         self, results: Sequence[dict[str, Any] | BaseException]

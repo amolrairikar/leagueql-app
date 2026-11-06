@@ -107,7 +107,10 @@ class TestOnboardingServiceInit:
             patch("requests.get", return_value=mock_resp),
             patch("common.yahoo_tokens.from_env") as mock_from_env,
         ):
-            mock_from_env.return_value.get_valid_access_token.return_value = "tok"
+            mock_from_env.return_value.get_valid_access_token_with_expiry.return_value = (
+                "tok",
+                2_000_000_000,
+            )
             svc = onboarder_onboarding_service.OnboardingService(
                 league_id="100",
                 platform="YAHOO",

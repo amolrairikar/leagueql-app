@@ -20,6 +20,7 @@ Access and refresh tokens are KMS-encrypted at rest and never returned to the br
 import base64
 import logging
 import os
+import threading
 import time
 from collections.abc import Callable
 from typing import Any
@@ -176,14 +177,77 @@ class YahooTokenClient:
         Raises:
             YahooReauthRequired: when no link exists or the refresh token was revoked.
         """
+        return self.get_valid_access_token_with_expiry(clerk_user_id)[0]
+
+    def get_valid_access_token_with_expiry(self, clerk_user_id: str) -> tuple[str, int]:
+        """Return ``(access_token, expires_at)``, refreshing if within the expiry skew.
+
+        ``expires_at`` is the epoch second the returned token expires, so a caller that reuses the
+        token across many requests (:class:`CachedAccessToken`) knows when to resolve it again.
+
+        Raises:
+            YahooReauthRequired: when no link exists or the refresh token was revoked.
+        """
         item = self.get_token_item(clerk_user_id)
         if item is None:
             raise YahooReauthRequired("No Yahoo link for user")
-        if int(item["expires_at"]) - TOKEN_EXPIRY_SKEW_SECONDS > int(time.time()):
-            return self.decrypt(item["access_token"])
+        expires_at = int(item["expires_at"])
+        if expires_at - TOKEN_EXPIRY_SKEW_SECONDS > int(time.time()):
+            return self.decrypt(item["access_token"]), expires_at
         refreshed = self.refresh_tokens(self.decrypt(item["refresh_token"]))
         self.store_tokens(clerk_user_id, refreshed)
-        return refreshed["access_token"]
+        new_expires_at = int(time.time()) + int(refreshed.get("expires_in", 3600))
+        return refreshed["access_token"], new_expires_at
+
+
+class CachedAccessToken:
+    """One user's Yahoo access token, decrypted once and reused until near expiry.
+
+    Each instance is bound to exactly one ``user_id`` and is owned by a single run (a backfill
+    season fetcher or an onboarding client). There is deliberately **no module- or class-level
+    state**, so one user's token can never be returned for another user and nothing survives a run
+    in a warm Lambda container (backend/yahoo-oauth). Failures are never cached.
+
+    Args:
+        token_client: The :class:`YahooTokenClient` used to resolve the token.
+        user_id: The Clerk user id whose linked Yahoo token this holds.
+    """
+
+    def __init__(self, token_client: YahooTokenClient, user_id: str):
+        self._token_client = token_client
+        self._user_id = user_id
+        self._lock = threading.Lock()
+        self._token: str | None = None
+        self._expires_at = 0
+
+    def get(self) -> str:
+        """Return the cached token, resolving it (DynamoDB read + KMS decrypt) only when needed.
+
+        Raises:
+            YahooReauthRequired: when no link exists or the refresh token was revoked.
+        """
+        with self._lock:
+            if (
+                self._token is not None
+                and self._expires_at - TOKEN_EXPIRY_SKEW_SECONDS > time.time()
+            ):
+                return self._token
+            token, expires_at = self._token_client.get_valid_access_token_with_expiry(
+                self._user_id
+            )
+            self._token, self._expires_at = token, expires_at
+            return token
+
+    def invalidate(self, rejected_token: str) -> None:
+        """Drop the cached token if it is still ``rejected_token`` (Yahoo answered it with 401).
+
+        A no-op when the cache already holds a different token, so several concurrent requests
+        that were rejected on the same stale token cause a single re-resolution.
+        """
+        with self._lock:
+            if self._token == rejected_token:
+                self._token = None
+                self._expires_at = 0
 
 
 def from_env() -> YahooTokenClient:

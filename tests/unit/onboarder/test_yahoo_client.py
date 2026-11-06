@@ -636,6 +636,96 @@ class TestFetchAsync:
         assert result == {"ok": True}
         assert mock_fetch.call_count == 2
 
+    def test_auth_retry_invalidates_cached_token_before_retry(self, yc):
+        import aiohttp
+
+        resolved = iter(["stale", "fresh"])
+        token_client = MagicMock()
+        token_client.get_valid_access_token_with_expiry.side_effect = lambda _u: (
+            next(resolved),
+            2_000_000_000,
+        )
+        payload = _user_leagues_payload(
+            [("461", _league_meta("461.l.100", "100", "2025"))]
+        )
+        with (
+            patch.object(
+                yc.YahooClient, "_build_token_client", return_value=token_client
+            ),
+            patch("requests.get") as mock_get,
+        ):
+            mock_get.return_value = MagicMock(
+                **{"json.return_value": payload, "raise_for_status": MagicMock()}
+            )
+            client = yc.YahooClient("100", "user_1")
+        err = aiohttp.ClientResponseError(
+            request_info=MagicMock(), history=(), status=401
+        )
+        mock_fetch = AsyncMock(side_effect=[err, {"ok": True}])
+        with patch.object(yc, "fetch_with_retry", new=mock_fetch):
+            asyncio.run(client._fetch_with_auth_retry(MagicMock(), "http://u"))
+        sent = [c.kwargs["headers"]["Authorization"] for c in mock_fetch.call_args_list]
+        # Season resolution used "stale" and cached it; the 401 retry used a re-resolved token.
+        assert sent == ["Bearer stale", "Bearer fresh"]
+        assert token_client.get_valid_access_token_with_expiry.call_count == 2
+
+    def test_concurrent_fanout_resolves_token_once(self, yc):
+        token_client = MagicMock()
+        token_client.get_valid_access_token_with_expiry.return_value = (
+            "tok",
+            2_000_000_000,
+        )
+        payload = _user_leagues_payload(
+            [("461", _league_meta("461.l.100", "100", "2025"))]
+        )
+        with (
+            patch.object(
+                yc.YahooClient, "_build_token_client", return_value=token_client
+            ),
+            patch("requests.get") as mock_get,
+        ):
+            mock_get.return_value = MagicMock(
+                **{"json.return_value": payload, "raise_for_status": MagicMock()}
+            )
+            client = yc.YahooClient("100", "user_1")
+        with patch.object(yc, "fetch_with_retry", new=AsyncMock(return_value={})):
+
+            async def run():
+                await asyncio.gather(
+                    *(
+                        client._fetch_with_auth_retry(MagicMock(), f"http://u/{i}")
+                        for i in range(20)
+                    )
+                )
+
+            asyncio.run(run())
+        assert token_client.get_valid_access_token_with_expiry.call_count == 1
+
+    def test_two_owners_use_only_their_own_token(self, yc):
+        token_client = MagicMock()
+        token_client.get_valid_access_token_with_expiry.side_effect = lambda u: (
+            f"tok-{u}",
+            2_000_000_000,
+        )
+
+        payload = _user_leagues_payload(
+            [("461", _league_meta("461.l.100", "100", "2025"))]
+        )
+        with (
+            patch.object(
+                yc.YahooClient, "_build_token_client", return_value=token_client
+            ),
+            patch("requests.get") as mock_get,
+        ):
+            mock_get.return_value = MagicMock(
+                **{"json.return_value": payload, "raise_for_status": MagicMock()}
+            )
+            a = yc.YahooClient("100", "user-a")
+            b = yc.YahooClient("100", "user-b")
+            assert a._auth_headers() == {"Authorization": "Bearer tok-user-a"}
+            assert b._auth_headers() == {"Authorization": "Bearer tok-user-b"}
+            assert a._auth_headers() == {"Authorization": "Bearer tok-user-a"}
+
     def test_auth_retry_reraises_non_401(self, client, yc):
         import aiohttp
 

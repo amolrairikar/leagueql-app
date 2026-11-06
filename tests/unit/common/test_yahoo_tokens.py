@@ -1,5 +1,6 @@
 """Tests for the shared Yahoo token engine (src/common/yahoo_tokens.py)."""
 
+import threading
 import time
 from unittest.mock import MagicMock, patch
 
@@ -7,7 +8,11 @@ import botocore.exceptions
 import pytest
 
 from common import yahoo_tokens
-from common.yahoo_tokens import YahooReauthRequired, YahooTokenClient
+from common.yahoo_tokens import (
+    CachedAccessToken,
+    YahooReauthRequired,
+    YahooTokenClient,
+)
 
 
 def _client(**overrides):
@@ -210,6 +215,180 @@ class TestGetValidAccessToken:
         table.get_item.return_value = {}
         with pytest.raises(YahooReauthRequired):
             _client(table=table).get_valid_access_token("user_1")
+
+
+class TestGetValidAccessTokenWithExpiry:
+    def test_returns_stored_expiry_when_not_expired(self):
+        expires_at = int(time.time()) + 3600
+        table = MagicMock()
+        table.get_item.return_value = {
+            "Item": {
+                "access_token": "ZW5j",
+                "refresh_token": "ZW5j",
+                "expires_at": expires_at,
+            }
+        }
+        kms = MagicMock()
+        kms.decrypt.return_value = {"Plaintext": b"live"}
+        client = _client(table=table, kms_client=kms)
+
+        assert client.get_valid_access_token_with_expiry("u") == ("live", expires_at)
+
+    def test_returns_new_expiry_after_refresh(self):
+        table = MagicMock()
+        table.get_item.return_value = {
+            "Item": {
+                "access_token": "ZW5j",
+                "refresh_token": "ZW5j",
+                "expires_at": int(time.time()) - 10,
+            }
+        }
+        kms = MagicMock()
+        kms.decrypt.return_value = {"Plaintext": b"old-refresh"}
+        kms.encrypt.return_value = {"CiphertextBlob": b"x"}
+        http = MagicMock()
+        http.post.return_value = MagicMock(
+            status_code=200,
+            **{
+                "json.return_value": {
+                    "access_token": "fresh",
+                    "refresh_token": "rt2",
+                    "expires_in": 1800,
+                }
+            },
+        )
+        client = _client(table=table, kms_client=kms, http_requests=http)
+
+        token, expires_at = client.get_valid_access_token_with_expiry("u")
+        assert token == "fresh"  # noqa: S105
+        assert abs(expires_at - (int(time.time()) + 1800)) <= 2
+
+    def test_raises_reauth_when_no_link(self):
+        table = MagicMock()
+        table.get_item.return_value = {}
+        with pytest.raises(YahooReauthRequired):
+            _client(table=table).get_valid_access_token_with_expiry("u")
+
+
+def _fake_token_client(tokens_by_user=None, ttl=3600):
+    """A token client whose resolved token is ``tok-<user>-<n>`` (n = resolution count)."""
+    client = MagicMock()
+    counts: dict[str, int] = {}
+
+    def resolve(user):
+        counts[user] = counts.get(user, 0) + 1
+        return f"tok-{user}-{counts[user]}", int(time.time()) + ttl
+
+    client.get_valid_access_token_with_expiry.side_effect = resolve
+    return client
+
+
+class TestCachedAccessToken:
+    def test_reuses_token_within_validity(self):
+        client = _fake_token_client()
+        cache = CachedAccessToken(client, "u")
+
+        assert [cache.get() for _ in range(5)] == ["tok-u-1"] * 5
+        assert client.get_valid_access_token_with_expiry.call_count == 1
+
+    def test_resolves_again_inside_expiry_skew(self):
+        client = _fake_token_client(ttl=yahoo_tokens.TOKEN_EXPIRY_SKEW_SECONDS - 1)
+        cache = CachedAccessToken(client, "u")
+
+        assert cache.get() == "tok-u-1"
+        assert cache.get() == "tok-u-2"
+
+    def test_resolves_again_after_expiry_passes(self):
+        client = _fake_token_client()
+        cache = CachedAccessToken(client, "u")
+        cache.get()
+        with patch.object(yahoo_tokens.time, "time", return_value=time.time() + 3600):
+            assert cache.get() == "tok-u-2"
+
+    def test_invalidate_rejected_token_forces_resolution(self):
+        client = _fake_token_client()
+        cache = CachedAccessToken(client, "u")
+        rejected = cache.get()
+
+        cache.invalidate(rejected)
+
+        assert cache.get() == "tok-u-2"
+
+    def test_invalidate_stale_token_is_noop(self):
+        client = _fake_token_client()
+        cache = CachedAccessToken(client, "u")
+        stale = cache.get()
+        cache.invalidate(stale)
+        fresh = cache.get()
+
+        cache.invalidate(stale)  # another request rejected the same stale token
+
+        assert cache.get() == fresh
+        assert client.get_valid_access_token_with_expiry.call_count == 2
+
+    def test_failure_is_not_cached(self):
+        client = MagicMock()
+        client.get_valid_access_token_with_expiry.side_effect = [
+            YahooReauthRequired("revoked"),
+            ("tok", int(time.time()) + 3600),
+        ]
+        cache = CachedAccessToken(client, "u")
+
+        with pytest.raises(YahooReauthRequired):
+            cache.get()
+        assert cache.get() == "tok"
+
+    def test_concurrent_gets_resolve_once(self):
+        client = _fake_token_client()
+        cache = CachedAccessToken(client, "u")
+        results: list[str] = []
+        barrier = threading.Barrier(8)
+
+        def worker():
+            barrier.wait()
+            results.append(cache.get())
+
+        threads = [threading.Thread(target=worker) for _ in range(8)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert results == ["tok-u-1"] * 8
+        assert client.get_valid_access_token_with_expiry.call_count == 1
+
+
+class TestCachedAccessTokenUserIsolation:
+    def test_interleaved_users_only_see_their_own_token(self):
+        client = _fake_token_client()
+        a = CachedAccessToken(client, "user-a")
+        b = CachedAccessToken(client, "user-b")
+
+        seen_a = [a.get()]
+        seen_b = [b.get()]
+        a.invalidate(seen_a[0])  # a's token rejected -> a re-resolves, b untouched
+        seen_a.append(a.get())
+        seen_b.append(b.get())
+        b.invalidate(seen_a[-1])  # a's token must not invalidate b's
+        seen_b.append(b.get())
+
+        assert seen_a == ["tok-user-a-1", "tok-user-a-2"]
+        assert seen_b == ["tok-user-b-1", "tok-user-b-1", "tok-user-b-1"]
+        users = [
+            c.args[0] for c in client.get_valid_access_token_with_expiry.call_args_list
+        ]
+        assert users == ["user-a", "user-b", "user-a"]
+
+    def test_module_holds_no_token_cache_state(self):
+        cache_like = [
+            name
+            for name, value in vars(yahoo_tokens).items()
+            if isinstance(value, dict | list | set) and not name.startswith("__")
+        ]
+        assert cache_like == []
+        assert not [
+            n for n, v in vars(CachedAccessToken).items() if isinstance(v, dict | list)
+        ]
 
 
 class TestFromEnv:
