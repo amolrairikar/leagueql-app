@@ -72,7 +72,7 @@ The processor SHALL compute `drafted_position_rank`, `actual_position_rank`, `dr
 - **THEN** each pick carries the computed rank/VORP analytics, with `vorp` null for K and D/ST, and auction fields (`bid_amount`, `nominating_team_id`) populated for auction drafts (null for snake)
 
 ### Requirement: Tolerate empty and absent inputs
-The processor SHALL write views without erroring when player metadata/stats or a Sleeper bracket are absent, when a Sleeper matchup entry's lineup fields (`starters`, `starters_points`, `players`, `players_points`) are null rather than merely omitted, guarding 0-column DuckDB registrations for views that can legitimately be empty.
+The processor SHALL write views without erroring when player metadata/stats or a Sleeper bracket are absent, when a Sleeper matchup entry's lineup fields (`starters`, `starters_points`, `players`, `players_points`) are null rather than merely omitted, when ESPN draft picks omit `memberId` (offline drafts), guarding 0-column DuckDB registrations for views that can legitimately be empty.
 
 #### Scenario: Missing player metadata
 - **WHEN** `player_name`, `total_points`, or `position` is missing for some players
@@ -89,6 +89,10 @@ The processor SHALL write views without erroring when player metadata/stats or a
 #### Scenario: Empty grouped view guard
 - **WHEN** a legitimately-empty view still referenced downstream is registered (`brackets`, `transactions`, `player_scoring_totals`)
 - **THEN** it is registered as a typed 0-row frame (numeric columns kept numeric) so DuckDB does not crash, and the `DRAFT` (SLEEPER) transform binds against an empty `player_scoring_totals` to yield draft rows with no scoring/VORP for that season
+
+#### Scenario: ESPN offline draft without memberId
+- **WHEN** an ESPN season's draft picks carry no `memberId` (a commissioner-entered offline draft)
+- **THEN** each pick is treated as having a null `memberId`, the `DRAFT#{season}` view is written with a null `member_id`, and the run completes without erroring
 
 #### Scenario: Other empty view attribution
 - **WHEN** any other view is unexpectedly empty at registration

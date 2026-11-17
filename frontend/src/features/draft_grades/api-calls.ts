@@ -14,7 +14,8 @@ export interface DraftPickItem {
   is_auction: boolean;
   keeper: boolean;
   lineup_slot_id: number;
-  member_id: string;
+  // Null for Yahoo and for ESPN offline-draft picks (ESPN omits memberId there).
+  member_id: string | null;
   nominating_team_id: number;
   overall_pick_number: number;
   owner_username: string;

@@ -8,16 +8,19 @@ export function teamLabel(team: {
   return team.teamName || team.ownerUsername;
 }
 
-/** "leads Rams by 30, trails Hawks by 15" — describes the points-for tiebreak. */
-export function marginList(margins: TieMargin[]): string {
-  return margins
-    .map(
-      (m) =>
-        `${m.gap >= 0 ? 'leads' : 'trails'} ${teamLabel(m.rival)} by ${Math.round(
-          Math.abs(m.gap),
-        )}`,
-    )
-    .join(', ');
+/**
+ * Summarizes the points-for tiebreak by its tightest margin — the one that could flip:
+ * "Wolves leads by 49", or "Wolves trails Hawks by 15" when the team is behind a rival.
+ */
+export function marginSummary(
+  team: { teamName: string; ownerUsername: string },
+  margins: TieMargin[],
+): string {
+  const tightest = margins.reduce((a, b) => (b.gap < a.gap ? b : a));
+  const gap = Math.round(Math.abs(tightest.gap));
+  return tightest.gap >= 0
+    ? `${teamLabel(team)} leads by ${gap}`
+    : `${teamLabel(team)} trails ${teamLabel(tightest.rival)} by ${gap}`;
 }
 
 export const CLINCH_PILL: Record<

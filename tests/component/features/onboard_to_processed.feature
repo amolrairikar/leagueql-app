@@ -195,6 +195,17 @@ Feature: Onboard-to-processed pipeline (backend/league-onboarding, backend/data-
     When I GET "/leagues/810/query?platform=ESPN&queryType=TRANSACTIONS#2024"
     Then the API responds with status 404
 
+  Scenario: An ESPN league with an offline draft (no memberId on picks) still builds every view (backend/data-processing-pipeline)
+    # ESPN omits memberId from commissioner-entered (offline) draft picks; the DRAFT transform
+    # must still bind and write the draft with a null member_id.
+    When the onboarder runs an ONBOARD for "ESPN" league "840" with fixture "espn/raw_data_offline_draft_2024.json"
+    Then the onboarder returns status 200
+    And the default caller is a member of the onboarded league
+    When the processor processes the onboarded league
+    Then a JOB_STATUS "COMPLETED" exists for the job
+    And the league has at least one "DRAFT#2024" item
+    And the league has at least one "STANDINGS#2024" item
+
   Scenario: An ESPN league onboards its accessible seasons and skips a season whose fetch failed (backend/league-onboarding)
     # The user can access 2024 but not 2023 (a 401 nulls one of 2023's fetches). The
     # fully-successful 2024 season onboards while 2023 is dropped — no S3 payload, no

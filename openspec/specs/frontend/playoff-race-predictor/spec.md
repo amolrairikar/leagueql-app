@@ -47,6 +47,10 @@ The standings table SHALL draw a cutoff line after the league's configured numbe
 - **WHEN** a team has secured a top-`num_playoff_teams` seed by wins alone regardless of any remaining pick
 - **THEN** its row shows a clinched indicator
 
+#### Scenario: Tie-only rivals do not clinch
+- **WHEN** a team leads on wins but a rival could still finish tied with it on wins, leaving the seat to the points-for tiebreaker
+- **THEN** its row does not show a clinched indicator
+
 ### Requirement: Show each team's record entering the week
 Each team card in a matchup SHALL display the team's record entering that week — its baseline record plus the results of the user's picks in earlier weeks only. A pick in the current week SHALL NOT change the record shown on that same card.
 
@@ -104,7 +108,7 @@ The projected-standings table SHALL show, for each team, a playoff-odds percenta
 - **THEN** the playoff odds are estimated by sampling possible outcomes at their win probabilities rather than left unshown
 
 ### Requirement: Surface playoff clinching scenarios
-Below the projected-standings table, the predictor SHALL surface a clinching-scenarios section that lists only teams still in playoff contention whose next un-picked game is decisive: winning it makes the team finish in a top-`num_playoff_teams` seed in every remaining outcome ("win & in"), losing it makes the team miss in every remaining outcome ("must win"), or both ("controls its own destiny"). Scenarios SHALL be computed exactly over the same enumeration of un-picked outcomes as the playoff odds and SHALL be conditional on the user's picks, treating each team's earliest un-picked matchup as the decisive game. A berth SHALL count as clinched only when record alone secures it; teams already clinched or already eliminated SHALL NOT be listed. When a listed team's seat could come down to a same-record tie, the scenario SHALL state the points-for margin versus the rival(s) it must hold off, because points-for keeps accumulating in the games still to play. The section SHALL appear only when the number of un-picked matchups is small enough to enumerate exactly and at least one team qualifies.
+Below the projected-standings table, the predictor SHALL surface a clinching-scenarios section that lists only teams still in playoff contention whose next un-picked game is decisive: winning it makes the team finish in a top-`num_playoff_teams` seed in every remaining outcome ("win & in"), losing it makes the team miss in every remaining outcome ("must win"), or both ("controls its own destiny"). Scenarios SHALL be computed exactly over the same enumeration of un-picked outcomes as the playoff odds and SHALL be conditional on the user's picks, treating each team's earliest un-picked matchup as the decisive game. A berth SHALL count as clinched only when record alone secures it; teams already clinched or already eliminated SHALL NOT be listed. When a "must win" team's seat could come down to a same-record tie, the scenario SHALL state the tightest points-for margin among the rival(s) it must hold off (e.g. "Wolves leads by 49", or naming the rival when the team trails), rather than listing every rival, because points-for keeps accumulating in the games still to play. A "win & in" scenario SHALL NOT mention the loss case or a points-for margin, since a loss before the final week does not by itself put the seat on the tiebreaker. The section SHALL appear only when the number of un-picked matchups is small enough to enumerate exactly and at least one team qualifies.
 
 #### Scenario: Win and in
 - **WHEN** a contending team would finish in a top-`num_playoff_teams` seat in every remaining outcome in which it wins its next un-picked game
@@ -123,8 +127,8 @@ Below the projected-standings table, the predictor SHALL surface a clinching-sce
 - **THEN** it is not listed in the clinching-scenarios section (its status is shown in the standings)
 
 #### Scenario: Same-record tie margin
-- **WHEN** a listed team's seat in some remaining outcome comes down to a same-record tie with one or more rivals
-- **THEN** the scenario states the points-for margin (the current points-for gap) versus each such rival that the team must hold off
+- **WHEN** a "must win" team's seat in some remaining outcome comes down to a same-record tie with one or more rivals
+- **THEN** the scenario states the tightest current points-for margin among such rivals ("<team> leads by N", or "<team> trails <rival> by N" when behind) rather than one margin per rival
 
 #### Scenario: Conditional on picks
 - **WHEN** the user picks a winner for a remaining matchup
