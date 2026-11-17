@@ -34,14 +34,14 @@ export const POWER_COMPONENTS: ComponentDefinition[] = [
     label: 'Points scored',
     weight: 30,
     description:
-      'Total points for, the steadiest signal of team strength, on a scale from 0-100.',
+      'Total points for, the steadiest signal of team strength, on a scale from 0-100. Unusually high weeks are capped.',
   },
   {
     key: 'form',
     label: 'Recent form',
     weight: 20,
     description:
-      'Average score over the last three weeks, on a scale from 0-100.',
+      'Average score over the last three weeks, on a scale from 0-100. Unusually high weeks are capped.',
   },
   {
     key: 'efficiency',
@@ -56,6 +56,8 @@ export const POWER_COMPONENTS: ComponentDefinition[] = [
 const FORM_WEEKS = 3;
 /** Number of weeks shown in a rank trend. */
 const TREND_WEEKS = 6;
+/** Robust standard deviations above the league median at which a weekly score is capped. */
+const OUTLIER_CAP_SDS = 2;
 /** Places apart between power rank and record rank before a team is flagged. */
 const VERDICT_THRESHOLD = 2;
 
@@ -225,6 +227,37 @@ function collectTeamWeeks(matchups: MatchupItem[]): {
   return { weeksByTeam, info, playedMatchups };
 }
 
+/** Scales a median absolute deviation to estimate a standard deviation for normal data. */
+const MAD_TO_SD = 1.4826;
+
+function median(sorted: number[]): number {
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+/**
+ * Upper cap for a single week's score: league median + 2 robust standard deviations
+ * (1.4826 × the median absolute deviation) of every team-week through `cutWeek`. Median-based so
+ * the outlier being capped cannot inflate its own cap. Keeps one freak week from dominating the
+ * points and form components.
+ */
+function weeklyScoreCap(
+  weeksByTeam: Map<string, TeamWeek[]>,
+  cutWeek: number,
+): number {
+  const scores = [...weeksByTeam.values()]
+    .flat()
+    .filter((w) => w.week <= cutWeek)
+    .map((w) => w.score)
+    .sort((a, b) => a - b);
+  if (scores.length === 0) return Infinity;
+  const med = median(scores);
+  const mad = median(
+    scores.map((x) => Math.abs(x - med)).sort((a, b) => a - b),
+  );
+  return med + OUTLIER_CAP_SDS * MAD_TO_SD * mad;
+}
+
 /** Scores and ranks every team using only the games played through `cutWeek`. */
 function scoreCut(
   cutWeek: number,
@@ -258,6 +291,9 @@ function scoreCut(
     expected[teamId] = totals.reduce((a, b) => a + b, 0) / totals.length;
   }
 
+  const cap = weeklyScoreCap(weeksByTeam, cutWeek);
+  const capped = (w: TeamWeek) => Math.min(w.score, cap);
+
   const raw = new Map<string, RawValues>();
   for (const t of stats) {
     const recent = t.weeks.slice(-FORM_WEEKS);
@@ -266,8 +302,8 @@ function scoreCut(
     const actual = withBench.reduce((s, w) => s + w.actualLineup, 0);
     raw.set(t.id, {
       record: ((t.wins + 0.5 * t.ties) / t.weeks.length) * 100,
-      points: t.pf,
-      form: recent.reduce((s, w) => s + w.score, 0) / recent.length,
+      points: t.weeks.reduce((s, w) => s + capped(w), 0),
+      form: recent.reduce((s, w) => s + capped(w), 0) / recent.length,
       efficiency:
         withBench.length === 0
           ? null

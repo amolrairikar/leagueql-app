@@ -541,7 +541,7 @@ Represents all draft picks across all seasons in the fantasy league. One item pe
 | `auto_draft_type_id` | Integer \| null | ESPN auto-draft type identifier; null for Sleeper |
 | `bid_amount` | Integer \| null | Auction bid amount; null for Sleeper |
 | `lineup_slot_id` | Integer \| null | ESPN lineup slot identifier; null for Sleeper |
-| `member_id` | String \| null | Platform user ID of the member who made the pick |
+| `member_id` | String \| null | Platform user ID of the member who made the pick (null for Yahoo and ESPN offline-draft picks) |
 | `nominating_team_id` | String \| null | Team ID that nominated the player (auction drafts); null for Sleeper |
 | `trade_locked` | Boolean \| null | Whether the pick is trade-locked; null for Sleeper |
 | `season` | String | Season year (e.g. `"2025"`) |

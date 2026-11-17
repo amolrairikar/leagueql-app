@@ -1366,6 +1366,10 @@ def _register_espn_raw_data(
             for record in item["data"].get("draft_picks", []):
                 record_copy = record.copy()
                 record_copy["season"] = item["season"]
+                # ESPN only attaches memberId to picks made in a live draft; offline
+                # (commissioner-entered) drafts omit it. The DRAFT transform selects
+                # memberId, so guarantee the column exists or DuckDB fails to bind.
+                record_copy.setdefault("memberId", None)
                 all_draft_picks.append(record_copy)
         elif item["data_type"] == "player_scoring_totals":
             for record in item["data"].get("player_scoring_totals", []):

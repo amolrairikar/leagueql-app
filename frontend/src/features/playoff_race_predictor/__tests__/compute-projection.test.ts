@@ -168,6 +168,28 @@ describe('projectStandings', () => {
   });
 });
 
+describe('projectStandings clinched flag and same-record ties', () => {
+  it('does not mark a team clinched when a rival can only tie its wins', () => {
+    const matchups = [
+      game('t1', 't2', 1, 100, 50),
+      game('t3', 't4', 1, 100, 50),
+      game('t1', 't3', 2, 100, 50),
+      game('t4', 't2', 2, 100, 50),
+      game('t1', 't3', 3),
+      game('t2', 't4', 3),
+    ];
+    const model = buildPredictorModel(
+      matchups,
+      settings({ num_playoff_teams: 1, regular_season_weeks: 3 }),
+      'live',
+    );
+    // t1 is 2-0; t3 and t4 (1-1) can each reach 2 wins and tie it, so the seat would
+    // be decided by points-for — not secured by record alone.
+    const rows = projectStandings(model, {});
+    expect(rows.find((r) => r.team.teamId === 't1')!.clinched).toBe(false);
+  });
+});
+
 describe('recordEnteringWeek', () => {
   it('includes earlier-week picks but not the current week', () => {
     const model = buildPredictorModel(liveMatchups(), settings(), 'live');

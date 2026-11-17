@@ -10,7 +10,7 @@ import {
 import { TeamAvatar } from '@/components/team-avatar';
 import {
   CLINCH_PILL,
-  marginList,
+  marginSummary,
   teamLabel,
 } from '@/features/playoff_race_predictor/clinch-format';
 import { avatarColor } from '@/lib/color-constants';
@@ -75,37 +75,19 @@ export function ClinchRow({
 
   let text: ReactNode;
   if (category === 'controls-destiny') {
-    text = (
-      <>
-        <span className="text-foreground font-medium">
-          Controls its own destiny
-        </span>{' '}
-        — win to clinch, out with a loss
-      </>
-    );
+    text = <>Controls its own destiny — win to clinch, out with a loss</>;
   } else if (category === 'win-and-in') {
-    text = (
-      <>
-        <span className="text-foreground font-medium">Clinches with a win</span>
-        {oppName ? ` over ${oppName}` : ''}
-        {tieMargins.length > 0 && (
-          <>
-            {' '}
-            — on a loss, the last seat is on points-for (
-            {marginList(tieMargins)})
-          </>
-        )}
-      </>
-    );
+    text = `Clinches with a win${oppName ? ` over ${oppName}` : ''}`;
   } else {
     text = (
       <>
-        <span className="text-foreground font-medium">
-          Must {oppName ? `beat ${oppName}` : 'win'}
-        </span>{' '}
-        to stay alive
+        Must {oppName ? `beat ${oppName}` : 'win'} to stay alive
         {tieMargins.length > 0 && (
-          <> — then take the points-for tiebreak ({marginList(tieMargins)})</>
+          <>
+            {' '}
+            — then take the points-for tiebreak (
+            {marginSummary(team, tieMargins)})
+          </>
         )}
       </>
     );

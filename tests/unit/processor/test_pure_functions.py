@@ -1162,6 +1162,33 @@ class TestRegisterESPNRawData:
         assert len(result["draft_picks"]) == 1
         assert result["draft_picks"][0]["season"] == "2024"
 
+    def test_draft_picks_without_member_id_default_to_none(self, processor_handler):
+        # Offline (commissioner-entered) ESPN drafts omit memberId entirely.
+        raw = [
+            {
+                "season": "2026",
+                "data_type": "draft_picks",
+                "data": {"draft_picks": [{"playerId": 100, "overallPickNumber": 1}]},
+            }
+        ]
+        result = processor_handler._register_espn_raw_data(raw)
+        assert result["draft_picks"][0]["memberId"] is None
+
+    def test_draft_picks_keep_existing_member_id(self, processor_handler):
+        raw = [
+            {
+                "season": "2024",
+                "data_type": "draft_picks",
+                "data": {
+                    "draft_picks": [
+                        {"playerId": 100, "overallPickNumber": 1, "memberId": "{M1}"}
+                    ]
+                },
+            }
+        ]
+        result = processor_handler._register_espn_raw_data(raw)
+        assert result["draft_picks"][0]["memberId"] == "{M1}"
+
     def test_parses_player_scoring_totals(self, processor_handler):
         raw = [
             {

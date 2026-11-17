@@ -227,6 +227,36 @@ describe('buildPowerRankings', () => {
     }
   });
 
+  describe('outlier week cap', () => {
+    // Dee is 0-3 but posts a freak 400 in week 3; an uncapped form/points score would vault her.
+    const SPIKE: MatchupItem[] = [
+      game(1, '1', 120, '4', 80),
+      game(1, '2', 110, '3', 90),
+      game(2, '1', 125, '4', 82),
+      game(2, '2', 112, '3', 92),
+      game(3, '1', 130, '4', 400),
+      game(3, '2', 115, '3', 95),
+    ];
+
+    it('keeps a winless team with one freak week below the teams that beat it', () => {
+      const rows = buildPowerRankings(SPIKE).through(3);
+      const dee = rows.find((r) => r.teamName === 'Team Dee')!;
+      expect(dee.rank).toBeGreaterThan(2);
+    });
+
+    it('caps the spike for points and form but leaves record and tiebreak points alone', () => {
+      const dee = buildPowerRankings(SPIKE)
+        .through(3)
+        .find((r) => r.teamName === 'Team Dee')!;
+      const points = dee.components.find((c) => c.key === 'points')!.value!;
+      const form = dee.components.find((c) => c.key === 'form')!.value!;
+      // Uncapped, 400 would make Dee the league's top points/form team (100).
+      expect(points).toBeLessThan(100);
+      expect(form).toBeLessThan(100);
+      expect(dee.record).toBe('1-2');
+    });
+  });
+
   describe('lineup efficiency', () => {
     it('is unavailable, and left out of the score, without bench data', () => {
       const rows = buildPowerRankings(SEASON).through(3);

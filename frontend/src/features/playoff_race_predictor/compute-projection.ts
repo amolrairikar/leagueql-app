@@ -371,7 +371,9 @@ function computeClinched(
     for (const [otherId, otherRec] of projected) {
       if (otherId === id) continue;
       const otherMax = otherRec.wins + (remaining.get(otherId) ?? 0);
-      if (otherMax > minWins) canFinishAbove++;
+      // A rival who can only *tie* still counts: same-record ties go to points-for,
+      // which keeps accruing, so record alone doesn't secure the seat.
+      if (otherMax >= minWins) canFinishAbove++;
     }
     if (canFinishAbove < model.numPlayoffTeams) clinched.add(id);
   }

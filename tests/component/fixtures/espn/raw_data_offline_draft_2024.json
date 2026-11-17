@@ -1,0 +1,295 @@
+[
+  {
+    "season": "2024",
+    "data_type": "users",
+    "data": {
+      "members": [
+        {
+          "id": "{M1}",
+          "displayName": "user1"
+        },
+        {
+          "id": "{M2}",
+          "displayName": "user2"
+        }
+      ],
+      "teams": [
+        {
+          "id": 1,
+          "name": "Team One",
+          "logo": "",
+          "owners": [
+            "{M1}"
+          ],
+          "rankCalculatedFinal": 1,
+          "primaryOwner": "{M1}"
+        },
+        {
+          "id": 2,
+          "name": "Team Two",
+          "logo": "",
+          "owners": [
+            "{M2}"
+          ],
+          "rankCalculatedFinal": 2,
+          "primaryOwner": "{M2}"
+        }
+      ]
+    }
+  },
+  {
+    "season": "2024",
+    "data_type": "settings",
+    "data": {
+      "settings": {
+        "name": "ESPN Test League",
+        "scheduleSettings": {
+          "playoffTeamCount": 2,
+          "matchupPeriodCount": 1
+        }
+      }
+    }
+  },
+  {
+    "season": "2024",
+    "data_type": "matchups_week1",
+    "data": {
+      "matchups": [
+        {
+          "matchupPeriodId": 1,
+          "playoffTierType": "NONE",
+          "home": {
+            "teamId": 1,
+            "totalPoints": "100.0",
+            "rosterForMatchupPeriod": {},
+            "rosterForCurrentScoringPeriod": {}
+          },
+          "away": {
+            "teamId": 2,
+            "totalPoints": "90.0",
+            "rosterForMatchupPeriod": {},
+            "rosterForCurrentScoringPeriod": {}
+          }
+        }
+      ]
+    }
+  },
+  {
+    "season": "2024",
+    "data_type": "draft_picks",
+    "data": {
+      "draft_picks": [
+        {
+          "id": 1,
+          "teamId": 1,
+          "playerId": 111,
+          "roundId": 1,
+          "roundPickNumber": 1,
+          "overallPickNumber": 1,
+          "keeper": false,
+          "reservedForKeeper": false,
+          "autoDraftTypeId": 0,
+          "bidAmount": 0,
+          "lineupSlotId": 0,
+          "nominatingTeamId": 0,
+          "tradeLocked": false
+        }
+      ]
+    }
+  },
+  {
+    "season": "2024",
+    "data_type": "player_scoring_totals",
+    "data": {
+      "player_scoring_totals": [
+        {
+          "player_id": 111,
+          "player_name": "Joe Burrow",
+          "position": 1,
+          "total_points": 300
+        },
+        {
+          "player_id": 222,
+          "player_name": "Joe Mixon",
+          "position": 2,
+          "total_points": 150
+        }
+      ]
+    }
+  },
+  {
+    "season": "2024",
+    "data_type": "transactions_week1",
+    "data": {
+      "transactions": [
+        {
+          "id": "w1",
+          "type": "WAIVER",
+          "scoringPeriodId": 1,
+          "proposedDate": 1788332899704,
+          "processDate": 1788332899722,
+          "bidAmount": 17,
+          "teamId": 2,
+          "items": [
+            {
+              "type": "ADD",
+              "playerId": 333,
+              "fromTeamId": 0,
+              "toTeamId": 2
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "season": "2024",
+    "data_type": "transactions_week2",
+    "data": {
+      "transactions": [
+        {
+          "id": "fa1",
+          "type": "FREEAGENT",
+          "scoringPeriodId": 2,
+          "proposedDate": 1788619307883,
+          "bidAmount": 0,
+          "teamId": 1,
+          "items": [
+            {
+              "type": "ADD",
+              "playerId": 111,
+              "fromTeamId": 0,
+              "toTeamId": 1
+            },
+            {
+              "type": "DROP",
+              "playerId": 222,
+              "fromTeamId": 1,
+              "toTeamId": 0
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "season": "2024",
+    "data_type": "transactions_week3",
+    "data": {
+      "transactions": [
+        {
+          "id": "fa1",
+          "type": "FREEAGENT",
+          "scoringPeriodId": 2,
+          "proposedDate": 1788619307883,
+          "bidAmount": 0,
+          "teamId": 1,
+          "items": [
+            {
+              "type": "ADD",
+              "playerId": 111,
+              "fromTeamId": 0,
+              "toTeamId": 1
+            },
+            {
+              "type": "DROP",
+              "playerId": 222,
+              "fromTeamId": 1,
+              "toTeamId": 0
+            }
+          ]
+        },
+        {
+          "id": "ta1",
+          "type": "TRADE_ACCEPT",
+          "scoringPeriodId": 3,
+          "proposedDate": 1789100000000,
+          "processDate": 1789272800000,
+          "bidAmount": 0,
+          "teamId": 2,
+          "items": [
+            {
+              "type": "TRADE",
+              "playerId": 111,
+              "fromTeamId": 1,
+              "toTeamId": 2
+            },
+            {
+              "type": "TRADE",
+              "playerId": 333,
+              "fromTeamId": 2,
+              "toTeamId": 1
+            }
+          ]
+        },
+        {
+          "id": "tu1",
+          "type": "TRADE_UPHOLD",
+          "scoringPeriodId": 3,
+          "proposedDate": 1789100000000,
+          "processDate": 1789272800000,
+          "bidAmount": 0,
+          "teamId": 0,
+          "items": [
+            {
+              "type": "TRADE",
+              "playerId": 111,
+              "fromTeamId": 1,
+              "toTeamId": 2
+            },
+            {
+              "type": "TRADE",
+              "playerId": 333,
+              "fromTeamId": 2,
+              "toTeamId": 1
+            }
+          ]
+        },
+        {
+          "id": "tu2",
+          "type": "TRADE_UPHOLD",
+          "relatedTransactionId": "T2",
+          "scoringPeriodId": 3,
+          "proposedDate": 1789400000000,
+          "processDate": null,
+          "bidAmount": 0,
+          "teamId": 0,
+          "items": []
+        }
+      ]
+    }
+  },
+  {
+    "season": "2024",
+    "data_type": "transactions_trade_cards",
+    "data": {
+      "transactions": [
+        {
+          "id": "ca2",
+          "type": "TRADE_ACCEPT",
+          "relatedTransactionId": "T2",
+          "scoringPeriodId": 3,
+          "proposedDate": 1789390000000,
+          "acceptedDate": 1789390000000,
+          "processDate": null,
+          "bidAmount": 0,
+          "teamId": 2,
+          "items": [
+            {
+              "type": "TRADE",
+              "playerId": 444,
+              "fromTeamId": 1,
+              "toTeamId": 2
+            },
+            {
+              "type": "TRADE",
+              "playerId": 555,
+              "fromTeamId": 2,
+              "toTeamId": 1
+            }
+          ]
+        }
+      ]
+    }
+  }
+]
