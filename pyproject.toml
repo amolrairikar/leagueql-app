@@ -22,6 +22,7 @@ dependencies = [
 dev = [
     "behave",
     "boto3",
+    "botocore[crt]>=1.43.119",
     "coverage",
     "diagrams",
     "httpx",
