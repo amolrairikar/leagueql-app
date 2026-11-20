@@ -52,6 +52,7 @@ resource "aws_apigatewayv2_stage" "default" {
       responseLength     = "$context.responseLength"
       responseLatency    = "$context.responseLatency"
       integrationLatency = "$context.integrationLatency"
+      userId             = "$context.authorizer.claims.sub"
     })
   }
 
