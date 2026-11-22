@@ -3,7 +3,8 @@ Feature: Landing page connect routing (frontend/landing-page / frontend/connect-
   connect form, and directs the caller to an owner's invite link for a private
   league they aren't a member of yet. A Yahoo league is onboarded in place when the
   caller is already linked; only an unlinked (or revoked) caller is sent to Yahoo's
-  consent screen.
+  consent screen, and only once per attempt. A linked caller who isn't a member of an
+  already-onboarded Yahoo league is pointed at the owner's invite link instead.
 
   Scenario: ESPN credential fields stay hidden until the league is looked up
     Given the landing connect form is open with ESPN selected
@@ -80,6 +81,24 @@ Feature: Landing page connect routing (frontend/landing-page / frontend/connect-
     When I connect a Yahoo league "45.l.678" from the landing page
     Then the Yahoo consent popup is opened for that league
 
+  Scenario: Connecting an onboarded Yahoo league I am not a member of shows invite guidance
+    Given a linked Yahoo caller who is not a member of the already-onboarded league and the authorize endpoint returns a consent URL
+    When I connect a Yahoo league "45.l.678" from the landing page
+    Then I see an inline alert "reach out to your leaguemate who onboarded the league"
+    And no Yahoo consent popup was opened
+
+  Scenario: A failure reading an onboarded Yahoo league shows the generic error without consent
+    Given reading the already-onboarded Yahoo league fails with a server error and the authorize endpoint returns a consent URL
+    When I connect a Yahoo league "45.l.678" from the landing page
+    Then I see an inline alert "Something went wrong connecting your league"
+    And no Yahoo consent popup was opened
+
+  Scenario: A link signal that persists after the consent popup shows an error instead of reopening it
+    Given onboarding a Yahoo league stays unlinked even after the popup links and the authorize endpoint returns a consent URL
+    When I connect a Yahoo league "45.l.678" and the popup reports a successful link
+    Then I see an inline alert "Yahoo linking didn't complete"
+    And exactly one Yahoo consent popup was opened
+
   Scenario: Selecting Yahoo shows no auto-refresh checkbox or note
     When I select Yahoo on the landing page
     Then no auto-refresh checkbox is shown
@@ -105,10 +124,11 @@ Feature: Landing page connect routing (frontend/landing-page / frontend/connect-
     When I return from Yahoo to the landing page with a linked account for league "45.l.678"
     Then the Yahoo onboard request carried no auto-refresh opt-in
 
-  Scenario: A revoked Yahoo link surfaced on return reopens the consent popup
-    Given onboarding a linked Yahoo league fails with a re-link signal and the authorize endpoint returns a consent URL
+  Scenario: A revoked Yahoo link surfaced on return shows an inline error instead of reopening consent
+    Given onboarding a linked Yahoo league fails with a re-link signal on return and the authorize endpoint returns a consent URL
     When I return from Yahoo to the landing page with a linked account for league "45.l.678"
-    Then the Yahoo consent popup is opened for that league
+    Then I see an inline alert "Yahoo linking didn't complete"
+    And no Yahoo consent popup was opened
 
   Scenario: A cancelled Yahoo link on return shows an inline retry alert
     When I return from Yahoo to the landing page with a cancelled link
