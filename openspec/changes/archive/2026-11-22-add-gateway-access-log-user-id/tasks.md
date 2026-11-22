@@ -3,7 +3,7 @@
 ## 1. Access log format
 
 - [x] 1.1 Add `userId = "$context.authorizer.claims.sub"` to `access_log_settings.format` in `infrastructure/modules/api-gw/main.tf`, leaving all existing keys unchanged; verify with `terraform fmt -check` and `terraform validate` in `infrastructure/regional`
-- [ ] 1.2 Run `terraform plan` for dev and verify the only change is the `$default` stage's `access_log_settings.format` (no other resources replaced)
+- [x] 1.2 Run `terraform plan` for dev and verify the only change is the `$default` stage's `access_log_settings.format` (no other resources replaced)
 
 ## 2. Docs and specs
 
@@ -12,8 +12,8 @@
 
 ## 3. Rollout verification
 
-- [ ] 3.1 After dev apply, make an authenticated API call and verify the newest entry in `/aws/apigateway/leagueql-api-dev-east` has a non-empty `userId` matching the caller's Clerk ID
-- [ ] 3.2 After prod apply, verify an authenticated request logs `userId` and a public route (`GET /health`) logs an empty/placeholder `userId` with a normal response
+- [x] 3.1 After dev apply, make an authenticated API call and verify the newest entry in `/aws/apigateway/leagueql-api-dev-east` has a non-empty `userId` matching the caller's Clerk ID
+- [x] 3.2 After prod apply, verify an authenticated request logs `userId` and a public route (`GET /health`) logs an empty/placeholder `userId` with a normal response
 
 ## Workflow follow-up
 

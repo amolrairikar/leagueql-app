@@ -31,6 +31,18 @@ import { getCurrentNflSeason } from '@/lib/season';
 // (re)link rather than showing a generic failure.
 const YAHOO_AUTH_CODE = 'YAHOO_AUTH';
 
+// Shown when the caller is linked to Yahoo but isn't the owner/a member of an
+// already-onboarded Yahoo league (GET /leagues/{id} 403). Mirrors the ESPN member
+// gate: membership comes from an owner-shared invite link, not from re-linking Yahoo.
+const YAHOO_NOT_MEMBER_ERROR =
+  'League already onboarded. Please reach out to your leaguemate who ' +
+  'onboarded the league to get your league-specific invite link.';
+
+// Shown when a link-needed signal persists after a completed consent round-trip, so
+// consent is not reopened (frontend/connect-yahoo-league: consent is bounded).
+const YAHOO_LINK_INCOMPLETE_ERROR =
+  "Yahoo linking didn't complete. Please try again.";
+
 // The generic inline message shown when connecting a league fails for an
 // infrastructure reason (network / 5xx) rather than a bad league id.
 const GENERIC_CONNECT_ERROR = (
@@ -144,9 +156,10 @@ export function useLandingPage() {
         setLeagueId(returnedLeagueId);
         setError(null);
         setLoading(true);
-        // Reuse the already-linked onboard chain (poll + progress bar + revoked-link
-        // recovery).
-        await handleYahooConnect(returnedLeagueId);
+        // Reuse the already-linked onboard chain (poll + progress bar). This return follows
+        // a completed consent round-trip, so a link-needed signal shows an error rather than
+        // reopening consent (frontend/connect-yahoo-league: consent is bounded).
+        await handleYahooConnect(returnedLeagueId, true);
       } else {
         // A declined/failed link (yahooLinked=0), or a linked return with no league id
         // to resume — show the inline retry alert with Yahoo preselected.
@@ -282,7 +295,8 @@ export function useLandingPage() {
         // A cross-origin popup may already be closing — ignore.
       }
       if (msg.yahooLinked === '1' && msg.leagueId) {
-        void handleYahooConnect(msg.leagueId);
+        // Consent just completed — a repeat link-needed signal must not reopen the popup.
+        void handleYahooConnect(msg.leagueId, true);
       } else {
         setError('Yahoo linking was cancelled or failed — try again.');
         setLoading(false);
@@ -313,12 +327,38 @@ export function useLandingPage() {
   // Connect a Yahoo league. An already-linked caller onboards in place with the same
   // progress UI as Sleeper (no consent round-trip); only an unlinked caller is sent to
   // Yahoo's consent screen. POST /leagues 403-gates unlinked callers before any side
-  // effect (backend/yahoo-oauth), so we optimistically onboard first and treat a 403 as
-  // "not linked". A revoked-token link passes the gate but fails the job with YAHOO_AUTH.
+  // effect (backend/yahoo-oauth), so we optimistically onboard first and treat a 403
+  // *from that call* as "not linked". A revoked-token link passes the gate but fails the
+  // job with YAHOO_AUTH. A 403 from the later league read (GET /leagues/{id}) is a
+  // different thing — the caller is linked but not a member — and never starts consent.
+  // `afterConsent` is true when re-entered after a completed consent round-trip (popup
+  // message or page return): a link-needed signal then shows an error instead of reopening
+  // consent, so the flow can't loop (frontend/connect-yahoo-league).
   // No auto-refresh opt-in: Yahoo leagues are always auto-refreshed in season.
-  async function handleYahooConnect(trimmedId: string) {
+  async function handleYahooConnect(trimmedId: string, afterConsent = false) {
+    // Consent at most once per attempt; after it already ran, surface an error instead.
+    async function requireYahooLink() {
+      if (afterConsent) {
+        setError(YAHOO_LINK_INCOMPLETE_ERROR);
+        setLoading(false);
+        return;
+      }
+      await startYahooOauth(trimmedId);
+    }
+
     try {
-      const onboardResult = await onboardYahooLeague(trimmedId);
+      let onboardResult;
+      try {
+        onboardResult = await onboardYahooLeague(trimmedId);
+      } catch (err) {
+        // 403 "Link your Yahoo account first" on the onboard call means the caller has no
+        // stored link — the only 403 that hands off to the OAuth consent screen.
+        if (err instanceof ApiError && err.status === 403) {
+          await requireYahooLink();
+          return;
+        }
+        throw err;
+      }
       // A fresh onboard returns a correlation_id to poll; an already-onboarded league
       // returns 200 with null `data`, which skips straight to routing the user in.
       if (onboardResult.data) {
@@ -327,7 +367,7 @@ export function useLandingPage() {
         );
         if (result.status === 'failed') {
           if (result.failureCode === YAHOO_AUTH_CODE) {
-            await startYahooOauth(trimmedId);
+            await requireYahooLink();
             return;
           }
           setError(result.failureReason ?? GENERIC_CONNECT_ERROR);
@@ -337,16 +377,23 @@ export function useLandingPage() {
       }
       // Onboarding wrote new precomputed views; drop cached reads before re-reading.
       clearApiCache();
-      const leagueData = await getLeague(trimmedId, 'YAHOO');
-      setLeagueCookies(trimmedId, 'YAHOO', leagueData.data.seasons);
-      void navigate('/home');
-    } catch (err) {
-      // 403 "Link your Yahoo account first" means the caller has no stored link — hand
-      // off to the OAuth consent screen (the only path that shows it now).
-      if (err instanceof ApiError && err.status === 403) {
-        await startYahooOauth(trimmedId);
-        return;
+      try {
+        const leagueData = await getLeague(trimmedId, 'YAHOO');
+        setLeagueCookies(trimmedId, 'YAHOO', leagueData.data.seasons);
+        void navigate('/home');
+      } catch (err) {
+        // A 403 on the league read means the caller isn't the league's owner/member
+        // (backend/league-authorization) — point them at the owner's invite link, never
+        // at Yahoo consent.
+        setError(
+          err instanceof ApiError && err.status === 403
+            ? YAHOO_NOT_MEMBER_ERROR
+            : GENERIC_CONNECT_ERROR,
+        );
+        setLoading(false);
       }
+    } catch {
+      // Onboard-call or job-polling failure (network / 5xx / other) — generic error.
       setError(GENERIC_CONNECT_ERROR);
       setLoading(false);
     }

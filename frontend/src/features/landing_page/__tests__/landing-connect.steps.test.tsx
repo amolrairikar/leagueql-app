@@ -62,6 +62,16 @@ const getLeagueOk = http.get(`${API}/leagues/:id`, () =>
   }),
 );
 
+// The league read after a Yahoo onboard: 403 when the caller isn't the league's owner/member
+// (backend/league-authorization), 500 for an infrastructure failure.
+const getLeagueForbidden = http.get(`${API}/leagues/:id`, () =>
+  HttpResponse.json({ detail: 'Not a member of this league' }, { status: 403 }),
+);
+
+const getLeagueServerError = http.get(`${API}/leagues/:id`, () =>
+  HttpResponse.json({ detail: 'boom' }, { status: 500 }),
+);
+
 /**
  * GET /leagues/:id returns 404 for the two pre-onboard lookups — the first Connect
  * (which reveals the credential fields) and the second Connect (which onboards) —
@@ -808,6 +818,128 @@ defineFeature(feature, (test) => {
     });
   });
 
+  test('Connecting an onboarded Yahoo league I am not a member of shows invite guidance', ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    const auth = captureAuthorize();
+    let popup!: ReturnType<typeof mockPopupOpen>;
+    given(
+      'a linked Yahoo caller who is not a member of the already-onboarded league and the authorize endpoint returns a consent URL',
+      () => {
+        // POST /leagues says "already onboarded" (caller is linked), but the league read
+        // is 403 (not an owner/member) — this must never start Yahoo consent.
+        server.use(onboardAlreadyOnboarded, getLeagueForbidden, auth.handler);
+        popup = mockPopupOpen();
+        window.history.pushState({}, '', '/?connect=true');
+      },
+    );
+    when(
+      /^I connect a Yahoo league "(.*)" from the landing page$/,
+      async (leagueId) => {
+        await connectYahooLeague(leagueId);
+      },
+    );
+    then(/^I see an inline alert "(.*)"$/, (text) => {
+      expect(screen.getByText(new RegExp(text, 'i'))).toBeInTheDocument();
+    });
+    and('no Yahoo consent popup was opened', () => {
+      expect(popup.open).not.toHaveBeenCalled();
+      expect(auth.captured.leagueId).toBeNull();
+    });
+  });
+
+  test('A failure reading an onboarded Yahoo league shows the generic error without consent', ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    const auth = captureAuthorize();
+    let popup!: ReturnType<typeof mockPopupOpen>;
+    given(
+      'reading the already-onboarded Yahoo league fails with a server error and the authorize endpoint returns a consent URL',
+      () => {
+        server.use(onboardAlreadyOnboarded, getLeagueServerError, auth.handler);
+        popup = mockPopupOpen();
+        window.history.pushState({}, '', '/?connect=true');
+      },
+    );
+    when(
+      /^I connect a Yahoo league "(.*)" from the landing page$/,
+      async (leagueId) => {
+        await connectYahooLeague(leagueId);
+      },
+    );
+    then(/^I see an inline alert "(.*)"$/, (text) => {
+      expect(screen.getByText(new RegExp(text, 'i'))).toBeInTheDocument();
+    });
+    and('no Yahoo consent popup was opened', () => {
+      expect(popup.open).not.toHaveBeenCalled();
+      expect(auth.captured.leagueId).toBeNull();
+    });
+  });
+
+  test('A link signal that persists after the consent popup shows an error instead of reopening it', ({
+    given,
+    when,
+    then,
+    and,
+  }) => {
+    const auth = captureAuthorize();
+    let popup!: ReturnType<typeof mockPopupOpen>;
+    given(
+      'onboarding a Yahoo league stays unlinked even after the popup links and the authorize endpoint returns a consent URL',
+      () => {
+        // Every onboard is 403 "link first" — even the resume after the popup reports linked.
+        server.use(onboardUnlinked, auth.handler);
+        popup = mockPopupOpen();
+        window.history.pushState({}, '', '/?connect=true');
+      },
+    );
+    when(
+      /^I connect a Yahoo league "(.*)" and the popup reports a successful link$/,
+      async (leagueId) => {
+        const user = userEvent.setup();
+        await renderRoute(
+          <Routes>
+            <Route path="/" element={<LeagueQLLanding />} />
+            <Route path="/home" element={<div>HOME PAGE</div>} />
+          </Routes>,
+          { route: '/' },
+        );
+        await user.click(await screen.findByRole('combobox'));
+        await user.click(await screen.findByRole('option', { name: 'Yahoo' }));
+        await user.type(screen.getByPlaceholderText('League ID'), leagueId);
+        vi.useFakeTimers();
+        await act(async () => {
+          fireEvent.click(screen.getByRole('button', { name: /^connect$/i }));
+          await Promise.resolve();
+        });
+        // Flush the 403 + authorize call so the first popup has "opened".
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(100);
+        });
+        // The popup reports a link; the resumed onboard is 403 "link first" again.
+        await act(async () => {
+          postYahooMessage({ yahooLinked: '1', leagueId });
+          await Promise.resolve();
+        });
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(5000);
+        });
+      },
+    );
+    then(/^I see an inline alert "(.*)"$/, (text) => {
+      expect(screen.getByText(new RegExp(text, 'i'))).toBeInTheDocument();
+    });
+    and('exactly one Yahoo consent popup was opened', () => {
+      expect(popup.open).toHaveBeenCalledTimes(1);
+    });
+  });
+
   test('Selecting Yahoo shows no auto-refresh checkbox or note', ({
     when,
     then,
@@ -944,15 +1076,16 @@ defineFeature(feature, (test) => {
     });
   });
 
-  test('A revoked Yahoo link surfaced on return reopens the consent popup', ({
+  test('A revoked Yahoo link surfaced on return shows an inline error instead of reopening consent', ({
     given,
     when,
     then,
+    and,
   }) => {
     const auth = captureAuthorize();
     let popup!: ReturnType<typeof mockPopupOpen>;
     given(
-      'onboarding a linked Yahoo league fails with a re-link signal and the authorize endpoint returns a consent URL',
+      'onboarding a linked Yahoo league fails with a re-link signal on return and the authorize endpoint returns a consent URL',
       () => {
         server.use(onboardOk, jobStatus('FAILED', 'YAHOO_AUTH'), auth.handler);
         popup = mockPopupOpen();
@@ -964,14 +1097,12 @@ defineFeature(feature, (test) => {
         await returnFromYahoo({ yahooLinked: '1', leagueId });
       },
     );
-    then('the Yahoo consent popup is opened for that league', () => {
-      expect(auth.captured.leagueId).toBe('45.l.678');
-      expect(auth.captured.display).toBe('popup');
-      expect(popup.open).toHaveBeenCalledWith(
-        CONSENT_URL,
-        expect.any(String),
-        expect.any(String),
-      );
+    then(/^I see an inline alert "(.*)"$/, (text) => {
+      expect(screen.getByText(new RegExp(text, 'i'))).toBeInTheDocument();
+    });
+    and('no Yahoo consent popup was opened', () => {
+      expect(popup.open).not.toHaveBeenCalled();
+      expect(auth.captured.leagueId).toBeNull();
     });
   });
 
