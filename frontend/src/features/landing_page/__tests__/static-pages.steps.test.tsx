@@ -317,6 +317,95 @@ defineFeature(feature, (test) => {
     });
   });
 
+  test('The landing page FAQ explains unused league removal', ({
+    when,
+    and,
+    then,
+  }) => {
+    when('I open the landing page', async () => {
+      server.use(
+        http.get('https://api.leagueql.com/counts', () =>
+          HttpResponse.json({ leagueCount: 3 }),
+        ),
+      );
+      await renderRoute(<LeagueQLLanding />, { route: '/' });
+    });
+    and(/^I expand the FAQ question "(.*)"$/, async (question) => {
+      await userEvent.click(screen.getByRole('button', { name: question }));
+    });
+    then(/^I see text containing "(.*)"$/, async (text) => {
+      expect(
+        (await screen.findAllByText(text, { exact: false })).length,
+      ).toBeGreaterThan(0);
+    });
+    and(/^I see text containing "(.*)"$/, async (text) => {
+      expect(
+        (await screen.findAllByText(text, { exact: false })).length,
+      ).toBeGreaterThan(0);
+    });
+    and(/^the "(.*)" link points to "(.*)"$/, async (name, href) => {
+      expect(await screen.findByRole('link', { name })).toHaveAttribute(
+        'href',
+        href,
+      );
+    });
+  });
+
+  test('The docs page documents unused league removal', ({
+    when,
+    then,
+    and,
+  }) => {
+    when('I open the docs page', async () => {
+      await renderRoute(<InstructionsPage />, { route: '/docs' });
+    });
+    then(
+      /^the docs page lists "(.*)" as a section and in the table of contents$/,
+      async (name) => {
+        expect(
+          await screen.findByRole('heading', { name, level: 3 }),
+        ).toBeInTheDocument();
+        expect(screen.getAllByRole('button', { name }).length).toBeGreaterThan(
+          0,
+        );
+      },
+    );
+    and(/^I see text containing "(.*)"$/, async (text) => {
+      expect(
+        (await screen.findAllByText(text, { exact: false })).length,
+      ).toBeGreaterThan(0);
+    });
+    and(/^I see text containing "(.*)"$/, async (text) => {
+      expect(
+        (await screen.findAllByText(text, { exact: false })).length,
+      ).toBeGreaterThan(0);
+    });
+    and(/^I see text containing "(.*)"$/, async (text) => {
+      expect(
+        (await screen.findAllByText(text, { exact: false })).length,
+      ).toBeGreaterThan(0);
+    });
+    and(/^I see text containing "(.*)"$/, async (text) => {
+      expect(
+        (await screen.findAllByText(text, { exact: false })).length,
+      ).toBeGreaterThan(0);
+    });
+  });
+
+  test('The privacy policy discloses unused league retention', ({
+    when,
+    then,
+  }) => {
+    when('I open the privacy page', async () => {
+      await renderRoute(<PrivacyPage />, { route: '/privacy' });
+    });
+    then(/^I see text containing "(.*)"$/, async (text) => {
+      expect(
+        (await screen.findAllByText(text, { exact: false })).length,
+      ).toBeGreaterThan(0);
+    });
+  });
+
   test('The docs page no longer shows the FAQ', ({ when, then }) => {
     when('I open the docs page', async () => {
       await renderRoute(<InstructionsPage />, { route: '/docs' });

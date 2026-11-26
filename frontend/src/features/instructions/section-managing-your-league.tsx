@@ -135,6 +135,40 @@ export function ManagingYourLeagueSection() {
             LeagueQL&apos;s backend. This action cannot be undone.
           </p>
         </div>
+
+        <div>
+          <SubHeading id="unused-league-removal">
+            Unused League Removal
+          </SubHeading>
+          <p className="text-muted-foreground leading-relaxed mb-4">
+            A league that nobody has opened for one year is permanently removed.
+            The year is counted from the last time the league was opened, or
+            from when it was connected if it has never been opened.
+          </p>
+          <ul className="list-disc space-y-2 pl-6 text-muted-foreground leading-relaxed">
+            <li>
+              Anyone with access to the league restarts the year by opening its
+              dashboard. Automatic refreshes and the league appearing in My
+              Leagues don&apos;t count.
+            </li>
+            <li>
+              Removal deletes the league&apos;s data, including the raw data
+              fetched from your fantasy platform, along with its memberships,
+              invite links, and ownership.
+            </li>
+            <li>
+              Stored ESPN cookies or Yahoo tokens are also removed if none of
+              your other leagues needs them, the same as when you delete a
+              league yourself.
+            </li>
+            <li>
+              No advance notice is sent. To use the league again, connect it
+              again. ESPN leagues may ask for your cookies again, Yahoo may ask
+              you to authorize LeagueQL again, and you will need to share new
+              invite links.
+            </li>
+          </ul>
+        </div>
       </div>
     </section>
   );

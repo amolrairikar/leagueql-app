@@ -32,6 +32,8 @@ from main import (
     logger,
 )
 
+from common.league_deletion import LeagueDeletionError, delete_league_raw_data
+
 router = APIRouter()
 
 
@@ -54,19 +56,7 @@ def delete_league(
         delete_all_league_items(canonical_league_id=canonical_league_id)
 
         # After DB delete, delete raw API data files from S3
-        s3_prefix = f"raw-api-data/{canonical_league_id}/"
-        response = main.s3_client.list_objects_v2(Bucket=S3_BUCKET, Prefix=s3_prefix)
-        if "Contents" in response:
-            delete_keys = [{"Key": obj["Key"]} for obj in response["Contents"]]
-
-            # S3 delete_objects can handle up to 1,000 keys per request
-            main.s3_client.delete_objects(
-                Bucket=S3_BUCKET,
-                Delete={
-                    "Objects": delete_keys,
-                    "Quiet": True,  # Returns only errors in the response
-                },
-            )
+        delete_league_raw_data(main.s3_client, S3_BUCKET, canonical_league_id)
 
         logger.info("Deleted raw API data for league from S3")
 
@@ -137,7 +127,7 @@ def delete_league(
         return APIResponse(
             detail="Successfully deleted league",
         )
-    except botocore.exceptions.ClientError as e:
+    except (botocore.exceptions.ClientError, LeagueDeletionError) as e:
         logger.error("Error occurred while deleting league: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

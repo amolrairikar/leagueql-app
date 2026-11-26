@@ -26,4 +26,5 @@ export const TOC_ITEMS = [
   { id: 'migrating-your-league', label: 'Migrating Your League', level: 2 },
   { id: 'switching-leagues', label: 'Switching Leagues', level: 2 },
   { id: 'deleting-a-league', label: 'Deleting a League', level: 2 },
+  { id: 'unused-league-removal', label: 'Unused League Removal', level: 2 },
 ] as const;

@@ -515,25 +515,45 @@ class TestDeleteLeagueHelpers:
         } in keys
         assert {"PK": "LEAGUE#123#PLATFORM#SLEEPER", "SK": "LEAGUE_LOOKUP"} in keys
 
-    def test_delete_all_league_items_deletes_everything(
+    def test_delete_all_league_items_deletes_metadata_last(
         self, mock_table, mock_time_sleep
     ):
         from main import delete_all_league_items
 
         writer = self._setup_writer(mock_table)
+        metadata = {"PK": "LEAGUE#canonical-abc", "SK": "METADATA"}
+        lookup = {"PK": "LEAGUE#123#PLATFORM#SLEEPER", "SK": "LEAGUE_LOOKUP"}
         mock_table.query.side_effect = [
-            {"Items": [{"PK": "LEAGUE#canonical-abc", "SK": "METADATA"}]},
-            {"Items": [{"PK": "LEAGUE#123#PLATFORM#SLEEPER", "SK": "LEAGUE_LOOKUP"}]},
+            # non-METADATA phase: delete the lookup, then verify it is gone
+            {"Items": [metadata]},
+            {"Items": [lookup]},
+            {"Items": [metadata]},
+            {"Items": []},
+            # final phase: delete METADATA, then verify nothing remains
+            {"Items": [metadata]},
+            {"Items": []},
             {"Items": []},
             {"Items": []},
         ]
         delete_all_league_items("canonical-abc")
-        writer.delete_item.assert_any_call(
-            Key={"PK": "LEAGUE#canonical-abc", "SK": "METADATA"}
-        )
-        writer.delete_item.assert_any_call(
-            Key={"PK": "LEAGUE#123#PLATFORM#SLEEPER", "SK": "LEAGUE_LOOKUP"}
-        )
+        assert [c.kwargs["Key"] for c in writer.delete_item.call_args_list] == [
+            lookup,
+            metadata,
+        ]
+
+    def test_metadata_kept_when_other_items_remain(
+        self, mock_table, mock_time_sleep, mock_sns_client
+    ):
+        from main import delete_all_league_items
+
+        writer = self._setup_writer(mock_table)
+        metadata = {"PK": "LEAGUE#canonical-abc", "SK": "METADATA"}
+        teams = {"PK": "LEAGUE#canonical-abc", "SK": "TEAMS#2024"}
+        mock_table.query.return_value = {"Items": [metadata, teams]}
+        with pytest.raises(HTTPException):
+            delete_all_league_items("canonical-abc", max_attempts=2)
+        deleted = [c.kwargs["Key"] for c in writer.delete_item.call_args_list]
+        assert metadata not in deleted
 
     def test_delete_all_league_items_noop_when_empty(self, mock_table, mock_time_sleep):
         from main import delete_all_league_items
@@ -552,12 +572,14 @@ class TestDeleteLeagueHelpers:
         writer = self._setup_writer(mock_table)
         mock_table.query.side_effect = [
             # pass 1: an item on the canonical PK, GSI1 empty
-            {"Items": [{"PK": "LEAGUE#canonical-abc", "SK": "METADATA"}]},
+            {"Items": [{"PK": "LEAGUE#canonical-abc", "SK": "TEAMS#2024"}]},
             {"Items": []},
             # pass 2: GSI1 was lagging, a lookup item now surfaces
             {"Items": []},
             {"Items": [{"PK": "LEAGUE#123#PLATFORM#SLEEPER", "SK": "LEAGUE_LOOKUP"}]},
-            # pass 3: clean
+            # pass 3: clean, then the METADATA phase finds nothing
+            {"Items": []},
+            {"Items": []},
             {"Items": []},
             {"Items": []},
         ]
@@ -574,9 +596,12 @@ class TestDeleteLeagueHelpers:
         writer = self._setup_writer(mock_table)
         mock_table.query.side_effect = [
             # attempt 1 collect: one item on the PK, GSI empty
-            {"Items": [{"PK": "LEAGUE#canonical-abc", "SK": "METADATA"}]},
+            {"Items": [{"PK": "LEAGUE#canonical-abc", "SK": "TEAMS#2024"}]},
             {"Items": []},
             # post-loop verification: clean
+            {"Items": []},
+            {"Items": []},
+            # METADATA phase: nothing left
             {"Items": []},
             {"Items": []},
         ]

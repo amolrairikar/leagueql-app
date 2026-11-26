@@ -41,3 +41,11 @@ variable "yahoo_connect_return_url" {
   type        = string
   default     = "https://leagueql.com/"
 }
+
+# backend/league-reaper: while true the nightly reaper only reports what it would remove.
+# Set the default to false to let it permanently delete unused leagues (prod only).
+variable "league_reaper_dry_run" {
+  description = "Run the unused-league reaper without deleting anything"
+  type        = bool
+  default     = true
+}
