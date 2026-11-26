@@ -32,6 +32,13 @@ Feature: Public pages render (frontend/landing-page, frontend/instructions-docs,
     Then I see text containing "once per week per league"
     And I do not see text containing "manually anytime"
 
+  Scenario: The landing page FAQ explains unused league removal
+    When I open the landing page
+    And I expand the FAQ question "Will my league ever be removed?"
+    Then I see text containing "nobody has opened for one year"
+    And I see text containing "Automatic refreshes don't count as opening it."
+    And the "Unused League Removal" link points to "/docs"
+
   Scenario: The Works with strip shows Yahoo without a Beta badge
     When I open the landing page
     Then I see "Works with"
@@ -77,6 +84,18 @@ Feature: Public pages render (frontend/landing-page, frontend/instructions-docs,
     When I open the docs page
     Then I see text containing "Each league can be refreshed manually at most once per week."
     And I see text containing "removed once none of them has automatic refresh on"
+
+  Scenario: The docs page documents unused league removal
+    When I open the docs page
+    Then the docs page lists "Unused League Removal" as a section and in the table of contents
+    And I see text containing "A league that nobody has opened for one year is permanently removed."
+    And I see text containing "Automatic refreshes and the league appearing in My Leagues"
+    And I see text containing "along with its memberships, invite links, and ownership"
+    And I see text containing "No advance notice is sent."
+
+  Scenario: The privacy policy discloses unused league retention
+    When I open the privacy page
+    Then I see text containing "nobody has opened the league for one year"
 
   Scenario: The docs page no longer shows the FAQ
     When I open the docs page

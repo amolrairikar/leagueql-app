@@ -44,6 +44,11 @@ stays sparse. Projection is `INCLUDE` of the dashboard display fields (`platform
 `league_name`, `last_refresh_at`, `last_accessed_at`, `active_platform`, `migrated_from`,
 `migrated_at`, `owner_user_id`), so the query needs no follow-up `GetItem`.
 
+The nightly unused-league reaper (`backend/league-reaper`) also lists leagues through this index.
+Because the index is eventually consistent, it re-reads each candidate's `METADATA` with a strongly
+consistent read before removing it. A removal deletes the league's raw S3 data first, then its
+items, with `METADATA` last, so an incomplete removal stays listed here and is retried.
+
 | Attribute | Type | Role | Description |
 |---|---|---|---|
 | `SK` | String | Partition key | Base-table sort key; always `METADATA` for indexed items |
@@ -140,7 +145,7 @@ the league will not appear as onboarded and a retry will re-run the full onboard
 | `platform` | String | Yes | Platform the league belongs to. Enum: `ESPN`, `SLEEPER`, `YAHOO` |
 | `onboarded_at` | String | Yes | ISO 8601 timestamp of when the league was onboarded |
 | `last_refresh_at` | String | No | ISO 8601 timestamp of when the most recent refresh completed successfully. Used to enforce the per-league weekly refresh cooldown (a manual refresh is rejected with `429` while this is less than 7 days old). |
-| `last_accessed_at` | String | No | ISO 8601 (UTC) timestamp of when a member last opened the league via `GET /leagues/{leagueId}` (backend/league-access-tracking). Written at most once per hour (app-side throttle); absent on older items and on leagues never opened since the field shipped. Used to identify stale leagues for future pruning/archival. |
+| `last_accessed_at` | String | No | ISO 8601 (UTC) timestamp of when a member last opened the league via `GET /leagues/{leagueId}` (backend/league-access-tracking). Written at most once per hour (app-side throttle); absent on older items and on leagues never opened since the field shipped. The nightly unused-league reaper (`backend/league-reaper`) permanently removes a league one calendar year after this timestamp, or after `onboarded_at` when it is absent. |
 | `league_name` | String | No | League name from the most recent season's settings |
 | `owner_user_id` | String | No | Clerk user ID of the league's owner — the authorization anchor for mutating endpoints (backend/league-authorization). Set **once** on first ONBOARD; never overwritten by REFRESH/MIGRATE. Absent for system-initiated onboards. |
 | `members` | String Set | No | Clerk user IDs entitled to **read** a gated league — ESPN or Yahoo (backend/league-authorization). Seeded with the owner at onboard; a leaguemate is `ADD`ed when they redeem an owner's invite link via `POST /leagues/{id}/accept-invite`. Unused for Sleeper (Sleeper reads are open). |

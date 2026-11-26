@@ -860,9 +860,23 @@ class TestDeleteLeagueEndpoint:
         mock_s3_client.list_objects_v2.return_value = {
             "Contents": [{"Key": "raw-api-data/canonical-abc/file.json"}]
         }
+        mock_s3_client.delete_objects.return_value = {}
         response = client.delete("/leagues/123?platform=SLEEPER")
         assert response.status_code == 200
         mock_s3_client.delete_objects.assert_called_once()
+
+    def test_returns_500_when_s3_reports_delete_errors(
+        self, client, mock_table, mock_s3_client, league_lookup_item
+    ):
+        self._setup_delete_mocks(mock_table, league_lookup_item, mock_s3_client)
+        mock_s3_client.list_objects_v2.return_value = {
+            "Contents": [{"Key": "raw-api-data/canonical-abc/file.json"}]
+        }
+        mock_s3_client.delete_objects.return_value = {
+            "Errors": [{"Key": "raw-api-data/canonical-abc/file.json"}]
+        }
+        response = client.delete("/leagues/123?platform=SLEEPER")
+        assert response.status_code == 500
 
     def test_skips_s3_delete_when_no_objects(
         self, client, mock_table, mock_s3_client, league_lookup_item
@@ -933,9 +947,9 @@ class TestDeleteLeagueEndpoint:
         mock_s3_client.list_objects_v2.return_value = {}
         response = client.delete("/leagues/123?platform=SLEEPER")
         assert response.status_code == 200
-        # Pass 1 paginates the canonical-PK query (2 calls) + GSI1 (1 call);
-        # pass 2 verifies clean (PK + GSI1 = 2 calls).
-        assert mock_table.query.call_count == 5
+        # Pass 1 paginates the canonical-PK query (2 calls) + GSI1 (1 call); pass 2
+        # verifies clean and the METADATA phase finds nothing (PK + GSI1 each).
+        assert mock_table.query.call_count == 7
 
     def test_client_error_during_delete_returns_500(
         self, client, mock_table, league_lookup_item

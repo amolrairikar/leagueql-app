@@ -70,6 +70,23 @@ const FAQ_ITEMS: FaqItem[] = [
     ),
   },
   {
+    q: 'Will my league ever be removed?',
+    a: (
+      <>
+        Yes, if it goes unused. A league that nobody has opened for one year is
+        permanently removed. Automatic refreshes don&apos;t count as opening it.
+        You can connect a removed league again at any time. See{' '}
+        <Link
+          to="/docs"
+          className="text-primary underline underline-offset-2 hover:text-primary/80"
+        >
+          Unused League Removal
+        </Link>{' '}
+        in the docs for details.
+      </>
+    ),
+  },
+  {
     q: "Why don't I see the Refresh, Migrate, or Delete buttons?",
     a: (
       <>

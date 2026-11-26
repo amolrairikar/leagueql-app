@@ -282,6 +282,17 @@ def _load_handlers(context) -> None:
         "admin_report.handler", _SRC / "admin_report" / "handler.py"
     )
 
+    # --- league reaper (nightly unused-league removal; bare ``eligibility``) --
+    reaper_pkg = types.ModuleType("league_reaper")
+    reaper_pkg.__path__ = [str(_SRC / "league_reaper")]
+    sys.modules["league_reaper"] = reaper_pkg
+    sys.modules["eligibility"] = _load_module(
+        "league_reaper.eligibility", _SRC / "league_reaper" / "eligibility.py"
+    )
+    context.league_reaper_handler = _load_module(
+        "league_reaper.handler", _SRC / "league_reaper" / "handler.py"
+    )
+
 
 def before_all(context):
     _stub_newrelic()

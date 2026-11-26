@@ -97,6 +97,7 @@ with Diagram(
             stats_task = Fargate("Sleeper stats\nrefresher (Fargate)")
             yahoo_stats_task = Fargate("Yahoo player-data\nrefresher (Fargate)")
             admin_report = Lambda("Admin onboarding\nreport (nightly, prod)")
+            league_reaper = Lambda("Unused-league\nreaper (nightly, prod)")
 
         discord_fn = Lambda("Discord notifier\nLambda")
         sns = SimpleNotificationServiceSns("SNS\n(alerts)")
@@ -155,6 +156,7 @@ with Diagram(
             stats_task,
             yahoo_stats_task,
             admin_report,
+            league_reaper,
         ]
     )
     league_refresh >> ASYNC >> onboarder
@@ -171,6 +173,10 @@ with Diagram(
     # and posts to the same Discord channel as the alert notifier (webhook URL from SSM).
     admin_report >> Edge(label="query GSI3\n(METADATA)") >> ddb
     admin_report >> Edge(label="webhook URL from SSM") >> discord
+    # Removes leagues nobody has opened for a year (raw S3 payloads, then DynamoDB items)
+    # and posts what it removed (or, in dry run, would remove) to Discord.
+    league_reaper >> Edge(label="delete unused\nleagues") >> [ddb, s3]
+    league_reaper >> Edge(label="summary") >> discord
 
     # ── Yahoo OAuth link (backend/yahoo-oauth) ────────────────────────────────
     # The API Lambda runs the OAuth handshake (authorize/callback), reads the Yahoo

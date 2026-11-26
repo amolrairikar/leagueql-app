@@ -1549,7 +1549,7 @@ module "admin-report-lambda-role" {
           "logs:CreateLogGroup"
         ]
         Resource = [
-          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/lambda/leagueql-admin-report-${var.environment}-east"
+          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/lambda/leagueql-admin-report-${var.environment}"
         ]
       },
       {
@@ -1560,7 +1560,7 @@ module "admin-report-lambda-role" {
           "logs:PutLogEvents"
         ]
         Resource = [
-          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/lambda/leagueql-admin-report-${var.environment}-east:*"
+          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/lambda/leagueql-admin-report-${var.environment}:*"
         ]
       },
       {
@@ -1587,6 +1587,112 @@ module "admin-report-lambda-role" {
         Resource = [
           "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/discord/webhook_url",
           "arn:aws:ssm:us-west-2:${var.account_id}:parameter/leagueql/${var.environment}/discord/webhook_url"
+        ]
+      }
+    ]
+  })
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    managed-by  = "terraform"
+  }
+}
+
+module "league-reaper-lambda-role" {
+  source           = "../../modules/iam-role"
+  role_name        = "leagueql-${var.environment}-league-reaper-role"
+  role_description = "Execution role for the nightly unused-league reaper lambda."
+  trust_policy_json = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+      }
+    ]
+  })
+  role_policy_json = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "CreateLogGroups"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup"
+        ]
+        Resource = [
+          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/lambda/leagueql-league-reaper-${var.environment}"
+        ]
+      },
+      {
+        Sid    = "CreateLogEvents"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = [
+          "arn:aws:logs:us-east-1:${var.account_id}:log-group:/aws/lambda/leagueql-league-reaper-${var.environment}:*"
+        ]
+      },
+      {
+        # Find idle leagues (GSI3), then re-read and delete their items (GSI1 locates the
+        # LEAGUE_LOOKUP entries). Only the primary region is written: the global table
+        # replicates the deletes.
+        Sid    = "ReadAndDeleteLeagueItems"
+        Effect = "Allow"
+        Action = [
+          "dynamodb:Query",
+          "dynamodb:GetItem",
+          "dynamodb:BatchWriteItem",
+          "dynamodb:DeleteItem"
+        ]
+        Resource = [
+          module.dynamodb.primary_table_arn,
+          "${module.dynamodb.primary_table_arn}/index/GSI1",
+          "${module.dynamodb.primary_table_arn}/index/GSI3"
+        ]
+      },
+      {
+        Sid    = "ListRawLeagueData"
+        Effect = "Allow"
+        Action = [
+          "s3:ListBucket"
+        ]
+        Resource = [
+          local.primary_bucket_arn
+        ]
+        Condition = {
+          StringLike = {
+            "s3:prefix" = "raw-api-data/*"
+          }
+        }
+      },
+      {
+        # Delete markers replicate to the secondary bucket; the raw-api-data/ lifecycle
+        # rule then expires the noncurrent versions.
+        Sid    = "DeleteRawLeagueData"
+        Effect = "Allow"
+        Action = [
+          "s3:DeleteObject"
+        ]
+        Resource = [
+          "${local.primary_bucket_arn}/raw-api-data/*"
+        ]
+      },
+      {
+        # Same Discord webhook SecureString as the discord-notifier lambda.
+        Sid    = "ReadDiscordWebhookSsmParameter"
+        Effect = "Allow"
+        Action = [
+          "ssm:GetParameter"
+        ]
+        Resource = [
+          "arn:aws:ssm:us-east-1:${var.account_id}:parameter/leagueql/${var.environment}/discord/webhook_url"
         ]
       }
     ]

@@ -1,7 +1,7 @@
 # delete-league Specification
 
 ## Purpose
-Delete an onboarded league and all of its associated data. `DELETE /leagues/{leagueId}` resolves the canonical league ID, removes every DynamoDB item for the league, deletes the raw API payloads from S3, and decrements the global `LEAGUE_COUNT`.
+Delete an onboarded league and all of its associated data. `DELETE /leagues/{leagueId}` resolves the canonical league ID, removes every DynamoDB item for the league, and deletes the raw API payloads from S3.
 
 ## Requirements
 
@@ -41,17 +41,6 @@ The API SHALL delete all raw API payloads under the league's S3 prefix `raw-api-
 #### Scenario: More than 1000 S3 objects
 - **WHEN** the league's S3 prefix holds more than 1000 objects
 - **THEN** the deletion batches the keys so all objects are removed (S3 `delete_objects` accepts at most 1000 keys per request)
-
-### Requirement: Decrement the global league count
-The API SHALL decrement the global `LEAGUE_COUNT` by 1 when a league is deleted, without leaving the count inconsistent on repeated deletes.
-
-#### Scenario: Count decremented once
-- **WHEN** an onboarded league is deleted
-- **THEN** `LEAGUE_COUNT` is decremented by 1
-
-#### Scenario: Deleting an already-deleted league
-- **WHEN** a delete is issued for a league that has already been deleted
-- **THEN** `LEAGUE_COUNT` is not driven inconsistent
 
 ### Requirement: Report backend failures
 The API SHALL return `500` "Failed to delete league" when a DynamoDB or S3 client error occurs during deletion.

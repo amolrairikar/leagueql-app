@@ -7,7 +7,7 @@ SNS failure alerting lives in the shared ``common.sns`` module.
 """
 
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Callable
 from datetime import UTC, datetime
 from decimal import Decimal
 from functools import partial
@@ -16,13 +16,14 @@ from typing import Any
 import botocore.exceptions
 import main
 import requests as http_requests
-from boto3.dynamodb.conditions import Attr, Key
+from boto3.dynamodb.conditions import Key
 from fastapi import HTTPException, status
 from main import (
     SLEEPER_STATE_URL,
     logger,
 )
 
+from common import league_deletion
 from common.job_status import JOB_TTL_SECONDS
 from common.league_members import MEMBER_INDEX_NAME, put_league_member
 from common.sns import publish_failure as _publish_failure
@@ -480,70 +481,18 @@ def list_user_leagues(
 
 
 def _query_all_keys(query_kwargs: dict) -> list[dict]:
-    """
-    Run a paginated query, returning every matched item's {PK, SK} key.
-
-    Args:
-        query_kwargs: Keyword arguments passed to table.query (must project PK/SK).
-
-    Returns:
-        A list of {"PK", "SK"} key dicts across all result pages.
-    """
-    keys: list[dict] = []
-    kwargs = dict(query_kwargs)
-    while True:
-        response = main.table.query(**kwargs)
-        for item in response.get("Items", []):
-            keys.append({"PK": item["PK"], "SK": item["SK"]})
-        last_key = response.get("LastEvaluatedKey")
-        if not last_key:
-            return keys
-        kwargs["ExclusiveStartKey"] = last_key
+    """Return every {PK, SK} key matched by a paginated query (see common.league_deletion)."""
+    return league_deletion.query_all_keys(main.table, query_kwargs)
 
 
 def collect_league_keys(canonical_league_id: str) -> list[dict]:
-    """
-    Collect the keys of every DynamoDB item belonging to a league.
-
-    This covers two key spaces:
-      * everything under the canonical PK (METADATA and all precomputed views,
-        including any future SK types) read with strong consistency, and
-      * the LEAGUE_LOOKUP items, which live under their own per-platform PKs and
-        are located via GSI1 (eventually consistent).
-
-    Args:
-        canonical_league_id: The canonical league ID.
-
-    Returns:
-        A list of {"PK", "SK"} key dicts for every item owned by the league.
-    """
-    keys = _query_all_keys(
-        {
-            "KeyConditionExpression": Key("PK").eq(f"LEAGUE#{canonical_league_id}"),
-            "ProjectionExpression": "PK, SK",
-            "ConsistentRead": True,
-        }
-    )
-    keys += _query_all_keys(
-        {
-            "IndexName": "GSI1",
-            "KeyConditionExpression": Key("canonical_league_id").eq(
-                canonical_league_id
-            ),
-            "ProjectionExpression": "PK, SK",
-        }
-    )
-    return keys
+    """Return the keys of every DynamoDB item owned by a league (see common.league_deletion)."""
+    return league_deletion.collect_league_keys(main.table, canonical_league_id)
 
 
 def delete_all_league_items(canonical_league_id: str, max_attempts: int = 4) -> None:
     """
-    Delete every DynamoDB item for a league, retrying until none remain.
-
-    Rather than deleting a hardcoded set of SK prefixes, this discovers the
-    league's actual items on each pass and deletes them, then re-verifies. This
-    catches orphaned items (e.g. PLATFORM_MIGRATION#) regardless of SK type and
-    tolerates GSI1 eventual-consistency lag on LEAGUE_LOOKUP items.
+    Delete every DynamoDB item for a league, alerting if any cannot be removed.
 
     Args:
         canonical_league_id: The canonical league ID.
@@ -552,74 +501,25 @@ def delete_all_league_items(canonical_league_id: str, max_attempts: int = 4) -> 
     Raises:
         HTTPException: 500 if items still remain after max_attempts.
     """
-    for attempt in range(1, max_attempts + 1):
-        keys = collect_league_keys(canonical_league_id)
-        if not keys:
-            return
-        logger.info(
-            "Delete attempt %d/%d: removing %d items for %s",
-            attempt,
-            max_attempts,
-            len(keys),
-            canonical_league_id,
+    try:
+        league_deletion.delete_all_league_items(
+            main.table, canonical_league_id, max_attempts
         )
-        with main.table.batch_writer() as writer:
-            for key in keys:
-                writer.delete_item(Key=key)
-        time.sleep(0.5 * attempt)  # let GSI1 catch up before re-verifying
-
-    remaining = collect_league_keys(canonical_league_id)
-    if remaining:
-        remaining_sks = [key["SK"] for key in remaining]
+    except league_deletion.OrphanedItemsError as e:
         logger.error(
             "Orphaned items remain for %s after %d attempts: %s",
             canonical_league_id,
             max_attempts,
-            remaining_sks,
+            e.remaining_sks,
         )
         publish_failure(
             f"Orphaned items remain for league {canonical_league_id} after "
-            f"{max_attempts} delete attempts: {remaining_sks}"
+            f"{max_attempts} delete attempts: {e.remaining_sks}"
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to fully delete league data",
         )
-
-
-def _iter_owner_other_league_metadata(
-    clerk_user_id: str, exclude_canonical_league_id: str
-) -> Iterator[dict]:
-    """Yield every METADATA item owned by ``clerk_user_id`` except the excluded league's.
-
-    Scans GSI3 (the sparse all-METADATA index) with pagination, filtered to the caller's owned
-    leagues, and skips the league being deleted / opted out by PK. Shared by the per-platform
-    "does the user still own another …" checks so the GSI3 query shape and pagination loop live
-    in exactly one place.
-
-    Args:
-        clerk_user_id: The owner whose other leagues are enumerated.
-        exclude_canonical_league_id: Canonical id of the league to skip.
-
-    Yields:
-        The full METADATA item for each of the user's other owned leagues.
-    """
-    excluded_pk = f"LEAGUE#{exclude_canonical_league_id}"
-    kwargs: dict[str, Any] = {
-        "IndexName": "GSI3",
-        "KeyConditionExpression": Key("SK").eq("METADATA"),
-        "FilterExpression": Attr("owner_user_id").eq(clerk_user_id),
-    }
-    while True:
-        response = main.table.query(**kwargs)
-        for item in response.get("Items", []):
-            if item.get("PK") == excluded_pk:
-                continue
-            yield item
-        last_key = response.get("LastEvaluatedKey")
-        if not last_key:
-            return
-        kwargs["ExclusiveStartKey"] = last_key
 
 
 def owner_has_other_yahoo_leagues(
@@ -632,11 +532,6 @@ def owner_has_other_yahoo_leagues(
     user's Yahoo leagues, so the token must survive as long as any other Yahoo
     league remains (backend/delete-league, backend/yahoo-oauth).
 
-    Queries GSI3 (the sparse all-METADATA index), filters to the caller's owned
-    leagues, and inspects each one's effective platform (``active_platform`` falling
-    back to ``platform``, so a league migrated *to* Yahoo counts and one migrated
-    *away* from Yahoo does not). The league being deleted is skipped by PK.
-
     Args:
         clerk_user_id: The owner whose remaining Yahoo leagues are counted.
         exclude_canonical_league_id: Canonical id of the league being deleted.
@@ -644,13 +539,9 @@ def owner_has_other_yahoo_leagues(
     Returns:
         ``True`` if at least one *other* Yahoo league is owned by the user.
     """
-    for item in _iter_owner_other_league_metadata(
-        clerk_user_id, exclude_canonical_league_id
-    ):
-        effective_platform = item.get("active_platform") or item.get("platform")
-        if effective_platform == main.Platform.YAHOO.value:
-            return True
-    return False
+    return league_deletion.owner_has_other_yahoo_leagues(
+        main.table, clerk_user_id, {exclude_canonical_league_id}
+    )
 
 
 def owner_has_other_optedin_espn_leagues(
@@ -663,11 +554,6 @@ def owner_has_other_optedin_espn_leagues(
     long as any *other* ESPN league they own is opted into automatic refresh
     (backend/espn-credential-storage, backend/delete-league).
 
-    Queries GSI3 (the sparse all-METADATA index), filters to the caller's owned leagues, and
-    inspects each one's effective platform (``active_platform`` falling back to ``platform``). GSI3
-    does not project ``auto_refresh_enabled``, so for each *other* ESPN league it reads that item's
-    METADATA to check the flag. The league being deleted / opted out is skipped by PK.
-
     Args:
         clerk_user_id: The owner whose remaining opted-in ESPN leagues are counted.
         exclude_canonical_league_id: Canonical id of the league being deleted / opted out.
@@ -675,18 +561,9 @@ def owner_has_other_optedin_espn_leagues(
     Returns:
         ``True`` if at least one *other* ESPN league owned by the user is opted into auto-refresh.
     """
-    for item in _iter_owner_other_league_metadata(
-        clerk_user_id, exclude_canonical_league_id
-    ):
-        effective_platform = item.get("active_platform") or item.get("platform")
-        if effective_platform != main.Platform.ESPN.value:
-            continue
-        # auto_refresh_enabled is not projected into GSI3, so read the METADATA item.
-        pk = item["PK"]
-        full = main.table.get_item(Key={"PK": pk, "SK": "METADATA"}).get("Item", {})
-        if full.get("auto_refresh_enabled"):
-            return True
-    return False
+    return league_deletion.owner_has_other_optedin_espn_leagues(
+        main.table, clerk_user_id, {exclude_canonical_league_id}
+    )
 
 
 def create_job_status(

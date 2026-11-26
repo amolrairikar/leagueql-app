@@ -228,8 +228,11 @@ export default function PrivacyPage() {
             app&apos;s features.
           </li>
           <li>
-            League data is retained until the league&apos;s owner deletes it or
-            you ask us to remove it
+            League data is retained until the league&apos;s owner deletes it,
+            you ask us to remove it, or nobody has opened the league for one
+            year, after which it is automatically and permanently removed.
+            Stored ESPN cookies or Yahoo tokens that no other league needs are
+            removed with it.
           </li>
           <li>
             We have implemented security measures to protect your data,

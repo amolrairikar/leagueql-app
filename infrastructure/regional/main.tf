@@ -26,6 +26,7 @@ locals {
   discord_notifier_role_arn = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-discord-notifier-role"
   lineup_backfill_role_arn  = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-lineup-backfill-role"
   admin_report_role_arn     = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-admin-report-role"
+  league_reaper_role_arn    = "arn:aws:iam::${local.account_id}:role/leagueql-${var.environment}-league-reaper-role"
 
   # Sleeper player stats refresher runs as a Fargate task (see backend/sleeper-player-stats-refresher). Roles are
   # created in infrastructure/global; ARNs are reconstructed here from their names.
@@ -486,6 +487,71 @@ resource "aws_lambda_permission" "allow_eventbridge_admin_report" {
   function_name = module.admin_report_lambda[0].lambda_arn
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.admin_report_schedule[0].arn
+}
+
+# Nightly unused-league reaper (backend/league-reaper): removes leagues nobody has opened for
+# a year. Prod-only and east-only; global tables and bucket replication carry the deletes west.
+module "league_reaper_lambda" {
+  source = "../modules/lambda"
+  count  = var.environment == "prod" && local.region == "east" ? 1 : 0
+
+  function_name        = "leagueql-league-reaper-${var.environment}"
+  function_description = "Nightly removal of leagues nobody has opened for a year"
+  role_arn             = local.league_reaper_role_arn
+  handler              = "handler.lambda_handler"
+  memory_size          = 256
+  timeout              = 900
+  log_retention        = 30
+  s3_bucket            = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
+  s3_key               = "lambda-code-artifacts/league_reaper-lambda.zip"
+
+  # Two overlapping runs would race on the same leagues.
+  reserved_concurrent_executions = 1
+
+  environment_variables = {
+    DYNAMODB_TABLE_NAME = "leagueql-table-${var.environment}"
+    S3_BUCKET_NAME      = "leagueql-${var.environment}-bucket-${local.region}-${local.account_id}"
+    ENVIRONMENT         = var.environment
+
+    # Only "false" lets the reaper delete anything.
+    LEAGUE_REAPER_DRY_RUN = tostring(var.league_reaper_dry_run)
+
+    DISCORD_WEBHOOK_URL_SSM_PARAM = "/leagueql/${var.environment}/discord/webhook_url"
+  }
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    managed-by  = "terraform"
+  }
+}
+
+resource "aws_cloudwatch_event_rule" "league_reaper_schedule" {
+  count               = var.environment == "prod" && local.region == "east" ? 1 : 0
+  name                = "league-reaper-schedule-${var.environment}-${local.region}"
+  schedule_expression = "cron(0 9 * * ? *)"
+  state               = "ENABLED"
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    managed-by  = "terraform"
+  }
+}
+
+resource "aws_cloudwatch_event_target" "league_reaper_target" {
+  count = var.environment == "prod" && local.region == "east" ? 1 : 0
+  rule  = aws_cloudwatch_event_rule.league_reaper_schedule[0].name
+  arn   = module.league_reaper_lambda[0].lambda_arn
+}
+
+resource "aws_lambda_permission" "allow_eventbridge_league_reaper" {
+  count         = var.environment == "prod" && local.region == "east" ? 1 : 0
+  statement_id  = "AllowEventBridgeInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = module.league_reaper_lambda[0].lambda_arn
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.league_reaper_schedule[0].arn
 }
 
 module "backend_api" {
@@ -991,6 +1057,32 @@ resource "aws_cloudwatch_metric_alarm" "league_refresh_errors" {
 
   dimensions = {
     FunctionName = "leagueql-league-refresh-${var.environment}"
+  }
+
+  tags = {
+    environment = var.environment
+    project     = "leagueql"
+    managed-by  = "terraform"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "league_reaper_errors" {
+  count               = local.region == "east" && var.environment == "prod" ? 1 : 0
+  alarm_name          = "leagueql-league-reaper-${var.environment}-errors"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods  = 1
+  metric_name         = "Errors"
+  namespace           = "AWS/Lambda"
+  period              = 300
+  statistic           = "Sum"
+  threshold           = 1
+  alarm_description   = "League reaper Lambda error detected"
+  alarm_actions       = [aws_sns_topic.lambda_alerts[0].arn]
+  ok_actions          = [aws_sns_topic.lambda_alerts[0].arn]
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    FunctionName = "leagueql-league-reaper-${var.environment}"
   }
 
   tags = {
