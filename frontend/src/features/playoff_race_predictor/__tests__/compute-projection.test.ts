@@ -262,6 +262,33 @@ describe('computePlayoffOdds', () => {
     expect(odds.get('t3')).toBe(0);
   });
 
+  it('reads exactly 100% (no float residue) for a clinched team amid weighted games', () => {
+    // 8 teams, 6 spots. t1 is 9-0 so it cannot miss with 3 games left. Uneven
+    // scores give non-dyadic win weights, which accumulate float noise.
+    const ids = ['t1', 't2', 't3', 't4', 't5', 't6', 't7', 't8'];
+    const matchups: MatchupItem[] = [];
+    for (let w = 1; w <= 12; w++) {
+      const opp = ids[1 + (w % 7)];
+      const played = w <= 9;
+      matchups.push(
+        played ? game('t1', opp, w, 120 + w, 90 + w) : game('t1', opp, w),
+      );
+      const rest = ids.slice(1).filter((x) => x !== opp);
+      for (let i = 0; i < 6; i += 2)
+        matchups.push(
+          played
+            ? game(rest[i], rest[i + 1], w, 100 + w * 3 + i, 80 + w * 7 + i * 5)
+            : game(rest[i], rest[i + 1], w),
+        );
+    }
+    const model = buildPredictorModel(
+      matchups,
+      settings({ num_playoff_teams: 6, regular_season_weeks: 12 }),
+      'live',
+    );
+    expect(computePlayoffOdds(model, {}).get('t1')).toBe(1);
+  });
+
   it('always keeps exactly num_playoff_teams worth of odds in play', () => {
     // Every outcome seats exactly N teams, so the odds sum to N regardless.
     const model = buildPredictorModel(liveMatchups(), settings(), 'live');

@@ -440,6 +440,10 @@ export function projectStandings(
  * stays comfortably under this bound and is computed exactly.
  */
 const MAX_EXACT_MATCHUPS = 20;
+
+/** Probabilities within this of 0 or 1 are treated as exactly 0 or 1 (float noise). */
+const PROB_EPSILON = 1e-9;
+
 /** Random outcomes drawn when the space is too large to enumerate exactly. */
 const MONTE_CARLO_SAMPLES = 50_000;
 
@@ -581,7 +585,12 @@ export function computeSeedProbabilities(
   const probs = new Map<string, number[]>();
   for (let i = 0; i < n; i++) {
     const dist = new Array<number>(n);
-    for (let k = 0; k < n; k++) dist[k] = seedCounts[i * n + k] / norm;
+    for (let k = 0; k < n; k++) {
+      // Snap float-accumulation noise (e.g. 0.9999999999999) to exact 0/1 so a
+      // mathematically certain outcome reads as 100%, not ">99%".
+      const p = seedCounts[i * n + k] / norm;
+      dist[k] = p < PROB_EPSILON ? 0 : p > 1 - PROB_EPSILON ? 1 : p;
+    }
     probs.set(ids[i], dist);
   }
   return probs;
@@ -603,7 +612,7 @@ export function computePlayoffOdds(
   for (const [id, dist] of seedProbs) {
     let sum = 0;
     for (let k = 0; k < numPlayoff && k < dist.length; k++) sum += dist[k];
-    odds.set(id, sum);
+    odds.set(id, sum < PROB_EPSILON ? 0 : sum > 1 - PROB_EPSILON ? 1 : sum);
   }
   return odds;
 }
